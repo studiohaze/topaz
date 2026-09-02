@@ -1,0 +1,16 @@
+enum Datum derives Show {
+  Symbol(string),
+  Number(int),
+  Pair(Datum, Datum),
+}
+
+function jsonError(text: string) -> string {
+  match JSON.parse(text) {
+    case Ok(_) => "unexpected-ok"
+    case Err(error) => "json:{error.line}:{error.column}:{error.message}"
+  }
+}
+
+let datum = Datum.Pair(Datum.Symbol("answer"), Datum.Number(42))
+print("datum={datum}")
+print(jsonError("\{"))

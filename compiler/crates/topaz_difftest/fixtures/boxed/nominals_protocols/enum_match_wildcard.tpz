@@ -1,0 +1,7 @@
+enum Color { Red, Blue }
+let n = match Color.Blue {
+  case Red => "r"
+  case _ => "other"
+}
+print("{n}")
+0

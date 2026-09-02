@@ -1,0 +1,3 @@
+let self = 1
+let impl = 2
+print("{self}:{impl}")

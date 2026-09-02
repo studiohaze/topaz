@@ -1,0 +1,22 @@
+
+function one(x: int) -> int {
+    1
+}
+function two(x: int) -> int {
+    2
+}
+
+let mut inner = { primary: one }
+let field = "primary"
+inner[field] = two
+let callbacks = { nested: inner }
+
+let result = concurrent {
+    value: {
+        let xs = [1]
+        let ys = xs.map(callbacks.nested.primary)
+        ys[0]
+    }
+    idle: 0
+}
+result.value

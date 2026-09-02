@@ -1,0 +1,4 @@
+
+import b
+import c
+b.value + c.value

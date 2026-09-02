@@ -1,0 +1,40 @@
+// canonical 문서에서는 명시적 helper 함수로 에러 정보를 다룹니다
+type 애플리케이션에러종류 = "database_connection_failed" | "file_access_denied" | "invalid_input" | "external_service_unavailable"
+type 애플리케이션에러 = { 종류: 애플리케이션에러종류, 메시지: string, 필드: string | null, 값: string | null }
+
+function 에러메시지(에러: 애플리케이션에러) -> string {
+    match 에러.종류 {
+        case "database_connection_failed" => "데이터베이스에 연결할 수 없습니다"
+        case "file_access_denied" => "파일에 접근할 권한이 없습니다"
+        case "invalid_input" => "잘못된 입력 - {에러.필드}: {에러.값}"
+        case "external_service_unavailable" => "외부 서비스를 사용할 수 없습니다"
+    }
+}
+
+function 에러코드(에러: 애플리케이션에러) -> int {
+    match 에러.종류 {
+        case "database_connection_failed" => 1001
+        case "file_access_denied" => 1002
+        case "invalid_input" => 1003
+        case "external_service_unavailable" => 1004
+    }
+}
+
+function 에러복구가능(에러: 애플리케이션에러) -> bool {
+    match 에러.종류 {
+        case "database_connection_failed" => true
+        case "external_service_unavailable" => true
+        case _ => false
+    }
+}
+
+// 에러 처리 통합
+function 에러로깅(에러: 애플리케이션에러) {
+    print("[에러 {에러코드(에러)}] {에러메시지(에러)}")
+    
+    if 에러복구가능(에러) {
+        print("복구를 시도할 수 있습니다")
+    } else {
+        print("복구 불가능한 에러입니다")
+    }
+}

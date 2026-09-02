@@ -1,0 +1,2 @@
+type Internal = { id: int }
+export function load() -> Internal { { id: 1 } }

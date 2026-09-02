@@ -1,0 +1,5 @@
+protocol Shift { function shifted(value: Self) -> int }
+record Point { x: int }
+let offset = 2
+impl Shift<Point> { function shifted(value: Point) -> int { value.x + offset } }
+Shift.shifted(Point { x: 1 })

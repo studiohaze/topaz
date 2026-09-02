@@ -1,0 +1,3 @@
+enum Pri derives Order { Low, High(int) }
+print("{Order.compare(Pri.Low, Pri.High(0))}/{Order.compare(Pri.High(3), Pri.High(1))}")
+0

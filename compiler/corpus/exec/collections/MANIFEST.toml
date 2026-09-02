@@ -1,0 +1,24 @@
+# corpus/exec/collections — execution transcripts (CDR-003 §11)
+
+[totals]
+recorded = 3
+runnable = 3
+pending = 0
+
+[[fixture]]
+file = "array-ops.tpz"
+phase = "exec"
+versions = "5.2"
+result = "ok"
+
+[[fixture]]
+file = "map-set-ops.tpz"
+phase = "exec"
+versions = "5.2"
+result = "ok"
+
+[[fixture]]
+file = "hofs.tpz"
+phase = "exec"
+versions = "5.2"
+result = "ok"

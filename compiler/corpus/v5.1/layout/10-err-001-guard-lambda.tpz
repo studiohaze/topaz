@@ -1,0 +1,6 @@
+let result = match d {
+    case day if day in weekend => "weekend"
+    case s if s.all(x => x >= 80) => "strong"
+    case y if (a => a) => "grouped lambda parses"
+    case _ => "other"
+}

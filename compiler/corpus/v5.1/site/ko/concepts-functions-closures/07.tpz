@@ -1,0 +1,27 @@
+// 고차 함수 정의
+function 연산적용(배열: Array<int>, 연산함수: (int) -> int) -> Array<int> {
+    let mut 결과: Array<int> = []
+    for 요소 in 배열 {
+        결과.push(연산함수(요소))
+    }
+    return 결과
+}
+
+// 함수를 매개변수로 전달
+let 숫자들 = [1, 2, 3, 4]
+let 제곱결과 = 연산적용(숫자들, x => x * x)
+let 두배결과 = 연산적용(숫자들, x => x * 2)
+
+print("{제곱결과}")  // [1, 4, 9, 16]
+print("{두배결과}")  // [2, 4, 6, 8]
+
+// 조건부 처리 함수
+function 조건부처리(값: int, 조건: (int) -> bool, 처리함수: (int) -> int) -> int {
+    if 조건(값) {
+        return 처리함수(값)
+    }
+    return 값
+}
+
+let 결과 = 조건부처리(15, x => x > 10, x => x * 2)
+print("{결과}")  // 30 (15 > 10이므로 15 * 2)

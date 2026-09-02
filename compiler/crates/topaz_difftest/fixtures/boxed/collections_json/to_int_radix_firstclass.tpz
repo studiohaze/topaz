@@ -1,0 +1,2 @@
+let f = toIntRadix
+f("7f", 16)

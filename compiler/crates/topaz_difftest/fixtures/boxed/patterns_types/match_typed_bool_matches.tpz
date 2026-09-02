@@ -1,0 +1,2 @@
+match true { case b: bool => 1
+case _ => 0 }

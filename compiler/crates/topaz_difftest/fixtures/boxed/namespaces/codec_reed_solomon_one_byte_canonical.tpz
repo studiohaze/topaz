@@ -1,0 +1,1 @@
+Bytes.fromHex("01").flatMap((b) => Codec.reedSolomon255223Protect(b)).map((b) => b.toHex())

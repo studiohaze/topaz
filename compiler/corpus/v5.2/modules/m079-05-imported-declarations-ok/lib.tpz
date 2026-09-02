@@ -1,0 +1,6 @@
+import sub
+export function f() -> int { 1 }
+export type T = int
+let a = 1
+let mut b = 2
+const C = 3

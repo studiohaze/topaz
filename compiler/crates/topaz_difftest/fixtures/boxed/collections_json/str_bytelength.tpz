@@ -1,0 +1,1 @@
+["".byteLength(), "abc".byteLength(), "가나다".byteLength(), "😀".byteLength(), "a가😀".byteLength()]

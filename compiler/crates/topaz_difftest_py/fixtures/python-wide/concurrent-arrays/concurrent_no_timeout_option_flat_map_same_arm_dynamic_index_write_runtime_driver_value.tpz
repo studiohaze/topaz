@@ -1,0 +1,31 @@
+
+function someDbl(x: int) -> Option<int> {
+    Some(x * 2)
+}
+
+function someInc(x: int) -> Option<int> {
+    Some(x + 1)
+}
+
+function someZero(x: int) -> Option<int> {
+    Some(0)
+}
+
+function choose(x: int) -> int {
+    let i = x - 2
+    let r = concurrent {
+        slow: {
+            let mut cbs = [someZero, someInc]
+            cbs[i] = someDbl
+            let out = Some(x).flatMap(cbs[i])
+            match out {
+                case Some(n) => n
+                case None => -1
+            }
+        }
+        fast: 0
+    }
+    r.slow + r.fast
+}
+
+choose(3)

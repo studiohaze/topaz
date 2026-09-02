@@ -1,0 +1,25 @@
+[package]
+name = "data_lens"
+version = "0.1.0"
+language = "5.18"
+entry = "src/main.tpz"
+
+[build]
+target = "web-app"
+deterministic = true
+
+[web]
+title = "Topaz Data Lens"
+styles = ["styles/app.css"]
+assets = []
+lifecycle = "v2"
+
+[capabilities.web]
+open_text = true
+download_text = true
+local_state = true
+
+[dependencies]
+std = "5.18"
+lens_labels = "1.0.0"
+data_lens_core = { path = "../data-lens-core", hash = "sha256:2ad67cd92214842b1141765d1d31b87383aa828d8ea50e52d9664323a7007e9f" }

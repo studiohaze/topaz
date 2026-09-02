@@ -1,0 +1,233 @@
+// B2 — fixed-point line-break DP in Topaz. P0 classifier + B1 badness + the integer DP.
+// Scope: drop-cap OFF (single bucket), first_line=target, justification=None. Must equal dp_fp.rs.
+// I/O: stdin "<targetMpt>\n<advanceMpt>\t<text>\n..." -> "<start> <endExcl> <lineBadnessB>\n...TOTAL <b>".
+
+let R = 100000000
+let B = 1000000
+
+// ── P0 classifier (proven byte-identical to ATLAS) ──
+function firstCp(t: string) -> int { t.codePointAt(0) ?? -1 }
+function singleScalar(t: string) -> bool { t.scalars().length == 1 }
+function isKoreanBreakChar(c: int) -> bool {
+  (c >= 4352 && c <= 4607) || (c >= 12592 && c <= 12687) || (c >= 44032 && c <= 55215)
+  || (c >= 13312 && c <= 19903) || (c >= 19968 && c <= 40959) || (c >= 63744 && c <= 64255)
+  || c == 65292 || c == 12289 || c == 12290 || c == 65307 || c == 65306
+}
+function isLineStartForbidden(c: int) -> bool {
+  c == 41 || c == 93 || c == 125 || c == 12301 || c == 12303 || c == 12299 || c == 12297
+  || c == 44 || c == 46 || c == 59 || c == 58 || c == 33 || c == 63 || c == 12289 || c == 12290
+}
+function isLineEndForbidden(c: int) -> bool {
+  c == 40 || c == 91 || c == 123 || c == 12300 || c == 12302 || c == 12298 || c == 12296
+}
+function allKoreanBreak(t: string) -> bool {
+  let mut ok = true
+  for s in t.scalars() { if !isKoreanBreakChar(firstCp(s)) { ok = false } }
+  ok
+}
+function allLineStartForbidden(t: string) -> bool {
+  let mut ok = true
+  for s in t.scalars() { if !isLineStartForbidden(firstCp(s)) { ok = false } }
+  ok
+}
+function anyLineStartForbidden(t: string) -> bool {
+  let mut found = false
+  for s in t.scalars() { if isLineStartForbidden(firstCp(s)) { found = true } }
+  found
+}
+function anyLineEndForbidden(t: string) -> bool {
+  let mut found = false
+  for s in t.scalars() { if isLineEndForbidden(firstCp(s)) { found = true } }
+  found
+}
+function isBreakableLatinSpace(t: string) -> bool { singleScalar(t) && firstCp(t) == 32 }
+function isLatinSpace(t: string) -> bool { singleScalar(t) && (firstCp(t) == 32 || firstCp(t) == 160) }
+function isNoBreakWhitespace(t: string) -> bool { singleScalar(t) && (firstCp(t) == 160 || firstCp(t) == 8239) }
+function isLatinHyphen(t: string) -> bool {
+  singleScalar(t) && (firstCp(t) == 45 || firstCp(t) == 8208 || firstCp(t) == 8209 || firstCp(t) == 8211)
+}
+function isCommaDotColon(t: string) -> bool { singleScalar(t) && (firstCp(t) == 44 || firstCp(t) == 46 || firstCp(t) == 58) }
+function isAsciiDigit(t: string) -> bool { t.byteLength() == 1 && firstCp(t) >= 48 && firstCp(t) <= 57 }
+function nextNotLatinSpace(next: Option<string>) -> bool {
+  match next {
+    case Some(t) => !isLatinSpace(t)
+    case None => true
+  }
+}
+function nextNoLineStartForbidden(next: Option<string>) -> bool {
+  match next {
+    case Some(t) => !anyLineStartForbidden(t)
+    case None => true
+  }
+}
+function optIsLatinSpace(next: Option<string>) -> bool {
+  match next {
+    case Some(t) => isLatinSpace(t)
+    case None => false
+  }
+}
+function optAnyLineStartForbidden(next: Option<string>) -> bool {
+  match next {
+    case Some(t) => anyLineStartForbidden(t)
+    case None => false
+  }
+}
+function optIsAsciiDigit(o: Option<string>) -> bool {
+  match o {
+    case Some(t) => isAsciiDigit(t)
+    case None => false
+  }
+}
+function isNumericSep(current: string, prev: Option<string>, next: Option<string>) -> bool {
+  isCommaDotColon(current) && optIsAsciiDigit(prev) && optIsAsciiDigit(next)
+}
+function isClosingPunctAllowed(current: string, prev: Option<string>, next: Option<string>) -> bool {
+  allLineStartForbidden(current) && nextNotLatinSpace(next) && !isNumericSep(current, prev, next)
+}
+function isKoreanBreakAllowed(current: string, next: Option<string>) -> bool {
+  allKoreanBreak(current) && nextNotLatinSpace(next) && nextNoLineStartForbidden(next) && !anyLineEndForbidden(current)
+}
+
+// ── B1 fixed-point badness (justification=None) ──
+function roundDiv(n: int, d: int) -> int { let q = n / d; let r = n % d; if r >= (d + 1) / 2 { q + 1 } else { q } }
+function absI(x: int) -> int { if x < 0 { 0 - x } else { x } }
+function badness(width: int, target: int, charCount: int, spaces: int, kind: string, isLast: bool) -> int {
+  let slack = target - width
+  let absSlack = absI(slack)
+  let rawR = if absSlack >= 4 * target { 4 * R } else { absSlack * R / target }
+  let adjcapCenti = if slack >= 0 { 100 + spaces * 45 } else { 100 + spaces * 25 }
+  let srR = roundDiv(rawR * 100, adjcapCenti)
+  let sq = srR * srR
+  let q = roundDiv(sq, R)
+  let mut baseB = roundDiv(q * (1000 * B), R)
+  if isLast {
+    baseB = roundDiv(baseB * 2, 5)
+    if width * 100 < target * 52 && charCount > 0 { baseB = baseB + 500 * B }
+  }
+  if slack < 0 { baseB = baseB + 20000 * B + roundDiv(20000 * B * srR, R) }
+  if kind == "latin_hyphen" { baseB = baseB + 65 * B }
+  if kind == "hard_fallback" { baseB = baseB + 50000 * B }
+  if charCount <= 2 { baseB = baseB + 275 * B }
+  baseB = baseB + 10 * B
+  baseB
+}
+
+// ── breakpoints (units + kinds), sentinel at index 0 ──
+function buildBreakpoints(clusters: Array<string>) -> { units: Array<int>, kinds: Array<string> } {
+  let n = clusters.length
+  let mut units = [0]
+  let mut kinds = ["forced_end"]
+  let mut i = 0
+  while i < n {
+    let unit = clusters[i]
+    let unitEnd = i + 1
+    let prev: Option<string> = if i > 0 { clusters.get(i - 1) } else { None }
+    let next = clusters.get(unitEnd)
+    let mut kind = ""
+    let mut emit = true
+    if unitEnd == n { kind = "forced_end" }
+    else if isBreakableLatinSpace(unit) { kind = "latin_space" }
+    else if isLatinHyphen(unit) { kind = "latin_hyphen" }
+    else if isClosingPunctAllowed(unit, prev, next) { kind = "closing_punctuation" }
+    else if isKoreanBreakAllowed(unit, next) { kind = "korean_cluster" }
+    else if optIsLatinSpace(next) || isNoBreakWhitespace(unit) || optAnyLineStartForbidden(next) { emit = false }
+    else { kind = "hard_fallback" }
+    if emit { units.push(unitEnd); kinds.push(kind) }
+    i = i + 1
+  }
+  { units: units, kinds: kinds }
+}
+
+function 처리(input: string) -> string {
+  let lines = input.split("\n")
+  let target = toInt(lines[0]) ?? 0
+  if target <= 0 || target > 23000000000 { return "OUT_OF_BOUNDS" }
+  let mut clusters: Array<string> = []
+  let mut adv: Array<int> = []
+  let mut li = 1
+  while li < lines.length {
+    let parts = lines[li].split("\t")
+    adv.push(toInt(parts[0]) ?? 0)
+    clusters.push(if parts.length >= 2 { parts[1] } else { "" })
+    li = li + 1
+  }
+  let n = clusters.length
+  // prefix sums
+  let mut wpre = [0]
+  let mut cpre = [0]
+  let mut i = 0
+  while i < n {
+    wpre.push(wpre[i] + adv[i])
+    cpre.push(cpre[i] + clusters[i].scalars().length)
+    i = i + 1
+  }
+  let bp = buildBreakpoints(clusters)
+  let bpUnit = bp.units
+  let bpKind = bp.kinds
+  let bpLen = bpUnit.length
+  // DP states (parallel arrays, pushed in endIndex order)
+  let mut stPresent = [true]
+  let mut stCost = [0]
+  let mut stPrev = [0]
+  let mut stLine = [0]
+  let mut ei = 1
+  while ei < bpLen {
+    let endUnit = bpUnit[ei]
+    let endKind = bpKind[ei]
+    let predStart = if ei > 80 { ei - 80 } else { 0 }
+    let isLast = endUnit == n
+    let mut bestPresent = false
+    let mut bestCost = 0
+    let mut bestPrev = 0
+    let mut bestLine = 0
+    let mut pi = predStart
+    while pi < ei {
+      if stPresent[pi] {
+        let start = bpUnit[pi]
+        if start < endUnit {
+          let width = wpre[endUnit] - wpre[start]
+          if !(width > target + 1 && endUnit > start + 1) {
+            let mut sp = 0
+            let mut u = start
+            while u < endUnit { if isBreakableLatinSpace(clusters[u]) { sp = sp + 1 }; u = u + 1 }
+            let lineCost = badness(width, target, cpre[endUnit] - cpre[start], sp, endKind, isLast)
+            let candCost = stCost[pi] + lineCost
+            if !bestPresent || candCost < bestCost {
+              bestPresent = true; bestCost = candCost; bestPrev = pi; bestLine = lineCost
+            }
+          }
+        }
+      }
+      pi = pi + 1
+    }
+    stPresent.push(bestPresent)
+    stCost.push(bestCost)
+    stPrev.push(bestPrev)
+    stLine.push(bestLine)
+    ei = ei + 1
+  }
+  let last = bpLen - 1
+  if !stPresent[last] { return "NO_PLAN" }
+  // back-walk (collect reversed)
+  let mut rs: Array<int> = []
+  let mut re: Array<int> = []
+  let mut rl: Array<int> = []
+  let mut wi = last
+  while wi > 0 {
+    rs.push(bpUnit[stPrev[wi]])
+    re.push(bpUnit[wi])
+    rl.push(stLine[wi])
+    wi = stPrev[wi]
+  }
+  let mut out = ""
+  let mut total = 0
+  let mut k = rs.length - 1
+  while k >= 0 {
+    out = if out == "" { "{rs[k]} {re[k]} {rl[k]}" } else { "{out}\n{rs[k]} {re[k]} {rl[k]}" }
+    total = total + rl[k]
+    k = k - 1
+  }
+  "{out}\nTOTAL {total}"
+}
+
+print(처리(input()))

@@ -1,0 +1,8 @@
+
+function main() -> string {
+    match FS.readText(path: "missing.txt") {
+        case Ok(text) => text
+        case Err(e) => e
+    }
+}
+main()

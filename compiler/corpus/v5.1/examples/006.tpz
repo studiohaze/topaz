@@ -1,0 +1,3 @@
+let greeting = if hour < 12 { "morning" }
+               else if hour < 18 { "afternoon" }
+               else { "evening" }

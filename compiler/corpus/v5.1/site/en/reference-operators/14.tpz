@@ -1,0 +1,11 @@
+let user: Option<{ name: string, profile: Option<{ city: string }> }> =
+    Some({ name: "Ann", profile: Some({ city: "Seoul" }) })
+
+let nameOpt = user?.name              // Option<string>
+let cityOpt = user?.profile?.city     // Option<string>
+let city    = user?.profile?.city ?? "Unknown"  // string
+
+let noneUser: Option<{ name: string }> = None
+let fallback = noneUser?.name ?? "guest"       // "guest"
+
+// Desugars to Option mapping/flat-mapping or equivalent nullable checks

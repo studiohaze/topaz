@@ -1,0 +1,4 @@
+newtype UserId = int
+let id: UserId = UserId(5)
+print("{id}")
+0

@@ -1,0 +1,5 @@
+
+import leaf { inc as bump }
+export function answer(x: int) -> int {
+    bump(x)
+}

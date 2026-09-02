@@ -1,0 +1,43 @@
+record Html<Msg> {
+  message: Msg,
+}
+
+enum Maybe<T> {
+  Missing,
+  Present(T),
+}
+
+newtype Id<T> = T
+
+function html<T>(value: T) -> Html<T> {
+  Html { message: value }
+}
+
+function just<T>(value: T) -> Maybe<T> {
+  Maybe.Present(value)
+}
+
+function none<T>() -> Maybe<T> {
+  Maybe.Missing
+}
+
+function ident<T>(value: T) -> Id<T> {
+  Id(value)
+}
+
+let view: Html<int> = html(7)
+let maybe: Maybe<int> = just(view.message)
+let empty: Maybe<string> = none()
+let id: Id<string> = ident("ok")
+
+let picked = match maybe {
+  case Present(value) => value
+  case Missing => 0
+}
+
+let fallback = match empty {
+  case Present(value) => value
+  case Missing => "missing"
+}
+
+print("{view.message}|{picked}|{fallback}|{id.value()}")

@@ -1,0 +1,2 @@
+function f(x: int, y: int = 5) -> int { x + y }
+f(1, 10)

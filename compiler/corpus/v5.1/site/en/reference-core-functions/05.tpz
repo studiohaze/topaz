@@ -1,0 +1,1 @@
+let digits = r"^[0-9]+$"     // a regex template value (no matching API yet)

@@ -1,0 +1,16 @@
+
+import util
+let seeds = [1]
+let callbacks = match seeds[0] {
+    case n if n == 1 => util.fastCallbacks
+    case _ => util.slowCallbacks
+}
+let result = concurrent {
+    value: {
+        let xs = [1]
+        let ys = xs.map(callbacks[0])
+        ys[0]
+    }
+    idle: 0
+}
+result.value

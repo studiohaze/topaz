@@ -1,0 +1,10 @@
+
+function add(a: int, b: int = 2) -> int {
+    a + b
+}
+
+function mul(a: int, b: int) -> int {
+    a * b
+}
+
+export let base = [42, add, mul]

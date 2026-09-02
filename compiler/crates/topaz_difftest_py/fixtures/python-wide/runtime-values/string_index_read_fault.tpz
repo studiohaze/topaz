@@ -1,0 +1,6 @@
+
+function f() -> string {
+    let s = "abc"
+    s[0]
+}
+f()

@@ -1,0 +1,2 @@
+import lib
+let r = lib.find(1)

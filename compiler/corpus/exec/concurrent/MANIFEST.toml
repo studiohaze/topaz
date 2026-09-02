@@ -1,0 +1,19 @@
+# corpus/exec/concurrent — execution transcripts (CDR-003 §11)
+
+[totals]
+recorded = 2
+runnable = 2
+pending = 0
+
+[[fixture]]
+file = "join-record.tpz"
+phase = "exec"
+versions = "5.2"
+result = "ok"
+
+[[fixture]]
+file = "timeout-else.tpz"
+phase = "exec"
+versions = "5.2"
+result = "ok"
+clock_tick = "10"

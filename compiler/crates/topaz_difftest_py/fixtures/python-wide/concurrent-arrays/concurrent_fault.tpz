@@ -1,0 +1,6 @@
+
+let r = concurrent {
+    boom: 1 / 0
+    fine: 5
+}
+r.fine

@@ -1,0 +1,9 @@
+
+function same<T>(a: T, b: T) -> bool {
+    a == b
+}
+function main() -> bool {
+    let m = Map.new<string, int>()
+    same(m, m)
+}
+main()

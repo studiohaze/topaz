@@ -1,0 +1,44 @@
+import src.report { buildReport }
+import std.fs
+
+const SAMPLE_CSV = "name,status,score\nCore API,ready,91\nDraft Tool,draft,99\nCLI Pack,ready,84"
+const SAMPLE_POLICY = "[policy]\nrequired_status = \"ready\"\nminimum_score = 85"
+
+function renderSample(csv: string) -> Result<int, string> {
+  let report = buildReport(csv, SAMPLE_POLICY)?
+  print(report)
+  Ok(0)
+}
+
+function hasArg(args: Array<string>, expected: string) -> bool {
+  match args.indexOf(expected) {
+    case Some(_) => true
+    case None => false
+  }
+}
+
+export function main(args: Array<string>, stdin: string) -> Result<int, string> {
+  if hasArg(args, "--sample") {
+    return renderSample(SAMPLE_CSV)
+  }
+  if hasArg(args, "--bad-sample") {
+    return renderSample("name,status,score\nBroken Row,ready,nope")
+  }
+  if hasArg(args, "--probe-denied") {
+    let secret = fs.readText("secret.txt")?
+    print(secret)
+    return Ok(0)
+  }
+  if hasArg(args, "--probe-symlink") {
+    let secret = fs.readText("data/escape-link")?
+    print(secret)
+    return Ok(0)
+  }
+
+  let inventory = fs.readText("data/releases.csv")?
+  let policy = fs.readText("data/policy.toml")?
+  let report = buildReport(inventory, policy)?
+  fs.writeText("out/report.txt", "{report}\n")?
+  print(report)
+  Ok(0)
+}

@@ -1,0 +1,30 @@
+import std.http { HttpRequest, HttpResponse, header, json, request, text }
+
+record HealthPayload derives JSON {
+  ok: bool,
+}
+
+function handle(req: HttpRequest) -> HttpResponse {
+  if req.url.path() == "/health" {
+    return text(200, "ok")
+  }
+  let trace = header(req, "x-trace") ?? "none"
+  text(404, "missing {req.url.path()} trace={trace}")
+}
+
+function demo() -> Result<string, string> {
+  let url = URL.parse("https://example.test/health")?
+  let req = request("GET", url, map { "x-trace": ["abc"] }, Bytes.encodeUtf8(""))
+  let res = handle(req)
+  let jsonRes = json(201, HealthPayload { ok: true })?
+  let jsonContentType = match jsonRes.headers.get("content-type").flatMap((values) => values.get(0)) {
+    case Some(value) => value
+    case None => "none"
+  }
+  Ok("{res.status}:{res.body.decodeUtf8()?}:{header(req, "x-trace") ?? "none"}:{jsonRes.status}:{jsonContentType}:{jsonRes.body.decodeUtf8()?}")
+}
+
+match demo() {
+  case Ok(line) => print(line)
+  case Err(error) => print("error: {error}")
+}

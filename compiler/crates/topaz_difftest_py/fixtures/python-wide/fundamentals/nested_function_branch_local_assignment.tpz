@@ -1,0 +1,14 @@
+
+function main() -> int {
+    function choose() -> int {
+        if true {
+            let mut x = 1
+            x = x + 1
+            x
+        } else {
+            0
+        }
+    }
+    choose()
+}
+main()

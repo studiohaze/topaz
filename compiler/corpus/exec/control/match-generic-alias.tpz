@@ -1,0 +1,19 @@
+type Alias = int
+type Boxed<T> = Array<T>
+
+function check_ints(xs: Array<int>) -> string {
+    return match xs {
+        case ok: Boxed<Alias> => "boxed-alias-int"
+        case _ => "other"
+    }
+}
+
+function check_strings(xs: Array<string>) -> string {
+    return match xs {
+        case ok: Boxed<Alias> => "boxed-alias-int"
+        case _ => "other"
+    }
+}
+
+print(check_ints([1, 2, 3]))
+print(check_strings(["a", "b"]))

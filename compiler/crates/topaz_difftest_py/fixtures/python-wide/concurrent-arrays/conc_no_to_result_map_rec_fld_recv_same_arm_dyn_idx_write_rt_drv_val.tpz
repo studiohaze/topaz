@@ -1,0 +1,33 @@
+
+function dbl(x: int) -> int {
+    x * 2
+}
+
+function inc(x: int) -> int {
+    x + 1
+}
+
+function zero(x: int) -> int {
+    0
+}
+
+function choose(x: int) -> int {
+    let i = x - 2
+    let r = concurrent {
+        slow: {
+            let mut cbs = [zero, inc]
+            cbs[i] = dbl
+            let value: Result<int, int> = Ok(x)
+            let holder = { res: value }
+            let out = holder.res.map(cbs[i])
+            match out {
+                case Ok(n) => n
+                case Err(code) => code
+            }
+        }
+        fast: 0
+    }
+    r.slow + r.fast
+}
+
+choose(3)

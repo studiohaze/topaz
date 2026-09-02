@@ -1,0 +1,14 @@
+function прочитатьТекст(путь: string) -> Result<string, string> {
+    let файл = open(путь)?
+    defer { файл.close() }
+
+    let содержимое = файл.read()?
+    Ok(содержимое)
+}
+
+function записатьТекст(путь: string, содержимое: string) -> Result<(), string> {
+    let файл = open(путь)?
+    defer { файл.close() }
+
+    файл.write(содержимое)
+}

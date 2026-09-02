@@ -1,0 +1,2 @@
+function id<T>(x: T) -> T { x }
+id("s")

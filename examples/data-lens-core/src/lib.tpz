@@ -1,0 +1,260 @@
+import lens_labels { canonicalLabel }
+
+export record DataRow derives JSON {
+  name: string,
+  category: string,
+  value: int,
+  active: bool,
+}
+
+export record Summary derives JSON {
+  totalRows: int,
+  activeRows: int,
+  totalValue: int,
+}
+
+export enum DataFormat {
+  Csv,
+  Json,
+}
+
+export enum SortMode {
+  ByName,
+  ByValue,
+}
+
+export record LensResult derives JSON {
+  rows: Array<DataRow>,
+  summary: Summary,
+}
+
+export record ExportDocument {
+  filename: string,
+  mediaType: string,
+  text: string,
+}
+
+export function emptySummary() -> Summary {
+  Summary { totalRows: 0, activeRows: 0, totalValue: 0 }
+}
+
+function csvCell(row: Map<string, string>, name: string, index: int) -> Result<string, string> {
+  match row.get(name) {
+    case Some(value) => Ok(value)
+    case None => Err("CSV rows[{index}].{name}: missing column")
+  }
+}
+
+function parseValue(text: string, path: string) -> Result<int, string> {
+  match toInt(text.trim()) {
+    case Some(value) => {
+      if value < 0 {
+        return Err("{path}: expected a non-negative integer")
+      }
+      Ok(value)
+    }
+    case None => Err("{path}: expected an integer, got `{text}`")
+  }
+}
+
+function parseActive(text: string, path: string) -> Result<bool, string> {
+  let value = text.trim()
+  if value == "true" {
+    return Ok(true)
+  }
+  if value == "false" {
+    return Ok(false)
+  }
+  Err("{path}: expected `true` or `false`, got `{text}`")
+}
+
+function validateRow(row: DataRow, path: string) -> Result<DataRow, string> {
+  if row.name.byteLength() == 0 {
+    return Err("{path}.name: must not be empty")
+  }
+  if row.category.byteLength() == 0 {
+    return Err("{path}.category: must not be empty")
+  }
+  if row.value < 0 {
+    return Err("{path}.value: expected a non-negative integer")
+  }
+  Ok(row)
+}
+
+export function parseCsv(text: string) -> Result<Array<DataRow>, string> {
+  let sourceRows = match CSV.parseWithHeader(text) {
+    case Ok(rows) => rows
+    case Err(error) => return Err("CSV $: {error}")
+  }
+  let mut rows: Array<DataRow> = []
+  let mut index = 0
+  for source in sourceRows {
+    let name = canonicalLabel(csvCell(source, "name", index)?)
+    let category = canonicalLabel(csvCell(source, "category", index)?)
+    let valueText = csvCell(source, "value", index)?
+    let activeText = csvCell(source, "active", index)?
+    let row = DataRow {
+      name: name,
+      category: category,
+      value: parseValue(valueText, "CSV rows[{index}].value")?,
+      active: parseActive(activeText, "CSV rows[{index}].active")?,
+    }
+    rows.push(validateRow(row, "CSV rows[{index}]")?)
+    index += 1
+  }
+  Ok(rows)
+}
+
+function jsonField(value: JSONValue, name: string, path: string) -> Result<JSONValue, string> {
+  match value.get(name) {
+    case Some(field) => Ok(field)
+    case None => Err("{path}.{name}: missing field")
+  }
+}
+
+function jsonString(value: JSONValue, name: string, path: string) -> Result<string, string> {
+  let field = jsonField(value, name, path)?
+  match field.asString() {
+    case Some(text) => Ok(canonicalLabel(text))
+    case None => Err("{path}.{name}: expected a string")
+  }
+}
+
+function jsonInt(value: JSONValue, name: string, path: string) -> Result<int, string> {
+  let field = jsonField(value, name, path)?
+  match field.asInt() {
+    case Some(number) => {
+      if number < 0 {
+        return Err("{path}.{name}: expected a non-negative integer")
+      }
+      Ok(number)
+    }
+    case None => Err("{path}.{name}: expected an integer")
+  }
+}
+
+function jsonBool(value: JSONValue, name: string, path: string) -> Result<bool, string> {
+  let field = jsonField(value, name, path)?
+  match field.asBool() {
+    case Some(flag) => Ok(flag)
+    case None => Err("{path}.{name}: expected a boolean")
+  }
+}
+
+export function parseJson(text: string) -> Result<Array<DataRow>, string> {
+  let document = match JSON.parse(text) {
+    case Ok(value) => value
+    case Err(error) => return Err("JSON {error.line}:{error.column}: {error.message}")
+  }
+  let sourceRows = match document.asArray() {
+    case Some(rows) => rows
+    case None => return Err("JSON $: expected an array")
+  }
+  let mut rows: Array<DataRow> = []
+  let mut index = 0
+  for source in sourceRows {
+    let path = "JSON $[{index}]"
+    let row = DataRow {
+      name: jsonString(source, "name", path)?,
+      category: jsonString(source, "category", path)?,
+      value: jsonInt(source, "value", path)?,
+      active: jsonBool(source, "active", path)?,
+    }
+    rows.push(validateRow(row, path)?)
+    index += 1
+  }
+  Ok(rows)
+}
+
+export function parseData(text: string, format: DataFormat) -> Result<Array<DataRow>, string> {
+  match format {
+    case Csv => parseCsv(text)
+    case Json => parseJson(text)
+  }
+}
+
+function matches(row: DataRow, query: string, activeOnly: bool) -> bool {
+  if activeOnly && !row.active {
+    return false
+  }
+  let needle = query.trim()
+  needle.byteLength() == 0 || row.name.contains(needle) || row.category.contains(needle)
+}
+
+function comesBefore(left: DataRow, right: DataRow, sort: SortMode) -> bool {
+  match sort {
+    case ByName => left.name < right.name
+    case ByValue => left.value < right.value
+  }
+}
+
+export function applyLens(rows: Array<DataRow>, query: string, activeOnly: bool, sort: SortMode) -> LensResult {
+  let mut filtered: Array<DataRow> = []
+  for row in rows {
+    if matches(row, query, activeOnly) {
+      filtered.push(row)
+    }
+  }
+  let mut ordered: Array<DataRow> = []
+  for row in filtered {
+    let mut inserted = false
+    let mut index = 0
+    while index < ordered.length && !inserted {
+      if comesBefore(row, ordered[index], sort) {
+        ordered.insert(index, row)
+        inserted = true
+      }
+      index += 1
+    }
+    if !inserted {
+      ordered.push(row)
+    }
+  }
+  let mut activeRows = 0
+  let mut totalValue = 0
+  for row in ordered {
+    if row.active {
+      activeRows += 1
+    }
+    totalValue += row.value
+  }
+  LensResult {
+    rows: ordered,
+    summary: Summary {
+      totalRows: ordered.length,
+      activeRows: activeRows,
+      totalValue: totalValue,
+    },
+  }
+}
+
+function csvRows(rows: Array<DataRow>) -> Array<Map<string, string>> {
+  let mut encoded: Array<Map<string, string>> = []
+  for row in rows {
+    let mut fields: Map<string, string> = Map.new()
+    fields.insert("name", row.name)
+    fields.insert("category", row.category)
+    fields.insert("value", "{row.value}")
+    fields.insert("active", "{row.active}")
+    encoded.push(fields)
+  }
+  encoded
+}
+
+export function exportRows(rows: Array<DataRow>, format: DataFormat) -> Result<ExportDocument, string> {
+  match format {
+    case Csv => Ok(ExportDocument {
+      filename: "data-lens.csv",
+      mediaType: "text/csv;charset=utf-8",
+      text: CSV.stringifyWithHeader(csvRows(rows), ["name", "category", "value", "active"]),
+    })
+    case Json => {
+      let encoded = JSON.stringify(rows)?
+      Ok(ExportDocument {
+        filename: "data-lens.json",
+        mediaType: "application/json;charset=utf-8",
+        text: encoded,
+      })
+    }
+  }
+}

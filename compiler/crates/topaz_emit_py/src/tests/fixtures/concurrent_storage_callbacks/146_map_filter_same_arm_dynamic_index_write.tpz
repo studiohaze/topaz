@@ -1,0 +1,23 @@
+
+function keep(key: string, value: int) -> bool {
+    value > 1
+}
+
+function drop(key: string, value: int) -> bool {
+    false
+}
+
+function choose(i: int) -> int {
+    concurrent {
+        slow: {
+            let mut cbs = [drop, drop]
+            cbs[i] = keep
+            let values = map { "a": 1, "b": 2 }
+            values.filter(cbs[i])
+        }
+        fast: 0
+    }
+    0
+}
+
+choose(1)

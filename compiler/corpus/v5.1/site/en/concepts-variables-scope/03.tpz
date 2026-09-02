@@ -1,0 +1,11 @@
+// Constants determined at compile time
+const MAX_SIZE: int = 1000
+const APP_NAME: string = "Topaz Calculator"
+const PI: float = 3.141592653589793
+
+// Top-level constants available below in this file
+const defaultConfig = {
+    language: "English",
+    theme: "dark",
+    autoSave: true
+}

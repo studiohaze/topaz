@@ -1,0 +1,3 @@
+
+const scale = 12
+export record Widget { label: string, size: int = scale * 3 }

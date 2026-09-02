@@ -1,0 +1,6 @@
+{
+  "raw_source_bytes": 4096,
+  "prepare_work": 1000000,
+  "logical_allocation": 1000000,
+  "syntax_depth": 64
+}

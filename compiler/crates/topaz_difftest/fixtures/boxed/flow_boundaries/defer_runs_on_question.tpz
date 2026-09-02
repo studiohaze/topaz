@@ -1,0 +1,6 @@
+function p() -> Result<int, string> {
+  defer print("p-cleanup")
+  let x = Err("boom")?
+  Ok(x)
+}
+p()

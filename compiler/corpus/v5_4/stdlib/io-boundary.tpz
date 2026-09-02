@@ -1,0 +1,4 @@
+import std.io
+
+let input = io.readStdin().trim()
+io.writeLine("stdin:{input}:{input.scalars().length}")

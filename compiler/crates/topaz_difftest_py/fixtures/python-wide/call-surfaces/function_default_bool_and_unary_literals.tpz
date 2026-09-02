@@ -1,0 +1,8 @@
+
+function flag(x: bool = !false) -> int {
+    if x { 1 } else { 0 }
+}
+function neg(n: int = -1) -> int {
+    n
+}
+flag() + flag(false) + neg()

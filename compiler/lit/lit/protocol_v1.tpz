@@ -1,0 +1,777 @@
+// Installed protocol-v1 orchestration for source and prepared kernel requests.
+// Decoders and renderers own wire details; this leaf applies artifact, resource,
+// cancellation, and batch-routing rules around evaluator execution.
+
+import lit.model {
+  GuestInt,
+  GuestRational,
+  ErrorObjectRow,
+  GuardClauseRow,
+  GuestValue,
+  ValuePacket,
+  NodeOp,
+  SpanRow,
+  OriginRow,
+  BinderRow,
+  GlobalRow,
+  NodeRow,
+  Kernel,
+  Request,
+  FrontendRequest,
+  SourceRequest,
+  V1ArtifactIdentity,
+  V1ArtifactExpectation,
+  V1Cancellation,
+  V1ProductRequest,
+  V1HostBinding,
+  V1HostFrame,
+  V1ResourceProfile,
+  V1CatalogRow,
+  V1DiagnosticProjection,
+  V1ObservationState,
+  ScalarRow,
+  FrontendToken,
+  FrontendFault,
+  TokenizedSource,
+  ReaderDatumKind,
+  ReaderDatum,
+  ReaderOutput,
+  NormalizeOutput,
+  SourcePoint,
+  MachineWarning,
+  RunResult,
+}
+import lit.frontend_lex_read {
+  tokenizeSource,
+  readSourceIterative,
+}
+import lit.normalize_core {
+  h6CapabilityTable,
+  normalizeSourceH6,
+}
+import lit.machine.eval {
+  runKernel,
+}
+import lit.render {
+  renderGuest,
+  escapeJson,
+  machineOriginStartByte,
+  sourceFrontendRequest,
+  sourcePoint,
+  renderSourceResourceReport,
+  renderSourceFrontendMetrics,
+  renderSourceMachineMetrics,
+  renderSourceResultRow,
+  sourceDiagnostic,
+  machineDiagnostic,
+  machineDiagnosticIsUnsupported,
+  renderSourceFrontendFailure,
+  renderSourceInfrastructureFailure,
+}
+import lit.request_decode {
+  v1ResourceProfile,
+  decodeV1ProductRequestEnvelope,
+  decodeV1ProductRequest,
+  decodeV1HostFrame,
+  validateV1HostBinding,
+  isV1HostFrameCandidate,
+}
+import lit.kernel_decode {
+  expectArray,
+  expectString,
+  requireLength,
+}
+
+export function renderSourceBackendResult(request: SourceRequest) -> string {
+  let frontendRequest = sourceFrontendRequest(request)
+  let capabilityTable = match h6CapabilityTable() {
+    case Ok(value) => value
+    case Err(error) => return renderSourceInfrastructureFailure(request, error)
+  }
+  match tokenizeSource(frontendRequest) {
+    case Err(fault) => renderSourceFrontendFailure(request, fault, 0, 0, 0, 0, 0, 0, 0)
+    case Ok(tokenized) => match readSourceIterative(frontendRequest, tokenized) {
+      case Err(fault) => renderSourceFrontendFailure(
+        request, fault, tokenized.scalars.length, tokenized.tokens.length, 0, 0, 0,
+        tokenized.transitions, 0,
+      )
+      case Ok(reader) => match normalizeSourceH6(frontendRequest, reader, capabilityTable) {
+        case Err(fault) => renderSourceFrontendFailure(
+          request, fault, tokenized.scalars.length, tokenized.tokens.length,
+          reader.datums.length, reader.roots.length, reader.maxNesting,
+          reader.transitions, 0,
+        )
+        case Ok(normalized) => {
+          let machineRequest = Request {
+            invocationId: request.invocationId,
+            mode: "source-v0",
+            sourceId: request.sourceId,
+            sourceSha: request.sourceSha,
+            sourceBytes: request.sourceBytes,
+            workloadSha: "e3b0c44298fc1f149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            litSourceSha: request.litSourceSha,
+            capabilitySha: request.capabilityRowsSha,
+            kernel: normalized.kernel,
+            transitionLimit: request.machineTransitionLimit,
+            inputLimit: 16777216,
+            outputLimit: request.outputLimit,
+            tokenLimit: request.tokenLimit,
+          }
+          let result = runKernel(machineRequest)
+          let mut status = if result.status == "ok" { "ok" } else if result.status == "resource" { "resource" } else { "runtime-error" }
+          match result.diagnostic {
+            case Some(value) => if machineDiagnosticIsUnsupported(value) { status = "unsupported-loud" }
+            case None => {}
+          }
+          let mut stdoutText = result.stdoutText
+          let mut diagnosticText = if status == "ok" { "" } else { machineDiagnostic(request, result) }
+          let mut exitStatus = result.exitStatus
+          let attemptedOutputBytes = stdoutText.byteLength()
+          if attemptedOutputBytes > request.outputLimit {
+            status = "resource"
+            stdoutText = ""
+            diagnosticText = sourceDiagnostic(request, "HK901", "output byte limit exceeded", 0)
+            exitStatus = 2
+          }
+          let outputBytes = stdoutText.byteLength()
+          let resource = renderSourceResourceReport(
+            request, status, reader.transitions, tokenized.tokens.length, normalized.transitions,
+            result.transitions, outputBytes, result.rootsCompleted,
+          )
+          let frontend = renderSourceFrontendMetrics(
+            tokenized.scalars.length, tokenized.tokens.length, reader.datums.length,
+            reader.roots.length, reader.maxNesting, reader.transitions, normalized.transitions,
+            normalized.kernel.nodes.length, normalized.kernel.binders.length,
+            normalized.generatedBinders, normalized.intrinsicReferences, true,
+          )
+          let machine = renderSourceMachineMetrics(
+            status, result.transitions, result.maxContinuationDepth, result.allocations,
+            result.transfers, result.rootsCompleted,
+          )
+          renderSourceResultRow(
+            request, status, stdoutText, diagnosticText, exitStatus, resource, frontend, machine,
+          )
+        }
+      }
+    }
+  }
+}
+
+function renderV1ByteChannel(bytes: Bytes) -> string {
+  let base64 = bytes.toBase64()
+  let digest = Hash.sha256(bytes).toHex()
+  "\{\"encoding\":\"base64\",\"base64\":\"{base64}\",\"byte_len\":{bytes.length()},\"sha256\":\"{digest}\"\}"
+}
+
+function renderV1ArtifactIdentity(identity: Option<V1ArtifactIdentity>) -> string {
+  match identity {
+    case None => "null"
+    case Some(value) => "\{\"identity_kind\":\"{escapeJson(value.identity_kind)}\",\"path\":\"{escapeJson(value.path)}\",\"byte_len\":{value.byte_len},\"sha256\":\"{value.sha256}\"\}"
+  }
+}
+
+function renderV1Limits(limits: Array<int>) -> string {
+  "\{\"frontend_transition_limit\":{limits[0]},\"token_limit\":{limits[1]},\"normalization_step_limit\":{limits[2]},\"machine_transition_limit\":{limits[3]},\"output_byte_limit\":{limits[4]}\}"
+}
+
+function v1CatalogRow(code: string, actualPhase: string) -> Option<V1CatalogRow> {
+  if code == "E100" { return Some(V1CatalogRow { code: code, severity: "error", phase: "reader", family: "illegal-token-or-structure", exitStatus: 1 }) }
+  if code == "E110" { return Some(V1CatalogRow { code: code, severity: "error", phase: "normalizer", family: "reserved-binding", exitStatus: 1 }) }
+  if code == "E120" { return Some(V1CatalogRow { code: code, severity: "error", phase: actualPhase, family: "forbidden-extension", exitStatus: 1 }) }
+  if code == "E130" { return Some(V1CatalogRow { code: code, severity: "error", phase: "normalizer", family: "malformed-form", exitStatus: 1 }) }
+  if code == "E140" { return Some(V1CatalogRow { code: code, severity: "error", phase: "reader", family: "malformed-dotted-list", exitStatus: 1 }) }
+  if code == "E150" { return Some(V1CatalogRow { code: code, severity: "error", phase: "reader", family: "invalid-string-or-character", exitStatus: 1 }) }
+  if code == "E300" { return Some(V1CatalogRow { code: code, severity: "error", phase: "runtime", family: "unbound-variable", exitStatus: 1 }) }
+  if code == "E301" { return Some(V1CatalogRow { code: code, severity: "error", phase: "runtime", family: "apply-non-procedure", exitStatus: 1 }) }
+  if code == "E302" { return Some(V1CatalogRow { code: code, severity: "error", phase: "runtime", family: "arity-mismatch", exitStatus: 1 }) }
+  if code == "E303" { return Some(V1CatalogRow { code: code, severity: "error", phase: "runtime", family: "set-unbound", exitStatus: 1 }) }
+  if code == "E310" { return Some(V1CatalogRow { code: code, severity: "error", phase: "runtime", family: "pair-expected", exitStatus: 1 }) }
+  if code == "E311" { return Some(V1CatalogRow { code: code, severity: "error", phase: "runtime", family: "index-out-of-range", exitStatus: 1 }) }
+  if code == "E312" { return Some(V1CatalogRow { code: code, severity: "error", phase: "runtime", family: "wrong-primitive-type", exitStatus: 1 }) }
+  if code == "E313" { return Some(V1CatalogRow { code: code, severity: "error", phase: "runtime", family: "division-by-zero", exitStatus: 1 }) }
+  if code == "E314" { return Some(V1CatalogRow { code: code, severity: "error", phase: actualPhase, family: "nonfinite-inexact", exitStatus: 1 }) }
+  if code == "E320" { return Some(V1CatalogRow { code: code, severity: "error", phase: "runtime", family: "multiple-values-misuse", exitStatus: 1 }) }
+  if code == "E321" { return Some(V1CatalogRow { code: code, severity: "error", phase: "runtime", family: "uninitialized-letrec-read", exitStatus: 1 }) }
+  if code == "E330" { return Some(V1CatalogRow { code: code, severity: "error", phase: "runtime", family: "user-error", exitStatus: 1 }) }
+  if code == "E331" { return Some(V1CatalogRow { code: code, severity: "error", phase: "runtime", family: "uncaught-raised-object", exitStatus: 1 }) }
+  if code == "E332" { return Some(V1CatalogRow { code: code, severity: "error", phase: "runtime", family: "noncontinuable-handler-returned", exitStatus: 1 }) }
+  if code == "E340" { return Some(V1CatalogRow { code: code, severity: "error", phase: "runtime", family: "inactive-escape-continuation", exitStatus: 1 }) }
+  if code == "recursion-limit" { return Some(V1CatalogRow { code: code, severity: "error", phase: "resource", family: "non-tail-call-depth", exitStatus: 2 }) }
+  if code == "W330" { return Some(V1CatalogRow { code: code, severity: "warning", phase: "runtime", family: "deprecated-percent", exitStatus: 0 }) }
+  if code == "W331" { return Some(V1CatalogRow { code: code, severity: "warning", phase: "runtime", family: "deprecated-list-alias", exitStatus: 0 }) }
+  None
+}
+
+function v1CatalogProjection(
+  code: string,
+  actualPhase: string,
+  message: string,
+  irritants: Array<string>,
+  startByte: int,
+) -> V1DiagnosticProjection {
+  match v1CatalogRow(code, actualPhase) {
+    case Some(row) => V1DiagnosticProjection {
+      code: row.code,
+      severity: row.severity,
+      phase: row.phase,
+      family: row.family,
+      message: message,
+      irritants: irritants,
+      startByte: startByte,
+    }
+    case None => V1DiagnosticProjection {
+      code: "backend-protocol",
+      severity: "error",
+      phase: "infrastructure",
+      family: "backend-protocol",
+      message: "diagnostic catalog projection failed for {code}: {message}",
+      irritants: irritants,
+      startByte: startByte,
+    }
+  }
+}
+
+function v1ExtensionProjection(
+  code: string,
+  phase: string,
+  family: string,
+  message: string,
+  startByte: int,
+) -> V1DiagnosticProjection {
+  V1DiagnosticProjection {
+    code: code,
+    severity: "error",
+    phase: phase,
+    family: family,
+    message: message,
+    irritants: [],
+    startByte: startByte,
+  }
+}
+
+function v1FrontendPhase(fault: FrontendFault) -> string {
+  if fault.phase == "normalize" { "normalizer" } else { "reader" }
+}
+
+function v1FrontendProjection(fault: FrontendFault) -> V1DiagnosticProjection {
+  if fault.resource {
+    let code = if fault.templateId == "logical-transition-limit" {
+      if fault.phase == "normalize" { "normalization-step-limit" } else { "frontend-transition-limit" }
+    } else { fault.templateId }
+    return v1ExtensionProjection(code, "resource", "resource-limit", fault.message, fault.startByte)
+  }
+  if fault.diagnosticCode == "backend-protocol" {
+    return v1ExtensionProjection(
+      fault.diagnosticCode,
+      fault.diagnosticPhase,
+      "backend-protocol",
+      fault.diagnosticMessage,
+      fault.diagnosticStartByte,
+    )
+  }
+  v1CatalogProjection(
+    fault.diagnosticCode,
+    fault.diagnosticPhase,
+    fault.diagnosticMessage,
+    [],
+    fault.diagnosticStartByte,
+  )
+}
+
+function v1RawDiagnosticCode(raw: string) -> string {
+  let pieces = raw.split(" ")
+  if pieces.length > 0 { pieces[0] } else { "LIT200" }
+}
+
+function v1RawDiagnosticMessage(raw: string) -> string {
+  let code = v1RawDiagnosticCode(raw)
+  let scalars = raw.scalars()
+  let start = code.scalars().length + 1
+  if start >= scalars.length { return raw }
+  scalars.slice(start, scalars.length).join("")
+}
+
+function v1MachineProjection(kernel: Kernel, result: RunResult) -> V1DiagnosticProjection {
+  let raw = match result.diagnostic {
+    case Some(value) => value
+    case None => "LIT200 machine terminated without diagnostic"
+  }
+  let internalCode = v1RawDiagnosticCode(raw)
+  let code = match result.diagnosticCode {
+    case Some(value) => value
+    case None => internalCode
+  }
+  let startByte = if code == "recursion-limit" { 0 }
+    else { machineOriginStartByte(kernel, result.diagnosticOrigin) }
+  let message = match result.diagnosticMessage {
+    case Some(value) => value
+    case None => v1RawDiagnosticMessage(raw)
+  }
+  if code == "backend-unsupported" {
+    return v1ExtensionProjection(
+      code,
+      "runtime",
+      "backend-unsupported",
+      message,
+      startByte,
+    )
+  }
+  if code == "backend-protocol" {
+    return v1ExtensionProjection(
+      code,
+      "infrastructure",
+      "backend-protocol",
+      message,
+      startByte,
+    )
+  }
+  let mut irritants: Array<string> = []
+  for irritant in result.diagnosticIrritants { irritants.push(renderGuest(irritant)) }
+  if v1CatalogRow(code, "runtime") == None {
+    return V1DiagnosticProjection {
+      code: code,
+      severity: "error",
+      phase: "runtime",
+      family: "backend-protocol",
+      message: message,
+      irritants: irritants,
+      startByte: startByte,
+    }
+  }
+  v1CatalogProjection(code, if code == "recursion-limit" { "resource" } else { "runtime" }, message, irritants, startByte)
+}
+
+function v1MachineWarnings(kernel: Kernel, result: RunResult) -> Array<V1DiagnosticProjection> {
+  let mut projected: Array<V1DiagnosticProjection> = []
+  for warning in result.warnings {
+    projected.push(v1CatalogProjection(
+      warning.code,
+      "runtime",
+      warning.message,
+      [],
+      machineOriginStartByte(kernel, warning.origin),
+    ))
+  }
+  projected
+}
+
+function v1ProjectedValues(packets: Array<ValuePacket>) -> Array<string> {
+  let mut values: Array<string> = []
+  for packet in packets {
+    match packet {
+      case One(value) => { values.push(renderGuest(value)) }
+      case Many(items) => for value in items { values.push(renderGuest(value)) }
+    }
+  }
+  values
+}
+
+function renderV1StringArray(values: Array<string>) -> string {
+  let mut rendered: Array<string> = []
+  for value in values { rendered.push("\"{escapeJson(value)}\"") }
+  "[{rendered.join(",")}]"
+}
+
+function v1DecodedSourceBytes(request: V1ProductRequest) -> Array<int> {
+  match Bytes.fromBase64(request.source_bytes_base64) {
+    case Ok(value) => value.toArray()
+    case Err(_) => []
+  }
+}
+
+function renderV1Diagnostic(request: V1ProductRequest, diagnostic: V1DiagnosticProjection) -> string {
+  let point = sourcePoint(v1DecodedSourceBytes(request), diagnostic.startByte)
+  let irritants = renderV1StringArray(diagnostic.irritants)
+  let mut renderedText = "{diagnostic.code} {request.logical_source_id}:{point.line}:{point.column} {diagnostic.message}"
+  for irritant in diagnostic.irritants { renderedText += " {irritant}" }
+  renderedText += "\n"
+  let channel = renderV1ByteChannel(Bytes.encodeUtf8(renderedText))
+  "\{\"code\":\"{escapeJson(diagnostic.code)}\",\"severity\":\"{diagnostic.severity}\",\"phase\":\"{diagnostic.phase}\",\"family\":\"{diagnostic.family}\",\"message\":\"{escapeJson(diagnostic.message)}\",\"irritants\":{irritants},\"span\":\{\"source\":\"{escapeJson(request.logical_source_id)}\",\"line\":{point.line},\"column\":{point.column}\},\"rendered_bytes\":{channel}\}"
+}
+
+function renderV1DiagnosticArray(request: V1ProductRequest, diagnostics: Array<V1DiagnosticProjection>) -> string {
+  let mut rendered: Array<string> = []
+  for diagnostic in diagnostics { rendered.push(renderV1Diagnostic(request, diagnostic)) }
+  "[{rendered.join(",")}]"
+}
+
+function renderV1ValueProjection(values: Array<string>) -> string {
+  "\{\"schema\":\"lispex.value-projection/v1\",\"values\":{renderV1StringArray(values)}\}"
+}
+
+function renderV1ResourceOutcome(profile: V1ResourceProfile, status: string, limit: Option<string>) -> string {
+  let limitJson = match limit {
+    case Some(value) => "\"{escapeJson(value)}\""
+    case None => "null"
+  }
+  "\{\"profile_id\":\"{profile.id}\",\"purpose\":\"{profile.purpose}\",\"status\":\"{status}\",\"limit\":{limitJson},\"limits\":{renderV1Limits(profile.limits)}\}"
+}
+
+function v1ObservationHostVariant(binding: Option<V1HostBinding>) -> string {
+  match binding {
+    case Some(value) => value.host_variant
+    case None => "topaz-interpreter-protocol-v1"
+  }
+}
+
+function v1ObservationArtifact(
+  request: V1ProductRequest,
+  binding: Option<V1HostBinding>,
+) -> V1ArtifactIdentity {
+  match binding {
+    case Some(value) => value.artifact
+    case None => request.artifact_expectation.artifact
+  }
+}
+
+function v1ObservationHostMetrics(binding: Option<V1HostBinding>) -> string {
+  match binding {
+    case Some(_) => ",\"binary_stdio\":true,\"fresh_process\":true,\"deadline_process_control\":true"
+    case None => ""
+  }
+}
+
+function renderV1ObservationIdentity(sourceSha: string, artifactJson: string) -> string {
+  "\{\"source_sha256\":\"{sourceSha}\",\"artifact\":{artifactJson},\"profile_id\":\"lispex-profile-1.5\",\"meter_id\":\"lispex.product-resource-meter/v1\",\"capability_manifest_id\":\"lispex.capability-manifest/2\",\"capability_manifest_digest\":\"sha256:22debb0569cabc51c8848d5a089e1b3c0b88e6c606525b92b5ce060e40f1d900\",\"meter_manifest_digest\":\"sha256:0e7bfe9be2ea155d7f9d8b5f83f49b0df4451710891769b77423e1c7cecbf657\",\"observation_schema_id\":\"lispex.observation-result/v1\",\"observation_contract_id\":\"lispex-observation-contract/1\",\"observation_contract_digest\":\"sha256:efb521008ae1077163b55bcb0f77e03fa586bd047ead2ee9b7f5fa25e4a6c7f8\",\"capability_schema\":\"lispex.primitive-capabilities/v2\",\"observation_schema\":\"lispex.observation-result/v1\",\"resource_schema\":\"lispex.resource-profiles/v1\",\"forbidden_fallback_counts\":\{\"debug_binary\":0,\"host_apply\":0,\"host_callback\":0,\"host_control\":0,\"host_eval\":0,\"host_source_decoder\":0,\"runtime_download\":0,\"rust_backend\":0,\"sibling_checkout\":0\}\}"
+}
+
+function renderV1Observation(
+  request: V1ProductRequest,
+  profile: V1ResourceProfile,
+  state: V1ObservationState,
+  binding: Option<V1HostBinding>,
+) -> string {
+  let stdoutChannel = renderV1ByteChannel(Bytes.encodeUtf8(state.stdoutText))
+  let diagnostics = renderV1DiagnosticArray(request, state.diagnostics)
+  let warnings = renderV1DiagnosticArray(request, state.warnings)
+  let values = renderV1ValueProjection(state.values)
+  let resources = renderV1ResourceOutcome(profile, state.resourceStatus, state.resourceLimit)
+  let artifact = renderV1ArtifactIdentity(Some(v1ObservationArtifact(request, binding)))
+  let hostVariant = v1ObservationHostVariant(binding)
+  let executionStarted = if state.executionStarted { "true" } else { "false" }
+  let kernelProduced = if state.kernelProduced { "true" } else { "false" }
+  let artifactVerified = match binding {
+    case Some(_) => "true"
+    case None => "false"
+  }
+  let hostMetrics = v1ObservationHostMetrics(binding)
+  let metrics = "\{\"protocol_admitted\":true,\"source_execution_started\":{executionStarted},\"kernel_produced\":{kernelProduced},\"source_byte_len\":{v1DecodedSourceBytes(request).length},\"scalar_count\":{state.scalarCount},\"token_count\":{state.tokenCount},\"reader_datums\":{state.readerDatums},\"reader_roots\":{state.readerRoots},\"tokenizer_transitions\":{state.tokenizerTransitions},\"normalization_steps\":{state.normalizationSteps},\"kernel_nodes\":{state.kernelNodes},\"machine_transitions\":{state.machineTransitions},\"roots_completed\":{state.rootsCompleted},\"max_continuation_depth\":{state.maxContinuationDepth},\"allocations\":{state.allocations},\"transfers\":{state.transfers},\"transition_metrics_available\":true,\"internal_disposition\":\"{state.internalDisposition}\",\"value_projection_source\":\"common-machine-completed-root-auto-print-bridge/v1\",\"artifact_identity_verified_by_executing_host\":{artifactVerified}{hostMetrics},\"host_utf8_source_decoder_count\":0,\"capability_row_count\":205,\"rust_supported_count\":205,\"lil_supported_count\":84,\"lit_supported_count\":205\}"
+  let identity = renderV1ObservationIdentity(request.source_sha256, artifact)
+  "\{\"schema\":\"lispex.observation-result/v1\",\"invocation_id\":\"{escapeJson(request.invocation_id)}\",\"backend\":\{\"id\":\"lit\",\"version\":\"5.7.0\",\"profile\":\"lispex-profile-1.5\",\"host_variant\":\"{hostVariant}\"\},\"status\":\"{state.status}\",\"stdout_bytes\":{stdoutChannel},\"diagnostics\":{diagnostics},\"warnings\":{warnings},\"exit_status\":{state.exitStatus},\"value_projection\":{values},\"resource_outcome\":{resources},\"metrics\":{metrics},\"identity\":{identity}\}"
+}
+
+function v1FrontendFailureState(
+  fault: FrontendFault,
+  scalars: int,
+  tokens: int,
+  readerDatums: int,
+  readerRoots: int,
+  tokenizerTransitions: int,
+  normalizationSteps: int,
+) -> V1ObservationState {
+  let resourceLimit = if fault.resource {
+    if fault.templateId == "token-limit" { Some("tokens") }
+    else if fault.templateId == "reader-nesting-limit" { Some("reader-nesting") }
+    else if fault.phase == "normalize" { Some("normalization-steps") }
+    else { Some("frontend-transitions") }
+  } else { None }
+  V1ObservationState {
+    executionStarted: true,
+    kernelProduced: false,
+    status: if fault.resource { "resource" } else { "source-error" },
+    stdoutText: "",
+    diagnostics: [v1FrontendProjection(fault)],
+    warnings: [],
+    exitStatus: if fault.resource { 2 } else { 1 },
+    values: [],
+    resourceStatus: if fault.resource { "limit-exceeded" } else { "not-started" },
+    resourceLimit: resourceLimit,
+    scalarCount: scalars,
+    tokenCount: tokens,
+    readerDatums: readerDatums,
+    readerRoots: readerRoots,
+    tokenizerTransitions: tokenizerTransitions,
+    normalizationSteps: normalizationSteps,
+    kernelNodes: 0,
+    machineTransitions: 0,
+    rootsCompleted: 0,
+    maxContinuationDepth: 0,
+    allocations: 0,
+    transfers: 0,
+    internalDisposition: if fault.resource { "resource" } else { "source-error" },
+  }
+}
+
+function v1InfrastructureState(message: string) -> V1ObservationState {
+  V1ObservationState {
+    executionStarted: false,
+    kernelProduced: false,
+    status: "infrastructure-error",
+    stdoutText: "",
+    diagnostics: [v1ExtensionProjection("backend-protocol", "infrastructure", "backend-protocol", message, 0)],
+    warnings: [],
+    exitStatus: 2,
+    values: [],
+    resourceStatus: "not-started",
+    resourceLimit: None,
+    scalarCount: 0,
+    tokenCount: 0,
+    readerDatums: 0,
+    readerRoots: 0,
+    tokenizerTransitions: 0,
+    normalizationSteps: 0,
+    kernelNodes: 0,
+    machineTransitions: 0,
+    rootsCompleted: 0,
+    maxContinuationDepth: 0,
+    allocations: 0,
+    transfers: 0,
+    internalDisposition: "infrastructure-error",
+  }
+}
+
+function v1MachineState(
+  request: V1ProductRequest,
+  normalized: NormalizeOutput,
+  tokenized: TokenizedSource,
+  reader: ReaderOutput,
+  result: RunResult,
+) -> V1ObservationState {
+  let mut status = if result.status == "ok" { "ok" }
+    else if result.status == "resource" { "resource" }
+    else { "runtime-error" }
+  let mut exitStatus = if status == "ok" { 0 } else if status == "resource" { 2 } else { 1 }
+  let mut diagnostics: Array<V1DiagnosticProjection> = []
+  let warnings = v1MachineWarnings(normalized.kernel, result)
+  let values = v1ProjectedValues(result.rootPackets)
+  let mut stdoutText = result.stdoutText
+  let mut resourceStatus = if status == "resource" { "limit-exceeded" } else { "within-limit" }
+  let mut resourceLimit: Option<string> = if status == "resource" { Some("machine-transitions") } else { None }
+  let mut internalDisposition = if status == "ok" { "executed" }
+    else if status == "resource" { "resource" }
+    else { "runtime-error" }
+  if status != "ok" {
+    let diagnostic = v1MachineProjection(normalized.kernel, result)
+    if diagnostic.code == "backend-protocol" {
+      status = "infrastructure-error"
+      exitStatus = 2
+      resourceStatus = "not-started"
+      resourceLimit = None
+      internalDisposition = "infrastructure-error"
+    } else if diagnostic.code == "backend-unsupported" {
+      status = "runtime-error"
+      exitStatus = 1
+      resourceStatus = "within-limit"
+      resourceLimit = None
+      internalDisposition = "unsupported-loud"
+    }
+    diagnostics.push(diagnostic)
+  }
+  if stdoutText.byteLength() > request.limits[4] {
+    status = "resource"
+    exitStatus = 2
+    stdoutText = ""
+    diagnostics = [v1ExtensionProjection(
+      "output-limit",
+      "resource",
+      "output-byte-limit",
+      "output byte limit exceeded",
+      0,
+    )]
+    resourceStatus = "limit-exceeded"
+    resourceLimit = Some("output-bytes")
+    internalDisposition = "resource"
+  } else if status == "resource" {
+    stdoutText = ""
+  }
+  V1ObservationState {
+    executionStarted: true,
+    kernelProduced: true,
+    status: status,
+    stdoutText: stdoutText,
+    diagnostics: diagnostics,
+    warnings: warnings,
+    exitStatus: exitStatus,
+    values: values,
+    resourceStatus: resourceStatus,
+    resourceLimit: resourceLimit,
+    scalarCount: tokenized.scalars.length,
+    tokenCount: tokenized.tokens.length,
+    readerDatums: reader.datums.length,
+    readerRoots: reader.roots.length,
+    tokenizerTransitions: tokenized.transitions,
+    normalizationSteps: normalized.transitions,
+    kernelNodes: normalized.kernel.nodes.length,
+    machineTransitions: result.transitions,
+    rootsCompleted: result.rootsCompleted,
+    maxContinuationDepth: result.maxContinuationDepth,
+    allocations: result.allocations,
+    transfers: result.transfers,
+    internalDisposition: internalDisposition,
+  }
+}
+
+function runV1AdmittedRequest(
+  request: V1ProductRequest,
+  binding: Option<V1HostBinding>,
+) -> string {
+  let profile = match v1ResourceProfile(request.resource_profile) {
+    case Some(value) => value
+    case None => return renderV1ProtocolFailure(Some(request), "protocol resource profile disappeared after admission", true)
+  }
+  let sourceBytes = v1DecodedSourceBytes(request)
+  let frontendRequest = FrontendRequest {
+    invocationId: request.invocation_id,
+    mode: "product-v1",
+    sourceId: request.logical_source_id,
+    sourceSha: request.source_sha256,
+    sourceBytes: sourceBytes,
+    workloadSha: "e3b0c44298fc1f149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    litSourceSha: request.source_sha256,
+    capabilitySha: "72bc588742e499cd47dc8f9b01751743535e0ed97bb2969527b00a1291695840",
+    transitionLimit: request.limits[0],
+    normalizationLimit: request.limits[2],
+    inputLimit: 4194304,
+    outputLimit: request.limits[4],
+    tokenLimit: request.limits[1],
+  }
+  let capabilityTable = match h6CapabilityTable() {
+    case Ok(value) => value
+    case Err(error) => return renderV1Observation(request, profile, v1InfrastructureState(error), binding)
+  }
+  let state = match tokenizeSource(frontendRequest) {
+    case Err(fault) => v1FrontendFailureState(fault, 0, 0, 0, 0, 0, 0)
+    case Ok(tokenized) => match readSourceIterative(frontendRequest, tokenized) {
+      case Err(fault) => v1FrontendFailureState(
+        fault,
+        tokenized.scalars.length,
+        tokenized.tokens.length,
+        0,
+        0,
+        tokenized.transitions,
+        0,
+      )
+      case Ok(reader) => match normalizeSourceH6(frontendRequest, reader, capabilityTable) {
+        case Err(fault) => v1FrontendFailureState(
+          fault,
+          tokenized.scalars.length,
+          tokenized.tokens.length,
+          reader.datums.length,
+          reader.roots.length,
+          tokenized.transitions,
+          0,
+        )
+        case Ok(normalized) => {
+          let machineRequest = Request {
+            invocationId: request.invocation_id,
+            mode: "product-v1",
+            sourceId: request.logical_source_id,
+            sourceSha: request.source_sha256,
+            sourceBytes: sourceBytes,
+            workloadSha: "e3b0c44298fc1f149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            litSourceSha: request.source_sha256,
+            capabilitySha: "72bc588742e499cd47dc8f9b01751743535e0ed97bb2969527b00a1291695840",
+            kernel: normalized.kernel,
+            transitionLimit: request.limits[3],
+            inputLimit: 4194304,
+            outputLimit: request.limits[4],
+            tokenLimit: request.limits[1],
+          }
+          v1MachineState(request, normalized, tokenized, reader, runKernel(machineRequest))
+        }
+      }
+    }
+  }
+  renderV1Observation(request, profile, state, binding)
+}
+
+function renderV1ProtocolFailure(
+  request: Option<V1ProductRequest>,
+  message: string,
+  admitted: bool,
+) -> string {
+  let mut invocationId = "invalid"
+  let mut sourceSha = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  let mut resourceProfile = V1ResourceProfile {
+    id: "lispex-product-native/v1",
+    purpose: "installed-product",
+    publicSelectable: true,
+    limits: [20000000, 2000000, 20000000, 100000000, 16777216],
+  }
+  let mut artifact: Option<V1ArtifactIdentity> = None
+  match request {
+    case Some(value) => {
+      invocationId = value.invocation_id
+      sourceSha = value.source_sha256
+      artifact = Some(value.artifact_expectation.artifact)
+      match v1ResourceProfile(value.resource_profile) {
+        case Some(profile) => { resourceProfile = profile }
+        case None => {}
+      }
+    }
+    case None => {}
+  }
+  let renderedDiagnostic = "backend-protocol <protocol>:1:1 {message}\n"
+  let stdoutChannel = renderV1ByteChannel(Bytes.encodeUtf8(""))
+  let diagnosticChannel = renderV1ByteChannel(Bytes.encodeUtf8(renderedDiagnostic))
+  let artifactJson = renderV1ArtifactIdentity(artifact)
+  let limitsJson = renderV1Limits(resourceProfile.limits)
+  let admittedJson = if admitted { "true" } else { "false" }
+  let identity = renderV1ObservationIdentity(sourceSha, artifactJson)
+  "\{\"schema\":\"lispex.observation-result/v1\",\"invocation_id\":\"{escapeJson(invocationId)}\",\"backend\":\{\"id\":\"lit\",\"version\":\"5.7.0\",\"profile\":\"lispex-profile-1.5\",\"host_variant\":\"topaz-interpreter-protocol-v1\"\},\"status\":\"infrastructure-error\",\"stdout_bytes\":{stdoutChannel},\"diagnostics\":[\{\"code\":\"backend-protocol\",\"severity\":\"error\",\"phase\":\"infrastructure\",\"family\":\"backend-protocol\",\"message\":\"{escapeJson(message)}\",\"irritants\":[],\"span\":\{\"source\":\"<protocol>\",\"line\":1,\"column\":1\},\"rendered_bytes\":{diagnosticChannel}\}],\"warnings\":[],\"exit_status\":2,\"value_projection\":\{\"schema\":\"lispex.value-projection/v1\",\"values\":[]\},\"resource_outcome\":\{\"profile_id\":\"{resourceProfile.id}\",\"purpose\":\"{resourceProfile.purpose}\",\"status\":\"not-started\",\"limit\":null,\"limits\":{limitsJson}\},\"metrics\":\{\"protocol_admitted\":{admittedJson},\"source_execution_started\":false,\"observation_projection_pending\":{admittedJson},\"host_utf8_source_decoder_count\":0\},\"identity\":{identity}\}"
+}
+
+export function runLispexBackendProtocolV1(stdin: string) -> string {
+  match decodeV1ProductRequest(stdin) {
+    case Err(error) => renderV1ProtocolFailure(None, error, false)
+    case Ok(request) => runV1AdmittedRequest(request, None)
+  }
+}
+
+export function runLispexBackendProtocolV1HostFrame(stdin: string) -> string {
+  let frame = match decodeV1HostFrame(stdin) {
+    case Err(error) => return renderV1ProtocolFailure(None, error, false)
+    case Ok(value) => value
+  }
+  let request = match decodeV1ProductRequestEnvelope(frame.request_jsonl) {
+    case Err(error) => return renderV1ProtocolFailure(None, error, false)
+    case Ok(value) => value
+  }
+  match validateV1HostBinding(request, frame.binding) {
+    case Err(error) => renderV1ProtocolFailure(Some(request), error, false)
+    case Ok(_) => runV1AdmittedRequest(request, Some(frame.binding))
+  }
+}
+
+export function isDiagnosticProjectionBatchCandidate(stdin: string) -> bool {
+  stdin.startsWith("[\"topaz.lit-j57-2c-diagnostic-projection-batch/v1\"")
+}
+
+export function runDiagnosticProjectionBatch(stdin: string) -> Result<string, string> {
+  let parsed = match JSON.parse(stdin) {
+    case Ok(value) => value
+    case Err(error) => return Err("step-4 diagnostic batch JSON is invalid at {error.line}:{error.column}: {error.message}")
+  }
+  let row = expectArray(parsed, "step-4-diagnostic-batch")?
+  requireLength(row, 2, "step-4-diagnostic-batch")?
+  if expectString(row[0], "step-4-diagnostic-batch.tag")? != "topaz.lit-j57-2c-diagnostic-projection-batch/v1" {
+    return Err("step-4 diagnostic batch tag is invalid")
+  }
+  let requests = expectArray(row[1], "step-4-diagnostic-batch.requests")?
+  if requests.length == 0 || requests.length > 200 {
+    return Err("step-4 diagnostic batch must contain 1..200 complete V1 requests")
+  }
+  let mut rendered = "[\"topaz.lit-j57-2c-diagnostic-projection-batch-result/v1\""
+  let mut index = 0
+  while index < requests.length {
+    let requestText = expectString(requests[index], "step-4-diagnostic-batch.requests[{index}]")?
+    let observation = if isV1HostFrameCandidate(requestText) {
+      runLispexBackendProtocolV1HostFrame(requestText)
+    } else {
+      runLispexBackendProtocolV1(requestText)
+    }
+    rendered += ",{observation}"
+    index += 1
+  }
+  Ok("{rendered}]")
+}

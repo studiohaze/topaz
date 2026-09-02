@@ -1,0 +1,6 @@
+
+let mut base = 36
+record User { name: string, age: int = base }
+base = 41
+let user = User { name: "Ada" }
+user.age

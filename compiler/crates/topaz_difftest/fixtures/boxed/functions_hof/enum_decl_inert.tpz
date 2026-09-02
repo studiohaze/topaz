@@ -1,0 +1,2 @@
+enum Color { Red, Blue }
+print("ok")

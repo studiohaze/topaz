@@ -1,0 +1,2 @@
+match Err(3) { case Ok(v) => v
+case Err(e) => e }

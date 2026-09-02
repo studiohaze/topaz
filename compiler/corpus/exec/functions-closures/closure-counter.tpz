@@ -1,0 +1,10 @@
+function makeAdder(n: int) -> (int) -> int {
+    return (m: int) => n + m
+}
+let add3 = makeAdder(3)
+print("{add3(4)}")
+let inc = (x: int) => x + 1
+let dbl = (x: int) => x * 2
+let f = inc >> dbl
+print("{f(5)}")
+print("{10 |> inc}")

@@ -1,0 +1,28 @@
+import data_lens_core { DataFormat, DataRow, parseData }
+
+let csv = "name,category,value,active\n서울_alpha,city,12,true\nКазань,city,8,false"
+let csvRows = parseData(csv, DataFormat.Csv)
+match csvRows {
+  case Ok(rows) => {
+    assert(rows.length == 2, "CSV row count")
+    assert(rows[0].name == "서울 alpha", "dependency-backed label normalization")
+    assert(rows[1].active == false, "CSV boolean")
+  }
+  case Err(error) => assert(false, error)
+}
+
+let json = "[\{\"name\":\"東京\",\"category\":\"city\",\"value\":17,\"active\":true\}]"
+match parseData(json, DataFormat.Json) {
+  case Ok(rows) => assert(rows.length == 1 && rows[0].name == "東京", "JSON Unicode row")
+  case Err(error) => assert(false, error)
+}
+
+match parseData("name,category,value,active\nBroken,city,nope,true", DataFormat.Csv) {
+  case Ok(_) => assert(false, "invalid CSV accepted")
+  case Err(error) => assert(error.contains("CSV rows[0].value"), "CSV path diagnostic")
+}
+
+match parseData("[\{\"name\":\"Broken\"\}]", DataFormat.Json) {
+  case Ok(_) => assert(false, "invalid JSON accepted")
+  case Err(error) => assert(error.contains("JSON $[0].category"), "JSON path diagnostic")
+}

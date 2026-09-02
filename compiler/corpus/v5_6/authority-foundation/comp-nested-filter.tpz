@@ -1,0 +1,2 @@
+let values = [ for x in [1, 2] for y in [10, 20] if y > 10 => x + y ]
+print("{values}")

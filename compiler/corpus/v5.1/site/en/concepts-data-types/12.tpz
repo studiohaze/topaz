@@ -1,0 +1,7 @@
+let stringNumber = "123"
+
+// toInt returns Option<int> — handle the None case explicitly
+let parsed = match toInt(stringNumber) {
+    case Some(value) => value
+    case None => 0
+}

@@ -1,0 +1,2 @@
+let o = Some(5)
+0 |> o?.get(print("y"))

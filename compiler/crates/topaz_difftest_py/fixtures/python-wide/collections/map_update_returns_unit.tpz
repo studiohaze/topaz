@@ -1,0 +1,7 @@
+
+function main() -> string {
+    let mut m = map { "x": 1 }
+    let u = m.update("x", 0, (value) => value + 1)
+    "{u}:{m.getOr("x", 0)}"
+}
+main()

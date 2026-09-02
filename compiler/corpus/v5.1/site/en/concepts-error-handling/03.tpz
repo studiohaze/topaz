@@ -1,0 +1,39 @@
+// Structured error types
+type FileErrorKind = "not_found" | "permission_denied" | "read_failed" | "format_error"
+type FileError = { kind: FileErrorKind, message: string }
+
+function readConfigFile(path: string) -> Result<{ theme: string }, FileError> {
+    if !fileExists(path) {
+        return Err({ kind: "not_found", message: "Config file not found: {path}" })
+    }
+    
+    if !hasReadPermission(path) {
+        return Err({ kind: "permission_denied", message: "No permission to read: {path}" })
+    }
+    
+    return match readFileContent(path) {
+        case Ok(content) => match JSON.parse(content) {
+            case Ok(config) => Ok({ theme: config.theme })
+            case Err(_) => Err({ kind: "format_error", message: "Invalid JSON format" })
+        }
+        case Err(reason) => Err({ kind: "read_failed", message: reason })
+    }
+}
+
+// Specific error handling: match the closed error-kind union directly,
+// so exhaustiveness is checked statically
+match readConfigFile("config.json") {
+    case Ok(config) => {
+        print("Config loaded successfully")
+        print("Theme: {config.theme}")
+    }
+    case Err(error) => match error.kind {
+        case "not_found" => {
+            print("Config file not found: {error.message}")
+            createDefaultConfig()
+        }
+        case "permission_denied" => print("No permission: {error.message}")
+        case "format_error" => print("Format error: {error.message}")
+        case "read_failed" => print("Read failed: {error.message}")
+    }
+}

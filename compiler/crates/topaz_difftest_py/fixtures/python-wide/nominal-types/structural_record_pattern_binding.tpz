@@ -1,0 +1,9 @@
+
+function main() -> int {
+    let r = { x: 1, y: 2 }
+    match r {
+        case { x, y } => x + y
+        case _ => 0
+    }
+}
+main()

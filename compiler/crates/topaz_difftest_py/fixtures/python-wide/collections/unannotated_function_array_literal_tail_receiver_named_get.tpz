@@ -1,0 +1,12 @@
+
+function make() {
+    [1, 2]
+}
+function main() -> int {
+    let xs = make()
+    match xs.get(i: 1) {
+        case Some(n) => n
+        case None => 0
+    }
+}
+main()

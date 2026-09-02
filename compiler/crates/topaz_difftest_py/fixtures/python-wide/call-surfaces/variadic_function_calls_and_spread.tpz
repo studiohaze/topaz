@@ -1,0 +1,29 @@
+
+function sum(seed: int, ...xs: int) -> int {
+    let mut total = seed
+    for x in xs {
+        total = total + x
+    }
+    total
+}
+function mark(label: string, text: string) -> string {
+    print(label)
+    text
+}
+function join(prefix: string = "v", ...xs: int) -> string {
+    let mut out = prefix
+    for x in xs {
+        out = "{out}:{x}"
+    }
+    out
+}
+function main() -> string {
+    let a = sum(1, 2, 3)
+    let b = sum(1, ...[4, 5])
+    let c = sum(6, ...[7, 8], 9)
+    let d = join("n", 1, 2)
+    let e = join(...[3, 4])
+    let f = join(...[1, 2], prefix: mark("prefix", "n"))
+    "{a}:{b}:{c}:{d}:{e}:{f}"
+}
+main()

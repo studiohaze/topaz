@@ -1,0 +1,22 @@
+[package]
+name = "topaz_parser"
+description = "Recursive-descent parser and recovery for the Topaz language"
+version.workspace = true
+license.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+topaz_diag = { workspace = true }
+topaz_syntax = { workspace = true }
+topaz_lexer = { workspace = true }
+
+[dev-dependencies]
+topaz_resolve = { workspace = true }
+# Dev-only (CDR-001 §3 exempts dev-dependencies): the corpus harness
+# selects fences through the extractor's rows instead of re-parsing
+# the manifests.
+corpus-extract = { path = "../../tools/corpus-extract" }
+
+[lints]
+workspace = true

@@ -1,0 +1,13 @@
+type 변환모드 = "double" | "square"
+
+function 변환선택(모드: 변환모드) -> (int) -> int {
+    return match 모드 {
+        case "double" => (x: int) => x * 2
+        case "square" => (x: int) => x * x
+    }
+}
+
+let 변환 = 변환선택("square")
+let 값 = 변환(5)
+
+print("값: {값}")  // 25

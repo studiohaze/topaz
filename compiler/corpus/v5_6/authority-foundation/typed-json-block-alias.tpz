@@ -1,0 +1,5 @@
+let decoded = {
+    type Scalar = int
+    JSON.parseAs<Scalar>("7")
+}
+print("{decoded}")

@@ -1,0 +1,12 @@
+
+function f() -> Map<Bytes, int> {
+    let mut m = map {
+        Bytes.encodeUtf8("b"): 2,
+        Bytes.encodeUtf8("a"): 1,
+    }
+    m.insert(Bytes.encodeUtf8("b"), 20)
+    let bValue = m.getOr(Bytes.encodeUtf8("b"), 0)
+    print("{m}:{bValue}:{m.values.length}")
+    m
+}
+f()

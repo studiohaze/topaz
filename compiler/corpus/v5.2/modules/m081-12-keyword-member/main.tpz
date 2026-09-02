@@ -1,0 +1,2 @@
+import utils.strings
+let k = strings.type

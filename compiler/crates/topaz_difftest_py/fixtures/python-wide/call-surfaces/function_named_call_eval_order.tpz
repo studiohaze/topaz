@@ -1,0 +1,9 @@
+
+function mark(label: string, n: int) -> int {
+    print(label)
+    n
+}
+function sub(a: int, b: int) -> int {
+    a - b
+}
+sub(b: mark("b", 3), a: mark("a", 10))

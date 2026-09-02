@@ -1,0 +1,25 @@
+
+function idKey(x: int) -> int {
+    x
+}
+
+function midKey(x: int) -> int {
+    3 * x * x - 13 * x + 16
+}
+
+function negKey(x: int) -> int {
+    0 - x
+}
+
+let mut base = []
+let callbacks = [...base, idKey, midKey, negKey]
+
+let r = concurrent {
+    slow: {
+        let mut xs = [3, 1, 2]
+        xs.sortBy(callbacks[2])
+        xs[0] * 100 + xs[1] * 10 + xs[2]
+    }
+    fast: 0
+}
+r.slow + r.fast

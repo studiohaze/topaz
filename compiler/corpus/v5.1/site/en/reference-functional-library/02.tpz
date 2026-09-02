@@ -1,0 +1,8 @@
+function addWith(amount: int) -> (int) -> int {
+    return (value: int) => value + amount
+}
+
+let add10 = addWith(10)
+let total = add10(5)
+
+print("Total: {total}")  // 15

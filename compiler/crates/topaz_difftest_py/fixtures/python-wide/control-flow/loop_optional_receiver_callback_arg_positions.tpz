@@ -1,0 +1,41 @@
+
+function add(a: int, b: int) -> int {
+    a + b
+}
+function inc(x: int) -> int {
+    x + 1
+}
+let xs: Option<Array<int>> = Some([1, 2, 3])
+let noneXs: Option<Array<int>> = None
+let reducedOption = xs?.reduce(loop {
+    print("initial")
+    break 5
+}, add)
+let reduced = reducedOption ?? 0
+let skippedReducedOption = noneXs?.reduce(loop {
+    print("skip-initial")
+    break 99
+}, add)
+let skippedReduced = skippedReducedOption ?? 7
+let mut m: Option<Map<string, int>> = Some(map { "a": 1 })
+m?.update(loop {
+    print("update-key")
+    break "b"
+}, loop {
+    print("update-initial")
+    break 4
+}, inc)
+let mut noneM: Option<Map<string, int>> = None
+noneM?.update(loop {
+    print("skip-update-key")
+    break "z"
+}, loop {
+    print("skip-update-initial")
+    break 99
+}, inc)
+let updated = match m {
+    case Some(mm) => mm.getOr("b", 0)
+    case None => 0
+}
+print("{reduced}:{skippedReduced}:{updated}")
+0

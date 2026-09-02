@@ -1,0 +1,3 @@
+let mut name: Option<string> = None
+name ??= Some("guest")     // name becomes Some("guest")
+name ??= Some("override")  // no-op (already Some)

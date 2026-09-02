@@ -1,0 +1,69 @@
+# corpus/v5.2/syntax manifest (CDR-002 §3). Phase A: every
+# fixture is parse-phase and runnable; resolve-phase fixtures
+# (corpus/v5.2/modules/) land separately and are counted as
+# pending until the resolver ships.
+
+[totals]
+recorded = 9
+runnable = 9
+pending = 0
+
+[[fixture]]
+file = "concurrent-keyword-arm.tpz"
+phase = "parse"
+versions = "5.2"
+result = "error"
+code = "TPZ2001"
+
+[[fixture]]
+file = "keyword-fields.tpz"
+phase = "parse"
+versions = "5.2"
+result = "ok"
+
+[[fixture]]
+file = "named-arg-keyword.tpz"
+phase = "parse"
+versions = "5.2"
+result = "error"
+code = "TPZ2001"
+
+[[fixture]]
+file = "or-binding.tpz"
+phase = "parse"
+versions = "5.2"
+result = "error"
+code = "TPZ2006"
+
+[[fixture]]
+file = "or-constructor-binding.tpz"
+phase = "parse"
+versions = "5.2"
+result = "error"
+code = "TPZ2006"
+
+[[fixture]]
+file = "or-patterns.tpz"
+phase = "parse"
+versions = "5.2"
+result = "ok"
+
+[[fixture]]
+file = "or-record-shorthand.tpz"
+phase = "parse"
+versions = "5.2"
+result = "error"
+code = "TPZ2006"
+
+[[fixture]]
+file = "return-arms.tpz"
+phase = "parse"
+versions = "5.2"
+result = "ok"
+
+[[fixture]]
+file = "shorthand-keyword-pattern.tpz"
+phase = "parse"
+versions = "5.2"
+result = "error"
+code = "TPZ2001"

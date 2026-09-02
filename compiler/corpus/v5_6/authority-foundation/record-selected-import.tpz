@@ -1,0 +1,4 @@
+import record_model { User }
+
+let user: User = User { name: "Ada" }
+print("{user.name}")

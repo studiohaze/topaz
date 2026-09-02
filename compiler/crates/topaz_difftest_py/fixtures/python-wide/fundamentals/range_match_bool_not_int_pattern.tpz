@@ -1,0 +1,8 @@
+
+function main() -> int {
+    match true {
+        case 0..1 => 7
+        case _ => 4
+    }
+}
+main()

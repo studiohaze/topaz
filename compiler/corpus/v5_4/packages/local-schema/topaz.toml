@@ -1,0 +1,11 @@
+[package]
+name = "local_schema"
+version = "0.1.0"
+language = "5.4"
+entry = "src/lib.tpz"
+
+[exports]
+module = "src/lib.tpz"
+
+[dependencies]
+std = "5.4"

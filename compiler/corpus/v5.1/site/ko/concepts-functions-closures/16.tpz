@@ -1,0 +1,40 @@
+type 메모항목 = { 입력: int, 출력: int }
+
+function 캐시찾기(캐시: Array<메모항목>, 입력: int) -> Option<int> {
+    match 캐시 {
+        case [] => None
+        case [첫항목, ..나머지] => {
+            if 첫항목.입력 == 입력 {
+                Some(첫항목.출력)
+            } else {
+                캐시찾기(나머지, 입력)
+            }
+        }
+    }
+}
+
+// int -> int 함수를 위한 메모이제이션 데코레이터
+function 정수메모이제이션(함수: (int) -> int) -> (int) -> int {
+    let mut 캐시: Array<메모항목> = []
+
+    return (입력: int) => {
+        match 캐시찾기(캐시, 입력) {
+            case Some(출력) => 출력
+            case None => {
+                let 결과 = 함수(입력)
+                캐시.push({ 입력: 입력, 출력: 결과 })
+                결과
+            }
+        }
+    }
+}
+
+function 느린피보나치(n: int) -> int {
+    if n <= 1 { n } else { 느린피보나치(n - 1) + 느린피보나치(n - 2) }
+}
+
+// 느린 피보나치를 메모이제이션으로 최적화
+let 메모피보나치 = 정수메모이제이션(느린피보나치)
+
+// 이제 큰 숫자도 빠르게 계산
+print("{메모피보나치(20)}")  // 빠르게 계산됨

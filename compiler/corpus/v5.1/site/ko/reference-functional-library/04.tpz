@@ -1,0 +1,8 @@
+let 숫자들 = Array.of(1, 2, 3, 4, 5, 6)
+
+let 합계 = 숫자들
+    |> filter(_, x => x % 2 == 0)
+    |> map(_, x => x * x)
+    |> reduce(_, 0, (누적, x) => 누적 + x)   // reduce(xs, initial, f)
+
+print("합계: {합계}")  // 56

@@ -1,0 +1,5 @@
+
+function fast(x: int) -> int {
+    x + 40
+}
+export let callbacks = [fast]

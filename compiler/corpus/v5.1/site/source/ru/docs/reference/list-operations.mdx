@@ -1,0 +1,123 @@
+---
+title: 'Операции со списками'
+description: 'Канонические cookbook-паттерны Topaz для обычных задач с Array, Map и Set.'
+covers: '§9, §11, §22'
+---
+
+Эта страница — task cookbook для небольшой поверхности коллекций, используемой в public Topaz примерах. Полную поверхность имён см. в [Основные функции](/ru/docs/reference/core-functions).
+
+## Создание коллекций
+
+Для создания коллекций используйте `Array.of`, `Map.new` и `Set.of`. Изменяющие операции требуют mutable binding.
+
+```topaz
+let числа = Array.of(1, 2, 3, 4, 5)
+
+let mut оценки: Map<string, int> = Map.new()
+оценки.insert("alice", 92)
+оценки.insert("bob", 78)
+
+let mut теги = Set.of("docs")
+теги.add("v5")
+
+print("Числа: {числа}")
+```
+
+Литералы массивов принимают spread `...expr`, вклеивающий элементы существующего массива на месте:
+
+```topaz
+let база = Array.of(1, 2)
+let расширенный = [0, ...база, 3]     // [0, 1, 2, 3]
+```
+
+## Преобразование массивов
+
+В pipeline используйте free helper-имена `filter`, `map` и `reduce`. Передавайте piped collection через `_`.
+
+```topaz
+let числа = Array.of(1, 2, 3, 4, 5)
+
+let суммаКвадратовЧётных = числа
+    |> filter(_, x => x % 2 == 0)
+    |> map(_, x => x * x)
+    |> reduce(_, 0, (накоплено, x) => накоплено + x)   // reduce(xs, initial, f)
+
+print("Сумма квадратов чётных: {суммаКвадратовЧётных}")  // 20
+```
+
+## Чтение массивов
+
+Массивы поддерживают `.length`, index access, чтение без фолта `.get` и membership через `in`. Порядок перебора — по возрастанию индексов.
+
+```topaz
+let числа = Array.of(1, 2, 3, 4, 5)
+
+let количество = числа.length
+let третий = числа[2]           // 3 — прямая индексация даёт фолт вне границ
+let безопасно = числа.get(10)   // None — чтение без фолта, возвращает Option<int>
+let естьТри = 3 in числа
+
+print("Количество: {количество}")
+print("Третий: {третий}")
+print("Есть три: {естьТри}")
+```
+
+Предпочитайте `arr.get(i)`, когда индекс может выйти за границы; оставляйте `arr[i]` для индексов, валидность которых уже доказана.
+
+## Чтение и удаление записей Map
+
+`m.get` — чтение map без фолта; `m.remove` удаляет ключ и сообщает, что там было. Оба возвращают `Option<V>`.
+
+```topaz
+let mut оценки: Map<string, int> = Map.new()
+оценки.insert("alice", 92)
+оценки.insert("bob", 78)
+
+let оценкаAlice = оценки.get("alice")    // Some(92) — None, если ключа нет
+let удалено = оценки.remove("bob")       // Some(78) — Some(старое) если был, иначе None
+let отсутствует = оценки.remove("carol") // None
+
+match оценки.get("alice") {
+    case Some(оценка) => print("Оценка alice: {оценка}")
+    case None => print("Нет оценки для alice")
+}
+```
+
+## Перебор ключей Map
+
+Перебирайте `map.keys`, когда задаче нужны только ключи. `map.keys` — это **снимок** `Array<K>` в порядке вставки ключей: последующее изменение карты не меняет уже созданный массив ключей.
+
+```topaz
+let mut оценки: Map<string, int> = Map.new()
+оценки.insert("alice", 92)
+оценки.insert("bob", 78)
+
+for имя in оценки.keys {
+    print("Оценка сохранена для {имя}")    // сначала "alice", затем "bob" (порядок вставки)
+}
+
+let естьAlice = "alice" in оценки.keys
+print("Есть alice: {естьAlice}")
+```
+
+Прямое `x in map` не канонично в Topaz — принадлежность идёт через представление keys: `x in map.keys`.
+
+## Set membership
+
+Для Set используйте `Set.of`, mutable `add`/`remove` и `in` для проверки membership.
+
+```topaz
+let mut теги = Set.of("docs")
+теги.add("v5")
+
+let естьDocs = "docs" in теги
+let естьLegacy = "legacy" in теги
+let убрано = теги.remove("docs")         // true, только если элемент был удалён
+
+print("Есть docs: {естьDocs}")
+print("Есть legacy: {естьLegacy}")
+```
+
+## Границы
+
+Public examples Topaz не задают отдельную List collection, set algebra helpers, sorting/grouping/zipping helpers, lazy collection pipelines или parallel collection pipelines. Используйте `Array`, `Map`, `Set` и canonical surface выше, пока будущее решение не расширит collection library.

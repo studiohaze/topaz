@@ -1,0 +1,12 @@
+[package]
+name = "topaz_host_native"
+version.workspace = true
+license.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+topaz_value = { workspace = true }
+
+[lints]
+workspace = true

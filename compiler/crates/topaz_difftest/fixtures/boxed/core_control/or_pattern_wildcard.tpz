@@ -1,0 +1,6 @@
+function h(r: Result<int, string>) -> int {
+    match r {
+        case Ok(_) | _ => 1
+    }
+}
+h(Err("x"))

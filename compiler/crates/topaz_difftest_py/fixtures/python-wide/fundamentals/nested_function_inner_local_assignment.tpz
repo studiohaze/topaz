@@ -1,0 +1,13 @@
+
+function main() -> int {
+    function outer() -> int {
+        function inner() -> int {
+            let mut x = 1
+            x = x + 1
+            x
+        }
+        inner()
+    }
+    outer()
+}
+main()

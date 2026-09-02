@@ -1,0 +1,13 @@
+
+import contract.request { Request }
+import contract.response { Response, text }
+
+export function handle(req: Request) -> Response {
+    if req.path == "/health" {
+        text(200, "ok")
+    } else if req.path == "/echo" {
+        text(200, "{req.method} {req.path}")
+    } else {
+        text(404, req.path)
+    }
+}

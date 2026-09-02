@@ -1,0 +1,18 @@
+
+concurrent {
+    slow: {
+        function spin() -> int {
+            let mut i = 0
+            while i < 200 {
+                i = i + 1
+            }
+            1 / 0
+        }
+        spin()
+    }
+    boom: {
+        let xs = [1]
+        xs[2]
+    }
+}
+0

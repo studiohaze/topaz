@@ -1,0 +1,4 @@
+let числа: Array<int> = [1, 2, 3]
+let имяОпционально: Option<string> = Some("Alice")
+let результатПарсинга: Result<Пользователь, string> = разобратьПользователя(rawJson)
+let кеш: Map<string, int> = Map.new()

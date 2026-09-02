@@ -1,0 +1,161 @@
+import src.observations { canonicalTag, counted }
+import std.lispex {
+    LispexConsumerArtifactInspection,
+    LispexConsumerEvidence,
+    LispexEvidenceOutcome,
+    LispexOperationalFault,
+    LispexSettlement,
+    LispexValue,
+    PreparedLispexRule,
+    consumerArtifactBytes,
+    consumerArtifactFromBytes,
+    defaultLimits,
+    evaluate,
+    evaluateWithEvidence,
+    freshReplay,
+    inspectConsumerArtifact,
+    portableCoreBytes,
+    valueFromCanonical,
+    verifyConsumerArtifact,
+}
+import std.lispex.rules as rules
+
+function canonicalInput(index: int) -> Result<LispexValue, string> {
+    let tag = canonicalTag(index)
+    let raw = if tag == 0 { [0] } else if tag == 1 { [1] } else { [2] }
+    let bytes = match Bytes.fromArray(raw) {
+        case Ok(value) => value
+        case Err(message) => return Err(message)
+    }
+    match valueFromCanonical(bytes) {
+        case Ok(value) => Ok(value)
+        case Err(_) => Err("canonical input was refused")
+    }
+}
+
+function requireComplete(
+    result: Result<LispexSettlement, LispexOperationalFault>,
+) -> Result<int, string> {
+    match result {
+        case Ok(Complete(_)) => Ok(1)
+        case Ok(_) => Err("evaluation did not complete")
+        case Err(_) => Err("evaluation returned an operational fault")
+    }
+}
+
+function runDefault(
+    approve: PreparedLispexRule,
+    classify: PreparedLispexRule,
+) -> Result<string, string> {
+    let mut completed = 0
+    let mut index = 0
+    while index < 24 {
+        let input = canonicalInput(index)?
+        let rule = if index % 2 == 0 { approve } else { classify }
+        completed = completed + requireComplete(evaluate(rule, input, defaultLimits(rule)))?
+        index = index + 1
+    }
+
+    let evidenceInput = canonicalInput(0)?
+    let evidence = match evaluateWithEvidence(
+        approve,
+        evidenceInput,
+        defaultLimits(approve),
+    ) {
+        case Ok(Portable(found)) => found
+        case Ok(Unrecorded(_)) => return Err("portable evidence was not retained")
+        case Err(_) => return Err("evidence evaluation returned an operational fault")
+    }
+    let serialized = consumerArtifactBytes(evidence.artifact)
+    let restored = match consumerArtifactFromBytes(serialized) {
+        case Ok(value) => value
+        case Err(_) => return Err("consumer artifact import failed")
+    }
+    let verified = match verifyConsumerArtifact(restored) {
+        case Ok(value) => value
+        case Err(_) => return Err("consumer artifact verification failed")
+    }
+    let inspected = match inspectConsumerArtifact(restored) {
+        case Ok(value) => value
+        case Err(_) => return Err("consumer artifact inspection failed")
+    }
+    if verified.artifactSha256 != inspected.artifactSha256 ||
+        verified.category != "complete" ||
+        verified.authenticated ||
+        verified.issuer != None ||
+        verified.semanticProfileId != Some("lispex/r7rs-rule-embedded-core/1") {
+        return Err("consumer artifact facts drifted")
+    }
+    let core = match portableCoreBytes(restored) {
+        case Ok(bytes) => bytes
+        case Err(_) => return Err("portable core extraction failed")
+    }
+    if core.isEmpty() {
+        return Err("portable core was empty")
+    }
+    match freshReplay(approve, evidenceInput, restored) {
+        case Ok(Complete(_)) => Ok("default:24:evidence:verified:replayed")
+        case Ok(_) => Err("fresh replay did not complete")
+        case Err(_) => Err("fresh replay failed")
+    }
+}
+
+function runIsolation(
+    approve: PreparedLispexRule,
+    classify: PreparedLispexRule,
+) -> Result<string, string> {
+    let firstInput = canonicalInput(1)?
+    let secondInput = canonicalInput(2)?
+    requireComplete(evaluate(approve, firstInput, defaultLimits(approve)))?
+    requireComplete(evaluate(classify, secondInput, defaultLimits(classify)))?
+    Ok(counted("isolation", 2, "complete"))
+}
+
+function runSemanticLimit(rule: PreparedLispexRule) -> Result<string, string> {
+    let input = canonicalInput(0)?
+    match evaluate(rule, input, defaultLimits(rule)) {
+        case Ok(LimitExhaustion(_)) => Ok("semantic-limit:exhausted")
+        case Ok(_) => Err("semantic limit did not exhaust")
+        case Err(_) => Err("semantic limit became an operational fault")
+    }
+}
+
+function runAggregateQuota(
+    rule: PreparedLispexRule,
+    alreadyUsed: int,
+) -> Result<string, string> {
+    let input = canonicalInput(0)?
+    let mut completed = 0
+    while completed < 64 - alreadyUsed {
+        requireComplete(evaluate(rule, input, defaultLimits(rule)))?
+        completed = completed + 1
+    }
+    match evaluate(rule, input, defaultLimits(rule)) {
+        case Err(TotalEvaluationsExceeded) => Ok("aggregate-quota:64:refused")
+        case Err(_) => Err("aggregate quota returned the wrong operational fault")
+        case Ok(_) => Err("aggregate quota did not refuse the next evaluation")
+    }
+}
+
+export function main(args: Array<string>, stdin: string) -> Result<int, string> {
+    let scenario = if args.length == 0 { "default" } else { args[0] }
+    let observation = if scenario == "default" {
+        runDefault(rules.approve(), rules.classify())?
+    } else if scenario == "isolation" {
+        runIsolation(rules.approve(), rules.classify())?
+    } else if scenario == "semantic-limit" {
+        runSemanticLimit(rules.semantic_limit_probe())?
+    } else if scenario == "aggregate-quota" {
+        runAggregateQuota(rules.approve(), 0)?
+    } else if scenario == "all" {
+        let defaultObservation = runDefault(rules.approve(), rules.classify())?
+        let isolationObservation = runIsolation(rules.approve(), rules.classify())?
+        let limitObservation = runSemanticLimit(rules.semantic_limit_probe())?
+        let quotaObservation = runAggregateQuota(rules.approve(), 29)?
+        "all:{defaultObservation}:{isolationObservation}:{limitObservation}:{quotaObservation}"
+    } else {
+        return Err("unknown court scenario")
+    }
+    print(observation)
+    Ok(0)
+}

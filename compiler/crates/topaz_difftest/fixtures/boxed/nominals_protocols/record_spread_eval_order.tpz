@@ -1,0 +1,16 @@
+record R { a: int, b: int, c: int }
+function base() {
+  print("S")
+  R { a: 1, b: 2, c: 3 }
+}
+function one() {
+  print("A")
+  10
+}
+function two() {
+  print("B")
+  20
+}
+let r = R { ...base(), a: one(), b: two() }
+print("{r.a}/{r.b}/{r.c}")
+0

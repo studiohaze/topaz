@@ -1,0 +1,2 @@
+function keep<T: Show>(value: T) -> T { value }
+0

@@ -1,0 +1,1 @@
+Codec.zstdCompress(level: 7, bytes: Bytes.encodeUtf8("hi")).flatMap((zs) => Codec.zstdDecompress(bytes: zs)).map((b) => b.toHex())

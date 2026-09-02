@@ -1,0 +1,3 @@
+import src.answer { answer }
+
+let checked = answer()

@@ -1,0 +1,458 @@
+// Evaluation transitions for decoded kernel nodes.
+// Primitive invocation and continuation delivery are delegated, while this leaf
+// owns expression dispatch and the initial run loop entry.
+
+import lit.model {
+  GuestInt,
+  GuestRational,
+  ErrorObjectRow,
+  GuardClauseRow,
+  GuestValue,
+  ValuePacket,
+  MachineSignal,
+  NodeOp,
+  SpanRow,
+  OriginRow,
+  BinderRow,
+  GlobalRow,
+  NodeRow,
+  Kernel,
+  Request,
+  EnvironmentRow,
+  ClosureRow,
+  ContinuationFrame,
+  ContinuationRow,
+  MachineWarning,
+  DynamicFrame,
+  DynamicRow,
+  MachineMode,
+  KernelInvokeStep,
+  KernelEvalStep,
+  KernelDeliverStep,
+  KernelTransferStep,
+  RunResult,
+}
+import lit.value_runtime {
+  cloneGuest,
+  allocateCell,
+  allocateEnvironment,
+  allocateClosure,
+  allocateContinuation,
+  allocateDynamic,
+  localCell,
+}
+import lit.render {
+  machineNodeOrigin,
+}
+import lit.machine.invoke {
+  runKernelInvoke,
+}
+import lit.machine.deliver {
+  runKernelDeliver,
+}
+import lit.machine.transfer {
+  runKernelTransfer,
+}
+
+function runKernelEval(
+  nodeId: int,
+  environment: int,
+  continuation: int,
+  kernel: Kernel,
+  cells: Array<GuestValue>,
+  environments: Array<EnvironmentRow>,
+  closures: Array<ClosureRow>,
+  continuations: Array<ContinuationRow>,
+  dynamics: Array<DynamicRow>,
+  dynamicSuppressed: Array<bool>,
+  guestIdentities: Array<int>,
+  initialAllocations: int,
+  initialMaxContinuationDepth: int,
+  initialTransfers: int,
+  initialDynamic: int,
+  initialActiveOrigin: int,
+) -> KernelEvalStep {
+  let mut allocations = initialAllocations
+  let mut maxContinuationDepth = initialMaxContinuationDepth
+  let mut transfers = initialTransfers
+  let mut dynamic = initialDynamic
+  let mut activeOrigin = initialActiveOrigin
+  let mut mode = MachineMode.HaltMode
+  if nodeId < 0 || nodeId >= kernel.nodes.length {
+    transfers += 1
+    mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal("LIT200 internal node reference"), continuation)
+  } else {
+    let node = kernel.nodes[nodeId]
+    activeOrigin = node.origin
+    match node.op {
+      case Literal(quoteId) => {
+        mode = MachineMode.DeliverMode(
+          ValuePacket.One(cloneGuest(kernel.quotes[quoteId], guestIdentities)),
+          continuation,
+        )
+      }
+      case LocalRef(binder, depth, slot) => {
+        match localCell(environments, environment, depth, slot) {
+          case Ok(cell) => {
+            let value = cells[cell]
+            match value {
+              case VUninitialized => {
+                transfers += 1
+                let name = if binder >= 0 && binder < kernel.binders.length { kernel.binders[binder].name } else { "binding" }
+                mode = MachineMode.TransferMode(
+                  MachineSignal.ProjectedRuntimeSignal(
+                    "E321 uninitialized letrec binding",
+                    "E321",
+                    "variable used before its letrec initialization: {name}",
+                    [],
+                  ),
+                  continuation,
+                )
+              }
+              case _ => {
+                mode = MachineMode.DeliverMode(ValuePacket.One(value), continuation)
+              }
+            }
+          }
+          case Err(error) => {
+            transfers += 1
+            mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+          }
+        }
+      }
+      case GlobalRef(global, slot) => {
+        let value = cells[slot]
+        match value {
+          case VUninitialized => {
+            transfers += 1
+            let row = kernel.globals[global]
+            let message = if row.capability == -2 { "unbound variable: {row.name}" } else { "uninitialized global: {row.name}" }
+            mode = MachineMode.TransferMode(
+              MachineSignal.ProjectedRuntimeSignal(
+                "E300 {message}",
+                "E300",
+                message,
+                [],
+              ),
+              continuation,
+            )
+          }
+          case _ => {
+            mode = MachineMode.DeliverMode(ValuePacket.One(value), continuation)
+          }
+        }
+      }
+      case Capability(capability) => {
+        mode = MachineMode.DeliverMode(ValuePacket.One(GuestValue.VPrimitive(capability)), continuation)
+      }
+      case IfNode(testNode, thenNode, elseNode) => {
+        let frame = allocateContinuation(
+          continuations,
+          ContinuationFrame.IfFrame(thenNode, elseNode, environment, machineNodeOrigin(kernel, testNode)),
+          continuation,
+        )
+        allocations += 1
+        if continuations[frame].depth > maxContinuationDepth { maxContinuationDepth = continuations[frame].depth }
+        mode = MachineMode.EvalMode(testNode, environment, frame)
+      }
+      case Begin(children) => {
+        if children.length == 1 {
+          mode = MachineMode.EvalMode(children[0], environment, continuation)
+        } else {
+          let frame = allocateContinuation(
+            continuations,
+            ContinuationFrame.BeginFrame(children, 1, environment),
+            continuation,
+          )
+          allocations += 1
+          if continuations[frame].depth > maxContinuationDepth { maxContinuationDepth = continuations[frame].depth }
+          mode = MachineMode.EvalMode(children[0], environment, frame)
+        }
+      }
+      case Lambda(binders, body, rest) => {
+        let closure = allocateClosure(closures, binders.length, rest >= 0, body, environment)
+        allocations += 1
+        mode = MachineMode.DeliverMode(ValuePacket.One(GuestValue.VClosure(closure)), continuation)
+      }
+      case Apply(operator, operands) => {
+        let frame = allocateContinuation(
+          continuations,
+          ContinuationFrame.OperatorFrame(operands, environment, node.origin, machineNodeOrigin(kernel, operator)),
+          continuation,
+        )
+        allocations += 1
+        if continuations[frame].depth > maxContinuationDepth { maxContinuationDepth = continuations[frame].depth }
+        mode = MachineMode.EvalMode(operator, environment, frame)
+      }
+      case SetLocal(_, depth, slot, rhs) => {
+        match localCell(environments, environment, depth, slot) {
+          case Ok(cell) => {
+            let frame = allocateContinuation(continuations, ContinuationFrame.SetLocalFrame(cell, environment, slot, machineNodeOrigin(kernel, rhs)), continuation)
+            allocations += 1
+            if continuations[frame].depth > maxContinuationDepth { maxContinuationDepth = continuations[frame].depth }
+            mode = MachineMode.EvalMode(rhs, environment, frame)
+          }
+          case Err(error) => {
+            transfers += 1
+            mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+          }
+        }
+      }
+      case SetGlobal(_, slot, rhs) => {
+        let frame = allocateContinuation(continuations, ContinuationFrame.SetGlobalFrame(slot, machineNodeOrigin(kernel, rhs)), continuation)
+        allocations += 1
+        if continuations[frame].depth > maxContinuationDepth { maxContinuationDepth = continuations[frame].depth }
+        mode = MachineMode.EvalMode(rhs, environment, frame)
+      }
+      case Letrec(binders, initializers, body) => {
+        let mut frameCells: Array<int> = []
+        let mut binderIndex = 0
+        while binderIndex < binders.length {
+          frameCells.push(allocateCell(cells, GuestValue.VUninitialized))
+          allocations += 1
+          binderIndex += 1
+        }
+        let localEnvironment = allocateEnvironment(environments, environment, frameCells)
+        allocations += 1
+        if initializers.length == 0 {
+          mode = MachineMode.EvalMode(body, localEnvironment, continuation)
+        } else {
+          let frame = allocateContinuation(
+            continuations,
+            ContinuationFrame.LetrecFrame(binders, initializers, 0, localEnvironment, body),
+            continuation,
+          )
+          allocations += 1
+          if continuations[frame].depth > maxContinuationDepth { maxContinuationDepth = continuations[frame].depth }
+          mode = MachineMode.EvalMode(initializers[0], localEnvironment, frame)
+        }
+      }
+      case GuardNode(_, clauses, elseNode, body) => {
+        let guardDynamic = allocateDynamic(
+          dynamics,
+          dynamicSuppressed,
+          DynamicFrame.GuardDynamic(clauses, elseNode, environment, continuation),
+          dynamic,
+        )
+        allocations += 1
+        let frame = allocateContinuation(
+          continuations,
+          ContinuationFrame.GuardScopeFrame(guardDynamic),
+          continuation,
+        )
+        allocations += 1
+        if continuations[frame].depth > maxContinuationDepth { maxContinuationDepth = continuations[frame].depth }
+        dynamic = guardDynamic
+        mode = MachineMode.EvalMode(body, environment, frame)
+      }
+    }
+  }
+
+  KernelEvalStep {
+    mode: mode,
+    allocations: allocations,
+    maxContinuationDepth: maxContinuationDepth,
+    transfers: transfers,
+    dynamic: dynamic,
+    activeOrigin: activeOrigin,
+  }
+}
+
+export function runKernel(request: Request) -> RunResult {
+  let kernel = request.kernel
+  let mut cells: Array<GuestValue> = []
+  let mut environments: Array<EnvironmentRow> = []
+  let mut closures: Array<ClosureRow> = []
+  let mut continuations: Array<ContinuationRow> = []
+  let mut dynamics: Array<DynamicRow> = []
+  let mut dynamicSuppressed: Array<bool> = []
+  let mut escapeActive: Array<bool> = []
+  let mut guestIdentities: Array<int> = [0]
+  let mut allocations = 0
+  for global in kernel.globals {
+    let value = if global.capability >= 0 {
+      GuestValue.VPrimitive(global.capability)
+    } else {
+      GuestValue.VUninitialized
+    }
+    allocateCell(cells, value)
+    allocations += 1
+  }
+  let haltContinuation = allocateContinuation(continuations, ContinuationFrame.HaltFrame, -1)
+  allocations += 1
+  let mut maxContinuationDepth = 1
+  let mut transitions = 0
+  let mut transfers = 0
+  let mut exhausted = false
+  let mut settlementTransitions = 0
+  let settlementLimit = 512
+  let mut dynamic = -1
+  let mut finalPacket: Option<ValuePacket> = None
+  let mut rootPackets: Array<ValuePacket> = []
+  let mut emittedOutput = ""
+  let mut finalDiagnostic: Option<string> = None
+  let mut finalDiagnosticCode: Option<string> = None
+  let mut finalDiagnosticMessage: Option<string> = None
+  let mut finalDiagnosticOrigin = -1
+  let mut finalDiagnosticIrritants: Array<GuestValue> = []
+  let mut warnings: Array<MachineWarning> = []
+  let mut activeOrigin = -1
+  let mut finalStatus = "error"
+  let mut finalExit = 1
+  let mut mode = if kernel.feature == "hosted-kernel-h6/v0" {
+    let programContinuation = allocateContinuation(
+      continuations,
+      ContinuationFrame.ProgramFrame(kernel.roots, 1, -1, []),
+      haltContinuation,
+    )
+    allocations += 1
+    if continuations[programContinuation].depth > maxContinuationDepth {
+      maxContinuationDepth = continuations[programContinuation].depth
+    }
+    MachineMode.EvalMode(kernel.roots[0], -1, programContinuation)
+  } else {
+    MachineMode.EvalMode(kernel.roots[0], -1, haltContinuation)
+  }
+
+  loop {
+    match mode {
+      case EvalMode(nodeId, _, _) => {
+        if nodeId >= 0 && nodeId < kernel.nodes.length { activeOrigin = kernel.nodes[nodeId].origin }
+      }
+      case InvokeMode(_, _, _, origin) => { activeOrigin = origin }
+      case _ => {}
+    }
+    if !exhausted {
+      if transitions >= request.transitionLimit {
+        exhausted = true
+        transfers += 1
+        mode = MachineMode.TransferMode(
+          MachineSignal.ResourceSignal("recursion-limit logical transition budget exhausted"),
+          haltContinuation,
+        )
+      } else {
+        transitions += 1
+      }
+    } else {
+      if settlementTransitions >= settlementLimit {
+        finalStatus = "resource"
+        finalDiagnostic = Some("recursion-limit cleanup settlement budget exhausted")
+        finalDiagnosticCode = Some("recursion-limit")
+        finalDiagnosticMessage = Some("execution exceeded the machine transition limit")
+        finalDiagnosticOrigin = activeOrigin
+        finalExit = 2
+        mode = MachineMode.HaltMode
+      }
+      settlementTransitions += 1
+      transitions += 1
+    }
+
+    match mode {
+      case EvalMode(nodeId, environment, continuation) => {
+        let step = runKernelEval(
+          nodeId, environment, continuation, kernel, cells, environments, closures,
+          continuations, dynamics, dynamicSuppressed, guestIdentities, allocations,
+          maxContinuationDepth, transfers, dynamic, activeOrigin,
+        )
+        mode = step.mode
+        allocations = step.allocations
+        maxContinuationDepth = step.maxContinuationDepth
+        transfers = step.transfers
+        dynamic = step.dynamic
+        activeOrigin = step.activeOrigin
+      }
+      case DeliverMode(packet, continuation) => {
+        let step = runKernelDeliver(
+          packet, continuation, kernel, cells, environments, continuations, dynamics,
+          dynamicSuppressed, escapeActive, guestIdentities, allocations,
+          maxContinuationDepth, transfers, dynamic, activeOrigin, emittedOutput,
+          finalPacket, rootPackets, finalStatus, finalExit,
+        )
+        mode = step.mode
+        allocations = step.allocations
+        maxContinuationDepth = step.maxContinuationDepth
+        transfers = step.transfers
+        dynamic = step.dynamic
+        activeOrigin = step.activeOrigin
+        emittedOutput = step.emittedOutput
+        finalPacket = step.finalPacket
+        rootPackets = step.rootPackets
+        finalStatus = step.finalStatus
+        finalExit = step.finalExit
+      }
+      case InvokeMode(procedure, arguments, continuation, origin) => {
+        let step = runKernelInvoke(
+          procedure,
+          arguments,
+          continuation,
+          origin,
+          kernel,
+          cells,
+          environments,
+          closures,
+          continuations,
+          dynamics,
+          dynamicSuppressed,
+          escapeActive,
+          guestIdentities,
+          warnings,
+          allocations,
+          maxContinuationDepth,
+          transfers,
+          dynamic,
+          emittedOutput,
+        )
+        mode = step.mode
+        allocations = step.allocations
+        maxContinuationDepth = step.maxContinuationDepth
+        transfers = step.transfers
+        dynamic = step.dynamic
+        emittedOutput = step.emittedOutput
+      }
+      case TransferMode(signal, continuation) => {
+        let step = runKernelTransfer(
+          signal, continuation, cells, environments, continuations, dynamics,
+          dynamicSuppressed, escapeActive, guestIdentities, allocations,
+          maxContinuationDepth, transfers, dynamic, activeOrigin, finalDiagnostic,
+          finalDiagnosticCode, finalDiagnosticMessage, finalDiagnosticOrigin,
+          finalDiagnosticIrritants, finalStatus, finalExit,
+        )
+        mode = step.mode
+        allocations = step.allocations
+        maxContinuationDepth = step.maxContinuationDepth
+        transfers = step.transfers
+        dynamic = step.dynamic
+        activeOrigin = step.activeOrigin
+        finalDiagnostic = step.finalDiagnostic
+        finalDiagnosticCode = step.finalDiagnosticCode
+        finalDiagnosticMessage = step.finalDiagnosticMessage
+        finalDiagnosticOrigin = step.finalDiagnosticOrigin
+        finalDiagnosticIrritants = step.finalDiagnosticIrritants
+        finalStatus = step.finalStatus
+        finalExit = step.finalExit
+      }
+      case HaltMode => { break }
+    }
+  }
+
+  RunResult {
+    status: finalStatus,
+    packet: finalPacket,
+    diagnostic: finalDiagnostic,
+    diagnosticCode: finalDiagnosticCode,
+    diagnosticMessage: finalDiagnosticMessage,
+    diagnosticOrigin: finalDiagnosticOrigin,
+    diagnosticIrritants: finalDiagnosticIrritants,
+    warnings: warnings,
+    exitStatus: finalExit,
+    transitionLimit: request.transitionLimit,
+    transitions: transitions,
+    exhausted: exhausted,
+    maxContinuationDepth: maxContinuationDepth,
+    allocations: allocations,
+    transfers: transfers,
+    rootPackets: rootPackets,
+    rootsCompleted: rootPackets.length,
+    stdoutText: emittedOutput,
+  }
+}

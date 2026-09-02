@@ -1,0 +1,12 @@
+
+function mark(label: string, xs: Array<int>) -> Array<int> {
+    print(label)
+    xs
+}
+function fallback() -> int { 7 }
+function main() -> string {
+    let opt: Option<Option<int>> = Some(None)
+    fallback |> opt?.okOrElse(...mark("pipe-ok", [0]))
+    "unreachable"
+}
+main()

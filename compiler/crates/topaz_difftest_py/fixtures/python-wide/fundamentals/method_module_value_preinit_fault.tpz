@@ -1,0 +1,5 @@
+record Point { x: int }
+impl Point { function shifted(self) -> int { self.x + offset } }
+Point { x: 1 }.shifted()
+let offset = 2
+0

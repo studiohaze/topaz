@@ -1,0 +1,10 @@
+
+function markBool(label: string, value: bool) -> bool {
+    print(label)
+    value
+}
+if markBool("if-cond", true) {
+    "then"
+} else {
+    "else"
+}

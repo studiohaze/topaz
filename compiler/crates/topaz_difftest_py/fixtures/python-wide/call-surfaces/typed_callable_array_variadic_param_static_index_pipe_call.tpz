@@ -1,0 +1,17 @@
+
+type CallbackArray = Array<(int, ...int) -> int>
+
+function sum(seed: int, ...xs: int) -> int {
+    let mut total = seed
+    for x in xs {
+        total = total + x
+    }
+    total
+}
+function call(callbacks: CallbackArray) -> int {
+    7 |> callbacks[0](...[1, 2])
+}
+function main() -> int {
+    call([sum])
+}
+main()

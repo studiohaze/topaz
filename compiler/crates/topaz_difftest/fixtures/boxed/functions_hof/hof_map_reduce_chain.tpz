@@ -1,0 +1,5 @@
+let xs = [1, 2, 3, 4]
+let doubled = map(xs, (x) => x * 2)
+let total = reduce(doubled, 0, (a, b) => a + b)
+print("{total}")
+0

@@ -1,0 +1,11 @@
+
+function breakValue() -> int {
+    print("eval-value")
+    7
+}
+let r = loop {
+    defer print("defer")
+    break breakValue()
+}
+print("r={r}")
+0

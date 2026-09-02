@@ -1,0 +1,11 @@
+
+function main() -> int {
+    let base = 10
+    function bad() -> int {
+        let mut base = 0
+        base = base + 1
+        base
+    }
+    bad()
+}
+main()

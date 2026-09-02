@@ -1,0 +1,3 @@
+let xs = [1]
+2 |> xs.push()
+xs

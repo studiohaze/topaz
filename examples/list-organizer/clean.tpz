@@ -1,0 +1,50 @@
+// 목록 정리기. 여러 줄을 붙여넣으면 공백 제거, 중복 제거, 정렬을 거친다. Topaz로 작성.
+// 순수하고 결정적. 같은 입력은 인터프리터와 네이티브/wasm 빌드에서 같은 HTML을 낸다.
+// arr.sorted()(줄 정렬)와 str.byteLength()(빈 줄 제거), 그리고 C3a의
+// split/trim을 직접 사용한다. 줄은 사용자 텍스트이므로 출력 전에 모두 HTML 이스케이프한다.
+
+function 글자정리(글: string) -> string {
+  if 글 == "&" { "&amp;" }
+  else if 글 == "<" { "&lt;" }
+  else if 글 == ">" { "&gt;" }
+  else { 글 }
+}
+
+function 줄정리(줄: string) -> string {
+  let mut 출력 = ""
+  for 글 in 줄.scalars() {
+    출력 = 출력 + 글자정리(글)
+  }
+  출력
+}
+
+function 정리하기(텍스트: string) -> string {
+  // 줄바꿈 기준으로 분리한 뒤 각 줄 공백을 제거하고 빈 줄(byteLength 0)을 버린다
+  let mut 줄목록: Array<string> = []
+  for 원시 in 텍스트.split("\n") {
+    let 다듬은 = 원시.trim()
+    if 다듬은.byteLength() > 0 {
+      줄목록.push(다듬은)
+    }
+  }
+
+  // 오름차순으로 정렬한 뒤 인접 중복을 버린다(같은 줄은 이제 이웃이 된다)
+  let 정렬됨 = 줄목록.sorted()
+  let mut 결과 = "<ol class=\"list\">"
+  let mut 이전 = ""
+  let mut 처음 = true
+  let mut 고유 = 0
+  for 줄 in 정렬됨 {
+    if 처음 || 줄 != 이전 {
+      결과 = 결과 + "<li>" + 줄정리(줄) + "</li>"
+      고유 = 고유 + 1
+    }
+    이전 = 줄
+    처음 = false
+  }
+  결과 = 결과 + "</ol>"
+
+  "<p class=\"meta\">원본 {줄목록.length}줄 → 고유 {고유}줄 (정렬·중복제거)</p>" + 결과
+}
+
+print(정리하기(input()))

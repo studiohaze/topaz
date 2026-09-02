@@ -1,0 +1,7 @@
+function describe(value: int | string | null) -> string {
+    match value {
+        case n: int => "number: {n}"
+        case s: string => "string: {s}"
+        case null => "no value"
+    }
+}

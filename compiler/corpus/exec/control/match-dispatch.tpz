@@ -1,0 +1,12 @@
+function name(n: int) -> string {
+    return match n {
+        case 0 => "zero"
+        case x if x < 0 => "neg"
+        case 1..9 => "small"
+        case _ => "big"
+    }
+}
+print(name(0))
+print(name(-3))
+print(name(4))
+print(name(99))

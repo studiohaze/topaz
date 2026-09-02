@@ -1,0 +1,1 @@
+record Bad derives Eq { f: (int) -> int }

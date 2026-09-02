@@ -1,0 +1,6 @@
+let mut x = 5
+let inc = () => { x = x + 1
+x }
+let get = () => x
+inc()
+get()

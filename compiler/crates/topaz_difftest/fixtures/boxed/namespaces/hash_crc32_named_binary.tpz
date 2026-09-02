@@ -1,0 +1,1 @@
+Bytes.fromHex("00ff10").map((data) => Hash.crc32(data: data))

@@ -1,0 +1,5 @@
+function привет(имя: string) -> string {
+    return "Привет, {имя}!"
+}
+
+let 🚀rate = 0.15

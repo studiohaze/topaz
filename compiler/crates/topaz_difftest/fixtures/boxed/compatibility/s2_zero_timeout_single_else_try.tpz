@@ -1,0 +1,4 @@
+function fail() -> Result<int, string> { Err("boom") }
+function main() -> Result<int, string> { let r = concurrent(timeout: 0ms) { x: 1 } else { { x: fail()? } }
+Ok(r.x) }
+main()

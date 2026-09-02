@@ -1,0 +1,5 @@
+let mut x = 99
+let f = () => { let mut s = 0
+for x: int in [1, 2, 3] { s = s + x }
+s }
+f()

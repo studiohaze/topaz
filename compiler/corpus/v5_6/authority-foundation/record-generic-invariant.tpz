@@ -1,0 +1,6 @@
+record Box<T> {
+    value: T,
+}
+
+let numbers: Box<int> = Box { value: 1 }
+let text: Box<string> = numbers

@@ -1,0 +1,20 @@
+// Express complex business logic with patterns
+type OrderStatus = "created" | "payment_complete" | "shipping" | "delivered" | "cancelled"
+
+function processOrder(status: OrderStatus, paymentAmount: int, isVip: bool) -> string {
+    match { status: status, amount: paymentAmount, vip: isVip } {
+        case { status: "created" } => "Please proceed with payment"
+        case { status: "payment_complete", amount, vip: true } if amount > 100000 => {
+            "VIP customer express shipping preparation"
+        }
+        case { status: "payment_complete", amount } if amount > 50000 => {
+            "Regular shipping preparation"
+        }
+        case { status: "payment_complete" } => "Standard shipping preparation"
+        case { status: "shipping", vip: true } => "VIP shipping tracking service"
+        case { status: "shipping" } => "In shipping"
+        case { status: "delivered" } => "Delivery complete"
+        case { status: "cancelled" } => "Order cancelled"
+        case _ => "Unknown order state"
+    }
+}

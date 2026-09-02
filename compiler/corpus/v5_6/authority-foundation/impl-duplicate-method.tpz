@@ -1,0 +1,11 @@
+record Point { x: int }
+
+impl Point {
+    function coordinate(self) -> int { self.x }
+}
+
+impl Point {
+    function coordinate(self) -> int { 0 }
+}
+
+0

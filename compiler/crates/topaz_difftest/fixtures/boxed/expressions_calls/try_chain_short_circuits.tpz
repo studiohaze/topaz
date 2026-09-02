@@ -1,0 +1,4 @@
+let f = (a, b) => { let x = a?
+let y = b?
+x + y }
+f(Ok(3), Err("no"))

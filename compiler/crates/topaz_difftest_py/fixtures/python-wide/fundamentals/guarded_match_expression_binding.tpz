@@ -1,0 +1,9 @@
+
+function main() -> int {
+    match 5 {
+        case n if n > 5 => 100
+        case n if n > 3 => n
+        case _ => 0
+    }
+}
+main()

@@ -1,0 +1,10 @@
+
+function mark(label: string, xs: Array<int>) -> Array<int> {
+    print(label)
+    xs
+}
+function main() -> Option<int> {
+    let xs: Option<Array<int>> = Some([1])
+    xs?.reduce(0, ...mark("array-reduce", [0]))
+}
+main()

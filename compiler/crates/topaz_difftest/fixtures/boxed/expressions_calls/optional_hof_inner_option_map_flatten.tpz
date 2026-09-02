@@ -1,0 +1,2 @@
+let oo: Option<Option<int>> = Some(Some(5))
+oo?.map((x) => x + 1)

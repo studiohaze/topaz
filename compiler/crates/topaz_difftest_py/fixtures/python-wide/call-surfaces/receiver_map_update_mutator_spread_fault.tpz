@@ -1,0 +1,12 @@
+
+function mark(label: string, fs: Array<(int) -> int>) -> Array<(int) -> int> {
+    print(label)
+    fs
+}
+function inc(x: int) -> int { x + 1 }
+function main() -> Map<string, int> {
+    let mut m = map { "x": 1 }
+    m.update("x", 0, ...mark("map-update", [inc]))
+    m
+}
+main()

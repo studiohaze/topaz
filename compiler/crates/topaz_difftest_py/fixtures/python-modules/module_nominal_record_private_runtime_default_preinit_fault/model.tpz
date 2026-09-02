@@ -1,0 +1,8 @@
+
+function early() -> int {
+    let u = User { name: "Ada" }
+    u.age
+}
+export let trigger = early()
+let base = 36
+export record User { name: string, age: int = base }

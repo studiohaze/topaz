@@ -1,0 +1,2 @@
+let f = Codec.deflateFixedCompress
+f(Bytes.encodeUtf8("abcabcabcabcabcabc")).map((b) => b.toHex())

@@ -1,0 +1,23 @@
+[package]
+name = "markdown_live"
+version = "0.1.0"
+language = "5.18"
+entry = "src/main.tpz"
+
+[build]
+target = "web-app"
+deterministic = true
+
+[web]
+title = "Topaz Markdown Live"
+styles = ["styles/app.css"]
+assets = []
+lifecycle = "v2"
+
+[capabilities.web]
+open_text = true
+download_text = true
+local_state = true
+
+[dependencies]
+std = "5.18"

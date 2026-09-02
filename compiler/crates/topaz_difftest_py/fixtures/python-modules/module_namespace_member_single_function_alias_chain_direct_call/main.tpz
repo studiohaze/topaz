@@ -1,0 +1,10 @@
+
+import util
+function main() -> int {
+    let first = util.plus
+    let second = first
+    let reserved = util.add
+    let chainedReserved = reserved
+    second(a: 5) + second(10, b: 3) + chainedReserved(a: 7) + chainedReserved(8, b: 4)
+}
+main()

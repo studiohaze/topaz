@@ -1,0 +1,5 @@
+let one = Decimal.fromInt(1)
+let eight = Decimal.fromInt(8)
+match one.div(eight, 2) { case Ok(a) => match one.div(eight, 2, RoundingMode.HalfUp) { case Ok(b) => "{a.toString()}/{b.toString()}"
+case Err(e) => e }
+case Err(e) => e }

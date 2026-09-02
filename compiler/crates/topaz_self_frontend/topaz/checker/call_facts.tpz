@@ -1,0 +1,1610 @@
+// Owns typed-call observations and the expected-expression and pipe stacks.
+// call_plan selects signatures; call_complete performs argument solving, keeping
+// the mutually recursive expression service out of both modules.
+
+import types {
+  PreviewCallArgument,
+  PreviewCallEvaluation,
+  PreviewResolvedReference,
+  PreviewTypedCall,
+  SyntaxNode,
+}
+import checker_types { TypeValue }
+import unicode { didYouMean }
+import checker.model {
+  BuiltinFunction,
+  CallSignature,
+  CheckerService,
+  CheckerState,
+  ExpectedExpressionContext,
+  ProtocolDefinition,
+  constructor,
+  emptyType,
+  functionType,
+  literal,
+  primitive,
+  rigid,
+  serviceInferExpression,
+}
+import checker.type_algebra {
+  assignable,
+  flattenType,
+  flattenedHasHole,
+  hasHole,
+  typeText,
+  widen,
+}
+import checker.syntax_index {
+  addDiagnostic,
+  addNode,
+  child,
+  children,
+  declarationFor,
+  moduleAt,
+  protocolDefinition,
+  referenceFor,
+  replaceNodeType,
+  resolvedTypeFromFact,
+  scopeFor,
+  scopeIsWithin,
+  spanKey,
+  symbolTypeAt,
+  text,
+}
+import checker.protocols_methods { receiverMethodTargetIdentity }
+import checker.members_capabilities {
+  builtinNamespaceFamily,
+  iterableElement,
+}
+
+export function argumentValue(argument: SyntaxNode) -> SyntaxNode {
+  if argument.kind == "call-argument/named" || argument.kind == "call-argument/spread" {
+    match child(argument, "value") {
+      case Some(found) => found
+      case None => argument
+    }
+  } else {
+    argument
+  }
+}
+
+export function lastReferenceInNode(
+  state: CheckerState,
+  moduleIndex: int,
+  node: SyntaxNode,
+) -> Option<PreviewResolvedReference> {
+  let mut selected = referenceFor(state, moduleIndex, node.lo, node.hi)
+  for found in node.children {
+    match lastReferenceInNode(state, moduleIndex, found) {
+      case Some(reference) => {
+        selected = match selected {
+          case Some(current) => if reference.lo > current.lo ||
+            (reference.lo == current.lo && reference.hi > current.hi) {
+            Some(reference)
+          } else {
+            Some(current)
+          }
+          case None => Some(reference)
+        }
+      }
+      case None => ()
+    }
+  }
+  selected
+}
+
+function callableReferenceInNode(
+  state: CheckerState,
+  moduleIndex: int,
+  node: SyntaxNode,
+) -> Option<PreviewResolvedReference> {
+  if node.kind == "expression/identifier" {
+    return referenceFor(state, moduleIndex, node.lo, node.hi)
+  }
+  if node.kind == "expression/parenthesized" {
+    return match child(node, "operand") {
+      case Some(operand) => callableReferenceInNode(state, moduleIndex, operand)
+      case None => None
+    }
+  }
+  if node.kind == "expression/member" ||
+    node.kind == "expression/optional-access" {
+    return match child(node, "field") {
+      case Some(field) => referenceFor(state, moduleIndex, field.lo, field.hi)
+      case None => None
+    }
+  }
+  None
+}
+
+function referenceTargetIdentity(
+  state: CheckerState,
+  reference: PreviewResolvedReference,
+) -> string {
+  match declarationFor(
+    state,
+    reference.targetModuleIndex,
+    reference.targetLo,
+    reference.targetHi,
+  ) {
+    case Some(declaration) => if declaration.targetModule != "" &&
+      declaration.targetName != "" {
+      "{declaration.targetModule}::{declaration.targetName}"
+    } else if reference.targetModule != "" && reference.targetName != "" {
+      "{reference.targetModule}::{reference.targetName}"
+    } else {
+      ""
+    }
+    case None => if reference.targetModule != "" && reference.targetName != "" {
+      "{reference.targetModule}::{reference.targetName}"
+    } else {
+      ""
+    }
+  }
+}
+
+function callMethodClass(name: string) -> string {
+  match name {
+    case "map" | "filter" | "reduce" | "flatMap" => "higher-order"
+    case "okOrElse" => "lazy-callback"
+    case "push" | "insert" | "set" | "remove" | "update" | "clear" |
+      "extend" | "add" => "mutator"
+    case "read" | "write" | "close" | "open" => "resource"
+    case _ => "other"
+  }
+}
+
+export function builtinMutator(receiver: TypeValue, name: string) -> bool {
+  if receiver.kind == "union" {
+    for member in receiver.members {
+      if builtinMutator(member, name) {
+        return true
+      }
+    }
+    return false
+  }
+  if receiver.kind == "constructor" && receiver.name == "Array" {
+    return name == "push" || name == "pop" || name == "clear" ||
+      name == "reverse" || name == "insert" || name == "removeAt" ||
+      name == "sort" || name == "sortBy" || name == "retain"
+  }
+  if receiver.kind == "constructor" && receiver.name == "Map" {
+    return name == "insert" || name == "remove" || name == "clear" ||
+      name == "update"
+  }
+  if receiver.kind == "constructor" && receiver.name == "Set" {
+    return name == "add" || name == "remove" || name == "clear"
+  }
+  receiver.kind == "byte-buffer" &&
+    (name == "set" || name == "fill" || name == "copy")
+}
+
+function requiredBuiltinFunction(
+  parameters: Array<TypeValue>,
+  result: TypeValue,
+  parameterNames: Array<string>,
+) -> BuiltinFunction {
+  BuiltinFunction {
+    typeValue: functionType(parameters, [], result),
+    callSignature: requiredCallSignature(parameterNames, false),
+  }
+}
+
+function defaultedBuiltinFunction(
+  parameters: Array<TypeValue>,
+  result: TypeValue,
+  parameterNames: Array<string>,
+  parameterDefaults: Array<bool>,
+) -> BuiltinFunction {
+  BuiltinFunction {
+    typeValue: functionType(parameters, [], result),
+    callSignature: defaultedCallSignature(
+      parameterNames,
+      parameterDefaults,
+    ),
+  }
+}
+
+export function builtinFunction(name: string) -> Option<BuiltinFunction> {
+  match name {
+    case "print" => Some(requiredBuiltinFunction(
+      [primitive("string")],
+      primitive("unit"),
+      ["value"],
+    ))
+    case "toInt" => Some(requiredBuiltinFunction(
+      [primitive("string")],
+      constructor("Option", [primitive("int")]),
+      ["text"],
+    ))
+    case "toIntRadix" => Some(requiredBuiltinFunction(
+      [primitive("string"), primitive("int")],
+      constructor("Option", [primitive("int")]),
+      ["text", "radix"],
+    ))
+    case "fromCodePoint" => Some(requiredBuiltinFunction(
+      [primitive("int")],
+      constructor("Option", [primitive("string")]),
+      ["n"],
+    ))
+    case "toFloat" => Some(requiredBuiltinFunction(
+      [primitive("int")],
+      primitive("float"),
+      ["n"],
+    ))
+    case "map" => {
+      let input = rigid("T", "builtin::map")
+      let output = rigid("U", "builtin::map")
+      Some(requiredBuiltinFunction(
+        [
+          emptyType("unknown"),
+          functionType([input], [], output),
+        ],
+        constructor("Array", [output]),
+        ["xs", "f"],
+      ))
+    }
+    case "filter" => {
+      let input = rigid("T", "builtin::filter")
+      Some(requiredBuiltinFunction(
+        [
+          emptyType("unknown"),
+          functionType([input], [], primitive("bool")),
+        ],
+        constructor("Array", [input]),
+        ["xs", "f"],
+      ))
+    }
+    case "reduce" => {
+      let input = rigid("T", "builtin::reduce")
+      let output = rigid("U", "builtin::reduce")
+      Some(requiredBuiltinFunction(
+        [
+          emptyType("unknown"),
+          output,
+          functionType([output, input], [], output),
+        ],
+        output,
+        ["xs", "initial", "f"],
+      ))
+    }
+    case "input" => Some(requiredBuiltinFunction(
+      [],
+      primitive("string"),
+      [],
+    ))
+    case "open" => Some(requiredBuiltinFunction(
+      [primitive("string")],
+      constructor("Result", [emptyType("file"), primitive("string")]),
+      ["path"],
+    ))
+    case "assert" => Some(defaultedBuiltinFunction(
+      [primitive("bool"), primitive("string")],
+      primitive("unit"),
+      ["condition", "message"],
+      [false, true],
+    ))
+    case "Some" => {
+      let value = rigid("T", "builtin::Some")
+      Some(requiredBuiltinFunction(
+        [value],
+        constructor("Option", [value]),
+        ["value"],
+      ))
+    }
+    case "Ok" => {
+      let value = rigid("T", "builtin::Ok")
+      let error = rigid("E", "builtin::Ok")
+      Some(requiredBuiltinFunction(
+        [value],
+        constructor("Result", [value, error]),
+        ["value"],
+      ))
+    }
+    case "Err" => {
+      let value = rigid("T", "builtin::Err")
+      let error = rigid("E", "builtin::Err")
+      Some(requiredBuiltinFunction(
+        [error],
+        constructor("Result", [value, error]),
+        ["error"],
+      ))
+    }
+    case _ => None
+  }
+}
+
+function builtinFunctionType(name: string) -> Option<TypeValue> {
+  match builtinFunction(name) {
+    case Some(found) => Some(found.typeValue)
+    case None => None
+  }
+}
+
+export function builtinIdentifierType(name: string) -> Option<TypeValue> {
+  match builtinFunctionType(name) {
+    case Some(found) => if name == "Some" || name == "Ok" ||
+      name == "Err" || name == "map" || name == "filter" ||
+      name == "reduce" {
+      Some(emptyType("unknown"))
+    } else {
+      Some(found)
+    }
+    case None => None
+  }
+}
+
+export function isBuiltinNamespace(name: string) -> bool {
+  builtinNamespaceFamily(name) != ""
+}
+
+function unboundFunctionSuggestionNames() -> Array<string> {
+  [
+    "print",
+    "toInt",
+    "toIntRadix",
+    "fromCodePoint",
+    "toFloat",
+    "map",
+    "filter",
+    "reduce",
+    "input",
+    "open",
+    "assert",
+    "Some",
+    "Ok",
+    "Err",
+  ]
+}
+
+export function unboundSuggestion(
+  state: CheckerState,
+  reference: PreviewResolvedReference,
+) -> string {
+  let mut candidates: Array<string> = []
+  match state.valueDeclarationIndexesByModule.get("{reference.moduleIndex}") {
+    case Some(indexes) => for index in indexes {
+      match state.resolved.declarations.get(index) {
+        case Some(declaration) => if scopeIsWithin(
+          state,
+          reference.moduleIndex,
+          reference.scopeOrdinal,
+          declaration.scopeOrdinal,
+        ) {
+          candidates.push(declaration.name)
+        }
+        case None => ()
+      }
+    }
+    case None => ()
+  }
+  for candidate in unboundFunctionSuggestionNames() {
+    candidates.push(candidate)
+  }
+  candidates.push("None")
+  didYouMean(reference.name, candidates)
+}
+
+export function unboundCalleeSuggestion(
+  state: CheckerState,
+  reference: PreviewResolvedReference,
+) -> string {
+  let mut candidates: Array<string> = []
+  let mut seen: Set<string> = set {}
+  let mut scopeOrdinal = reference.scopeOrdinal
+  while scopeOrdinal >= 0 {
+    match state.valueDeclarationIndexesByModule.get("{reference.moduleIndex}") {
+      case Some(indexes) => for index in indexes {
+        match state.resolved.declarations.get(index) {
+          case Some(declaration) => if declaration.scopeOrdinal == scopeOrdinal {
+            match symbolTypeAt(
+              state,
+              reference.moduleIndex,
+              declaration.lo,
+              declaration.hi,
+            ) {
+              case Some(typeValue) => if !seen.contains(declaration.name) {
+                seen.add(declaration.name)
+                if typeValue.kind == "function" {
+                  candidates.push(declaration.name)
+                }
+              }
+              case None => ()
+            }
+          }
+          case None => ()
+        }
+      }
+      case None => ()
+    }
+    scopeOrdinal = match scopeFor(state, reference.moduleIndex, scopeOrdinal) {
+      case Some(scope) => scope.parentOrdinal
+      case None => -1
+    }
+  }
+  for candidate in unboundFunctionSuggestionNames() {
+    if !seen.contains(candidate) {
+      candidates.push(candidate)
+    }
+  }
+  didYouMean(reference.name, candidates)
+}
+
+export function diagnoseUnboundReferences(state: CheckerState) -> () {
+  for reference in state.resolved.references {
+    if reference.targetModuleIndex >= 0 ||
+      reference.namespace != "value" ||
+      reference.role == "read" ||
+      generatedLispexIntrinsic(state, reference.moduleIndex, reference.name) ||
+      reference.name == "None" ||
+      isBuiltinNamespace(reference.name) ||
+      match builtinIdentifierType(reference.name) {
+        case Some(_) => true
+        case None => false
+      } {
+      continue
+    }
+    addDiagnostic(
+      state,
+      reference.moduleIndex,
+      "TPZ5002",
+      "`{reference.name}` is not bound{unboundSuggestion(state, reference)}",
+      "",
+      SyntaxNode {
+        kind: "identifier",
+        lo: reference.lo,
+        hi: reference.hi,
+        field: "",
+        index: 0,
+        attributes: [],
+        children: [],
+      },
+    )
+  }
+  ()
+}
+
+function currentFunctionReturn(state: CheckerState) -> Option<TypeValue> {
+  if state.expectedReturns.length == 0 {
+    return None
+  }
+  state.expectedReturns.get(state.expectedReturns.length - 1)
+}
+
+export function currentExpectedExpression(
+  state: CheckerState,
+  expression: SyntaxNode,
+) -> Option<TypeValue> {
+  if state.expectedExpressions.length == 0 {
+    return None
+  }
+  match state.expectedExpressions.get(state.expectedExpressions.length - 1) {
+    case Some(context) => if context.kind == expression.kind &&
+      context.lo == expression.lo && context.hi == expression.hi {
+      Some(context.typeValue)
+    } else {
+      None
+    }
+    case None => None
+  }
+}
+
+export function inferExpressionWithExpected(
+  service: CheckerService,
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  expression: SyntaxNode,
+  expected: TypeValue,
+  contextual: bool,
+) -> TypeValue {
+  let mut expectedExpressions = state.expectedExpressions
+  expectedExpressions.push(ExpectedExpressionContext {
+    kind: expression.kind,
+    lo: expression.lo,
+    hi: expression.hi,
+    typeValue: expected,
+  })
+  let inferred = if contextual {
+    inferExpressionContext(service, state, moduleIndex, source, expression)
+  } else {
+    serviceInferExpression(service, state, moduleIndex, source, expression)
+  }
+  expectedExpressions.pop()
+  inferred
+}
+
+function appendReturnType(state: CheckerState, value: TypeValue) -> () {
+  if state.returnJoins.length == 0 {
+    return ()
+  }
+  let index = state.returnJoins.length - 1
+  match state.returnJoins.get(index) {
+    case Some(found) => {
+      let mut values = found
+      values.push(value)
+      let mut joins = state.returnJoins
+      joins[index] = values
+    }
+    case None => ()
+  }
+  ()
+}
+
+export function checkReturn(
+  service: CheckerService,
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  node: SyntaxNode,
+) -> () {
+  let value = child(node, "value")
+  match currentFunctionReturn(state) {
+    case None => {
+      addDiagnostic(
+        state,
+        moduleIndex,
+        "TPZ5001",
+        "`return` outside a function",
+        "",
+        node,
+      )
+      match value {
+        case Some(found) => {
+          let _ = serviceInferExpression(service, state, moduleIndex, source, found)
+        }
+        case None => ()
+      }
+    }
+    case Some(expected) => if expected.kind == "unknown" {
+      let inferred = match value {
+        case Some(found) => serviceInferExpression(service, state, moduleIndex, source, found)
+        case None => primitive("unit")
+      }
+      appendReturnType(state, inferred)
+    } else {
+      match value {
+        case Some(found) => {
+          let _ = checkExpressionExpected(
+            service,
+            state,
+            moduleIndex,
+            source,
+            found,
+            expected,
+          )
+        }
+        case None => reportExpectedType(
+          state,
+          moduleIndex,
+          node,
+          expected,
+          primitive("unit"),
+        )
+      }
+    }
+  }
+  ()
+}
+
+export function builtinCallTypeParameters(
+  service: CheckerService,
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  callee: SyntaxNode,
+  receiverType: TypeValue,
+) -> Array<string> {
+  let empty: Array<string> = []
+  if callee.kind == "expression/identifier" {
+    if !unshadowedIdentifier(state, moduleIndex, callee) {
+      return empty
+    }
+    return match text(source, callee) {
+      case "Some" => ["T"]
+      case "Ok" | "Err" => ["T", "E"]
+      case "map" | "reduce" => ["T", "U"]
+      case "filter" => ["T"]
+      case _ => empty
+    }
+  }
+  if callee.kind != "expression/member" {
+    return empty
+  }
+  let object = match child(callee, "object") {
+    case Some(found) => found
+    case None => return empty
+  }
+  let field = match child(callee, "field") {
+    case Some(found) => text(source, found)
+    case None => return empty
+  }
+  if !builtinNamespaceObject(service, state, moduleIndex, source, object) {
+    if receiverType.kind != "constructor" {
+      return empty
+    }
+    return match receiverType.name {
+      case "Option" => match field {
+        case "okOr" | "okOrElse" | "map" | "flatMap" => ["U"]
+        case _ => empty
+      }
+      case "Result" => match field {
+        case "map" | "flatMap" => ["U"]
+        case _ => empty
+      }
+      case "Array" => match field {
+        case "map" | "reduce" => ["U"]
+        case "sortedBy" | "sortBy" => ["K"]
+        case _ => empty
+      }
+      case "Map" => if field == "mapValues" { ["W"] } else { empty }
+      case _ => empty
+    }
+  }
+  match text(source, object) {
+    case "Array" | "Set" => if field == "of" { ["T"] } else { empty }
+    case "Map" => if field == "new" || field == "ofEntries" {
+      ["K", "V"]
+    } else {
+      empty
+    }
+    case "JSON" => if field == "parseAs" || field == "decode" ||
+      field == "stringify" {
+      ["T"]
+    } else {
+      empty
+    }
+    case "Test" => match field {
+      case "assertEq" | "assertNe" | "assertSome" | "assertNone" => ["T"]
+      case "assertOk" | "assertErr" => ["T", "E"]
+      case _ => empty
+    }
+    case _ => empty
+  }
+}
+
+export function contextualBuiltinCall(
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  expression: SyntaxNode,
+  callee: SyntaxNode,
+  calleeType: TypeValue,
+) -> Option<TypeValue> {
+  if !unshadowedIdentifier(state, moduleIndex, callee) {
+    return None
+  }
+  let name = text(source, callee)
+  if name != "Ok" && name != "Err" {
+    return None
+  }
+  let expected = match currentExpectedExpression(state, expression) {
+    case Some(found) => found
+    case None => return None
+  }
+  if expected.kind != "constructor" ||
+    expected.name != "Result" ||
+    expected.arguments.length != 2 {
+    return None
+  }
+  let parameter = if name == "Ok" {
+    expected.arguments.get(0)
+  } else {
+    expected.arguments.get(1)
+  }
+  match parameter {
+    case Some(found) => Some(functionType([found], [], expected))
+    case None => Some(calleeType)
+  }
+}
+
+export function contextualBuiltinArgumentType(
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  callee: SyntaxNode,
+  argumentIndex: int,
+  actuals: Array<TypeValue>,
+  fallback: Option<TypeValue>,
+) -> Option<TypeValue> {
+  if !unshadowedIdentifier(state, moduleIndex, callee) {
+    return fallback
+  }
+  let name = text(source, callee)
+  if argumentIndex == 1 && (name == "map" || name == "filter") {
+    match actuals.get(0) {
+      case Some(collection) => {
+        let input = iterableElement(collection)
+        return Some(functionType(
+          [input],
+          [],
+          if name == "filter" {
+            primitive("bool")
+          } else {
+            rigid("U", "builtin::map")
+          },
+        ))
+      }
+      case None => ()
+    }
+  }
+  if argumentIndex == 2 && name == "reduce" {
+    let input = match actuals.get(0) {
+      case Some(collection) => iterableElement(collection)
+      case None => emptyType("unknown")
+    }
+    let output = match actuals.get(1) {
+      case Some(initial) => widen(initial)
+      case None => emptyType("unknown")
+    }
+    return Some(functionType(
+      [output, input],
+      [],
+      output,
+    ))
+  }
+  fallback
+}
+
+export function contextualStandardWrapperCall(
+  state: CheckerState,
+  moduleIndex: int,
+  expression: SyntaxNode,
+  callee: SyntaxNode,
+  calleeType: TypeValue,
+  actuals: Array<TypeValue>,
+) -> Option<TypeValue> {
+  if callee.kind != "expression/member" &&
+    callee.kind != "expression/optional-access" {
+    return None
+  }
+  if calleeType.kind != "unknown" {
+    return None
+  }
+  match moduleAt(state, moduleIndex) {
+    case Some(module) => if !module.identity.startsWith("std.") {
+      return None
+    }
+    case None => return None
+  }
+  let expected = match currentExpectedExpression(state, expression) {
+    case Some(found) => found
+    case None => return None
+  }
+  let mut parameters: Array<TypeValue> = []
+  for actual in actuals {
+    parameters.push(widen(actual))
+  }
+  match moduleAt(state, moduleIndex) {
+    case Some(module) => {
+      let field = match child(callee, "field") {
+        case Some(found) => text(module.source, found)
+        case None => ""
+      }
+      if module.identity == "std.decimal" &&
+        ((field == "round" && parameters.length == 1) ||
+        (field == "div" && parameters.length == 2)) {
+        parameters.push(emptyType("rounding-mode"))
+      }
+    }
+    case None => ()
+  }
+  Some(functionType(parameters, [], expected))
+}
+
+export function generatedLispexIntrinsic(
+  state: CheckerState,
+  moduleIndex: int,
+  name: string,
+) -> bool {
+  match moduleAt(state, moduleIndex) {
+    case Some(module) => if !module.generatedStd {
+      false
+    } else if module.identity == "std.lispex.rules" {
+      name == "__lispexRule"
+    } else if module.identity == "std.lispex" {
+      name == "__lispexValueFromCanonical" ||
+        name == "__lispexCanonicalBytes" ||
+        name == "__lispexDefaultLimits" ||
+        name == "__lispexInspectRule" ||
+        name == "__lispexEvaluate" ||
+        name == "__lispexEvaluateWithEvidence" ||
+        name == "__lispexConsumerArtifactFromBytes" ||
+        name == "__lispexConsumerArtifactBytes" ||
+        name == "__lispexPortableCoreBytes" ||
+        name == "__lispexInspectConsumerArtifact" ||
+        name == "__lispexVerifyConsumerArtifact" ||
+        name == "__lispexFreshReplay"
+    } else {
+      false
+    }
+    case None => false
+  }
+}
+
+export function contextualGeneratedLispexCall(
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  expression: SyntaxNode,
+  callee: SyntaxNode,
+  actuals: Array<TypeValue>,
+) -> Option<TypeValue> {
+  if callee.kind != "expression/identifier" ||
+    !generatedLispexIntrinsic(state, moduleIndex, text(source, callee)) {
+    return None
+  }
+  let expected = match currentExpectedExpression(state, expression) {
+    case Some(found) => found
+    case None => return None
+  }
+  let mut parameters: Array<TypeValue> = []
+  for actual in actuals {
+    parameters.push(widen(actual))
+  }
+  Some(functionType(parameters, [], expected))
+}
+
+function builtinCallIdentity(
+  service: CheckerService,
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  callee: SyntaxNode,
+) -> string {
+  if callee.kind == "expression/identifier" {
+    let name = text(source, callee)
+    if generatedLispexIntrinsic(state, moduleIndex, name) {
+      return "builtin::{name}"
+    }
+    if unshadowedIdentifier(state, moduleIndex, callee) {
+      match builtinFunctionType(name) {
+        case Some(_) => return "builtin::{name}"
+        case None => ()
+      }
+    }
+  }
+  if callee.kind == "expression/member" {
+    match child(callee, "object") {
+      case Some(object) => {
+        match userProtocolObject(state, moduleIndex, source, object) {
+          case Some(definition) => return "builtin::{definition.name}"
+          case None => ()
+        }
+        if builtinNamespaceObject(
+          service,
+          state,
+          moduleIndex,
+          source,
+          object,
+        ) {
+          let name = text(source, object)
+          return "builtin::{name}"
+        }
+      }
+      case None => ()
+    }
+  }
+  ""
+}
+
+function previewSourceCallArgument(
+  source: Bytes,
+  argument: SyntaxNode,
+  sourceIndex: int,
+) -> PreviewCallArgument {
+  let value = argumentValue(argument)
+  PreviewCallArgument {
+    bindingKind: if argument.kind == "call-argument/named" {
+      "named"
+    } else if argument.kind == "call-argument/spread" {
+      "spread"
+    } else {
+      "positional"
+    },
+    bindingName: if argument.kind == "call-argument/named" {
+      match child(argument, "name") {
+        case Some(found) => text(source, found)
+        case None => ""
+      }
+    } else {
+      ""
+    },
+    sourceIndex: Some(sourceIndex),
+    lo: value.lo,
+    hi: value.hi,
+  }
+}
+
+function projectedCallIdentity(
+  service: CheckerService,
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  callee: SyntaxNode,
+  reference: Option<PreviewResolvedReference>,
+) -> string {
+  match reference {
+    case Some(found) => if found.targetModule == "std.lispex.rules" &&
+      found.targetName != "" {
+      return "topaz.lispex-rule-handle/v1:{found.targetName}"
+    }
+    case None => ()
+  }
+  let identity = match reference {
+    case Some(found) => referenceTargetIdentity(state, found)
+    case None => ""
+  }
+  if identity != "" {
+    return identity
+  }
+  builtinCallIdentity(service, state, moduleIndex, source, callee)
+}
+
+record CallFactContext {
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  node: SyntaxNode,
+  callee: SyntaxNode,
+  calleeType: TypeValue,
+  receiverType: TypeValue,
+  resultType: TypeValue,
+}
+
+record CallArgumentObservation {
+  arguments: Array<PreviewCallArgument>,
+  evaluations: Array<PreviewCallEvaluation>,
+}
+
+record DirectCallProjection {
+  field: string,
+  calleeType: TypeValue,
+  identity: string,
+  observation: CallArgumentObservation,
+}
+
+function callField(source: Bytes, callee: SyntaxNode) -> string {
+  match child(callee, "field") {
+    case Some(found) => text(source, found)
+    case None => ""
+  }
+}
+
+function projectedDirectCalleeType(
+  context: CallFactContext,
+  reference: Option<PreviewResolvedReference>,
+) -> TypeValue {
+  if context.calleeType.kind != "unknown" {
+    return context.calleeType
+  }
+  match reference {
+    case Some(foundReference) => match resolvedTypeFromFact(
+      context.state,
+      foundReference,
+    ) {
+      case Some(found) => if found.kind == "unknown" {
+        context.calleeType
+      } else {
+        found
+      }
+      case None => context.calleeType
+    }
+    case None => context.calleeType
+  }
+}
+
+function directCallArguments(
+  context: CallFactContext,
+  field: string,
+) -> CallArgumentObservation {
+  let mut arguments: Array<PreviewCallArgument> = []
+  let mut evaluations: Array<PreviewCallEvaluation> = [
+    PreviewCallEvaluation {
+      kind: if field == "" { "callee" } else { "receiver" },
+      argumentIndex: -1,
+    },
+  ]
+  if context.callee.kind == "expression/optional-access" {
+    evaluations.push(PreviewCallEvaluation {
+      kind: "optional-guard",
+      argumentIndex: -1,
+    })
+  }
+  let mut sourceIndex = 0
+  for argument in children(context.node, "arguments") {
+    arguments.push(previewSourceCallArgument(context.source, argument, sourceIndex))
+    evaluations.push(PreviewCallEvaluation {
+      kind: "argument",
+      argumentIndex: sourceIndex,
+    })
+    sourceIndex += 1
+  }
+  CallArgumentObservation { arguments: arguments, evaluations: evaluations }
+}
+
+function directCallProjection(service: CheckerService, context: CallFactContext) -> DirectCallProjection {
+  let field = callField(context.source, context.callee)
+  let reference = callableReferenceInNode(
+    context.state,
+    context.moduleIndex,
+    context.callee,
+  )
+  let receiverIdentity = if field == "" {
+    ""
+  } else {
+    receiverMethodTargetIdentity(
+      context.state,
+      context.moduleIndex,
+      context.receiverType,
+      field,
+    )
+  }
+  DirectCallProjection {
+    field: field,
+    calleeType: projectedDirectCalleeType(context, reference),
+    identity: if receiverIdentity != "" {
+      receiverIdentity
+    } else {
+      projectedCallIdentity(
+        service,
+        context.state,
+        context.moduleIndex,
+        context.source,
+        context.callee,
+        reference,
+      )
+    },
+    observation: directCallArguments(context, field),
+  }
+}
+
+function appendCall(state: CheckerState, value: PreviewTypedCall) -> () {
+  let key = spanKey(value.moduleIndex, value.lo, value.hi)
+  let mut indexes = state.callIndexes
+  match indexes.get(key) {
+    case Some(_) => ()
+    case None => indexes.insert(key, state.calls.length)
+  }
+  let mut target = state.calls
+  target.push(value)
+}
+
+export function addCall(
+  service: CheckerService,
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  node: SyntaxNode,
+  callee: SyntaxNode,
+  calleeType: TypeValue,
+  receiverType: TypeValue,
+  resultType: TypeValue,
+) -> () {
+  let context = CallFactContext {
+    state: state,
+    moduleIndex: moduleIndex,
+    source: source,
+    node: node,
+    callee: callee,
+    calleeType: calleeType,
+    receiverType: receiverType,
+    resultType: resultType,
+  }
+  let projected = directCallProjection(service, context)
+  appendCall(state, PreviewTypedCall {
+    moduleIndex: moduleIndex,
+    lo: node.lo,
+    hi: node.hi,
+    calleeLo: callee.lo,
+    calleeHi: callee.hi,
+    calleeType: flattenType(projected.calleeType),
+    resultType: flattenType(context.resultType),
+    targetIdentity: projected.identity,
+    ambient: hasHole(projected.calleeType) || hasHole(context.resultType),
+    calleeKind: if projected.field == "" { "value" } else { "member" },
+    method: projected.field,
+    methodClass: if projected.field == "" {
+      ""
+    } else {
+      callMethodClass(projected.field)
+    },
+    optional: callee.kind == "expression/optional-access",
+    shadowFirst: projected.field == "map" || projected.field == "filter" ||
+      projected.field == "reduce" || projected.field == "flatMap" ||
+      projected.field == "okOrElse",
+    stageMethod: "",
+    arguments: projected.observation.arguments,
+    evaluations: projected.observation.evaluations,
+  })
+}
+
+export function containsPlaceholder(node: SyntaxNode) -> bool {
+  if node.kind == "expression/placeholder" {
+    return true
+  }
+  if node.kind == "expression/pipe" {
+    return match child(node, "left") {
+      case Some(left) => containsPlaceholder(left)
+      case None => false
+    }
+  }
+  for nested in node.children {
+    if containsPlaceholder(nested) {
+      return true
+    }
+  }
+  false
+}
+
+export function currentPipeValue(
+  state: CheckerState,
+  moduleIndex: int,
+  node: SyntaxNode,
+) -> TypeValue {
+  match state.pipeValues.get(state.pipeValues.length - 1) {
+    case Some(found) => found
+    case None => {
+      addDiagnostic(
+        state,
+        moduleIndex,
+        "TPZ5001",
+        "a placeholder `_` is valid only inside a pipeline stage (§11)",
+        "",
+        node,
+      )
+      emptyType("unknown")
+    }
+  }
+}
+
+record PipeCallContext {
+  call: CallFactContext,
+  left: SyntaxNode,
+  stage: SyntaxNode,
+  hasPlaceholder: bool,
+}
+
+record PipeCallProjection {
+  identity: string,
+  stageMethod: string,
+  observation: CallArgumentObservation,
+}
+
+function pipeCallArguments(context: PipeCallContext) -> CallArgumentObservation {
+  let call = context.call
+  let mut arguments: Array<PreviewCallArgument> = []
+  let mut sourceIndex = 0
+  let missingSourceIndex: Option<int> = None
+  if context.stage.kind == "expression/call" {
+    for argument in children(context.stage, "arguments") {
+      arguments.push(previewSourceCallArgument(
+        call.source,
+        argument,
+        sourceIndex,
+      ))
+      sourceIndex += 1
+    }
+    if !context.hasPlaceholder {
+      arguments.insert(0, PreviewCallArgument {
+        bindingKind: "inserted-lead",
+        bindingName: "",
+        sourceIndex: missingSourceIndex,
+        lo: context.left.lo,
+        hi: context.left.hi,
+      })
+    }
+  } else {
+    arguments.push(PreviewCallArgument {
+      bindingKind: "inserted-lead",
+      bindingName: "",
+      sourceIndex: missingSourceIndex,
+      lo: context.left.lo,
+      hi: context.left.hi,
+    })
+  }
+  let mut evaluations: Array<PreviewCallEvaluation> = [
+    PreviewCallEvaluation {
+      kind: if context.hasPlaceholder { "pipe-lead" } else { "argument" },
+      argumentIndex: if context.hasPlaceholder { -1 } else { 0 },
+    },
+    PreviewCallEvaluation {
+      kind: "receiver",
+      argumentIndex: -1,
+    },
+  ]
+  if call.callee.kind == "expression/optional-access" {
+    evaluations.push(PreviewCallEvaluation {
+      kind: "optional-guard",
+      argumentIndex: -1,
+    })
+  }
+  let mut argumentIndex = 0
+  while argumentIndex < arguments.length {
+    if context.hasPlaceholder || argumentIndex != 0 {
+      evaluations.push(PreviewCallEvaluation {
+        kind: "argument",
+        argumentIndex: argumentIndex,
+      })
+    }
+    argumentIndex += 1
+  }
+  CallArgumentObservation { arguments: arguments, evaluations: evaluations }
+}
+
+function pipeCallProjection(service: CheckerService, context: PipeCallContext) -> PipeCallProjection {
+  let call = context.call
+  let reference = callableReferenceInNode(
+    call.state,
+    call.moduleIndex,
+    call.callee,
+  )
+  let stageMethod = match child(call.callee, "field") {
+    case Some(found) => text(call.source, found)
+    case None => ""
+  }
+  let receiverIdentity = if stageMethod == "" {
+    ""
+  } else {
+    receiverMethodTargetIdentity(
+      call.state,
+      call.moduleIndex,
+      call.receiverType,
+      stageMethod,
+    )
+  }
+  PipeCallProjection {
+    identity: if receiverIdentity != "" {
+      receiverIdentity
+    } else {
+      projectedCallIdentity(
+        service,
+        call.state,
+        call.moduleIndex,
+        call.source,
+        call.callee,
+        reference,
+      )
+    },
+    stageMethod: stageMethod,
+    observation: pipeCallArguments(context),
+  }
+}
+
+export function addPipeCall(
+  service: CheckerService,
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  node: SyntaxNode,
+  left: SyntaxNode,
+  stage: SyntaxNode,
+  callee: SyntaxNode,
+  calleeType: TypeValue,
+  receiverType: TypeValue,
+  resultType: TypeValue,
+  hasPlaceholder: bool,
+) -> () {
+  let context = PipeCallContext {
+    call: CallFactContext {
+      state: state,
+      moduleIndex: moduleIndex,
+      source: source,
+      node: node,
+      callee: callee,
+      calleeType: calleeType,
+      receiverType: receiverType,
+      resultType: resultType,
+    },
+    left: left,
+    stage: stage,
+    hasPlaceholder: hasPlaceholder,
+  }
+  let projected = pipeCallProjection(service, context)
+  appendCall(state, PreviewTypedCall {
+    moduleIndex: moduleIndex,
+    lo: node.lo,
+    hi: node.hi,
+    calleeLo: stage.lo,
+    calleeHi: stage.hi,
+    calleeType: flattenType(calleeType),
+    resultType: flattenType(resultType),
+    targetIdentity: projected.identity,
+    ambient: hasHole(calleeType) || hasHole(resultType),
+    calleeKind: "pipe",
+    method: "",
+    methodClass: "",
+    optional: context.call.callee.kind == "expression/optional-access",
+    shadowFirst: false,
+    stageMethod: projected.stageMethod,
+    arguments: projected.observation.arguments,
+    evaluations: projected.observation.evaluations,
+  })
+}
+
+function replaceCallResultType(
+  state: CheckerState,
+  moduleIndex: int,
+  node: SyntaxNode,
+  resultType: TypeValue,
+) -> () {
+  let mut calls = state.calls
+  match state.callIndexes.get(spanKey(moduleIndex, node.lo, node.hi)) {
+    case Some(index) => match calls.get(index) {
+      case Some(call) => {
+        let nextCalleeType = if call.targetIdentity == "builtin::Map" &&
+          call.method == "new" {
+          flattenType(functionType([], [], resultType))
+        } else {
+          call.calleeType
+        }
+        calls[index] = PreviewTypedCall {
+          moduleIndex: call.moduleIndex,
+          lo: call.lo,
+          hi: call.hi,
+          calleeLo: call.calleeLo,
+          calleeHi: call.calleeHi,
+          calleeType: nextCalleeType,
+          resultType: flattenType(resultType),
+          targetIdentity: call.targetIdentity,
+          ambient: flattenedHasHole(nextCalleeType) || hasHole(resultType),
+          calleeKind: call.calleeKind,
+          method: call.method,
+          methodClass: call.methodClass,
+          optional: call.optional,
+          shadowFirst: call.shadowFirst,
+          stageMethod: call.stageMethod,
+          arguments: call.arguments,
+          evaluations: call.evaluations,
+        }
+      }
+      case None => ()
+    }
+    case None => ()
+  }
+  ()
+}
+
+function isBuiltinMapNewCall(
+  state: CheckerState,
+  moduleIndex: int,
+  node: SyntaxNode,
+) -> bool {
+  match state.callIndexes.get(spanKey(moduleIndex, node.lo, node.hi)) {
+    case Some(index) => match state.calls.get(index) {
+      case Some(call) => call.targetIdentity == "builtin::Map" &&
+        call.method == "new"
+      case None => false
+    }
+    case None => false
+  }
+}
+
+export function inferExpressionContext(
+  service: CheckerService,
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  expression: SyntaxNode,
+) -> TypeValue {
+  let mut contexts = state.literalJoinContexts
+  contexts.push(expression.lo)
+  let result = serviceInferExpression(service, state, moduleIndex, source, expression)
+  contexts.pop()
+  result
+}
+
+export function reportExpectedType(
+  state: CheckerState,
+  moduleIndex: int,
+  node: SyntaxNode,
+  expected: TypeValue,
+  actual: TypeValue,
+) -> () {
+  if !hasHole(expected) && !hasHole(actual) &&
+    !assignable(expected, actual) {
+    let shown = if expected.kind == "primitive" {
+      widen(actual)
+    } else {
+      actual
+    }
+    addDiagnostic(
+      state,
+      moduleIndex,
+      "TPZ5001",
+      "expected `{typeText(expected)}`, found `{typeText(shown)}`",
+      "",
+      node,
+    )
+  }
+}
+
+export function checkExpressionExpected(
+  service: CheckerService,
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  node: SyntaxNode,
+  expected: TypeValue,
+) -> TypeValue {
+  let inferred = inferExpressionWithExpected(
+    service,
+    state,
+    moduleIndex,
+    source,
+    node,
+    expected,
+    false,
+  )
+  let refined = refineExpressionToExpected(
+    state,
+    moduleIndex,
+    node,
+    inferred,
+    expected,
+  )
+  reportExpectedType(state, moduleIndex, node, expected, refined)
+  refined
+}
+
+export function builtinNamespaceObject(
+  service: CheckerService,
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  object: SyntaxNode,
+) -> bool {
+  if object.kind != "expression/identifier" ||
+    !isBuiltinNamespace(text(source, object)) {
+    return false
+  }
+  unshadowedIdentifier(state, moduleIndex, object)
+}
+
+export function userProtocolObject(
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  object: SyntaxNode,
+) -> Option<ProtocolDefinition> {
+  if object.kind != "expression/identifier" {
+    return None
+  }
+  match referenceFor(state, moduleIndex, object.lo, object.hi) {
+    case Some(reference) => {
+      let name = if reference.targetName == "" {
+        text(source, object)
+      } else {
+        reference.targetName
+      }
+      if reference.targetNamespace == "type" {
+        return protocolDefinition(state, reference.targetModuleIndex, name)
+      }
+      if reference.targetModuleIndex < 0 && reference.namespace == "value" {
+        return protocolDefinition(state, moduleIndex, name)
+      }
+      None
+    }
+    case None => protocolDefinition(state, moduleIndex, text(source, object))
+  }
+}
+
+export function unshadowedIdentifier(
+  state: CheckerState,
+  moduleIndex: int,
+  node: SyntaxNode,
+) -> bool {
+  if node.kind != "expression/identifier" {
+    return false
+  }
+  match referenceFor(state, moduleIndex, node.lo, node.hi) {
+    case Some(reference) => reference.targetModuleIndex < 0
+    case None => true
+  }
+}
+
+function suppressExpressionObservation(
+  state: CheckerState,
+  source: Bytes,
+  node: SyntaxNode,
+) -> bool {
+  let suppressStatementFor = if node.kind == "expression/for" &&
+    state.statementExpressionContexts.length > 0 {
+    match state.statementExpressionContexts.get(
+      state.statementExpressionContexts.length - 1,
+    ) {
+      case Some(lo) => lo == node.lo
+      case None => false
+    }
+  } else {
+    false
+  }
+  let suppressBuiltinNamespace = node.kind == "expression/identifier" &&
+    (text(source, node) == "Bytes" || text(source, node) == "JSON")
+  suppressStatementFor || suppressBuiltinNamespace
+}
+
+export function recordInferredExpression(
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  node: SyntaxNode,
+  result: TypeValue,
+) -> () {
+  if result.kind != "unknown" &&
+    !suppressExpressionObservation(state, source, node) {
+    addNode(state, moduleIndex, "expression", node, result)
+  }
+}
+
+export function requiredCallSignature(
+  parameterNames: Array<string>,
+  variadic: bool,
+) -> CallSignature {
+  let mut defaults: Array<bool> = []
+  for _ in parameterNames {
+    defaults.push(false)
+  }
+  CallSignature {
+    parameterNames: parameterNames,
+    parameterDefaults: defaults,
+    parameterCount: parameterNames.length,
+    variadic: variadic,
+    positionalOnlyIdentity: "",
+  }
+}
+
+export function defaultedCallSignature(
+  parameterNames: Array<string>,
+  parameterDefaults: Array<bool>,
+) -> CallSignature {
+  CallSignature {
+    parameterNames: parameterNames,
+    parameterDefaults: parameterDefaults,
+    parameterCount: parameterNames.length,
+    variadic: false,
+    positionalOnlyIdentity: "",
+  }
+}
+
+export function refineExpressionToExpected(
+  state: CheckerState,
+  moduleIndex: int,
+  node: SyntaxNode,
+  inferred: TypeValue,
+  expected: TypeValue,
+) -> TypeValue {
+  if node.kind == "expression/record-literal" &&
+    inferred.kind == "record" &&
+    expected.kind == "record" &&
+    assignable(expected, inferred) {
+    replaceNodeType(state, moduleIndex, "expression", node, expected)
+    return expected
+  }
+  let contextualBuiltinConstructor = node.kind == "expression/call" &&
+    isBuiltinMapNewCall(state, moduleIndex, node)
+  if (hasHole(inferred) || contextualBuiltinConstructor) &&
+    !hasHole(expected) &&
+    (inferred.kind == "unknown" ||
+    (inferred.kind == expected.kind && inferred.name == expected.name)) {
+    replaceNodeType(state, moduleIndex, "expression", node, expected)
+    if node.kind == "expression/call" {
+      replaceCallResultType(state, moduleIndex, node, expected)
+      if contextualBuiltinConstructor {
+        match child(node, "callee") {
+          case Some(callee) => replaceNodeType(
+            state,
+            moduleIndex,
+            "expression",
+            callee,
+            functionType([], [], expected),
+          )
+          case None => ()
+        }
+      }
+    }
+    expected
+  } else {
+    inferred
+  }
+}

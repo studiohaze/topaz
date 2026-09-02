@@ -1,0 +1,10 @@
+function 포트파싱(텍스트: string) -> Result<int, string> {
+    if 텍스트 == "" {
+        return Err("포트가 필요합니다")
+    }
+
+    match toInt(텍스트) {
+        case Some(포트) => Ok(포트)
+        case None => Err("포트는 정수여야 합니다")
+    }
+}

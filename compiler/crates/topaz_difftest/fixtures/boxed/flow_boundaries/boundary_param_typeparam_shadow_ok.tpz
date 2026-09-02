@@ -1,0 +1,2 @@
+function id<int>(x: int) -> int { x }
+id("s")

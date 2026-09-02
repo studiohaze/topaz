@@ -1,0 +1,8 @@
+
+import contract.request { Request }
+import contract.handler { handle }
+
+let req = Request { method: "GET", path: "/health" }
+let res = handle(req)
+print("{res.status}:{res.body}")
+res.status

@@ -1,0 +1,9 @@
+// Block expression for scope isolation
+let result = {
+    let tempCalculation = 10 * 20
+    let adjustment = 50
+    tempCalculation + adjustment
+}
+
+print("{result}")  // 250
+// tempCalculation, adjustment are not accessible outside the block

@@ -1,0 +1,7 @@
+
+import facade
+function main() -> int {
+    let local = facade.forwarded
+    local(a: 5) + local(10, b: 3)
+}
+main()

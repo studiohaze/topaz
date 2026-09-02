@@ -1,0 +1,55 @@
+{
+  "schema": "studio-haze.lispex-evaluator-component/v1",
+  "id": "lispex-embed-evaluator/1.12.4",
+  "status": "qualified-develop-provider-component",
+  "owner": "lispex-release",
+  "source_revision": "5423eb32a1f456163de1a4898bef4eebd7f3c91e",
+  "artifact": {
+    "path": "products/embed-evaluator/v1.12.4/lispex-embed-evaluator.wasm",
+    "bytes": 1387762,
+    "sha256": "fa6e52559e1f5a43e50a3b7ac0cc5add6930cff0aed8aaff462cff4609362870",
+    "imports": 0,
+    "memory_initial_pages": 18,
+    "memory_maximum_pages": 256
+  },
+  "bundle_manifest": {
+    "path": "products/embed-evaluator/v1.12.4/manifest.v1.json",
+    "sha256": "360814a572eacf64e065551ea3d6d21ae905f8c7b15e03a6b056d0766038ab0a"
+  },
+  "golden_vectors": {
+    "path": "products/embed-evaluator/v1.12.4/golden-vectors.v1.json",
+    "sha256": "80c4bfe346c1c5feba1e010e254dca3cc6a4dbacd0bf253ae00ed6bb0c43a942"
+  },
+  "contracts": {
+    "semantic_profile_id": "lispex/r7rs-rule-embedded-core/1",
+    "model_id": "lispex-vm-meter/1",
+    "abi_id": "lispex.embed-wasm-abi/v1",
+    "value_codec_id": "lispex.embed-value/v1",
+    "receipt_schema_id": "lispex.embed-receipt-core/v1"
+  },
+  "execution": {
+    "engine_count": 1,
+    "fresh_instance_per_operation": true,
+    "preparation_and_evaluation_separate": true,
+    "portable_categories": [
+      "deterministic-semantic-outcome",
+      "deterministic-request-refusal"
+    ],
+    "nonportable_categories": [
+      "operational-interruption",
+      "engine-fault"
+    ]
+  },
+  "capabilities": {
+    "host_imports": false,
+    "discovery": false,
+    "fallback": false,
+    "remote_transport": false,
+    "vouch_promotion": false
+  },
+  "dependencies": {
+    "topaz_build_dependency": null,
+    "aot_component_dependency": null
+  },
+  "release_authority": false
+}

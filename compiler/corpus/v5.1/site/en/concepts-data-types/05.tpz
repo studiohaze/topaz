@@ -1,0 +1,27 @@
+// Record definition
+let user = {
+    name: "John Topaz",
+    age: 28,
+    email: "john@example.com",
+    isActive: true
+}
+
+// Property access
+print(user.name)               // "John Topaz"
+
+// Immutable update with record literals
+let calculator = { value: 0 }
+let afterAdd = calculator{ value: calculator.value + 10 }
+let afterMultiply = afterAdd{ value: afterAdd.value * 2 }
+
+print("{afterMultiply.value}")       // 20
+print("{calculator.value}")          // 0 (original unchanged)
+
+// Reusable behavior can be written as regular functions
+function addToCalculator(state: { value: int }, x: int) -> { value: int } {
+    state{ value: state.value + x }
+}
+
+function multiplyCalculator(state: { value: int }, x: int) -> { value: int } {
+    state{ value: state.value * x }
+}

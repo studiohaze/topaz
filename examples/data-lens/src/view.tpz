@@ -1,0 +1,124 @@
+import data_lens_core { DataFormat, DataRow, SortMode, Summary }
+import src.model { Model, Msg }
+import std.dom { Attr, Html, attr, element, event, text }
+
+function selected(selected: bool) -> Array<Attr> {
+  if selected {
+    return [attr("selected", "selected")]
+  }
+  []
+}
+
+function isCsv(format: DataFormat) -> bool {
+  match format {
+    case Csv => true
+    case Json => false
+  }
+}
+
+function isJson(format: DataFormat) -> bool {
+  match format {
+    case Csv => false
+    case Json => true
+  }
+}
+
+function isByName(sort: SortMode) -> bool {
+  match sort {
+    case ByName => true
+    case ByValue => false
+  }
+}
+
+function isByValue(sort: SortMode) -> bool {
+  match sort {
+    case ByName => false
+    case ByValue => true
+  }
+}
+
+function checkboxAttrs(model: Model) -> Array<Attr> {
+  let mut attrs = [attr("id", "active-only"), attr("type", "checkbox")]
+  if model.activeOnly {
+    attrs.push(attr("checked", "checked"))
+  }
+  attrs
+}
+
+function rowView(row: DataRow, index: int) -> Html<Msg> {
+  let state = if row.active { "active" } else { "inactive" }
+  element("li", [attr("id", "row-{index}"), attr("class", "data-row")], [], [
+    element("strong", [], [], [text(row.name)]),
+    element("span", [attr("class", "category")], [], [text(row.category)]),
+    element("span", [attr("class", "value")], [], [text("{row.value}")]),
+    element("small", [attr("class", "state")], [], [text(state)]),
+  ])
+}
+
+function rowsView(model: Model) -> Html<Msg> {
+  let mut children: Array<Html<Msg>> = []
+  let mut index = 0
+  for row in model.rows {
+    children.push(rowView(row, index))
+    index += 1
+  }
+  if children.length == 0 {
+    children.push(element("li", [attr("id", "empty-result")], [], [text("No matching rows")]))
+  }
+  element("ul", [attr("id", "data-rows"), attr("class", "data-rows")], [], children)
+}
+
+function errorView(model: Model) -> Html<Msg> {
+  match model.error {
+    case Some(message) => element("p", [attr("id", "error"), attr("role", "alert")], [], [text(message)])
+    case None => element("p", [attr("id", "error"), attr("role", "status")], [], [text("")])
+  }
+}
+
+export function render(model: Model) -> Html<Msg> {
+  element("main", [attr("id", "data-lens"), attr("class", "shell")], [], [
+    element("header", [attr("class", "hero")], [], [
+      element("p", [attr("class", "eyebrow")], [], [text("Topaz Web Application Loop")]),
+      element("h1", [], [], [text("Data Lens")]),
+      element("p", [], [], [text("Inspect JSON and CSV locally. Nothing leaves this browser.")]),
+    ]),
+    element("form", [attr("id", "lens-form")], [event("submit", Msg.Submit)], [
+      element("label", [attr("for", "source")], [], [text("Dataset")]),
+      element("textarea", [attr("id", "source"), attr("name", "source"), attr("value", model.source), attr("aria-label", "Dataset source")], [event("input", Msg.SourceChanged), event("keyup", Msg.SourceKey)], []),
+      element("div", [attr("class", "controls")], [], [
+        element("label", [attr("for", "format")], [], [text("Format")]),
+        element("select", [attr("id", "format"), attr("name", "format")], [event("change", Msg.FormatChanged)], [
+          element("option", selected(isCsv(model.format)), [], [text("CSV")]),
+          element("option", selected(isJson(model.format)), [], [text("JSON")]),
+        ]),
+        element("label", [attr("for", "query")], [], [text("Filter")]),
+        element("input", [attr("id", "query"), attr("name", "query"), attr("type", "text"), attr("value", model.query), attr("placeholder", "name or category")], [event("input", Msg.QueryChanged)], []),
+        element("label", [attr("for", "sort")], [], [text("Sort")]),
+        element("select", [attr("id", "sort"), attr("name", "sort")], [event("change", Msg.SortChanged)], [
+          element("option", selected(isByName(model.sortMode)), [], [text("Name")]),
+          element("option", selected(isByValue(model.sortMode)), [], [text("Value")]),
+        ]),
+        element("label", [attr("for", "active-only")], [], [text("Active only")]),
+        element("input", checkboxAttrs(model), [event("change", Msg.ActiveChanged)], []),
+      ]),
+      element("div", [attr("class", "actions")], [], [
+        element("button", [attr("id", "apply"), attr("type", "submit")], [], [text("Apply lens")]),
+        element("button", [attr("id", "open-document"), attr("type", "button")], [event("click", Msg.OpenDocument)], [text("Open file")]),
+        element("button", [attr("id", "download-results"), attr("type", "button")], [event("click", Msg.DownloadResults)], [text("Download results")]),
+        element("button", [attr("id", "save-session"), attr("type", "button")], [event("click", Msg.SaveSession)], [text("Save session")]),
+        element("button", [attr("id", "forget-session"), attr("type", "button")], [event("click", Msg.ForgetSession)], [text("Forget session")]),
+        element("button", [attr("id", "load-csv"), attr("type", "button")], [event("click", Msg.LoadCsv)], [text("CSV sample")]),
+        element("button", [attr("id", "load-json"), attr("type", "button")], [event("click", Msg.LoadJson)], [text("JSON sample")]),
+        element("button", [attr("id", "clear"), attr("type", "button")], [event("click", Msg.Clear)], [text("Clear")]),
+      ]),
+    ]),
+    errorView(model),
+    element("p", [attr("id", "status"), attr("aria-live", "polite")], [], [text(model.status)]),
+    element("section", [attr("id", "summary"), attr("class", "summary"), attr("aria-label", "Summary")], [], [
+      element("span", [attr("id", "total-rows")], [], [text("Rows {model.summary.totalRows}")]),
+      element("span", [attr("id", "active-rows")], [], [text("Active {model.summary.activeRows}")]),
+      element("span", [attr("id", "total-value")], [], [text("Total {model.summary.totalValue}")]),
+    ]),
+    rowsView(model),
+  ])
+}

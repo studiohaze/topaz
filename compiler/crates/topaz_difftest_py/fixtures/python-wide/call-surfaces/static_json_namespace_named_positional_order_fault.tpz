@@ -1,0 +1,9 @@
+
+function markString(label: string, value: string) -> string {
+    print(label)
+    value
+}
+function main() -> JSONValue {
+    JSON.parse(text: markString("named", "null"), markString("pos", "null"))
+}
+main()

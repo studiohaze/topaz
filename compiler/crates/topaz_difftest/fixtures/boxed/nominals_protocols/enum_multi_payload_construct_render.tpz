@@ -1,0 +1,4 @@
+enum Pair { P(int, int) }
+let p: Pair = Pair.P(1, 2)
+print("{p}")
+0

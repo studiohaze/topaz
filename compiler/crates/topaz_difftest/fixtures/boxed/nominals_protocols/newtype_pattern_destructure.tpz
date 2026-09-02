@@ -1,0 +1,7 @@
+newtype UserId = int
+let id: UserId = UserId(42)
+let r: int = match id {
+  case UserId(x) => x + 100
+}
+print("{r}")
+0

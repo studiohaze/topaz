@@ -1,0 +1,40 @@
+// В canonical-документации сведения об ошибке оформляют через helper-функции
+type ВидОшибкиПриложения = "database_connection_failed" | "file_access_denied" | "invalid_input" | "external_service_unavailable"
+type ОшибкаПриложения = { вид: ВидОшибкиПриложения, сообщение: string, поле: string | null, значение: string | null }
+
+function сообщениеОшибки(ошибка: ОшибкаПриложения) -> string {
+    match ошибка.вид {
+        case "database_connection_failed" => "Не удается подключиться к базе данных"
+        case "file_access_denied" => "Нет разрешения на доступ к файлу"
+        case "invalid_input" => "Неверный ввод - {ошибка.поле}: {ошибка.значение}"
+        case "external_service_unavailable" => "Внешняя служба недоступна"
+    }
+}
+
+function кодОшибки(ошибка: ОшибкаПриложения) -> int {
+    match ошибка.вид {
+        case "database_connection_failed" => 1001
+        case "file_access_denied" => 1002
+        case "invalid_input" => 1003
+        case "external_service_unavailable" => 1004
+    }
+}
+
+function ошибкаВосстановима(ошибка: ОшибкаПриложения) -> bool {
+    match ошибка.вид {
+        case "database_connection_failed" => true
+        case "external_service_unavailable" => true
+        case _ => false
+    }
+}
+
+// Интегрированная обработка ошибок
+function логироватьОшибку(ошибка: ОшибкаПриложения) {
+    print("[Ошибка {кодОшибки(ошибка)}] {сообщениеОшибки(ошибка)}")
+    
+    if ошибкаВосстановима(ошибка) {
+        print("Можно попытаться восстановить")
+    } else {
+        print("Невосстановимая ошибка")
+    }
+}

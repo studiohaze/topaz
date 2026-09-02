@@ -1,0 +1,1 @@
+Codec.gzipCompress(Bytes.encodeUtf8("topaz")).flatMap((gz) => Codec.gzipDecompress(gz)).flatMap((b) => b.decodeUtf8())

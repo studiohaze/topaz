@@ -1,0 +1,2 @@
+let user = { name: "Alice", age: 30 }
+let older = user{ age: 31 }

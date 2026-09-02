@@ -1,0 +1,11 @@
+let mut order = 0
+let values = set {
+  { order = order * 10 + 1
+    2 },
+  { order = order * 10 + 2
+    1 },
+  { order = order * 10 + 3
+    2 },
+}
+let items = values.toArray()
+order * 100 + items[0] * 10 + items[1]

@@ -1,0 +1,5 @@
+function f() -> int {
+    defer print("cleanup")
+    return 1
+}
+print("{f()}")

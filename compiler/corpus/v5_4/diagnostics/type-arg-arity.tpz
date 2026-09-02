@@ -1,0 +1,6 @@
+function id<T>(x: T) -> T {
+    return x
+}
+
+let n = id<int, int>(1)
+print("{n}")

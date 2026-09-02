@@ -1,0 +1,12 @@
+
+function mark(label: string, xs: Array<int>) -> Array<int> {
+    print(label)
+    xs
+}
+function key(x: int) -> int { x }
+function main() -> string {
+    let xs: Option<Array<int>> = Some([1])
+    key |> xs?.sortedBy(...mark("pipe-sorted", [0]))
+    "unreachable"
+}
+main()

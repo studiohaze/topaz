@@ -1,0 +1,12 @@
+let entries: Array<{ key: string, value: int }> = [
+  { key: "red", value: 1 },
+  { key: "blue", value: 2 },
+  { key: "red", value: 5 },
+]
+
+let m = Map.ofEntries(entries)
+let red = m.getOr("red", 0)
+let keys = m.keys.join(",")
+let named = Map.ofEntries(entries: [{ key: "blue", value: 9 }]).getOr("blue", 0)
+
+print("{red}/{keys}/{named}")

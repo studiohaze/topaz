@@ -1,0 +1,3 @@
+let xs = [5, 2]
+match xs { case [a, b] if a < b => 1
+case _ => xs.length }

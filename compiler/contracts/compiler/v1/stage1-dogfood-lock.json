@@ -1,0 +1,35 @@
+{
+  "schema": "topaz.compiler.stage1-dogfood-lock/v1",
+  "application": {
+    "root": "docs/samples/learn/first-application",
+    "expectedStdout": "tasks=2, remaining=25 minutes\n"
+  },
+  "lit": {
+    "source": "compiler/lit",
+    "sourceSha256": "2a9233eaf6cabf90352611a37b4eed01d8a7f1c33bb20e6eb3ce0dd585607c3f",
+    "expectedValue": "42",
+    "forbiddenFallbackCount": 0
+  },
+  "codeImage": {
+    "repository": "clavef/codeimage",
+    "commit": "defcb4a0b84596739f163ad3912cc4607a88d753",
+    "source": "topaz/src/core.tpz",
+    "sourceSha256": "26457323f26b3e89602d69fa8e2fe0ca8e3e6b7df133006815a39afcaeb8e2eb",
+    "canary": "compiler/corpus/stage1/codeimage-canary.tpz",
+    "prefixLines": 3,
+    "functionStart": "function 청크만들기",
+    "functionEnd": "\n}\n",
+    "canarySha256": "08010268ab52f0c10c155719891fecd66a733b6e54e025101e1352c737fb46c7"
+  },
+  "lispexProvider": {
+    "root": "compiler/lispex-topaz-vm-products/aarch64-apple-darwin",
+    "manifestSha256": "275ddc35ecd087464be3ed3799c0fefc3890ed924dd531a7cb36b94b0f60f435",
+    "artifactSha256": "37ffdfb1fcc16ab6b6c5dec156748263b5582b752c3cb361671c56d76808212e",
+    "executableSha256": "f2d306a6b6d591216d79c9644b65f4ed28bcca225c2d5956d50a7fd3b160b513",
+    "wrapperSha256": "146f6d5b0eb7171384e2dd605379b16ac4b8ff7dad850ab1dc2ba605e66c2481",
+    "opcodeCount": 22,
+    "primitiveCount": 205,
+    "guestCallingCount": 18,
+    "fallbackCount": 0
+  }
+}

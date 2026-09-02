@@ -1,0 +1,7 @@
+match Decimal.parse("100.50") { case Some(d) => { let x: Decimal = d
+let mut m = Map.new()
+m.insert(x, "ok")
+let first = [x, Decimal.fromInt(-1)].sorted().get(0)
+match first { case Some(v) => "{m.getOr(x, \"miss\")}/{v.toString()}"
+case None => "none" } }
+case None => "none" }

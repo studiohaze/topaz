@@ -1,0 +1,6 @@
+let mut import = {}
+import = {
+    let x = 1
+    x
+}
+import(x)

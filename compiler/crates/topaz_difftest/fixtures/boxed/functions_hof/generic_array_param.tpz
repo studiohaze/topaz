@@ -1,0 +1,2 @@
+function echo<T>(xs: Array<T>) { xs }
+echo([1, 2])

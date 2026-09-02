@@ -1,0 +1,2 @@
+let x: Option<int> = Some(5)
+x

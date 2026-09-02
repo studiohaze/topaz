@@ -1,0 +1,42 @@
+enum Node { Num(int), Var(string), Bin(BinNode) }
+type BinNode = { op: int, left: int, right: int }
+
+function eval(nodes: Array<Node>, env: Map<string, int>, i: int) -> int {
+  match nodes[i] {
+    case Num(n) => n
+    case Var(name) => env.get(name) ?? 0
+    case Bin(b) => {
+      let l = eval(nodes, env, b.left)
+      let r = eval(nodes, env, b.right)
+      if b.op == 0 { l + r }
+      else if b.op == 1 { l - r }
+      else if b.op == 2 { l * r }
+      else { l / r }
+    }
+  }
+}
+
+let empty: Map<string, int> = Map.new()
+
+let arith: Array<Node> = [
+  Node.Num(1),
+  Node.Num(2),
+  Node.Bin({ op: 0, left: 0, right: 1 }),
+  Node.Num(3),
+  Node.Bin({ op: 2, left: 2, right: 3 }),
+  Node.Num(4),
+  Node.Bin({ op: 1, left: 4, right: 5 })
+]
+print("{eval(arith, empty, 6)}")
+
+let mut env: Map<string, int> = Map.new()
+env.insert("x", 10)
+let letprog: Array<Node> = [
+  Node.Var("x"),
+  Node.Var("x"),
+  Node.Bin({ op: 2, left: 0, right: 1 }),
+  Node.Var("x"),
+  Node.Bin({ op: 0, left: 2, right: 3 })
+]
+print("{eval(letprog, env, 4)}")
+0

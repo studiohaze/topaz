@@ -1,0 +1,6 @@
+newtype UserId = int
+let id: UserId = UserId(7)
+let get: () -> int = id.value
+let n: int = get()
+print("{n}")
+0

@@ -1,0 +1,2 @@
+match Some("hi") { case Some(n: int) => 1
+case _ => 0 }

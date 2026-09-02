@@ -1,0 +1,7 @@
+
+import util
+function main() -> int {
+    let callbacks = [...util.base]
+    callbacks[1](a: 5) + callbacks[2](b: 3, a: 10)
+}
+main()

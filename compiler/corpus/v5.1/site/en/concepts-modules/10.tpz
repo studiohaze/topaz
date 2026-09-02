@@ -1,0 +1,5 @@
+// config.tpz — rejected
+export let cache = compute()         // error: reaches `limit`,
+export let limit = 100               // declared after `cache`
+
+function compute() -> int { return limit * 2 }

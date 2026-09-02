@@ -1,0 +1,2 @@
+match { x: 1 } { case n: { x: int, y: int } => 1
+case _ => 0 }

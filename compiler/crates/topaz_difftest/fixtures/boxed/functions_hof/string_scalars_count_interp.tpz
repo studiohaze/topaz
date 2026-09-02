@@ -1,0 +1,3 @@
+let s = "héllo"
+print("len {s.scalars().length} of {s}")
+0

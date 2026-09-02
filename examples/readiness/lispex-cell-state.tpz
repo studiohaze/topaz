@@ -1,0 +1,10 @@
+function makeCell(initial: int) -> (int) -> int {
+  let mut value = initial
+  (delta: int) => {
+    value += delta
+    value
+  }
+}
+
+let cell: (int) -> int = makeCell(10)
+print("cell={cell(0)},{cell(5)},{cell(-3)}")

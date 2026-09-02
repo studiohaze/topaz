@@ -1,0 +1,8 @@
+
+let x = loop 'a {
+    loop {
+        break 'a 100
+    }
+    break 0
+}
+x

@@ -1,0 +1,6 @@
+function mk() -> (int) -> Option<int> {
+  print("F")
+  (x) => Some(x)
+}
+let n: Option<int> = None
+n.flatMap(mk())

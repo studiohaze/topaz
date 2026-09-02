@@ -1,0 +1,679 @@
+// Type-expression and binding-pattern grammar for the self-host parser.
+// It shares cursor and node helpers with parser.core and returns syntax trees to
+// declaration and expression leaves without owning parse-result flattening.
+
+import types { PreviewToken, SyntaxNode }
+import parser.core {
+  Parser,
+  ParserService,
+  addDiagnostic,
+  at,
+  attach,
+  boolAttribute,
+  boxValue,
+  bump,
+  current,
+  diagnostic,
+  eat,
+  expect,
+  expectLeftBrace,
+  expectRightBrace,
+  fail,
+  fieldName,
+  identNode,
+  identifier,
+  invokeParseExpressionBp,
+  matchingParenFollowedBy,
+  node,
+  parseString,
+  rejectReservedBinding,
+  setBox,
+  text,
+  tokenAt,
+}
+
+export function bindingPattern(value: PreviewToken, field: string, index: int) -> SyntaxNode {
+  node(
+    "pattern/binding",
+    value.lo,
+    value.hi,
+    field,
+    index,
+    [],
+    [identNode(value, "name", 0)],
+  )
+}
+
+export function namedType(value: PreviewToken, field: string, index: int) -> SyntaxNode {
+  node(
+    "type/named",
+    value.lo,
+    value.hi,
+    field,
+    index,
+    [],
+    [identNode(value, "name", 0)],
+  )
+}
+
+export function expectCloseAngle(parser: Parser) -> Result<int, string> {
+  if at(parser, "gt") {
+    return Ok(bump(parser).hi)
+  }
+  if at(parser, "gt-gt") {
+    let token = bump(parser)
+    let mut pending = parser.pendingGt
+    pending.push(token.hi)
+    setBox(parser.lastHi, token.lo + 1)
+    return Ok(token.lo + 1)
+  }
+  fail(parser, "expected `>`")?
+  Err("expected `>`")
+}
+
+export function parseTypeArguments(
+  service: ParserService,
+  parser: Parser,
+) -> Result<Array<SyntaxNode>, string> {
+  expect(parser, "lt", "`<`")?
+  let mut arguments: Array<SyntaxNode> = [
+    parseType(service, parser, "arguments", 0)?,
+  ]
+  let mut index = 1
+  while eat(parser, "comma") {
+    arguments.push(parseType(
+      service,
+
+      parser,
+      "arguments",
+      index,
+    )?)
+    index += 1
+  }
+  expectCloseAngle(parser)?
+  Ok(arguments)
+}
+
+function parseNamedType(
+  service: ParserService,
+  parser: Parser,
+  field: string,
+  index: int,
+) -> Result<SyntaxNode, string> {
+  let namespace = bump(parser)
+  if eat(parser, "dot") {
+    let name = identifier(parser, "an exported type name")?
+    let mut children: Array<SyntaxNode> = [
+      identNode(namespace, "namespace", 0),
+      identNode(name, "name", 0),
+    ]
+    if at(parser, "lt") {
+      for argument in parseTypeArguments(service, parser)? {
+        children.push(argument)
+      }
+    }
+    return Ok(node(
+      "type/qualified",
+      namespace.lo,
+      boxValue(parser.lastHi),
+      field,
+      index,
+      [],
+      children,
+    ))
+  }
+  let mut children: Array<SyntaxNode> = [identNode(namespace, "name", 0)]
+  if at(parser, "lt") {
+    for argument in parseTypeArguments(service, parser)? {
+      children.push(argument)
+    }
+  }
+  Ok(node(
+    "type/named",
+    namespace.lo,
+    boxValue(parser.lastHi),
+    field,
+    index,
+    [],
+    children,
+  ))
+}
+
+function parseRecordType(
+  service: ParserService,
+  parser: Parser,
+  field: string,
+  index: int,
+) -> Result<SyntaxNode, string> {
+  let open = bump(parser)
+  let mut fields: Array<SyntaxNode> = []
+  let mut fieldIndex = 0
+  while !at(parser, "right-brace") && !at(parser, "eof") {
+    let name = fieldName(parser, "a field name")?
+    expect(parser, "colon", "`:`")?
+    let typeNode = parseType(service, parser, "type", 0)?
+    fields.push(node(
+      "record-type-field",
+      name.lo,
+      typeNode.hi,
+      "fields",
+      fieldIndex,
+      [],
+      [identNode(name, "name", 0), typeNode],
+    ))
+    fieldIndex += 1
+    if !eat(parser, "comma") {
+      break
+    }
+  }
+  let close = expectRightBrace(parser)?
+  if fields.length == 0 {
+    addDiagnostic(
+      parser,
+      "TPZ2001",
+      "a record type requires at least one field",
+      open.lo,
+      close.hi,
+    )
+  }
+  Ok(node("type/record", open.lo, close.hi, field, index, [], fields))
+}
+
+function parseFunctionType(
+  service: ParserService,
+  parser: Parser,
+  open: PreviewToken,
+  field: string,
+  index: int,
+) -> Result<SyntaxNode, string> {
+  let mut parameters: Array<SyntaxNode> = []
+  let mut parameterIndex = 0
+  while !at(parser, "right-paren") && !at(parser, "eof") {
+    let variadic = eat(parser, "ellipsis")
+    let typeNode = parseType(service, parser, "type", 0)?
+    parameters.push(node(
+      "function-type-parameter",
+      typeNode.lo,
+      typeNode.hi,
+      "parameters",
+      parameterIndex,
+      [boolAttribute("variadic", variadic)],
+      [typeNode],
+    ))
+    parameterIndex += 1
+    if !eat(parser, "comma") {
+      break
+    }
+  }
+  expect(parser, "right-paren", "`)`")?
+  expect(parser, "thin-arrow", "`->`")?
+  let returnType = parseType(service, parser, "returnType", 0)?
+  let hi = returnType.hi
+  parameters.push(returnType)
+  Ok(node("type/function", open.lo, hi, field, index, [], parameters))
+}
+
+function parseParenthesizedType(
+  service: ParserService,
+  parser: Parser,
+  field: string,
+  index: int,
+) -> Result<SyntaxNode, string> {
+  let functionType = matchingParenFollowedBy(parser, "thin-arrow")
+  let open = bump(parser)
+  if functionType {
+    return parseFunctionType(service, parser, open, field, index)
+  }
+  if eat(parser, "right-paren") {
+    return Ok(node(
+      "type/unit",
+      open.lo,
+      boxValue(parser.lastHi),
+      field,
+      index,
+      [],
+      [],
+    ))
+  }
+  let inner = parseType(service, parser, field, index)?
+  let close = expect(parser, "right-paren", "`)`")?
+  Ok(node(
+    inner.kind,
+    open.lo,
+    close.hi,
+    field,
+    index,
+    inner.attributes,
+    inner.children,
+  ))
+}
+
+function parsePrimaryType(
+  service: ParserService,
+  parser: Parser,
+  field: string,
+  index: int,
+) -> Result<SyntaxNode, string> {
+  let start = current(parser)
+  if start.kind == "identifier" {
+    return parseNamedType(service, parser, field, index)
+  }
+  if start.kind == "left-brace" {
+    return parseRecordType(service, parser, field, index)
+  }
+  if start.kind == "left-paren" {
+    return parseParenthesizedType(service, parser, field, index)
+  }
+  if start.kind == "integer" || start.kind == "float" ||
+    start.kind == "keyword/true" || start.kind == "keyword/false" ||
+    start.kind == "keyword/null" {
+    bump(parser)
+    return Ok(node("type/literal", start.lo, start.hi, field, index, [], []))
+  }
+  if start.kind.startsWith("string-start/") {
+    let literal = parseString(service, parser, field, index)?
+    for part in literal.children {
+      if part.kind == "string-part/interpolation" {
+        addDiagnostic(
+          parser,
+          "TPZ2001",
+          "a literal type cannot contain interpolation",
+          literal.lo,
+          literal.hi,
+        )
+        break
+      }
+    }
+    return Ok(node("type/literal", literal.lo, literal.hi, field, index, [], []))
+  }
+  fail(parser, "expected a type")?
+  Err("expected a type")
+}
+
+export function parseType(
+  service: ParserService,
+  parser: Parser,
+  field: string,
+  index: int,
+) -> Result<SyntaxNode, string> {
+  let first = parsePrimaryType(service, parser, field, index)?
+  if !at(parser, "pipe") {
+    return Ok(first)
+  }
+  let mut members: Array<SyntaxNode> = [attach(first, "members", 0)]
+  let mut memberIndex = 1
+  while eat(parser, "pipe") {
+    members.push(parsePrimaryType(
+      service,
+
+      parser,
+      "members",
+      memberIndex,
+    )?)
+    memberIndex += 1
+  }
+  Ok(node("type/union", first.lo, boxValue(parser.lastHi), field, index, [], members))
+}
+
+function isLiteralExpressionKind(kind: string) -> bool {
+  kind == "expression/integer" ||
+    kind == "expression/float" ||
+    kind == "expression/string" ||
+    kind == "expression/boolean" ||
+    kind == "expression/null" ||
+    kind == "expression/unit"
+}
+
+function parseRecordPatternFields(
+  service: ParserService,
+  parser: Parser,
+) -> Result<Array<SyntaxNode>, string> {
+  let open = expectLeftBrace(parser)?
+  let mut fields: Array<SyntaxNode> = []
+  let mut fieldIndex = 0
+  while !at(parser, "right-brace") && !at(parser, "eof") {
+    let lo = current(parser).lo
+    let name = if current(parser).kind.startsWith("keyword/") &&
+      tokenAt(parser, 1).kind == "colon" {
+      bump(parser)
+    } else {
+      identifier(parser, "a field name")?
+    }
+    let mut children: Array<SyntaxNode> = [identNode(name, "name", 0)]
+    if eat(parser, "colon") {
+      children.push(parsePattern(service, parser, "pattern", 0)?)
+    } else {
+      rejectReservedBinding(parser, name)
+    }
+    fields.push(node(
+      "record-pattern-field",
+      lo,
+      boxValue(parser.lastHi),
+      "fields",
+      fieldIndex,
+      [],
+      children,
+    ))
+    fieldIndex += 1
+    if !eat(parser, "comma") {
+      break
+    }
+  }
+  let close = expectRightBrace(parser)?
+  if fields.length == 0 {
+    let mut diagnostics = parser.diagnostics
+    diagnostics.push(diagnostic(
+      "TPZ2001",
+      "a record pattern requires at least one field",
+      open.lo,
+      close.hi,
+    ))
+  }
+  Ok(fields)
+}
+
+function parseListPattern(
+  service: ParserService,
+  parser: Parser,
+  field: string,
+  index: int,
+) -> Result<SyntaxNode, string> {
+  let open = bump(parser)
+  let mut elements: Array<SyntaxNode> = []
+  let mut elementIndex = 0
+  while !at(parser, "right-bracket") && !at(parser, "eof") {
+    if eat(parser, "dot-dot") {
+      let markerLo = boxValue(parser.lastHi) - 2
+      let mut children: Array<SyntaxNode> = []
+      if !at(parser, "comma") && !at(parser, "right-bracket") {
+        children.push(parsePattern(service, parser, "binding", 0)?)
+      }
+      let restLo = match children.get(0) {
+        case Some(binding) => binding.lo
+        case None => markerLo
+      }
+      let restHi = boxValue(parser.lastHi)
+      elements.push(node(
+        "list-pattern/rest",
+        restLo,
+        restHi,
+        "elements",
+        elementIndex,
+        [],
+        children,
+      ))
+    } else {
+      elements.push(parsePattern(
+        service,
+
+        parser,
+        "elements",
+        elementIndex,
+      )?)
+    }
+    elementIndex += 1
+    if !eat(parser, "comma") {
+      break
+    }
+  }
+  let close = expect(parser, "right-bracket", "`]`")?
+  let mut normalized: Array<SyntaxNode> = []
+  for element in elements {
+    if element.kind == "list-pattern/rest" && element.children.length == 0 {
+      normalized.push(node(
+        element.kind,
+        open.lo,
+        close.hi,
+        element.field,
+        element.index,
+        element.attributes,
+        element.children,
+      ))
+    } else {
+      normalized.push(element)
+    }
+  }
+  Ok(node("pattern/list", open.lo, close.hi, field, index, [], normalized))
+}
+
+function parseConstructorPattern(
+  service: ParserService,
+  parser: Parser,
+  field: string,
+  index: int,
+) -> Result<SyntaxNode, string> {
+  let name = bump(parser)
+  bump(parser)
+  let mut children: Array<SyntaxNode> = [identNode(name, "name", 0)]
+  let mut argumentIndex = 0
+  while !at(parser, "right-paren") && !at(parser, "eof") {
+    children.push(parsePattern(
+      service,
+
+      parser,
+      "arguments",
+      argumentIndex,
+    )?)
+    argumentIndex += 1
+    if !eat(parser, "comma") {
+      break
+    }
+  }
+  let close = expect(parser, "right-paren", "`)`")?
+  Ok(node(
+    "pattern/constructor",
+    name.lo,
+    close.hi,
+    field,
+    index,
+    [],
+    children,
+  ))
+}
+
+function parseNominalRecordPattern(
+  service: ParserService,
+  parser: Parser,
+  field: string,
+  index: int,
+) -> Result<SyntaxNode, string> {
+  let name = bump(parser)
+  let fields = parseRecordPatternFields(service, parser)?
+  let mut children: Array<SyntaxNode> = [identNode(name, "name", 0)]
+  for found in fields {
+    children.push(found)
+  }
+  Ok(node(
+    "pattern/nominal-record",
+    name.lo,
+    boxValue(parser.lastHi),
+    field,
+    index,
+    [],
+    children,
+  ))
+}
+
+function parseTypedPattern(
+  service: ParserService,
+  parser: Parser,
+  field: string,
+  index: int,
+) -> Result<SyntaxNode, string> {
+  let name = bump(parser)
+  rejectReservedBinding(parser, name)
+  bump(parser)
+  let typeNode = parseType(service, parser, "type", 0)?
+  Ok(node(
+    "pattern/typed",
+    name.lo,
+    typeNode.hi,
+    field,
+    index,
+    [],
+    [identNode(name, "name", 0), typeNode],
+  ))
+}
+
+function identifierStartsBindingPattern(parser: Parser) -> bool {
+  let next = tokenAt(parser, 1).kind
+  next != "dot-dot" && next != "dot-dot-lt" && next != "plus" &&
+    next != "minus" && next != "star" && next != "slash" &&
+    next != "percent" && next != "star-star"
+}
+
+function parseIdentifierPattern(
+  service: ParserService,
+  parser: Parser,
+  field: string,
+  index: int,
+) -> Result<Option<SyntaxNode>, string> {
+  let next = tokenAt(parser, 1).kind
+  if next == "left-paren" {
+    return Ok(Some(parseConstructorPattern(
+      service,
+
+      parser,
+      field,
+      index,
+    )?))
+  }
+  if next == "left-brace" {
+    return Ok(Some(parseNominalRecordPattern(
+      service,
+
+      parser,
+      field,
+      index,
+    )?))
+  }
+  if next == "colon" {
+    return Ok(Some(parseTypedPattern(
+      service,
+
+      parser,
+      field,
+      index,
+    )?))
+  }
+  if !identifierStartsBindingPattern(parser) {
+    return Ok(None)
+  }
+  let name = bump(parser)
+  if text(parser, name.lo, name.hi) == "None" {
+    return Ok(Some(node(
+      "pattern/constructor",
+      name.lo,
+      name.hi,
+      field,
+      index,
+      [],
+      [identNode(name, "name", 0)],
+    )))
+  }
+  Ok(Some(bindingPattern(name, field, index)))
+}
+
+function parseExpressionPattern(
+  service: ParserService,
+  parser: Parser,
+  field: string,
+  index: int,
+) -> Result<SyntaxNode, string> {
+  let first = invokeParseExpressionBp(service, parser, 8, "value", 0)?
+  if at(parser, "dot-dot") || at(parser, "dot-dot-lt") {
+    let inclusive = at(parser, "dot-dot")
+    bump(parser)
+    let high = invokeParseExpressionBp(service, parser, 8, "high", 0)?
+    return Ok(node(
+      "pattern/range",
+      first.lo,
+      high.hi,
+      field,
+      index,
+      [boolAttribute("inclusive", inclusive)],
+      [attach(first, "low", 0), high],
+    ))
+  }
+  if isLiteralExpressionKind(first.kind) {
+    return Ok(node(
+      "pattern/literal",
+      first.lo,
+      first.hi,
+      field,
+      index,
+      [],
+      [attach(first, "value", 0)],
+    ))
+  }
+  fail(parser, "expected a pattern")?
+  Err("expected a pattern")
+}
+
+function parsePrimaryPattern(
+  service: ParserService,
+  parser: Parser,
+  field: string,
+  index: int,
+) -> Result<SyntaxNode, string> {
+  let start = current(parser)
+  if start.kind == "underscore" {
+    let value = bump(parser)
+    return Ok(node("pattern/wildcard", value.lo, value.hi, field, index, [], []))
+  }
+  if start.kind == "left-bracket" {
+    return parseListPattern(service, parser, field, index)
+  }
+  if start.kind == "left-brace" {
+    let fields = parseRecordPatternFields(service, parser)?
+    return Ok(node(
+      "pattern/record",
+      start.lo,
+      boxValue(parser.lastHi),
+      field,
+      index,
+      [],
+      fields,
+    ))
+  }
+  if start.kind == "identifier" {
+    match parseIdentifierPattern(service, parser, field, index)? {
+      case Some(pattern) => return Ok(pattern)
+      case None => ()
+    }
+  }
+  parseExpressionPattern(service, parser, field, index)
+}
+
+export function parsePattern(
+  service: ParserService,
+  parser: Parser,
+  field: string,
+  index: int,
+) -> Result<SyntaxNode, string> {
+  let first = parsePrimaryPattern(service, parser, field, index)?
+  if !at(parser, "pipe") {
+    return Ok(first)
+  }
+  let mut alternatives: Array<SyntaxNode> = [attach(first, "alternatives", 0)]
+  let mut alternativeIndex = 1
+  while eat(parser, "pipe") {
+    alternatives.push(parsePrimaryPattern(
+      service,
+
+      parser,
+      "alternatives",
+      alternativeIndex,
+    )?)
+    alternativeIndex += 1
+  }
+  Ok(node(
+    "pattern/or",
+    first.lo,
+    boxValue(parser.lastHi),
+    field,
+    index,
+    [],
+    alternatives,
+  ))
+}

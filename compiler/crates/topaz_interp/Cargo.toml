@@ -1,0 +1,19 @@
+[package]
+name = "topaz_interp"
+version.workspace = true
+license.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+topaz_diag = { workspace = true }
+topaz_syntax = { workspace = true }
+topaz_parser = { workspace = true }
+topaz_resolve = { workspace = true }
+topaz_value = { workspace = true }
+
+[dev-dependencies]
+corpus-extract = { path = "../../tools/corpus-extract" }
+
+[lints]
+workspace = true

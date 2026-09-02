@@ -1,0 +1,10 @@
+
+function mark(label: string, xs: Array<int>) -> Array<int> {
+    print(label)
+    xs
+}
+function main() -> Option<Option<int>> {
+    let opt: Option<Option<int>> = Some(Some(1))
+    opt?.flatMap(...mark("option-flat", [0]))
+}
+main()

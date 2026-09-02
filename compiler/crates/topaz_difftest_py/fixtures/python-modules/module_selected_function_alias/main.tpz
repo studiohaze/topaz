@@ -1,0 +1,8 @@
+
+import math { add as plus }
+function main() -> int {
+    let total = plus(19, 23)
+    print("{total}")
+    total
+}
+main()

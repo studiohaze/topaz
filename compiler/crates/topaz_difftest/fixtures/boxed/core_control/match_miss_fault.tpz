@@ -1,0 +1,2 @@
+match 5 { case 1 => 10
+case 2 => 20 }

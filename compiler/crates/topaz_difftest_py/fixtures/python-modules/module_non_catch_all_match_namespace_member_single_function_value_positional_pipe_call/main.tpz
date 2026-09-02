@@ -1,0 +1,17 @@
+
+import util
+function main() -> int {
+    let seeds = [1, 2]
+    let f = match seeds[0] {
+        case n if n == 1 => util.inc
+        case n if n == 2 => util.double
+    }
+    let g = match seeds[1] {
+        case n if n == 1 => util.inc
+        case n if n == 2 => util.double
+    }
+    let a = 5 |> f
+    let b = 5 |> g
+    a * 1000 + b
+}
+main()

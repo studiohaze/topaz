@@ -1,0 +1,2 @@
+function r(v: { a: int }) -> int { v.a }
+r({ a: "x" })

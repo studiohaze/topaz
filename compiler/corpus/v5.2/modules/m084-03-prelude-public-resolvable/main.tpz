@@ -1,0 +1,2 @@
+import lib
+let h = lib.head([1])

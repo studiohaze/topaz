@@ -1,0 +1,9 @@
+
+let base = 36
+record Box { size: int = base }
+function main() -> string {
+    let base = 999
+    let b = Box { }
+    "{b.size}:{base}"
+}
+main()

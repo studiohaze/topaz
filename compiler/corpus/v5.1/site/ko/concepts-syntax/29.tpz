@@ -1,0 +1,7 @@
+let 사용자데이터 = fetch("https://api.example.com/users/1")
+    |> json()
+    |> (data => {
+        이름: data.name,
+        이메일: data.email,
+        가입일: Date.parse(data.created_at)
+    })

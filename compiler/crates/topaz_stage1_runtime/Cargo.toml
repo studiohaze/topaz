@@ -1,0 +1,20 @@
+[package]
+name = "topaz_stage1_runtime"
+version.workspace = true
+license.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+
+[features]
+test-invalid-stage2-identity = []
+
+[dependencies]
+topaz_product_runtime = { workspace = true }
+topaz_value = { workspace = true }
+
+[build-dependencies]
+topaz_value = { workspace = true }
+
+[lints]
+workspace = true

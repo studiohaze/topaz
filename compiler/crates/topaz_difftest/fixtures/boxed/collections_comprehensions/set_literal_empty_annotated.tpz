@@ -1,0 +1,2 @@
+let s: Set<int> = set {}
+s.length

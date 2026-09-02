@@ -1,0 +1,31 @@
+// 에러에 컨텍스트 정보 추가
+function 사용자데이터로드(아이디: int) -> Result<{ 이름: string, 설정: { theme: string } }, string> {
+    return match 필수사용자찾기(아이디) {
+        case Ok(사용자) => match 설정파일읽기("user_{아이디}.json") {
+            case Ok(설정) => Ok({ 이름: 사용자.이름, 설정: 설정 })
+            case Err(오류) => Err("사용자 설정 로드 실패 (ID: {아이디}): {오류.메시지}")
+        }
+        case Err(오류) => Err("사용자 조회 실패 (ID: {아이디}): {오류}")
+    }
+}
+
+// 단계별 에러 처리
+function 단계별처리() -> Result<string, string> {
+    print("1단계: 데이터 검증 중...")
+    return match 데이터검증() {
+        case Err(오류) => Err("1단계 실패: {오류}")
+        case Ok(검증결과) => {
+            print("2단계: 데이터 변환 중...")
+            match 데이터변환(검증결과) {
+                case Err(오류) => Err("2단계 실패: {오류}")
+                case Ok(변환결과) => {
+                    print("3단계: 데이터 저장 중...")
+                    match 데이터저장(변환결과) {
+                        case Err(오류) => Err("3단계 실패: {오류}")
+                        case Ok(저장결과) => Ok("모든 단계 완료: {저장결과}")
+                    }
+                }
+            }
+        }
+    }
+}

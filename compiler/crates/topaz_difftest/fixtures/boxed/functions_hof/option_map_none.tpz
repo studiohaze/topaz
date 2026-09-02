@@ -1,0 +1,2 @@
+let n: Option<int> = None
+n.map((x) => x + 1)

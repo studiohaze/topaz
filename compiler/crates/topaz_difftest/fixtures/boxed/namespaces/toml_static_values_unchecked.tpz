@@ -1,0 +1,4 @@
+let parse = TOML.parse
+match parse("name = \"Ada\"") { case Ok(t) => { let toJson = TOML.toJson
+JSON.stringify(toJson(t)) }
+case Err(e) => Err(e) }

@@ -1,0 +1,1158 @@
+// Lexical scope construction and resolved-reference traversal.
+// Module tables define cross-file bindings, while this leaf owns local scopes,
+// declarations, captures, and reference observations.
+
+import raw { keywordKind }
+import types {
+  PreviewResolvedDeclaration,
+  PreviewResolvedExport,
+  PreviewResolvedReference,
+  PreviewResolvedScope,
+  SyntaxNode,
+}
+import unicode { didYouMean }
+import resolver.model_facts {
+  Binding,
+  LocalScope,
+  ModuleTable,
+  ReferenceResolution,
+  ResolverWalkContext,
+  boolAttribute,
+  child,
+  children,
+  diagnostic,
+  isNone,
+  text,
+}
+import resolver.modules_tables {
+  bindingForStatement,
+  catalogTable,
+  collectPatternBindings,
+  effectiveNamespace,
+  exportedBinding,
+  exportedNames,
+  tableBinding,
+}
+
+function localBinding(scopes: Array<LocalScope>, name: string, namespace: string) -> Option<Binding> {
+  let mut index = scopes.length
+  while index > 0 {
+    index -= 1
+    let scope = scopes[index]
+    let bindings = if namespace == "type" { scope.types } else { scope.values }
+    match bindings.get(name) {
+      case Some(binding) => return Some(binding)
+      case None => ()
+    }
+  }
+  None
+}
+
+function currentScope(scopes: Array<LocalScope>) -> int {
+  if scopes.length == 0 {
+    return 0
+  }
+  scopes[scopes.length - 1].ordinal
+}
+
+export function addDeclaration(
+  output: Array<PreviewResolvedDeclaration>,
+  binding: Binding,
+  namespace: string,
+  exported: bool,
+) -> () {
+  let mut target = output
+  target.push(PreviewResolvedDeclaration {
+    moduleIndex: binding.moduleIndex,
+    scopeOrdinal: binding.scopeOrdinal,
+    name: binding.name,
+    namespace: namespace,
+    declarationKind: binding.declarationKind,
+    lo: binding.lo,
+    hi: binding.hi,
+    exported: exported,
+    targetModule: binding.targetModule,
+    targetName: binding.targetName,
+  })
+}
+
+function addLocalBinding(
+  scopes: Array<LocalScope>,
+  declarations: Array<PreviewResolvedDeclaration>,
+  binding: Binding,
+) -> () {
+  let mut activeScopes = scopes
+  let scope = activeScopes[activeScopes.length - 1]
+  if binding.namespace == "type" {
+    let mut types = scope.types
+    types.insert(binding.name, binding)
+  } else {
+    let mut values = scope.values
+    values.insert(binding.name, binding)
+  }
+  addDeclaration(
+    declarations,
+    binding,
+    binding.namespace,
+    binding.exported,
+  )
+}
+
+export function appendModuleExports(
+  output: Array<PreviewResolvedExport>,
+  moduleIndexValue: int,
+  table: ModuleTable,
+) -> () {
+  let mut target = output
+  for name in exportedNames(table, "") {
+    match exportedBinding(table, name) {
+      case Some(exported) => {
+        let binding = table.bindings[exported.bindingIndex]
+        target.push(PreviewResolvedExport {
+          moduleIndex: moduleIndexValue,
+          name: name,
+          namespace: exported.namespace,
+          declarationLo: binding.lo,
+          declarationHi: binding.hi,
+        })
+      }
+      case None => ()
+    }
+  }
+  ()
+}
+
+function unresolvedReference(namespace: string) -> ReferenceResolution {
+  ReferenceResolution {
+    referenceNamespace: namespace,
+    targetModuleIndex: -1,
+    targetLo: 0,
+    targetHi: 0,
+    targetNamespace: "",
+    targetModule: "",
+    targetName: "",
+  }
+}
+
+function appendReference(
+  context: ResolverWalkContext,
+  scopes: Array<LocalScope>,
+  name: string,
+  role: string,
+  lo: int,
+  hi: int,
+  resolved: ReferenceResolution,
+) -> () {
+  let mut output = context.referenceOutput
+  output.push(PreviewResolvedReference {
+    moduleIndex: context.moduleIndex,
+    scopeOrdinal: currentScope(scopes),
+    name: name,
+    namespace: resolved.referenceNamespace,
+    role: role,
+    lo: lo,
+    hi: hi,
+    targetModuleIndex: resolved.targetModuleIndex,
+    targetLo: resolved.targetLo,
+    targetHi: resolved.targetHi,
+    targetNamespace: resolved.targetNamespace,
+    targetModule: resolved.targetModule,
+    targetName: resolved.targetName,
+  })
+}
+
+function localReferenceResolution(
+  context: ResolverWalkContext,
+  scopes: Array<LocalScope>,
+  name: string,
+  namespace: string,
+) -> Option<ReferenceResolution> {
+  match localBinding(scopes, name, namespace) {
+    case Some(target) => Some(ReferenceResolution {
+      referenceNamespace: namespace,
+      targetModuleIndex: context.moduleIndex,
+      targetLo: target.lo,
+      targetHi: target.hi,
+      targetNamespace: target.namespace,
+      targetModule: context.table.identity,
+      targetName: name,
+    })
+    case None => None
+  }
+}
+
+function moduleReferenceResolution(
+  context: ResolverWalkContext,
+  found: Binding,
+  name: string,
+  namespace: string,
+  role: string,
+) -> ReferenceResolution {
+  if found.declarationKind == "selected-import" {
+    return ReferenceResolution {
+      referenceNamespace: namespace,
+      targetModuleIndex: context.moduleIndex,
+      targetLo: found.lo,
+      targetHi: found.hi,
+      targetNamespace: if role == "type" {
+        namespace
+      } else {
+        effectiveNamespace(found, context.tables)
+      },
+      targetModule: if role == "type" {
+        context.table.identity
+      } else {
+        found.targetModule
+      },
+      targetName: if role == "type" { name } else { found.targetName },
+    }
+  } else if found.declarationKind == "namespace-import" {
+    return ReferenceResolution {
+      referenceNamespace: "module",
+      targetModuleIndex: context.moduleIndex,
+      targetLo: found.lo,
+      targetHi: found.hi,
+      targetNamespace: found.namespace,
+      targetModule: found.targetModule,
+      targetName: "",
+    }
+  }
+  ReferenceResolution {
+    referenceNamespace: namespace,
+    targetModuleIndex: context.moduleIndex,
+    targetLo: found.lo,
+    targetHi: found.hi,
+    targetNamespace: found.namespace,
+    targetModule: context.table.identity,
+    targetName: name,
+  }
+}
+
+function reference(
+  context: ResolverWalkContext,
+  scopes: Array<LocalScope>,
+  name: string,
+  namespace: string,
+  role: string,
+  lo: int,
+  hi: int,
+) -> Option<Binding> {
+  let mut moduleBinding: Option<Binding> = None
+  let resolved = match localReferenceResolution(
+    context,
+    scopes,
+    name,
+    namespace,
+  ) {
+    case Some(value) => value
+    case None => match tableBinding(context.table, name) {
+      case Some(binding) => {
+        moduleBinding = Some(binding)
+        moduleReferenceResolution(
+          context,
+          binding,
+          name,
+          namespace,
+          role,
+        )
+      }
+      case None => unresolvedReference(namespace)
+    }
+  }
+  appendReference(context, scopes, name, role, lo, hi, resolved)
+  moduleBinding
+}
+
+function namespaceMemberResolution(
+  context: ResolverWalkContext,
+  binding: Binding,
+  member: string,
+  namespace: string,
+  field: SyntaxNode,
+) -> ReferenceResolution {
+  let targetTable = match catalogTable(context.tables, binding.targetModule) {
+    case Some(found) => found
+    case None => return unresolvedReference(namespace)
+  }
+  let targetBinding = tableBinding(targetTable, member)
+  let targetExport = exportedBinding(targetTable, member)
+  let targetNamespace = match targetExport {
+    case Some(exported) => exported.namespace
+    case None => ""
+  }
+  let memberExported = !isNone(targetExport)
+  let keywordNamed = namespace == "value" &&
+    keywordKind(member).startsWith("keyword/")
+  if keywordNamed {
+    diagnostic(
+      context.diagnostics,
+      context.moduleIndex,
+      "TPZ3013",
+      "namespace members are exported declarations and cannot be keyword-named (`{binding.name}.{member}`)",
+      field.lo,
+      field.hi,
+    )
+  } else if !memberExported {
+    let mut recordDefaultPrivateValue = false
+    if namespace == "value" && context.recordDefaultStack.length > 0 {
+      match targetBinding {
+        case Some(privateBinding) => if privateBinding.declarationKind == "let" &&
+          !privateBinding.mutable && !privateBinding.exported {
+          recordDefaultPrivateValue = true
+        }
+        case None => ()
+      }
+    }
+    if !recordDefaultPrivateValue {
+      let hint = didYouMean(
+        member,
+        exportedNames(targetTable, namespace),
+      )
+      diagnostic(
+        context.diagnostics,
+        context.moduleIndex,
+        "TPZ3009",
+        "`{member}` is not exported by `{binding.targetModule}`{hint}",
+        field.lo,
+        field.hi,
+      )
+    }
+  }
+  let target = match targetBinding {
+    case Some(found) => found
+    case None => return unresolvedReference(namespace)
+  }
+  if !keywordNamed && memberExported && namespace == "value" &&
+    targetNamespace == "type" {
+    diagnostic(
+      context.diagnostics,
+      context.moduleIndex,
+      "TPZ3013",
+      "`{member}` is an exported type alias of `{binding.targetModule}`, not a value; use it in type position",
+      field.lo,
+      field.hi,
+    )
+  } else if !keywordNamed && memberExported && namespace == "type" &&
+    targetNamespace != "type" {
+    diagnostic(
+      context.diagnostics,
+      context.moduleIndex,
+      "TPZ3013",
+      "`{member}` is exported by `{binding.targetModule}` but is not a type alias",
+      field.lo,
+      field.hi,
+    )
+  }
+  ReferenceResolution {
+    referenceNamespace: namespace,
+    targetModuleIndex: target.moduleIndex,
+    targetLo: target.lo,
+    targetHi: target.hi,
+    targetNamespace: if namespace == "type" || targetNamespace == "type" {
+      "type"
+    } else {
+      "value"
+    },
+    targetModule: binding.targetModule,
+    targetName: member,
+  }
+}
+
+function namespaceMember(
+  context: ResolverWalkContext,
+  scopes: Array<LocalScope>,
+  object: SyntaxNode,
+  field: SyntaxNode,
+  namespace: string,
+  role: string,
+) -> bool {
+  let head = text(context.source, object)
+  if match localBinding(scopes, head, "value") {
+    case Some(_) => true
+    case None => false
+  } {
+    return false
+  }
+  let binding = match tableBinding(context.table, head) {
+    case Some(found) => found
+    case None => return false
+  }
+  if binding.declarationKind != "namespace-import" {
+    return false
+  }
+  let member = text(context.source, field)
+  let resolved = namespaceMemberResolution(
+    context,
+    binding,
+    member,
+    namespace,
+    field,
+  )
+  appendReference(
+    context,
+    scopes,
+    "{head}.{member}",
+    role,
+    field.lo,
+    field.hi,
+    resolved,
+  )
+  true
+}
+
+function pushScope(
+  moduleIndexValue: int,
+  owner: SyntaxNode,
+  kind: string,
+  scopes: Array<LocalScope>,
+  nextScope: Array<int>,
+  output: Array<PreviewResolvedScope>,
+) -> int {
+  let ordinal = nextScope[0]
+  let mut nextScopeBox = nextScope
+  nextScopeBox[0] = ordinal + 1
+  let mut rows = output
+  rows.push(PreviewResolvedScope {
+    moduleIndex: moduleIndexValue,
+    ordinal: ordinal,
+    parentOrdinal: currentScope(scopes),
+    kind: kind,
+    lo: owner.lo,
+    hi: owner.hi,
+  })
+  let mut active = scopes
+  active.push(LocalScope {
+    ordinal: ordinal,
+    values: Map.new(),
+    types: Map.new(),
+  })
+  ordinal
+}
+
+function popScope(scopes: Array<LocalScope>) -> () {
+  let mut activeScopes = scopes
+  match activeScopes.pop() {
+    case Some(_) => ()
+    case None => ()
+  }
+}
+
+function bindPattern(
+  moduleIndexValue: int,
+  pattern: SyntaxNode,
+  source: Bytes,
+  declarationKind: string,
+  scopes: Array<LocalScope>,
+  declarations: Array<PreviewResolvedDeclaration>,
+) -> () {
+  let mut names: Array<SyntaxNode> = []
+  collectPatternBindings(pattern, source, names)
+  for name in names {
+    addLocalBinding(scopes, declarations, Binding {
+      moduleIndex: moduleIndexValue,
+      scopeOrdinal: currentScope(scopes),
+      name: text(source, name),
+      namespace: "value",
+      declarationKind: declarationKind,
+      lo: name.lo,
+      hi: name.hi,
+      exported: false,
+      targetModule: "",
+      targetName: "",
+      mutable: false,
+    })
+  }
+  ()
+}
+
+function walkProtocolStatement(
+  context: ResolverWalkContext,
+  node: SyntaxNode,
+  scopes: Array<LocalScope>,
+) -> () {
+  match child(node, "name") {
+    case Some(name) => {
+      let protocolName = text(context.source, name)
+      let alreadyBound = match localBinding(scopes, protocolName, "type") {
+        case Some(binding) => binding.scopeOrdinal == currentScope(scopes) &&
+          binding.lo == name.lo && binding.hi == name.hi
+        case None => false
+      }
+      if !alreadyBound {
+        let mut declarations = context.declarationOutput
+        declarations.push(PreviewResolvedDeclaration {
+          moduleIndex: context.moduleIndex,
+          scopeOrdinal: currentScope(scopes),
+          name: protocolName,
+          namespace: "type",
+          declarationKind: "protocol",
+          lo: name.lo,
+          hi: name.hi,
+          exported: false,
+          targetModule: "",
+          targetName: "",
+        })
+      }
+    }
+    case None => ()
+  }
+  for method in children(node, "methods") {
+    for parameter in children(method, "parameters") {
+      match child(parameter, "type") {
+        case Some(parameterType) => walkNode(context, parameterType, scopes)
+        case None => ()
+      }
+    }
+    match child(method, "returnType") {
+      case Some(returnType) => walkNode(context, returnType, scopes)
+      case None => ()
+    }
+  }
+  ()
+}
+
+function walkUsingStatement(
+  context: ResolverWalkContext,
+  node: SyntaxNode,
+  scopes: Array<LocalScope>,
+) -> () {
+  match child(node, "value") {
+    case Some(value) => walkNode(context, value, scopes)
+    case None => ()
+  }
+  match child(node, "body") {
+    case Some(body) => {
+      pushScope(
+        context.moduleIndex,
+        body,
+        "using",
+        scopes,
+        context.nextScope,
+        context.scopeOutput,
+      )
+      match child(node, "name") {
+        case Some(name) => addLocalBinding(
+          scopes,
+          context.declarationOutput,
+          Binding {
+            moduleIndex: context.moduleIndex,
+            scopeOrdinal: currentScope(scopes),
+            name: text(context.source, name),
+            namespace: "value",
+            declarationKind: "using",
+            lo: name.lo,
+            hi: name.hi,
+            exported: false,
+            targetModule: "",
+            targetName: "",
+            mutable: false,
+          },
+        )
+        case None => ()
+      }
+      walkNode(context, body, scopes)
+      popScope(scopes)
+    }
+    case None => ()
+  }
+  ()
+}
+
+function walkComprehensionExpression(
+  context: ResolverWalkContext,
+  node: SyntaxNode,
+  scopes: Array<LocalScope>,
+) -> () {
+  let mut opened = 0
+  for clause in children(node, "clauses") {
+    if clause.kind == "comprehension-clause/for" {
+      match child(clause, "iterator") {
+        case Some(iterator) => walkNode(context, iterator, scopes)
+        case None => ()
+      }
+      match child(clause, "pattern") {
+        case Some(pattern) => {
+          pushScope(
+            context.moduleIndex,
+            pattern,
+            "comprehension",
+            scopes,
+            context.nextScope,
+            context.scopeOutput,
+          )
+          bindPattern(
+            context.moduleIndex,
+            pattern,
+            context.source,
+            "pattern",
+            scopes,
+            context.declarationOutput,
+          )
+          walkNode(context, pattern, scopes)
+          opened += 1
+        }
+        case None => ()
+      }
+    } else {
+      for part in clause.children {
+        walkNode(context, part, scopes)
+      }
+    }
+  }
+  for found in node.children {
+    if found.field == "body" || found.field == "bodyKey" ||
+      found.field == "bodyValue" {
+      walkNode(context, found, scopes)
+    }
+  }
+  while opened > 0 {
+    popScope(scopes)
+    opened -= 1
+  }
+  ()
+}
+
+function openPatternScope(
+  context: ResolverWalkContext,
+  pattern: SyntaxNode,
+  scopes: Array<LocalScope>,
+) -> () {
+  walkNode(context, pattern, scopes)
+  pushScope(
+    context.moduleIndex,
+    pattern,
+    "pattern",
+    scopes,
+    context.nextScope,
+    context.scopeOutput,
+  )
+  bindPattern(
+    context.moduleIndex,
+    pattern,
+    context.source,
+    "pattern",
+    scopes,
+    context.declarationOutput,
+  )
+  ()
+}
+
+function walkMatchCase(
+  context: ResolverWalkContext,
+  node: SyntaxNode,
+  scopes: Array<LocalScope>,
+) -> () {
+  let mut opened = false
+  match child(node, "pattern") {
+    case Some(pattern) => {
+      openPatternScope(context, pattern, scopes)
+      opened = true
+    }
+    case None => ()
+  }
+  for found in node.children {
+    if found.field != "pattern" {
+      walkNode(context, found, scopes)
+    }
+  }
+  if opened {
+    popScope(scopes)
+  }
+  ()
+}
+
+function walkForExpression(
+  context: ResolverWalkContext,
+  node: SyntaxNode,
+  scopes: Array<LocalScope>,
+) -> () {
+  match child(node, "iterator") {
+    case Some(iterator) => walkNode(context, iterator, scopes)
+    case None => ()
+  }
+  let mut opened = false
+  match child(node, "pattern") {
+    case Some(pattern) => {
+      openPatternScope(context, pattern, scopes)
+      opened = true
+    }
+    case None => ()
+  }
+  for found in node.children {
+    if found.field != "iterator" && found.field != "pattern" {
+      walkNode(context, found, scopes)
+    }
+  }
+  if opened {
+    popScope(scopes)
+  }
+  ()
+}
+
+function resolveAssignmentIdentifier(
+  context: ResolverWalkContext,
+  target: SyntaxNode,
+  scopes: Array<LocalScope>,
+) -> () {
+  let name = text(context.source, target)
+  let binding = match reference(
+    context,
+    scopes,
+    name,
+    "value",
+    "write",
+    target.lo,
+    target.hi,
+  ) {
+    case Some(found) => found
+    case None => return ()
+  }
+  if binding.declarationKind == "selected-import" {
+    diagnostic(
+      context.diagnostics,
+      context.moduleIndex,
+      "TPZ3015",
+      "`{name}` is an imported binding and cannot be assigned",
+      target.lo,
+      target.hi,
+    )
+  } else if binding.declarationKind == "namespace-import" {
+    diagnostic(
+      context.diagnostics,
+      context.moduleIndex,
+      "TPZ3012",
+      "`{name}` is a namespace, not a value; it may appear only as `{name}.member`",
+      target.lo,
+      target.hi,
+    )
+  }
+  ()
+}
+
+function rejectNamespaceAssignment(
+  context: ResolverWalkContext,
+  target: SyntaxNode,
+  scopes: Array<LocalScope>,
+) -> bool {
+  if target.kind != "expression/member" {
+    return false
+  }
+  let object = match child(target, "object") {
+    case Some(found) => found
+    case None => return false
+  }
+  if object.kind != "expression/identifier" {
+    return false
+  }
+  let name = text(context.source, object)
+  if !isNone(localBinding(scopes, name, "value")) {
+    return false
+  }
+  let binding = match tableBinding(context.table, name) {
+    case Some(found) => found
+    case None => return false
+  }
+  if binding.declarationKind != "namespace-import" {
+    return false
+  }
+  let member = match child(target, "field") {
+    case Some(field) => text(context.source, field)
+    case None => ""
+  }
+  diagnostic(
+    context.diagnostics,
+    context.moduleIndex,
+    "TPZ3015",
+    "`{name}.{member}` is an exported binding viewed through a namespace and cannot be assigned",
+    target.lo,
+    target.hi,
+  )
+  true
+}
+
+function walkAssignmentStatement(
+  context: ResolverWalkContext,
+  node: SyntaxNode,
+  scopes: Array<LocalScope>,
+) -> () {
+  match child(node, "target") {
+    case Some(target) => if target.kind == "expression/identifier" {
+      resolveAssignmentIdentifier(context, target, scopes)
+    } else if !rejectNamespaceAssignment(context, target, scopes) {
+      walkNode(context, target, scopes)
+    }
+    case None => ()
+  }
+  match child(node, "value") {
+    case Some(value) => walkNode(context, value, scopes)
+    case None => ()
+  }
+  ()
+}
+
+function resolveNamedTypeReference(
+  context: ResolverWalkContext,
+  node: SyntaxNode,
+  scopes: Array<LocalScope>,
+) -> () {
+  match child(node, "name") {
+    case Some(name) => {
+      reference(
+        context,
+        scopes,
+        text(context.source, name),
+        "type",
+        "type",
+        name.lo,
+        name.hi,
+      )
+      ()
+    }
+    case None => ()
+  }
+  ()
+}
+
+function resolveQualifiedTypeReference(
+  context: ResolverWalkContext,
+  node: SyntaxNode,
+  scopes: Array<LocalScope>,
+) -> () {
+  match child(node, "namespace") {
+    case Some(namespaceNode) => match child(node, "name") {
+      case Some(name) => if !namespaceMember(
+        context,
+        scopes,
+        namespaceNode,
+        name,
+        "type",
+        "type",
+      ) {
+        diagnostic(
+          context.diagnostics,
+          context.moduleIndex,
+          "TPZ3013",
+          "the head of a qualified type must be a namespace binding; `{text(context.source, namespaceNode)}` is not one here",
+          namespaceNode.lo,
+          namespaceNode.hi,
+        )
+      }
+      case None => ()
+    }
+    case None => ()
+  }
+  ()
+}
+
+function resolveValueIdentifier(
+  context: ResolverWalkContext,
+  node: SyntaxNode,
+  scopes: Array<LocalScope>,
+) -> () {
+  let name = text(context.source, node)
+  let binding = match reference(
+    context,
+    scopes,
+    name,
+    "value",
+    "read",
+    node.lo,
+    node.hi,
+  ) {
+    case Some(found) => found
+    case None => return ()
+  }
+  if binding.declarationKind == "namespace-import" {
+    diagnostic(
+      context.diagnostics,
+      context.moduleIndex,
+      "TPZ3012",
+      "`{name}` is a namespace, not a value; it may appear only as `{name}.member`",
+      node.lo,
+      node.hi,
+    )
+  }
+  ()
+}
+
+function resolveNamespaceMemberReference(
+  context: ResolverWalkContext,
+  node: SyntaxNode,
+  scopes: Array<LocalScope>,
+) -> bool {
+  if node.kind != "expression/member" {
+    return false
+  }
+  match child(node, "object") {
+    case Some(object) => match child(node, "field") {
+      case Some(field) => object.kind == "expression/identifier" &&
+        namespaceMember(
+          context,
+          scopes,
+          object,
+          field,
+          "value",
+          "namespace-member",
+        )
+      case None => false
+    }
+    case None => false
+  }
+}
+
+function walkCallableSignature(
+  context: ResolverWalkContext,
+  node: SyntaxNode,
+  scopes: Array<LocalScope>,
+) -> () {
+  if node.kind != "function-declaration" &&
+    node.kind != "expression/lambda" {
+    return ()
+  }
+  for parameter in children(node, "parameters") {
+    for part in parameter.children {
+      if part.field == "type" || part.field == "default" {
+        walkNode(context, part, scopes)
+      }
+    }
+  }
+  match child(node, "returnType") {
+    case Some(returnType) => walkNode(context, returnType, scopes)
+    case None => ()
+  }
+  ()
+}
+
+function openNodeScope(
+  context: ResolverWalkContext,
+  node: SyntaxNode,
+  scopes: Array<LocalScope>,
+) -> bool {
+  let kind = match node.kind {
+    case "function-declaration" => "function"
+    case "expression/lambda" => "lambda"
+    case "block" => "block"
+    case _ => ""
+  }
+  if kind == "" {
+    return false
+  }
+  let ordinal = pushScope(
+    context.moduleIndex,
+    node,
+    kind,
+    scopes,
+    context.nextScope,
+    context.scopeOutput,
+  )
+  if node.kind == "function-declaration" ||
+    node.kind == "expression/lambda" {
+    for parameter in children(node, "parameters") {
+      match child(parameter, "name") {
+        case Some(name) => addLocalBinding(
+          scopes,
+          context.declarationOutput,
+          Binding {
+            moduleIndex: context.moduleIndex,
+            scopeOrdinal: ordinal,
+            name: text(context.source, name),
+            namespace: "value",
+            declarationKind: "parameter",
+            lo: name.lo,
+            hi: name.hi,
+            exported: false,
+            targetModule: "",
+            targetName: "",
+            mutable: false,
+          },
+        )
+        case None => ()
+      }
+    }
+  }
+  true
+}
+
+function prebindChildDeclaration(
+  context: ResolverWalkContext,
+  childNode: SyntaxNode,
+  scopes: Array<LocalScope>,
+) -> () {
+  if scopes.length == 0 {
+    return ()
+  }
+  for candidate in bindingForStatement(
+    context.moduleIndex,
+    childNode,
+    context.source,
+    false,
+  ) {
+    if candidate.declarationKind != "let" &&
+      candidate.declarationKind != "const" &&
+      candidate.declarationKind != "namespace-import" &&
+      candidate.declarationKind != "selected-import" {
+      addLocalBinding(
+        scopes,
+        context.declarationOutput,
+        Binding {
+          moduleIndex: context.moduleIndex,
+          scopeOrdinal: currentScope(scopes),
+          name: candidate.name,
+          namespace: candidate.namespace,
+          declarationKind: candidate.declarationKind,
+          lo: candidate.lo,
+          hi: candidate.hi,
+          exported: false,
+          targetModule: "",
+          targetName: "",
+          mutable: candidate.mutable,
+        },
+      )
+    }
+  }
+  ()
+}
+
+function bindStatementAfterWalk(
+  context: ResolverWalkContext,
+  node: SyntaxNode,
+  scopes: Array<LocalScope>,
+) -> () {
+  if node.kind == "statement/let" {
+    match child(node, "pattern") {
+      case Some(pattern) => {
+        let mut names: Array<SyntaxNode> = []
+        collectPatternBindings(pattern, context.source, names)
+        for name in names {
+          addLocalBinding(
+            scopes,
+            context.declarationOutput,
+            Binding {
+              moduleIndex: context.moduleIndex,
+              scopeOrdinal: currentScope(scopes),
+              name: text(context.source, name),
+              namespace: "value",
+              declarationKind: "let",
+              lo: name.lo,
+              hi: name.hi,
+              exported: false,
+              targetModule: "",
+              targetName: "",
+              mutable: boolAttribute(node, "mutable"),
+            },
+          )
+        }
+      }
+      case None => ()
+    }
+  } else if node.kind == "statement/const" && scopes.length > 0 {
+    match child(node, "name") {
+      case Some(name) => addLocalBinding(
+        scopes,
+        context.declarationOutput,
+        Binding {
+          moduleIndex: context.moduleIndex,
+          scopeOrdinal: currentScope(scopes),
+          name: text(context.source, name),
+          namespace: "value",
+          declarationKind: "const",
+          lo: name.lo,
+          hi: name.hi,
+          exported: false,
+          targetModule: "",
+          targetName: "",
+          mutable: false,
+        },
+      )
+      case None => ()
+    }
+  }
+  ()
+}
+
+function walkNodeChildren(
+  context: ResolverWalkContext,
+  node: SyntaxNode,
+  scopes: Array<LocalScope>,
+) -> () {
+  for found in node.children {
+    if found.kind == "identifier" {
+      continue
+    }
+    if node.kind == "expression/call" && found.field == "typeArguments" {
+      continue
+    }
+    if (node.kind == "function-declaration" ||
+      node.kind == "expression/lambda") &&
+      (found.field == "parameters" || found.field == "returnType") {
+      continue
+    }
+    prebindChildDeclaration(context, found, scopes)
+    let recordDefault = node.kind == "record-field-declaration" &&
+      found.field == "default"
+    if recordDefault {
+      let mut stack = context.recordDefaultStack
+      stack.push(true)
+    }
+    walkNode(context, found, scopes)
+    if recordDefault {
+      let mut stack = context.recordDefaultStack
+      stack.pop()
+    }
+    bindStatementAfterWalk(context, found, scopes)
+  }
+  ()
+}
+
+export function walkNode(
+  context: ResolverWalkContext,
+  nodeValue: SyntaxNode,
+  scopes: Array<LocalScope>,
+) -> () {
+  let mut activeScopes = scopes
+  if nodeValue.kind == "identifier" {
+    return ()
+  }
+  if nodeValue.kind == "statement/protocol" {
+    walkProtocolStatement(context, nodeValue, activeScopes)
+    return ()
+  }
+  if nodeValue.kind == "statement/using" {
+    walkUsingStatement(context, nodeValue, activeScopes)
+    return ()
+  }
+  if nodeValue.kind == "expression/comprehension" {
+    walkComprehensionExpression(context, nodeValue, activeScopes)
+    return ()
+  }
+  if nodeValue.kind == "match-case" {
+    walkMatchCase(context, nodeValue, activeScopes)
+    return ()
+  }
+  if nodeValue.kind == "expression/for" {
+    walkForExpression(context, nodeValue, activeScopes)
+    return ()
+  }
+  if nodeValue.kind == "statement/assign" {
+    walkAssignmentStatement(context, nodeValue, scopes)
+    return ()
+  }
+  if nodeValue.kind == "type/named" {
+    resolveNamedTypeReference(context, nodeValue, scopes)
+  } else if nodeValue.kind == "pattern/nominal-record" {
+    resolveNamedTypeReference(context, nodeValue, scopes)
+  } else if nodeValue.kind == "type/qualified" {
+    resolveQualifiedTypeReference(context, nodeValue, scopes)
+  } else if nodeValue.kind == "expression/identifier" {
+    resolveValueIdentifier(context, nodeValue, scopes)
+  } else if resolveNamespaceMemberReference(context, nodeValue, scopes) {
+    return ()
+  }
+
+  walkCallableSignature(context, nodeValue, scopes)
+  let opened = openNodeScope(context, nodeValue, activeScopes)
+  walkNodeChildren(context, nodeValue, activeScopes)
+  if opened {
+    popScope(activeScopes)
+  }
+}

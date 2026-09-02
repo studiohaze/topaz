@@ -1,0 +1,3 @@
+function print(s: string) -> () { () }
+print("x")
+let y = 1

@@ -1,0 +1,1 @@
+Encoding.hexEncode(Encoding.utf8Encode("foobar"))

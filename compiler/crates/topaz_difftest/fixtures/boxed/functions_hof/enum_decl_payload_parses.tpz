@@ -1,0 +1,2 @@
+enum Shape { Circle(int), Square(int), Dot }
+print("hi")

@@ -1,0 +1,1608 @@
+// Inference for operators, branches, loops, matches, and concurrent forms.
+// Core literals and member access stay in expression_core; recursive descent is
+// routed through the service boundary owned by the checker facade.
+
+import types { SyntaxNode }
+import checker_types { TypeValue }
+import checker.model {
+  CheckerService,
+  CheckerState,
+  LeadingCallArgument,
+  LoopFrame,
+  MAX_DURATION_MILLISECONDS,
+  MAX_DURATION_MINUTES,
+  MAX_DURATION_SECONDS,
+  constructor,
+  emptyType,
+  literal,
+  nominal,
+  primitive,
+  serviceCheckBlock,
+  serviceCheckBlockExpected,
+  structural,
+}
+import checker.type_algebra {
+  assignable,
+  hasHole,
+  hasPartialHole,
+  joinedTypes,
+  solvePartialTypeAgainst,
+  stringJoin,
+  typeText,
+  unionType,
+  widen,
+  widenedUnion,
+}
+import checker.syntax_index {
+  addDiagnostic,
+  addNode,
+  attribute,
+  child,
+  children,
+  text,
+}
+import checker.members_capabilities {
+  comparableType,
+  gateCollectionKey,
+  memberType,
+  orderCapability,
+}
+import checker.patterns {
+  coverageGap,
+  emptyPatternCoverage,
+  mergePatternCoverage,
+  patternBindingType,
+  patternBindingTypeAt,
+}
+import checker.call_facts {
+  addPipeCall,
+  argumentValue,
+  checkExpressionExpected,
+  checkReturn,
+  containsPlaceholder,
+  currentExpectedExpression,
+  currentPipeValue,
+  inferExpressionWithExpected,
+  recordInferredExpression,
+  refineExpressionToExpected,
+  reportExpectedType,
+}
+import checker.expression_core {
+  blockTerminates,
+  checkedIterableElement,
+  expressionTerminates,
+  hasLiteralJoinContext,
+  inferBranchExpression,
+  inferIdentifierExpression,
+  inferLambda,
+  inferMapLiteralExpression,
+  inferMemberAccessExpression,
+  inferRecordLiteralExpression,
+  inferRecordUpdateExpression,
+  inferSequenceLiteralExpression,
+  inferTextExpression,
+}
+import checker.call_complete {
+  completePreparedCall,
+  inferCall,
+  inferCallArguments,
+  leadingCallActuals,
+  prepareCall,
+}
+
+function inferIfExpression(
+  service: CheckerService,
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  node: SyntaxNode,
+) -> TypeValue {
+  let contextual = hasLiteralJoinContext(state, node)
+  let expected = currentExpectedExpression(state, node)
+  match child(node, "condition") {
+    case Some(found) => {
+      let _ = checkExpressionExpected(
+        service,
+        state,
+        moduleIndex,
+        source,
+        found,
+        primitive("bool"),
+      )
+    }
+    case None => ()
+  }
+  let mut branches: Array<TypeValue> = []
+  match child(node, "then") {
+    case Some(found) => {
+      let terminating = blockTerminates(found)
+      let branch = if terminating {
+        serviceCheckBlock(
+          service,
+          state,
+          moduleIndex,
+          source,
+          found,
+        )
+      } else {
+        match expected {
+          case Some(expectedType) => if hasHole(expectedType) {
+            serviceCheckBlock(
+              service,
+              state,
+              moduleIndex,
+              source,
+              found,
+            )
+          } else {
+            serviceCheckBlockExpected(
+              service,
+              state,
+              moduleIndex,
+              source,
+              found,
+              expectedType,
+            )
+          }
+          case None => serviceCheckBlock(
+            service,
+            state,
+            moduleIndex,
+            source,
+            found,
+          )
+        }
+      }
+      if !terminating {
+        branches.push(branch)
+      }
+    }
+    case None => ()
+  }
+  match child(node, "else") {
+    case Some(found) => {
+      let terminating = expressionTerminates(found)
+      let branch = if terminating {
+        inferExpression(service, state, moduleIndex, source, found)
+      } else {
+        match expected {
+          case Some(expectedType) => if hasHole(expectedType) {
+            inferBranchExpression(
+              service,
+              state,
+              moduleIndex,
+              source,
+              found,
+              contextual,
+            )
+          } else {
+            checkExpressionExpected(
+              service,
+              state,
+              moduleIndex,
+              source,
+              found,
+              expectedType,
+            )
+          }
+          case None => inferBranchExpression(
+            service,
+            state,
+            moduleIndex,
+            source,
+            found,
+            contextual,
+          )
+        }
+      }
+      if !terminating {
+        branches.push(branch)
+      }
+    }
+    case None => branches.push(primitive("unit"))
+  }
+  let expectedContext = match expected {
+    case Some(found) => !hasHole(found)
+    case None => false
+  }
+  joinedTypes(state, branches, !(contextual || expectedContext))
+}
+
+function inferMatchExpression(
+  service: CheckerService,
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  node: SyntaxNode,
+) -> TypeValue {
+  let contextual = hasLiteralJoinContext(state, node)
+  let scrutinee = match child(node, "scrutinee") {
+    case Some(found) => inferExpression(service, state, moduleIndex, source, found)
+    case None => emptyType("unknown")
+  }
+  let mut branches: Array<TypeValue> = []
+  let mut coverage = emptyPatternCoverage()
+  for foundCase in children(node, "cases") {
+    let mut caseCoverage = emptyPatternCoverage()
+    match child(foundCase, "pattern") {
+      case Some(pattern) => {
+        caseCoverage = patternBindingTypeAt(
+          service,
+          state,
+          moduleIndex,
+          source,
+          pattern,
+          scrutinee,
+          false,
+          true,
+        )
+      }
+      case None => ()
+    }
+    match child(foundCase, "guard") {
+      case Some(guard) => {
+        let _ = checkExpressionExpected(
+          service,
+          state,
+          moduleIndex,
+          source,
+          guard,
+          primitive("bool"),
+        )
+      }
+      case None => {
+        coverage = mergePatternCoverage(coverage, caseCoverage)
+      }
+    }
+    match child(foundCase, "body") {
+      case Some(body) => if body.kind == "match-case-return" {
+        checkReturn(service, state, moduleIndex, source, body)
+      } else {
+        let terminating = expressionTerminates(body)
+        let branch = match currentExpectedExpression(state, node) {
+          case Some(expected) => checkExpressionExpected(
+            service,
+            state,
+            moduleIndex,
+            source,
+            body,
+            expected,
+          )
+          case None => inferBranchExpression(
+            service,
+            state,
+            moduleIndex,
+            source,
+            body,
+            contextual,
+          )
+        }
+        if !terminating {
+          branches.push(branch)
+        }
+      }
+      case None => ()
+    }
+  }
+  let gap = coverageGap(state, moduleIndex, coverage, scrutinee)
+  if gap.decidable && gap.missing.length > 0 {
+    addDiagnostic(
+      state,
+      moduleIndex,
+      "TPZ5021",
+      "non-exhaustive match: missing {stringJoin(gap.missing, ", ")}",
+      "",
+      node,
+    )
+  }
+  joinedTypes(state, branches, !contextual)
+}
+
+function currentLoopFloor(state: CheckerState) -> int {
+  if state.loopFloors.length == 0 {
+    return 0
+  }
+  match state.loopFloors.get(state.loopFloors.length - 1) {
+    case Some(found) => found
+    case None => 0
+  }
+}
+
+function statementForExpression(
+  state: CheckerState,
+  node: SyntaxNode,
+) -> bool {
+  if state.statementExpressionContexts.length == 0 {
+    return false
+  }
+  match state.statementExpressionContexts.get(
+    state.statementExpressionContexts.length - 1,
+  ) {
+    case Some(lo) => lo == node.lo
+    case None => false
+  }
+}
+
+function resolveLoopTarget(
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  node: SyntaxNode,
+  keyword: string,
+) -> int {
+  let floor = currentLoopFloor(state)
+  match child(node, "label") {
+    case Some(label) => {
+      let name = text(source, label)
+      let mut index = state.loopFrames.length - 1
+      while index >= floor {
+        match state.loopFrames.get(index) {
+          case Some(frame) => if frame.label == name {
+            return index
+          }
+          case None => ()
+        }
+        index -= 1
+      }
+      addDiagnostic(
+        state,
+        moduleIndex,
+        "TPZ5720",
+        "no loop labeled `'{name}` in scope",
+        "",
+        node,
+      )
+      -1
+    }
+    case None => if state.loopFrames.length <= floor {
+      addDiagnostic(
+        state,
+        moduleIndex,
+        "TPZ5001",
+        "`{keyword}` outside a loop",
+        "",
+        node,
+      )
+      -1
+    } else {
+      let index = state.loopFrames.length - 1
+      match state.loopFrames.get(index) {
+        case Some(frame) => if frame.bareTarget {
+          index
+        } else {
+          addDiagnostic(
+            state,
+            moduleIndex,
+            "TPZ5001",
+            "bare `{keyword}` cannot target {frame.bareError}",
+            "",
+            node,
+          )
+          -1
+        }
+        case None => -1
+      }
+    }
+  }
+}
+
+export function checkLoopExitStatement(
+  service: CheckerService,
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  node: SyntaxNode,
+) -> () {
+  let keyword = if node.kind == "statement/break" {
+    "break"
+  } else {
+    "continue"
+  }
+  let targetIndex = resolveLoopTarget(
+    state,
+    moduleIndex,
+    source,
+    node,
+    keyword,
+  )
+  if keyword == "continue" {
+    return ()
+  }
+  let expected = if targetIndex >= 0 {
+    match state.loopFrames.get(targetIndex) {
+      case Some(frame) => frame.expected
+      case None => None
+    }
+  } else {
+    None
+  }
+  let valueType = match child(node, "value") {
+    case Some(value) => match expected {
+      case Some(expectedType) => {
+        let inferred = inferExpressionWithExpected(
+          service,
+          state,
+          moduleIndex,
+          source,
+          value,
+          expectedType,
+          false,
+        )
+        refineExpressionToExpected(
+          state,
+          moduleIndex,
+          value,
+          inferred,
+          expectedType,
+        )
+      }
+      case None => inferExpression(service, state, moduleIndex, source, value)
+    }
+    case None => primitive("unit")
+  }
+  if targetIndex < 0 {
+    return ()
+  }
+  match state.loopFrames.get(targetIndex) {
+    case Some(frame) => if frame.valueLoop {
+      let mut breaks = frame.breaks
+      if frame.expected == None && breaks.length > 0 {
+        match breaks.get(0) {
+          case Some(first) => {
+            let earlier = widen(first)
+            let current = widen(valueType)
+            if !hasHole(earlier) && !hasHole(current) &&
+              !assignable(earlier, current) &&
+              !assignable(current, earlier) {
+              addDiagnostic(
+                state,
+                moduleIndex,
+                "TPZ5721",
+                "`break` values targeting this loop disagree — earlier `break` is `{typeText(earlier)}`, this is `{typeText(current)}` (all break values must have the same type)",
+                "",
+                node,
+              )
+            }
+          }
+          case None => ()
+        }
+      }
+      breaks.push(valueType)
+      let mut frames = state.loopFrames
+      frames[targetIndex] = LoopFrame { ...frame, breaks: breaks }
+    }
+    case Some(_) => ()
+    case None => ()
+  }
+  ()
+}
+
+function inferLoopExpression(
+  service: CheckerService,
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  node: SyntaxNode,
+) -> TypeValue {
+  let expected = currentExpectedExpression(state, node)
+  let frame = LoopFrame {
+    label: match child(node, "label") {
+      case Some(label) => text(source, label)
+      case None => ""
+    },
+    valueLoop: true,
+    bareTarget: true,
+    bareError: "",
+    expected: expected,
+    breaks: [],
+  }
+  let mut frames = state.loopFrames
+  frames.push(frame)
+  match child(node, "body") {
+    case Some(body) => {
+      let _ = serviceCheckBlock(
+        service,
+        state,
+        moduleIndex,
+        source,
+        body,
+      )
+    }
+    case None => ()
+  }
+  let completed = match frames.get(frames.length - 1) {
+    case Some(found) => found
+    case None => frame
+  }
+  frames.pop()
+  if completed.breaks.length == 0 {
+    primitive("unit")
+  } else {
+    match expected {
+      case Some(_) => unionType(completed.breaks)
+      case None => widenedUnion(completed.breaks)
+    }
+  }
+}
+
+function inferForExpression(
+  service: CheckerService,
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  node: SyntaxNode,
+) -> TypeValue {
+  let statementPosition = statementForExpression(state, node)
+  let iteratorNode = child(node, "iterator")
+  let iterator = match iteratorNode {
+    case Some(found) => inferExpression(service, state, moduleIndex, source, found)
+    case None => emptyType("unknown")
+  }
+  match child(node, "pattern") {
+    case Some(pattern) => patternBindingType(
+      service,
+      state,
+      moduleIndex,
+      source,
+      pattern,
+      checkedIterableElement(
+        state,
+        moduleIndex,
+        match iteratorNode {
+          case Some(found) => found
+          case None => node
+        },
+        iterator,
+      ),
+      false,
+    )
+    case None => ()
+  }
+  let mut frames = state.loopFrames
+  frames.push(LoopFrame {
+    label: "",
+    valueLoop: false,
+    bareTarget: statementPosition,
+    bareError: "a value-collecting `for` (§5)",
+    expected: None,
+    breaks: [],
+  })
+  let bodyType = match child(node, "body") {
+    case Some(body) => serviceCheckBlock(
+      service,
+      state,
+      moduleIndex,
+      source,
+      body,
+    )
+    case None => primitive("unit")
+  }
+  frames.pop()
+  if statementPosition {
+    primitive("unit")
+  } else {
+    constructor("Array", [widen(bodyType)])
+  }
+}
+
+function inferConcurrentExpression(
+  service: CheckerService,
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  node: SyntaxNode,
+) -> TypeValue {
+  match child(node, "timeout") {
+    case Some(found) => {
+      if found.kind == "expression/duration" &&
+        !durationFitsMilliseconds(found) {
+        addDiagnostic(
+          state,
+          moduleIndex,
+          "TPZ5001",
+          "`concurrent` timeout duration must fit in u64 milliseconds (§15)",
+          "",
+          found,
+        )
+      }
+      let timeoutType = inferExpression(service, state, moduleIndex, source, found)
+      if timeoutType.kind == "unknown" {
+        addNode(state, moduleIndex, "expression", found, timeoutType)
+      }
+    }
+    case None => ()
+  }
+  let mut names: Array<string> = []
+  let mut values: Array<TypeValue> = []
+  for arm in children(node, "arms") {
+    let nameNode = match child(arm, "name") {
+      case Some(found) => found
+      case None => arm
+    }
+    let name = text(source, nameNode)
+    let mut duplicate = false
+    for existing in names {
+      if existing == name {
+        duplicate = true
+      }
+    }
+    if duplicate {
+      addDiagnostic(
+        state,
+        moduleIndex,
+        "TPZ5008",
+        "duplicate concurrent arm `{name}`",
+        "",
+        nameNode,
+      )
+    }
+    let value = match child(arm, "value") {
+      case Some(found) => widen(inferExpression(
+        service,
+        state,
+        moduleIndex,
+        source,
+        found,
+      ))
+      case None => emptyType("unknown")
+    }
+    names.push(name)
+    values.push(value)
+  }
+  let record = structural(names, values)
+  match child(node, "else") {
+    case Some(found) => {
+      let _ = serviceCheckBlockExpected(service, state, moduleIndex, source, found, record)
+    }
+    case None => ()
+  }
+  if hasHole(record) {
+    emptyType("unknown")
+  } else {
+    record
+  }
+}
+
+function checkerByteAt(bytes: Bytes, index: int) -> int {
+  match bytes.get(index) {
+    case Some(value) => value
+    case None => -1
+  }
+}
+
+function durationFitsMilliseconds(node: SyntaxNode) -> bool {
+  let maximum = match attribute(node, "unit") {
+    case "ms" => MAX_DURATION_MILLISECONDS
+    case "s" => MAX_DURATION_SECONDS
+    case "m" => MAX_DURATION_MINUTES
+    case _ => return false
+  }
+  let value = Bytes.encodeUtf8(attribute(node, "valueDecimal"))
+  let limit = Bytes.encodeUtf8(maximum)
+  let mut start = 0
+  while start + 1 < value.length() && checkerByteAt(value, start) == 48 {
+    start += 1
+  }
+  let digits = value.length() - start
+  if digits < limit.length() {
+    return true
+  }
+  if digits > limit.length() {
+    return false
+  }
+  let mut index = 0
+  while index < digits {
+    let actual = checkerByteAt(value, start + index)
+    let allowed = checkerByteAt(limit, index)
+    if actual < allowed {
+      return true
+    }
+    if actual > allowed {
+      return false
+    }
+    index += 1
+  }
+  true
+}
+
+function inferRangeExpression(
+  service: CheckerService,
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  node: SyntaxNode,
+) -> TypeValue {
+  for fieldName in ["low", "high", "step"] {
+    match child(node, fieldName) {
+      case Some(found) => {
+        let endpoint = widen(inferExpression(
+          service,
+          state,
+          moduleIndex,
+          source,
+          found,
+        ))
+        if !hasHole(endpoint) &&
+          (endpoint.kind != "primitive" || endpoint.name != "int") {
+          addDiagnostic(
+            state,
+            moduleIndex,
+            "TPZ5001",
+            if fieldName == "step" {
+              "a range step is `int`, found `{typeText(endpoint)}`"
+            } else {
+              "range endpoints are `int`, found `{typeText(endpoint)}`"
+            },
+            "",
+            found,
+          )
+        }
+      }
+      case None => ()
+    }
+  }
+  constructor("Range", [primitive("int")])
+}
+
+function sameBinaryType(
+  left: TypeValue,
+  right: TypeValue,
+  kind: string,
+  name: string,
+) -> bool {
+  left.kind == kind && right.kind == kind &&
+    left.name == name && right.name == name
+}
+
+export function inferBinaryExpression(
+  service: CheckerService,
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  node: SyntaxNode,
+) -> TypeValue {
+  let leftNode = child(node, "left")
+  let left = match leftNode {
+    case Some(found) => inferExpression(service, state, moduleIndex, source, found)
+    case None => emptyType("unknown")
+  }
+  let operator = attribute(node, "operator")
+  if operator == "coalesce" {
+    let optional = if left.kind == "constructor" && left.name == "Option" {
+      left.arguments.get(0)
+    } else if left.kind == "union" {
+      let mut nullable = false
+      let mut remaining: Array<TypeValue> = []
+      for member in left.members {
+        if member.kind == "literal" && member.name == "null" {
+          nullable = true
+        } else {
+          remaining.push(member)
+        }
+      }
+      if nullable && remaining.length > 0 {
+        Some(unionType(remaining))
+      } else {
+        None
+      }
+    } else {
+      None
+    }
+    return match optional {
+      case Some(inner) => {
+        match child(node, "right") {
+          case Some(found) => {
+            let _ = checkExpressionExpected(
+              service,
+              state,
+              moduleIndex,
+              source,
+              found,
+              inner,
+            )
+          }
+          case None => ()
+        }
+        inner
+      }
+      case None => {
+        match child(node, "right") {
+          case Some(found) => { let _ = inferExpression(service, state, moduleIndex, source, found) }
+          case None => ()
+        }
+        if !hasHole(left) {
+          addDiagnostic(
+            state,
+            moduleIndex,
+            "TPZ5001",
+            "`??` needs an Option or nullable left operand, found `{typeText(left)}`",
+            "",
+            node,
+          )
+        }
+        emptyType("unknown")
+      }
+    }
+  }
+  let right = match child(node, "right") {
+    case Some(found) => inferExpression(service, state, moduleIndex, source, found)
+    case None => emptyType("unknown")
+  }
+  let mut lhs = widen(left)
+  let mut rhs = widen(right)
+  if operator == "equal" || operator == "not-equal" {
+    if hasPartialHole(lhs) && !hasHole(rhs) {
+      lhs = solvePartialTypeAgainst(state, lhs, rhs)
+    } else if hasPartialHole(rhs) && !hasHole(lhs) {
+      rhs = solvePartialTypeAgainst(state, rhs, lhs)
+    }
+  }
+  if hasHole(lhs) || hasHole(rhs) {
+    return emptyType("unknown")
+  }
+  match operator {
+    case "power" | "divide" => if sameBinaryType(
+      lhs,
+      rhs,
+      "primitive",
+      "int",
+    ) {
+      primitive("int")
+    } else if sameBinaryType(lhs, rhs, "primitive", "float") {
+      primitive("float")
+    } else {
+      addDiagnostic(
+        state,
+        moduleIndex,
+        "TPZ5001",
+        "arithmetic needs matching numeric operands, found `{typeText(lhs)}` and `{typeText(rhs)}`",
+        "",
+        node,
+      )
+      emptyType("unknown")
+    }
+    case "multiply" | "subtract" => if sameBinaryType(
+      lhs,
+      rhs,
+      "primitive",
+      "int",
+    ) {
+      primitive("int")
+    } else if sameBinaryType(lhs, rhs, "primitive", "float") {
+      primitive("float")
+    } else if sameBinaryType(lhs, rhs, "big-int", "") {
+      emptyType("big-int")
+    } else if sameBinaryType(lhs, rhs, "decimal", "") {
+      emptyType("decimal")
+    } else {
+      addDiagnostic(
+        state,
+        moduleIndex,
+        "TPZ5001",
+        "arithmetic needs matching numeric operands, found `{typeText(lhs)}` and `{typeText(rhs)}`",
+        "",
+        node,
+      )
+      emptyType("unknown")
+    }
+    case "remainder" => if sameBinaryType(lhs, rhs, "primitive", "int") {
+      primitive("int")
+    } else {
+      addDiagnostic(
+        state,
+        moduleIndex,
+        "TPZ5001",
+        "`%` needs int operands in v5.2, found `{typeText(lhs)}` and `{typeText(rhs)}`",
+        "",
+        node,
+      )
+      emptyType("unknown")
+    }
+    case "add" => if sameBinaryType(lhs, rhs, "primitive", "int") {
+      primitive("int")
+    } else if sameBinaryType(lhs, rhs, "primitive", "float") {
+      primitive("float")
+    } else if sameBinaryType(lhs, rhs, "primitive", "string") {
+      primitive("string")
+    } else if sameBinaryType(lhs, rhs, "big-int", "") {
+      emptyType("big-int")
+    } else if sameBinaryType(lhs, rhs, "decimal", "") {
+      emptyType("decimal")
+    } else {
+      addDiagnostic(
+        state,
+        moduleIndex,
+        "TPZ5001",
+        "`+` needs matching int, float, string, BigInt, or Decimal operands, found `{typeText(lhs)}` and `{typeText(rhs)}`",
+        "",
+        node,
+      )
+      emptyType("unknown")
+    }
+    case "less-than" | "less-or-equal" | "greater-than" |
+      "greater-or-equal" => {
+      let scalar = sameBinaryType(lhs, rhs, "primitive", "int") ||
+        sameBinaryType(lhs, rhs, "primitive", "float") ||
+        sameBinaryType(lhs, rhs, "primitive", "string") ||
+        sameBinaryType(lhs, rhs, "big-int", "") ||
+        sameBinaryType(lhs, rhs, "decimal", "")
+      let nominal = (assignable(lhs, rhs) || assignable(rhs, lhs)) &&
+        orderCapability(state, moduleIndex, lhs, []) == "accept" &&
+        orderCapability(state, moduleIndex, rhs, []) == "accept"
+      if scalar || nominal {
+        primitive("bool")
+      } else {
+        addDiagnostic(
+          state,
+          moduleIndex,
+          "TPZ5007",
+          "`{typeText(lhs)}` and `{typeText(rhs)}` are not ordered comparable",
+          "",
+          node,
+        )
+        emptyType("unknown")
+      }
+    }
+    case "equal" | "not-equal" => if !comparableType(
+      state,
+      moduleIndex,
+      lhs,
+      [],
+    ) || !comparableType(state, moduleIndex, rhs, []) {
+      addDiagnostic(
+        state,
+        moduleIndex,
+        "TPZ5007",
+        "`{typeText(lhs)}` and `{typeText(rhs)}` are not comparable values",
+        "",
+        node,
+      )
+      emptyType("unknown")
+    } else if assignable(lhs, rhs) || assignable(rhs, lhs) {
+      primitive("bool")
+    } else {
+      addDiagnostic(
+        state,
+        moduleIndex,
+        "TPZ5007",
+        "`{typeText(lhs)}` and `{typeText(rhs)}` are never equal",
+        "",
+        node,
+      )
+      emptyType("unknown")
+    }
+    case "in" => if rhs.kind == "constructor" &&
+      (rhs.name == "Array" || rhs.name == "Set" || rhs.name == "Range") {
+      match rhs.arguments.get(0) {
+        case Some(element) => reportExpectedType(
+          state,
+          moduleIndex,
+          node,
+          element,
+          lhs,
+        )
+        case None => ()
+      }
+      primitive("bool")
+    } else if rhs.kind == "constructor" && rhs.name == "Map" {
+      addDiagnostic(
+        state,
+        moduleIndex,
+        "TPZ5001",
+        "`in` does not apply to a Map; use `in map.keys`",
+        "",
+        node,
+      )
+      emptyType("unknown")
+    } else if rhs.kind == "primitive" && rhs.name == "string" {
+      addDiagnostic(
+        state,
+        moduleIndex,
+        "TPZ5001",
+        "`in` does not apply to strings",
+        "",
+        node,
+      )
+      emptyType("unknown")
+    } else {
+      emptyType("unknown")
+    }
+    case "and" | "or" => {
+      reportExpectedType(state, moduleIndex, node, primitive("bool"), lhs)
+      reportExpectedType(state, moduleIndex, node, primitive("bool"), rhs)
+      primitive("bool")
+    }
+    case _ => emptyType("unknown")
+  }
+}
+
+function inferUnaryExpression(
+  service: CheckerService,
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  node: SyntaxNode,
+) -> TypeValue {
+  let operandNode = child(node, "operand")
+  let operand = match operandNode {
+    case Some(found) => inferExpression(service, state, moduleIndex, source, found)
+    case None => emptyType("unknown")
+  }
+  let widened = widen(operand)
+  if hasHole(widened) {
+    return emptyType("unknown")
+  }
+  let operator = attribute(node, "operator")
+  let valid = if operator == "not" {
+    widened.kind == "primitive" && widened.name == "bool"
+  } else {
+    (widened.kind == "primitive" &&
+      (widened.name == "int" || widened.name == "float")) ||
+      widened.kind == "big-int" || widened.kind == "decimal"
+  }
+  if valid {
+    if operator == "not" { primitive("bool") } else { widened }
+  } else {
+    addDiagnostic(
+      state,
+      moduleIndex,
+      "TPZ5001",
+      "unary operator cannot apply to `{typeText(widened)}`",
+      "",
+      match operandNode {
+        case Some(found) => found
+        case None => node
+      },
+    )
+    emptyType("unknown")
+  }
+}
+
+function inferTryExpression(
+  service: CheckerService,
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  node: SyntaxNode,
+) -> TypeValue {
+  let operand = match child(node, "operand") {
+    case Some(found) => inferExpression(service, state, moduleIndex, source, found)
+    case None => emptyType("unknown")
+  }
+  if operand.kind == "constructor" &&
+    (operand.name == "Result" || operand.name == "Option") {
+    match operand.arguments.get(0) {
+      case Some(found) => found
+      case None => emptyType("unknown")
+    }
+  } else {
+    emptyType("unknown")
+  }
+}
+
+function inferIndexExpression(
+  service: CheckerService,
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  node: SyntaxNode,
+) -> TypeValue {
+  let objectType = match child(node, "object") {
+    case Some(found) => inferExpression(service, state, moduleIndex, source, found)
+    case None => emptyType("unknown")
+  }
+  let indexNode = child(node, "index")
+  let indexType = match indexNode {
+    case Some(found) => inferExpression(service, state, moduleIndex, source, found)
+    case None => emptyType("unknown")
+  }
+  if objectType.kind == "constructor" && objectType.name == "Array" {
+    match indexNode {
+      case Some(found) => reportExpectedType(
+        state,
+        moduleIndex,
+        found,
+        primitive("int"),
+        indexType,
+      )
+      case None => ()
+    }
+    match objectType.arguments.get(0) {
+      case Some(found) => found
+      case None => emptyType("unknown")
+    }
+  } else if hasHole(objectType) {
+    emptyType("unknown")
+  } else if objectType.kind == "union" {
+    let mut containsArray = false
+    for member in objectType.members {
+      if member.kind == "constructor" && member.name == "Array" {
+        containsArray = true
+      }
+    }
+    if containsArray {
+      match indexNode {
+        case Some(found) => reportExpectedType(
+          state,
+          moduleIndex,
+          found,
+          primitive("int"),
+          indexType,
+        )
+        case None => ()
+      }
+    } else {
+      addDiagnostic(
+        state,
+        moduleIndex,
+        "TPZ5001",
+        "`{typeText(objectType)}` is not index-readable; only arrays support `[…]` indexing (§9)",
+        "",
+        node,
+      )
+    }
+    emptyType("unknown")
+  } else {
+    addDiagnostic(
+      state,
+      moduleIndex,
+      "TPZ5001",
+      if objectType.kind == "constructor" && objectType.name == "Map" {
+        "a Map is not index-readable; use `m.get` (§22)"
+      } else {
+        "`{typeText(objectType)}` is not index-readable; only arrays support `[…]` indexing (§9)"
+      },
+      "",
+      node,
+    )
+    emptyType("unknown")
+  }
+}
+
+function inferBlockExpression(
+  service: CheckerService,
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  node: SyntaxNode,
+) -> TypeValue {
+  match child(node, "block") {
+    case Some(found) => match currentExpectedExpression(state, node) {
+      case Some(expected) => serviceCheckBlockExpected(
+        service,
+        state,
+        moduleIndex,
+        source,
+        found,
+        expected,
+      )
+      case None => serviceCheckBlock(
+        service,
+        state,
+        moduleIndex,
+        source,
+        found,
+      )
+    }
+    case None => primitive("unit")
+  }
+}
+
+function inferUnknownExpressionChildren(
+  service: CheckerService,
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  node: SyntaxNode,
+) -> TypeValue {
+  for nested in node.children {
+    if nested.kind.startsWith("expression/") {
+      let _ = inferExpression(service, state, moduleIndex, source, nested)
+    }
+  }
+  emptyType("unknown")
+}
+
+function inferExpressionValue(
+  service: CheckerService,
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  node: SyntaxNode,
+) -> TypeValue {
+  match node.kind {
+    case "expression/integer" => literal("int", attribute(node, "valueDecimal"))
+    case "expression/float" => literal("float", text(source, node))
+    case "expression/boolean" => literal("bool", attribute(node, "value"))
+    case "expression/null" => literal("null", "")
+    case "expression/unit" => primitive("unit")
+    case "expression/placeholder" => currentPipeValue(
+      state,
+      moduleIndex,
+      node,
+    )
+    case "expression/try" => inferTryExpression(service, state, moduleIndex, source, node)
+    case "expression/string" | "expression/template" =>
+      inferTextExpression(service, state, moduleIndex, source, node)
+    case "expression/identifier" =>
+      inferIdentifierExpression(state, moduleIndex, source, node, false)
+    case "expression/parenthesized" => match child(node, "operand") {
+      case Some(found) => inferExpression(service, state, moduleIndex, source, found)
+      case None => emptyType("unknown")
+    }
+    case "expression/array" | "expression/set" =>
+      inferSequenceLiteralExpression(service, state, moduleIndex, source, node)
+    case "expression/map" =>
+      inferMapLiteralExpression(service, state, moduleIndex, source, node)
+    case "expression/member" | "expression/optional-access" =>
+      inferMemberAccessExpression(service, state, moduleIndex, source, node)
+    case "expression/index" => inferIndexExpression(service, state, moduleIndex, source, node)
+    case "expression/call" => inferCall(service, state, moduleIndex, source, node)
+    case "expression/pipe" => inferPipe(
+      service,
+      state,
+      moduleIndex,
+      source,
+      node,
+    )
+    case "expression/record-literal" =>
+      inferRecordLiteralExpression(service, state, moduleIndex, source, node)
+    case "expression/record-update" =>
+      inferRecordUpdateExpression(service, state, moduleIndex, source, node)
+    case "expression/block" => inferBlockExpression(service, state, moduleIndex, source, node)
+    case "expression/if" =>
+      inferIfExpression(service, state, moduleIndex, source, node)
+    case "expression/match" =>
+      inferMatchExpression(service, state, moduleIndex, source, node)
+    case "expression/for" =>
+      inferForExpression(service, state, moduleIndex, source, node)
+    case "expression/loop" =>
+      inferLoopExpression(service, state, moduleIndex, source, node)
+    case "expression/concurrent" =>
+      inferConcurrentExpression(service, state, moduleIndex, source, node)
+    case "expression/comprehension" => inferComprehension(
+      service,
+      state,
+      moduleIndex,
+      source,
+      node,
+    )
+    case "expression/range" =>
+      inferRangeExpression(service, state, moduleIndex, source, node)
+    case "expression/binary" =>
+      inferBinaryExpression(service, state, moduleIndex, source, node)
+    case "expression/unary" =>
+      inferUnaryExpression(service, state, moduleIndex, source, node)
+    case "expression/lambda" => inferLambda(
+      service,
+      state,
+      moduleIndex,
+      source,
+      node,
+      None,
+    )
+    case _ => inferUnknownExpressionChildren(service, state, moduleIndex, source, node)
+  }
+}
+
+export function inferExpression(
+  service: CheckerService,
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  node: SyntaxNode,
+) -> TypeValue {
+  let result = inferExpressionValue(service, state, moduleIndex, source, node)
+  recordInferredExpression(state, moduleIndex, source, node, result)
+  result
+}
+
+function pipeCallHasPlaceholder(stage: SyntaxNode) -> bool {
+  for argument in children(stage, "arguments") {
+    if containsPlaceholder(argumentValue(argument)) {
+      return true
+    }
+  }
+  false
+}
+
+function inferBarePipeStage(
+  service: CheckerService,
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  node: SyntaxNode,
+  leftNode: SyntaxNode,
+  leftType: TypeValue,
+  stage: SyntaxNode,
+) -> TypeValue {
+  let stageType = inferExpression(service, state, moduleIndex, source, stage)
+  let mut result = emptyType("unknown")
+  if !hasHole(stageType) {
+    if stageType.kind == "function" {
+      let expected = if stageType.parameters.length == 1 {
+        stageType.parameters.get(0)
+      } else if stageType.parameters.length == 0 &&
+        stageType.variadic.length > 0 {
+        stageType.variadic.get(0)
+      } else {
+        addDiagnostic(
+          state,
+          moduleIndex,
+          "TPZ5004",
+          "a pipeline stage takes the piped value as its only argument (§11)",
+          "",
+          stage,
+        )
+        None
+      }
+      match expected {
+        case Some(expectedType) => {
+          let refined = refineExpressionToExpected(
+            state,
+            moduleIndex,
+            leftNode,
+            leftType,
+            expectedType,
+          )
+          reportExpectedType(
+            state,
+            moduleIndex,
+            leftNode,
+            expectedType,
+            refined,
+          )
+          result = match stageType.result.get(0) {
+            case Some(found) => found
+            case None => emptyType("unknown")
+          }
+        }
+        case None => ()
+      }
+    } else {
+      addDiagnostic(
+        state,
+        moduleIndex,
+        "TPZ5005",
+        "`{typeText(stageType)}` is not callable",
+        "",
+        stage,
+      )
+    }
+  }
+  addPipeCall(
+    service,
+    state,
+    moduleIndex,
+    source,
+    node,
+    leftNode,
+    stage,
+    stage,
+    stageType,
+    emptyType("unknown"),
+    result,
+    false,
+  )
+  result
+}
+
+function inferPipeCallStage(
+  service: CheckerService,
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  node: SyntaxNode,
+  leftNode: SyntaxNode,
+  leftType: TypeValue,
+  stage: SyntaxNode,
+) -> TypeValue {
+  let hasPlaceholder = pipeCallHasPlaceholder(stage)
+  let leading = if hasPlaceholder {
+    None
+  } else {
+    Some(LeadingCallArgument { node: leftNode, typeValue: leftType })
+  }
+  let calleeNode = match child(stage, "callee") {
+    case Some(found) => found
+    case None => stage
+  }
+  let placeholderCallee = containsPlaceholder(calleeNode)
+  let mut pipeValues = state.pipeValues
+  if placeholderCallee {
+    addDiagnostic(
+      state,
+      moduleIndex,
+      "TPZ5001",
+      "a placeholder `_` is valid only in a pipeline stage's argument list (§11)",
+      "",
+      calleeNode,
+    )
+  }
+  let preparation = prepareCall(
+    service,
+    state,
+    moduleIndex,
+    source,
+    stage,
+    node,
+    leading,
+  )
+  pipeValues.push(leftType)
+  let inferred = inferCallArguments(
+    service,
+    state,
+    moduleIndex,
+    source,
+    stage,
+    preparation.callee,
+    preparation.contextualType,
+    preparation.argumentPlan.slots,
+    leadingCallActuals(leading),
+  )
+  pipeValues.pop()
+  let completed = completePreparedCall(
+    service,
+    state,
+    moduleIndex,
+    source,
+    stage,
+    preparation,
+    inferred,
+  )
+  addPipeCall(
+    service,
+    state,
+    moduleIndex,
+    source,
+    node,
+    leftNode,
+    stage,
+    preparation.callee,
+    completed.calleeType,
+    preparation.receiverType,
+    completed.resultType,
+    hasPlaceholder,
+  )
+  completed.resultType
+}
+
+function inferPipe(
+  service: CheckerService,
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  node: SyntaxNode,
+) -> TypeValue {
+  let leftNode = match child(node, "left") {
+    case Some(found) => found
+    case None => node
+  }
+  let leftType = inferExpression(service, state, moduleIndex, source, leftNode)
+  match child(node, "field") {
+    case Some(found) => return memberType(
+      state,
+      moduleIndex,
+      leftType,
+      text(source, found),
+    )
+    case None => ()
+  }
+  let stage = match child(node, "right") {
+    case Some(found) => found
+    case None => return emptyType("unknown")
+  }
+  if stage.kind != "expression/call" {
+    return inferBarePipeStage(
+      service,
+      state,
+      moduleIndex,
+      source,
+      node,
+      leftNode,
+      leftType,
+      stage,
+    )
+  }
+  inferPipeCallStage(
+    service,
+    state,
+    moduleIndex,
+    source,
+    node,
+    leftNode,
+    leftType,
+    stage,
+  )
+}
+
+function inferComprehension(
+  service: CheckerService,
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  node: SyntaxNode,
+) -> TypeValue {
+  let mut frames = state.loopFrames
+  frames.push(LoopFrame {
+    label: "",
+    valueLoop: false,
+    bareTarget: false,
+    bareError: "a comprehension (§6.4)",
+    expected: None,
+    breaks: [],
+  })
+  for clause in children(node, "clauses") {
+    if clause.kind == "comprehension-clause/for" {
+      let iterator = match child(clause, "iterator") {
+        case Some(found) => inferExpression(service, state, moduleIndex, source, found)
+        case None => emptyType("unknown")
+      }
+      match child(clause, "pattern") {
+        case Some(pattern) => patternBindingType(
+          service,
+          state,
+          moduleIndex,
+          source,
+          pattern,
+          checkedIterableElement(
+            state,
+            moduleIndex,
+            match child(clause, "iterator") {
+              case Some(found) => found
+              case None => clause
+            },
+            iterator,
+          ),
+          false,
+        )
+        case None => ()
+      }
+    } else {
+      match child(clause, "condition") {
+        case Some(found) => {
+          let _ = checkExpressionExpected(
+            service,
+            state,
+            moduleIndex,
+            source,
+            found,
+            primitive("bool"),
+          )
+        }
+        case None => ()
+      }
+    }
+  }
+  let result = match attribute(node, "collection") {
+    case "map" => {
+      let key = match child(node, "bodyKey") {
+        case Some(found) => widen(inferExpression(service, state, moduleIndex, source, found))
+        case None => emptyType("unknown")
+      }
+      let value = match child(node, "bodyValue") {
+        case Some(found) => widen(inferExpression(service, state, moduleIndex, source, found))
+        case None => emptyType("unknown")
+      }
+      gateCollectionKey(service, state, moduleIndex, node, key)
+      constructor("Map", [key, value])
+    }
+    case "set" => {
+      let value = match child(node, "body") {
+        case Some(found) => widen(inferExpression(service, state, moduleIndex, source, found))
+        case None => emptyType("unknown")
+      }
+      gateCollectionKey(service, state, moduleIndex, node, value)
+      constructor("Set", [value])
+    }
+    case _ => {
+      let value = match child(node, "body") {
+        case Some(found) => widen(inferExpression(service, state, moduleIndex, source, found))
+        case None => emptyType("unknown")
+      }
+      constructor("Array", [value])
+    }
+  }
+  frames.pop()
+  result
+}

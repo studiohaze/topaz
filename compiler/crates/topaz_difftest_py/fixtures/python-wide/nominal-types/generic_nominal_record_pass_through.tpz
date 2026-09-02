@@ -1,0 +1,11 @@
+
+record Html<Msg> { message: Msg }
+function html<T>(value: T) -> Html<T> {
+    Html { message: value }
+}
+function main() -> int {
+    let view = html(7)
+    print("{view.message}")
+    view.message
+}
+main()

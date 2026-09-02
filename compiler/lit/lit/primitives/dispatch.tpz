@@ -1,0 +1,221 @@
+// Central primitive-name routing for the split Lispex families.
+// Individual leaves own argument rules and results; this boundary chooses one
+// family and reports an unknown primitive without duplicating implementations.
+
+import lit.model {
+  GuestInt,
+  GuestRational,
+  ErrorObjectRow,
+  GuardClauseRow,
+  GuestValue,
+  ValuePacket,
+  MachineSignal,
+  NodeOp,
+  SpanRow,
+  OriginRow,
+  BinderRow,
+  GlobalRow,
+  NodeRow,
+  Kernel,
+  ContinuationFrame,
+  ContinuationRow,
+  DynamicFrame,
+  DynamicRow,
+  MachineMode,
+  KernelInvokeStep,
+}
+import lit.primitives.numeric_pairs {
+  invokePrimitiveArithmeticAndPairs,
+  invokePrimitiveNumericAndEquality,
+  invokePrimitiveNumericTextConversions,
+}
+import lit.primitives.control_hof {
+  invokePrimitiveHigherOrderAndVector,
+  invokePrimitiveControlAndErrors,
+}
+import lit.primitives.text_io {
+  invokePrimitiveTextConstruction,
+  invokePrimitiveListAndOutput,
+  invokePrimitiveTextAndCharacter,
+}
+import lit.primitives.containers {
+  invokePrimitiveContainers,
+  invokePrimitiveSequenceConversionsAndCopies,
+}
+
+export function dispatchPrimitive(
+  name: string,
+  arguments: Array<GuestValue>,
+  continuation: int,
+  activeOrigin: int,
+  kernel: Kernel,
+  continuations: Array<ContinuationRow>,
+  dynamics: Array<DynamicRow>,
+  dynamicSuppressed: Array<bool>,
+  escapeActive: Array<bool>,
+  guestIdentities: Array<int>,
+  allocations: int,
+  maxContinuationDepth: int,
+  transfers: int,
+  dynamic: int,
+  emittedOutput: string,
+) -> KernelInvokeStep {
+  let mut step = invokePrimitiveArithmeticAndPairs(
+    name,
+    arguments,
+    continuation,
+    activeOrigin,
+    continuations,
+    dynamics,
+    dynamicSuppressed,
+    escapeActive,
+    guestIdentities,
+    allocations,
+    maxContinuationDepth,
+    transfers,
+    dynamic,
+    emittedOutput,
+  )
+  if step == None {
+    step = invokePrimitiveHigherOrderAndVector(
+      name,
+      arguments,
+      continuation,
+      activeOrigin,
+      continuations,
+      dynamics,
+      dynamicSuppressed,
+      escapeActive,
+      guestIdentities,
+      allocations,
+      maxContinuationDepth,
+      transfers,
+      dynamic,
+      emittedOutput,
+    )
+  }
+  if step == None {
+    step = invokePrimitiveControlAndErrors(
+      name,
+      arguments,
+      continuation,
+      activeOrigin,
+      continuations,
+      dynamics,
+      dynamicSuppressed,
+      escapeActive,
+      guestIdentities,
+      allocations,
+      maxContinuationDepth,
+      transfers,
+      dynamic,
+      emittedOutput,
+    )
+  }
+  if step == None {
+    step = invokePrimitiveNumericAndEquality(
+      name,
+      arguments,
+      continuation,
+      guestIdentities,
+      allocations,
+      maxContinuationDepth,
+      transfers,
+      dynamic,
+      emittedOutput,
+    )
+  }
+  if step == None {
+    step = invokePrimitiveTextConstruction(
+      name,
+      arguments,
+      continuation,
+      guestIdentities,
+      allocations,
+      maxContinuationDepth,
+      transfers,
+      dynamic,
+      emittedOutput,
+    )
+  }
+  if step == None {
+    step = invokePrimitiveListAndOutput(
+      name,
+      arguments,
+      continuation,
+      guestIdentities,
+      allocations,
+      maxContinuationDepth,
+      transfers,
+      dynamic,
+      emittedOutput,
+    )
+  }
+  if step == None {
+    step = invokePrimitiveContainers(
+      name,
+      arguments,
+      continuation,
+      kernel,
+      guestIdentities,
+      allocations,
+      maxContinuationDepth,
+      transfers,
+      dynamic,
+      emittedOutput,
+    )
+  }
+  if step == None {
+    step = invokePrimitiveTextAndCharacter(
+      name,
+      arguments,
+      continuation,
+      kernel,
+      guestIdentities,
+      allocations,
+      maxContinuationDepth,
+      transfers,
+      dynamic,
+      emittedOutput,
+    )
+  }
+  if step == None {
+    step = invokePrimitiveNumericTextConversions(
+      name,
+      arguments,
+      continuation,
+      kernel,
+      guestIdentities,
+      allocations,
+      maxContinuationDepth,
+      transfers,
+      dynamic,
+      emittedOutput,
+    )
+  }
+  if step == None {
+    step = invokePrimitiveSequenceConversionsAndCopies(
+      name,
+      arguments,
+      continuation,
+      kernel,
+      guestIdentities,
+      allocations,
+      maxContinuationDepth,
+      transfers,
+      dynamic,
+      emittedOutput,
+    )
+  }
+  match step {
+    case Some(result) => result
+    case None => KernelInvokeStep {
+      mode: MachineMode.TransferMode(MachineSignal.RuntimeSignal("LIT200 unknown primitive"), continuation),
+      allocations: allocations,
+      maxContinuationDepth: maxContinuationDepth,
+      transfers: transfers + 1,
+      dynamic: dynamic,
+      emittedOutput: emittedOutput,
+    }
+  }
+}

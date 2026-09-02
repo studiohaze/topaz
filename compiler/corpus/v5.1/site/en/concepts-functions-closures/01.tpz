@@ -1,0 +1,18 @@
+// Basic function structure
+function greet(name: string) -> string {
+    return "Hello, {name}!"
+}
+
+// Function without parameters
+function getCurrentTime() -> string {
+    return "December 20, 2024"
+}
+
+// Function without return value (unit ())
+function logMessage(message: string) {
+    print("Log: {message}")
+}
+
+// Usage examples
+let greeting = greet("Topaz Developer")
+print(greeting)  // "Hello, Topaz Developer!"

@@ -1,0 +1,14 @@
+
+import util
+
+function sub(a: int, b: int = 10) -> int {
+    a - b
+}
+
+function main() -> int {
+    let callbacks = [...util.base, sub]
+    let i = 0
+    let j = 1
+    callbacks[i](a: 5) * 10 + callbacks[j](a: 15)
+}
+main()

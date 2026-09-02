@@ -1,0 +1,1111 @@
+// Function-body checking, initialization order, and closure capture derivation.
+// Expression recursion enters through CheckerService; this leaf owns body
+// sequencing and returns indexes used by the checker facade.
+
+import types {
+  PreviewResolvedReference,
+  PreviewTypedCall,
+  PreviewTypedCapture,
+  ResolveResult,
+  SyntaxNode,
+}
+import checker.model {
+  CaptureTarget,
+  CheckerService,
+  CheckerState,
+  FunctionDefinition,
+  ModuleSyntax,
+  constructor,
+  emptyType,
+  functionType,
+  primitive,
+}
+import checker.type_algebra {
+  flattenType,
+  hasHole,
+  joinedTypes,
+  projectionType,
+  stripProjectionTypes,
+}
+import checker.syntax_index {
+  addDiagnostic,
+  addNode,
+  attribute,
+  bindSymbol,
+  boolAttribute,
+  child,
+  children,
+  declarationFor,
+  definitionNameKey,
+  emptyStringIntMap,
+  moduleIdentityAt,
+  referenceFor,
+  referenceTargetsPendingFunction,
+  replaceNodeType,
+  scopeFor,
+  scopeKey,
+  spanKey,
+  text,
+  typedNodeIndex,
+  unwrapExport,
+}
+import checker.protocols_methods { functionDeclaration }
+import checker.members_capabilities { bindingIndex }
+import checker.patterns { patternBindingNodes }
+import checker.call_facts { checkExpressionExpected }
+import checker.expression_core { blockTerminates }
+import checker.expression_control { inferExpression }
+import checker.statements {
+  checkBlock,
+  checkBlockExpected,
+  checkStatement,
+  constantExpressionShape,
+  foldConstantInteger,
+  orderedModules,
+  precheckTopLevelBindings,
+}
+
+function checkRecordDefaults(service: CheckerService, state: CheckerState, module: ModuleSyntax) -> () {
+  for statement in module.root.children {
+    let item = unwrapExport(statement)
+    if item.kind == "statement/record" {
+      for field in children(item, "fields") {
+        match child(field, "default") {
+          case Some(found) => {
+            let _ = inferExpression(
+              service,
+              state,
+              module.moduleIndex,
+              module.source,
+              found,
+            )
+          }
+          case None => ()
+        }
+      }
+    }
+  }
+  ()
+}
+
+function checkFunctionDefault(
+  state: CheckerState,
+  moduleIndex: int,
+  node: SyntaxNode,
+) -> () {
+  if !constantExpressionShape(node) {
+    addDiagnostic(
+      state,
+      moduleIndex,
+      "TPZ5001",
+      "`const` initializers must be constant expressions (§4)",
+      "",
+      node,
+    )
+    return ()
+  }
+  let _ = foldConstantInteger(state, moduleIndex, node)
+  ()
+}
+
+function callsPendingReturnSince(
+  state: CheckerState,
+  firstCall: int,
+) -> bool {
+  let mut index = firstCall
+  while index < state.calls.length {
+    match state.calls.get(index) {
+      case Some(call) => match referenceFor(
+        state,
+        call.moduleIndex,
+        call.calleeLo,
+        call.calleeHi,
+      ) {
+        case Some(reference) => if referenceTargetsPendingFunction(
+          state,
+          reference,
+        ) {
+          return true
+        }
+        case None => ()
+      }
+      case None => ()
+    }
+    index += 1
+  }
+  false
+}
+
+function checkFunctionDeclaration(
+  service: CheckerService,
+  state: CheckerState,
+  module: ModuleSyntax,
+  declaration: SyntaxNode,
+) -> () {
+  let nameNode = match child(declaration, "name") {
+    case Some(found) => found
+    case None => declaration
+  }
+  let definitionIndex = match state.functionIndexes.get(spanKey(
+    module.moduleIndex,
+    nameNode.lo,
+    nameNode.hi,
+  )) {
+    case Some(index) => index
+    case None => -1
+  }
+  match state.functions.get(definitionIndex) {
+    case Some(definition) => {
+      addNode(
+        state,
+        module.moduleIndex,
+        "declaration",
+        nameNode,
+        functionType(
+          definition.parameterTypes,
+          definition.variadic,
+          definition.result,
+        ),
+      )
+      let mut fixedIndex = 0
+      for parameter in children(declaration, "parameters") {
+        let name = match child(parameter, "name") {
+          case Some(found) => found
+          case None => parameter
+        }
+        let parameterType = if boolAttribute(parameter, "variadic") {
+          constructor("Array", [match definition.variadic.get(0) {
+            case Some(found) => found
+            case None => emptyType("unknown")
+          }])
+        } else {
+          match definition.parameterTypes.get(fixedIndex) {
+            case Some(found) => found
+            case None => emptyType("unknown")
+          }
+        }
+        if !boolAttribute(parameter, "variadic") {
+          fixedIndex += 1
+        }
+        bindSymbol(
+          state,
+          module.moduleIndex,
+          name.lo,
+          name.hi,
+          text(module.source, name),
+          parameterType,
+          false,
+        )
+        addNode(state, module.moduleIndex, "binding", name, parameterType)
+        match child(parameter, "default") {
+          case Some(found) => {
+            let _ = checkExpressionExpected(
+              service,
+              state,
+              module.moduleIndex,
+              module.source,
+              found,
+              parameterType,
+            )
+            checkFunctionDefault(state, module.moduleIndex, found)
+          }
+          case None => ()
+        }
+      }
+      match child(declaration, "body") {
+        case Some(body) => {
+          let inferredResult = definition.result.kind == "unknown"
+          let firstCall = state.calls.length
+          let mut activeFunctions = state.activeFunctions
+          activeFunctions.push(definitionIndex)
+          let mut loopFloors = state.loopFloors
+          loopFloors.push(state.loopFrames.length)
+          let mut expectedReturns = state.expectedReturns
+          expectedReturns.push(definition.result)
+          let mut returnJoins = state.returnJoins
+          returnJoins.push([])
+          let bodyResult = if inferredResult {
+            checkBlock(
+              service,
+              state,
+              module.moduleIndex,
+              module.source,
+              body,
+            )
+          } else {
+            checkBlockExpected(
+              service,
+              state,
+              module.moduleIndex,
+              module.source,
+              body,
+              definition.result,
+            )
+          }
+          let mut returns = match returnJoins.get(returnJoins.length - 1) {
+            case Some(found) => found
+            case None => []
+          }
+          returnJoins.pop()
+          expectedReturns.pop()
+          loopFloors.pop()
+          activeFunctions.pop()
+          if inferredResult {
+            match child(body, "tail") {
+              case Some(_) => returns.push(bodyResult)
+              case None => if !blockTerminates(body) {
+                returns.push(primitive("unit"))
+              }
+            }
+            let mut result = if returns.length == 0 {
+              primitive("unit")
+            } else {
+              let mut unresolved = false
+              for found in returns {
+                if hasHole(found) {
+                  unresolved = true
+                }
+              }
+              if unresolved {
+                emptyType("unknown")
+              } else {
+                joinedTypes(state, returns, true)
+              }
+            }
+            if projectionType(result) {
+              addDiagnostic(
+                state,
+                module.moduleIndex,
+                "TPZ5022",
+                "cannot infer a return type for `{definition.name}`: it returns a destructured generic value with no nameable type — annotate the return type",
+                "",
+                nameNode,
+              )
+              result = stripProjectionTypes(result)
+            }
+            if result.kind == "unknown" &&
+              callsPendingReturnSince(state, firstCall) {
+              addDiagnostic(
+                state,
+                module.moduleIndex,
+                "TPZ5022",
+                "`{definition.name}` is (mutually) recursive: declare its return type (§7)",
+                "",
+                nameNode,
+              )
+            }
+            let mut pending = state.pendingFunctions
+            pending[definitionIndex] = false
+            let patched = FunctionDefinition {
+              ...definition,
+              result: result,
+            }
+            let mut functions = state.functions
+            functions[definitionIndex] = patched
+            let functionValue = functionType(
+              definition.parameterTypes,
+              definition.variadic,
+              result,
+            )
+            bindSymbol(
+              state,
+              module.moduleIndex,
+              nameNode.lo,
+              nameNode.hi,
+              definition.name,
+              functionValue,
+              false,
+            )
+            replaceNodeType(
+              state,
+              module.moduleIndex,
+              "declaration",
+              nameNode,
+              functionValue,
+            )
+          }
+        }
+        case None => ()
+      }
+    }
+    case None => ()
+  }
+  ()
+}
+
+function staticTopLevelItem(item: SyntaxNode) -> bool {
+  item.kind == "statement/function" ||
+    item.kind == "statement/impl" ||
+    item.kind == "statement/record" ||
+    item.kind == "statement/enum" ||
+    item.kind == "statement/newtype" ||
+    item.kind == "statement/type-alias" ||
+    item.kind == "statement/protocol" ||
+    item.kind == "statement/const" ||
+    item.kind == "statement/import"
+}
+
+function checkImplBodies(
+  service: CheckerService,
+  state: CheckerState,
+  module: ModuleSyntax,
+  statement: SyntaxNode,
+) -> () {
+  let item = unwrapExport(statement)
+  if item.kind != "statement/impl" {
+    return ()
+  }
+  for method in children(item, "methods") {
+    match child(method, "declaration") {
+      case Some(declaration) => checkFunctionDeclaration(
+        service,
+        state,
+        module,
+        declaration,
+      )
+      case None => ()
+    }
+  }
+  ()
+}
+
+function topLevelRuntimeBindingIndexes(
+  module: ModuleSyntax,
+) -> Map<int, int> {
+  let mut indexes: Map<int, int> = Map.new()
+  let mut index = 0
+  for statement in module.root.children {
+    let item = unwrapExport(statement)
+    match functionDeclaration(item) {
+      case Some(declaration) => match child(declaration, "name") {
+        case Some(name) => indexes.insert(name.lo, index)
+        case None => ()
+      }
+      case None => if item.kind == "statement/let" {
+        match child(item, "pattern") {
+          case Some(pattern) => for binding in patternBindingNodes(pattern) {
+            indexes.insert(binding.lo, index)
+          }
+          case None => ()
+        }
+      } else {
+        ()
+      }
+    }
+    index += 1
+  }
+  indexes
+}
+
+function initializationReferenceViolation(
+  state: CheckerState,
+  module: ModuleSyntax,
+  runtimeBindingIndexes: Map<int, int>,
+  cutoff: int,
+  node: SyntaxNode,
+) -> bool {
+  match referenceFor(state, module.moduleIndex, node.lo, node.hi) {
+    case Some(reference) => if reference.targetModuleIndex == module.moduleIndex {
+      match runtimeBindingIndexes.get(reference.targetLo) {
+        case Some(target) => target >= cutoff
+        case None => false
+      }
+    } else {
+      false
+    }
+    case None => false
+  }
+}
+
+function initializationChildIsImmediate(
+  parent: SyntaxNode,
+  found: SyntaxNode,
+) -> bool {
+  // Conditional children are delayed under the same DIRECT rule as branch,
+  // arm, loop, lambda, function, defer, and concurrent bodies.
+  let kind = parent.kind
+  if kind == "statement/function" || kind == "statement/defer" ||
+    kind == "statement/break" || kind == "statement/continue" ||
+    kind == "expression/lambda" || kind == "expression/loop" {
+    return false
+  }
+  if kind == "statement/while" || kind == "expression/if" {
+    return found.field == "condition"
+  }
+  if kind == "expression/match" {
+    return found.field == "scrutinee"
+  }
+  if kind == "expression/for" || kind == "comprehension-clause/for" {
+    return found.field == "iterator"
+  }
+  if kind == "expression/comprehension" {
+    return found.field == "clauses" && found.index == 0 &&
+      found.kind == "comprehension-clause/for"
+  }
+  if kind == "expression/concurrent" {
+    return found.field == "timeout"
+  }
+  if kind == "expression/binary" && found.field == "right" {
+    let operator = attribute(parent, "operator")
+    return operator != "and" && operator != "or" && operator != "coalesce"
+  }
+  if kind == "expression/call" && found.field == "arguments" {
+    match child(parent, "callee") {
+      case Some(callee) => return callee.kind != "expression/optional-access"
+      case None => ()
+    }
+  }
+  if kind == "statement/let" || kind == "statement/const" ||
+    kind == "statement/return" {
+    return found.field == "value"
+  }
+  if kind == "statement/assign" {
+    return found.field == "target" || found.field == "value"
+  }
+  if kind == "statement/using" {
+    return found.field == "value" || found.field == "body"
+  }
+  if kind.startsWith("statement/") {
+    return kind == "statement/expression"
+  }
+  true
+}
+
+function initializationViolation(
+  state: CheckerState,
+  module: ModuleSyntax,
+  runtimeBindingIndexes: Map<int, int>,
+  cutoff: int,
+  node: SyntaxNode,
+) -> Option<SyntaxNode> {
+  if node.kind == "expression/identifier" {
+    return if initializationReferenceViolation(
+      state,
+      module,
+      runtimeBindingIndexes,
+      cutoff,
+      node,
+    ) {
+      Some(node)
+    } else {
+      None
+    }
+  }
+  for found in node.children {
+    if initializationChildIsImmediate(node, found) {
+      match initializationViolation(
+        state,
+        module,
+        runtimeBindingIndexes,
+        cutoff,
+        found,
+      ) {
+        case Some(violation) => return Some(violation)
+        case None => ()
+      }
+    }
+  }
+  None
+}
+
+function reportInitializationViolation(
+  state: CheckerState,
+  module: ModuleSyntax,
+  violation: Option<SyntaxNode>,
+) -> () {
+  match violation {
+    case Some(found) => addDiagnostic(
+      state,
+      module.moduleIndex,
+      "TPZ5002",
+      "`{text(module.source, found)}` is not bound",
+      "",
+      found,
+    )
+    case None => ()
+  }
+}
+
+function checkTopLevelInitializationOrder(
+  state: CheckerState,
+  module: ModuleSyntax,
+) -> () {
+  let runtimeBindingIndexes = topLevelRuntimeBindingIndexes(module)
+  let mut cutoff = 0
+  for statement in module.root.children {
+    let item = unwrapExport(statement)
+    if item.kind == "statement/let" {
+      match child(item, "value") {
+        case Some(found) => reportInitializationViolation(
+          state,
+          module,
+          initializationViolation(
+            state,
+            module,
+            runtimeBindingIndexes,
+            cutoff,
+            found,
+          ),
+        )
+        case None => ()
+      }
+    } else if item.kind == "statement/using" {
+      match child(item, "value") {
+        case Some(found) => reportInitializationViolation(
+          state,
+          module,
+          initializationViolation(
+            state,
+            module,
+            runtimeBindingIndexes,
+            cutoff,
+            found,
+          ),
+        )
+        case None => ()
+      }
+      match child(item, "body") {
+        case Some(found) => reportInitializationViolation(
+          state,
+          module,
+          initializationViolation(
+            state,
+            module,
+            runtimeBindingIndexes,
+            cutoff,
+            found,
+          ),
+        )
+        case None => ()
+      }
+    } else if item.kind == "statement/assign" {
+      for field in ["target", "value"] {
+        match child(item, field) {
+          case Some(found) => reportInitializationViolation(
+            state,
+            module,
+            initializationViolation(
+              state,
+              module,
+              runtimeBindingIndexes,
+              cutoff,
+              found,
+            ),
+          )
+          case None => ()
+        }
+      }
+    } else if item.kind == "statement/while" {
+      match child(item, "condition") {
+        case Some(found) => reportInitializationViolation(
+          state,
+          module,
+          initializationViolation(
+            state,
+            module,
+            runtimeBindingIndexes,
+            cutoff,
+            found,
+          ),
+        )
+        case None => ()
+      }
+    } else if item.kind == "statement/expression" ||
+      item.kind == "statement/return" {
+      for found in item.children {
+        reportInitializationViolation(
+          state,
+          module,
+          initializationViolation(
+            state,
+            module,
+            runtimeBindingIndexes,
+            cutoff,
+            found,
+          ),
+        )
+      }
+    }
+    cutoff += 1
+  }
+  ()
+}
+
+function checkModuleBodies(service: CheckerService, state: CheckerState, module: ModuleSyntax) -> () {
+  checkRecordDefaults(service, state, module)
+  for statement in module.root.children {
+    checkImplBodies(service, state, module, statement)
+    match functionDeclaration(unwrapExport(statement)) {
+      case Some(declaration) => checkFunctionDeclaration(
+        service,
+        state,
+        module,
+        declaration,
+      )
+      case None => if !staticTopLevelItem(unwrapExport(statement)) {
+        checkStatement(
+          service,
+          state,
+          module.moduleIndex,
+          module.source,
+          statement,
+        )
+      }
+    }
+  }
+  checkTopLevelInitializationOrder(state, module)
+  ()
+}
+
+export function checkFunctionBodies(service: CheckerService, state: CheckerState) -> () {
+  let ordered = orderedModules(state)
+  for module in ordered {
+    precheckTopLevelBindings(service, state, module)
+  }
+  for module in ordered {
+    checkModuleBodies(service, state, module)
+  }
+  ()
+}
+
+function captureScopeAncestors(
+  state: CheckerState,
+  indexes: Map<string, Set<int>>,
+  moduleIndex: int,
+  ordinal: int,
+) -> Set<int> {
+  let key = scopeKey(moduleIndex, ordinal)
+  match indexes.get(key) {
+    case Some(found) => return found
+    case None => ()
+  }
+  let mut ancestors: Set<int> = set {}
+  let mut current = ordinal
+  while current >= 0 {
+    ancestors.add(current)
+    match scopeFor(state, moduleIndex, current) {
+      case Some(scope) => {
+        current = scope.parentOrdinal
+      }
+      case None => {
+        current = -1
+      }
+    }
+  }
+  let mut target = indexes
+  target.insert(key, ancestors)
+  ancestors
+}
+
+function namespaceCaptureTarget(
+  state: CheckerState,
+  reference: PreviewResolvedReference,
+) -> Option<CaptureTarget> {
+  let segments = reference.name.split(".")
+  if segments.length < 2 {
+    return None
+  }
+  let alias = match segments.get(0) {
+    case Some(found) => found
+    case None => return None
+  }
+  let index = match state.namespaceImportIndexes.get(
+      definitionNameKey(reference.moduleIndex, alias),
+  ) {
+    case Some(found) => found
+    case None => return None
+  }
+  let declaration = match state.resolved.declarations.get(index) {
+    case Some(found) => found
+    case None => return None
+  }
+  let unknown = emptyType("unknown")
+  Some(CaptureTarget {
+    declaration: declaration,
+    name: declaration.name,
+    typeValue: flattenType(unknown),
+    ambient: true,
+  })
+}
+
+function captureTargetForReference(
+  state: CheckerState,
+  reference: PreviewResolvedReference,
+) -> Option<CaptureTarget> {
+  if reference.namespace != "value" {
+    return None
+  }
+  if reference.role == "namespace-member" {
+    return namespaceCaptureTarget(state, reference)
+  }
+  if reference.targetModuleIndex != reference.moduleIndex {
+    return None
+  }
+  let bindingIndex = typedNodeIndex(
+    state,
+    reference.targetModuleIndex,
+    "binding",
+    reference.targetLo,
+    reference.targetHi,
+  )
+  let declarationIndex = typedNodeIndex(
+    state,
+    reference.targetModuleIndex,
+    "declaration",
+    reference.targetLo,
+    reference.targetHi,
+  )
+  let declaredIndex = if bindingIndex > declarationIndex {
+    bindingIndex
+  } else {
+    declarationIndex
+  }
+  let observedIndex = if declaredIndex >= 0 {
+    declaredIndex
+  } else {
+    typedNodeIndex(
+      state,
+      reference.moduleIndex,
+      "expression",
+      reference.lo,
+      reference.hi,
+    )
+  }
+  let typedNode = match state.nodes.get(observedIndex) {
+    case Some(found) => found
+    case None => return None
+  }
+  let declaration = match declarationFor(
+      state,
+      reference.targetModuleIndex,
+      reference.targetLo,
+      reference.targetHi,
+  ) {
+    case Some(found) => found
+    case None => return None
+  }
+  Some(CaptureTarget {
+    declaration: declaration,
+    name: reference.name,
+    typeValue: typedNode.typeValue,
+    ambient: typedNode.ambient,
+  })
+}
+
+function capturesForReference(
+  state: CheckerState,
+  scopeAncestorIndexes: Map<string, Set<int>>,
+  reference: PreviewResolvedReference,
+) -> Array<PreviewTypedCapture> {
+  let mut captures: Array<PreviewTypedCapture> = []
+  let target = match captureTargetForReference(state, reference) {
+    case Some(found) => found
+    case None => return captures
+  }
+  let declarationAncestors = captureScopeAncestors(
+    state,
+    scopeAncestorIndexes,
+    reference.moduleIndex,
+    target.declaration.scopeOrdinal,
+  )
+  let mut current = reference.scopeOrdinal
+  while current >= 0 {
+    match scopeFor(state, reference.moduleIndex, current) {
+      case Some(scope) => {
+        if (scope.kind == "function" || scope.kind == "lambda") &&
+          !declarationAncestors.contains(scope.ordinal) {
+          captures.push(PreviewTypedCapture {
+            moduleIndex: reference.moduleIndex,
+            closureLo: scope.lo,
+            closureHi: scope.hi,
+            referenceLo: reference.lo,
+            referenceHi: reference.hi,
+            declarationLo: target.declaration.lo,
+            declarationHi: target.declaration.hi,
+            name: target.name,
+            typeValue: target.typeValue,
+            ambient: target.ambient,
+          })
+        }
+        current = scope.parentOrdinal
+      }
+      case None => {
+        current = -1
+      }
+    }
+  }
+  captures
+}
+
+function capturesAreSame(
+  left: PreviewTypedCapture,
+  right: PreviewTypedCapture,
+) -> bool {
+  left.moduleIndex == right.moduleIndex &&
+  left.closureLo == right.closureLo &&
+  left.closureHi == right.closureHi &&
+  left.referenceLo == right.referenceLo &&
+  left.referenceHi == right.referenceHi &&
+  left.declarationLo == right.declarationLo &&
+  left.declarationHi == right.declarationHi &&
+  left.name == right.name
+}
+
+function sortAndDeduplicateCaptures(state: CheckerState) -> () {
+  let mut target = state.captures
+  target.sortBy((capture) => capture.name)
+  target.sortBy((capture) => capture.declarationHi)
+  target.sortBy((capture) => capture.declarationLo)
+  target.sortBy((capture) => capture.referenceHi)
+  target.sortBy((capture) => capture.referenceLo)
+  target.sortBy((capture) => capture.closureHi)
+  target.sortBy((capture) => capture.closureLo)
+  target.sortBy((capture) => capture.moduleIndex)
+  target.sortBy((capture) => moduleIdentityAt(state, capture.moduleIndex))
+  let mut index = 1
+  while index < target.length {
+    let previous = match target.get(index - 1) {
+      case Some(value) => value
+      case None => return ()
+    }
+    let current = match target.get(index) {
+      case Some(value) => value
+      case None => return ()
+    }
+    if capturesAreSame(previous, current) {
+      target.removeAt(index)
+    } else {
+      index += 1
+    }
+  }
+}
+
+export function deriveCaptures(state: CheckerState) -> () {
+  let mut scopeAncestorIndexes: Map<string, Set<int>> = Map.new()
+  let mut captures = state.captures
+  for reference in state.resolved.references {
+    for capture in capturesForReference(
+      state,
+      scopeAncestorIndexes,
+      reference,
+    ) {
+      captures.push(capture)
+    }
+  }
+  sortAndDeduplicateCaptures(state)
+  ()
+}
+
+function lispexRuleFactoryCallIndexes(
+  calls: Array<PreviewTypedCall>,
+) -> Map<string, Array<int>> {
+  let mut indexes: Map<string, Array<int>> = Map.new()
+  let mut index = 0
+  for call in calls {
+    if call.arguments.length == 0 &&
+      call.targetIdentity.startsWith("topaz.lispex-rule-handle/v1:") {
+      let key = definitionNameKey(call.moduleIndex, call.targetIdentity)
+      match indexes.get(key) {
+        case Some(found) => {
+          let mut targets = found
+          targets.push(index)
+        }
+        case None => indexes.insert(key, [index])
+      }
+    }
+    index += 1
+  }
+  indexes
+}
+
+export function diagnoseLispexRuleFactoryEscapes(state: CheckerState) -> () {
+  let callIndexes = lispexRuleFactoryCallIndexes(state.calls)
+  for reference in state.resolved.references {
+    if reference.namespace != "value" ||
+      reference.targetModule != "std.lispex.rules" ||
+      reference.targetName == "" {
+      continue
+    }
+    let expected = "topaz.lispex-rule-handle/v1:{reference.targetName}"
+    let mut direct = false
+    match callIndexes.get(definitionNameKey(reference.moduleIndex, expected)) {
+      case Some(indexes) => for index in indexes {
+        match state.calls.get(index) {
+          case Some(call) => if reference.lo >= call.calleeLo &&
+            reference.hi <= call.calleeHi {
+            direct = true
+          }
+          case None => ()
+        }
+      }
+      case None => ()
+    }
+    if !direct {
+      addDiagnostic(
+        state,
+        reference.moduleIndex,
+        "TPZ5500",
+        "a generated Lispex rule factory may only appear as the direct callee of a zero-argument call",
+        "",
+        SyntaxNode {
+          kind: "identifier",
+          lo: reference.lo,
+          hi: reference.hi,
+          field: "",
+          index: 0,
+          attributes: [],
+          children: [],
+        },
+      )
+    }
+  }
+  ()
+}
+
+record DeclarationIndexes {
+  spans: Map<string, int>,
+  valuesByModule: Map<string, Array<int>>,
+  namespaceImports: Map<string, int>,
+}
+
+export record CheckerIndexes {
+  declarations: Map<string, int>,
+  valueDeclarationsByModule: Map<string, Array<int>>,
+  namespaceImports: Map<string, int>,
+  references: Map<string, int>,
+  scopes: Map<string, int>,
+}
+
+function declarationIndexes(resolved: ResolveResult) -> DeclarationIndexes {
+  let mut spans = emptyStringIntMap()
+  let mut valuesByModule: Map<string, Array<int>> = Map.new()
+  let mut namespaceImports = emptyStringIntMap()
+  let mut index = 0
+  for declaration in resolved.declarations {
+    let span = spanKey(declaration.moduleIndex, declaration.lo, declaration.hi)
+    match spans.get(span) {
+      case Some(_) => ()
+      case None => spans.insert(span, index)
+    }
+    if declaration.namespace == "value" {
+      let key = "{declaration.moduleIndex}"
+      match valuesByModule.get(key) {
+        case Some(found) => {
+          let mut targets = found
+          targets.push(index)
+        }
+        case None => valuesByModule.insert(key, [index])
+      }
+    }
+    if declaration.namespace == "module" &&
+      declaration.declarationKind == "namespace-import" {
+      let name = definitionNameKey(declaration.moduleIndex, declaration.name)
+      match namespaceImports.get(name) {
+        case Some(_) => ()
+        case None => namespaceImports.insert(name, index)
+      }
+    }
+    index += 1
+  }
+  DeclarationIndexes {
+    spans: spans,
+    valuesByModule: valuesByModule,
+    namespaceImports: namespaceImports,
+  }
+}
+
+function referenceSpanIndexes(resolved: ResolveResult) -> Map<string, int> {
+  let mut indexes = emptyStringIntMap()
+  let mut index = 0
+  for reference in resolved.references {
+    let key = spanKey(reference.moduleIndex, reference.lo, reference.hi)
+    match indexes.get(key) {
+      case Some(_) => ()
+      case None => indexes.insert(key, index)
+    }
+    index += 1
+  }
+  indexes
+}
+
+function scopeOrdinalIndexes(resolved: ResolveResult) -> Map<string, int> {
+  let mut indexes = emptyStringIntMap()
+  let mut index = 0
+  for scope in resolved.scopes {
+    let key = scopeKey(scope.moduleIndex, scope.ordinal)
+    match indexes.get(key) {
+      case Some(_) => ()
+      case None => indexes.insert(key, index)
+    }
+    index += 1
+  }
+  indexes
+}
+
+export function checkerIndexes(resolved: ResolveResult) -> CheckerIndexes {
+  let declarations = declarationIndexes(resolved)
+  CheckerIndexes {
+    declarations: declarations.spans,
+    valueDeclarationsByModule: declarations.valuesByModule,
+    namespaceImports: declarations.namespaceImports,
+    references: referenceSpanIndexes(resolved),
+    scopes: scopeOrdinalIndexes(resolved),
+  }
+}
+
+export function initialCheckerState(
+  resolved: ResolveResult,
+  modules: Array<ModuleSyntax>,
+  indexes: CheckerIndexes,
+) -> CheckerState {
+  CheckerState {
+    resolved: resolved,
+    modules: modules,
+    declarationIndexes: indexes.declarations,
+    valueDeclarationIndexesByModule: indexes.valueDeclarationsByModule,
+    namespaceImportIndexes: indexes.namespaceImports,
+    referenceIndexes: indexes.references,
+    scopeIndexes: indexes.scopes,
+    symbolIndexes: emptyStringIntMap(),
+    nodeIndexes: emptyStringIntMap(),
+    callIndexes: emptyStringIntMap(),
+    functionIndexes: emptyStringIntMap(),
+    functionNameIndexes: emptyStringIntMap(),
+    receiverMethodIndexes: emptyStringIntMap(),
+    protocolIndexes: emptyStringIntMap(),
+    conformanceIndexes: emptyStringIntMap(),
+    conformanceTypeIndexes: emptyStringIntMap(),
+    recordIndexes: emptyStringIntMap(),
+    enumIndexes: emptyStringIntMap(),
+    newtypeIndexes: emptyStringIntMap(),
+    aliasIndexes: emptyStringIntMap(),
+    symbols: [],
+    records: [],
+    enums: [],
+    newtypes: [],
+    aliases: [],
+    functions: [],
+    receiverMethods: [],
+    protocols: [],
+    pendingFunctions: [],
+    functionAliases: emptyStringIntMap(),
+    conformances: [],
+    typeParameters: [],
+    activeFunctions: [],
+    expectedReturns: [],
+    returnJoins: [],
+    expectedExpressions: [],
+    literalJoinContexts: [],
+    statementExpressionContexts: [],
+    typeCapabilitySuppressions: [],
+    loopFrames: [],
+    loopFloors: [],
+    pipeValues: [],
+    nodes: [],
+    calls: [],
+    captures: [],
+    diagnostics: [],
+    inferenceSolutions: Map.new(),
+    nextInference: 0,
+  }
+}

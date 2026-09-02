@@ -1,0 +1,9 @@
+enum Shape { Circle(int), Square(int), Dot }
+function inner(o: Option<Shape>) -> int {
+  match o {
+    case Some(Circle(x)) | Some(Square(x)) => x
+    case _ => -1
+  }
+}
+print("{inner(Some(Shape.Circle(3)))}/{inner(Some(Shape.Square(8)))}/{inner(Some(Shape.Dot))}/{inner(None)}")
+0

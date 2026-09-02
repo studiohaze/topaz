@@ -1,0 +1,10 @@
+let first: Option<int> = None
+let second: Option<int> = Some(2)
+let found = if let Some(n) = first {
+    n
+} else if let Some(n) = second {
+    n
+} else {
+    0
+}
+print("{found}")

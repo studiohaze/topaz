@@ -1,0 +1,26 @@
+
+function rank(x: int) -> int {
+    let mut i = 0
+    while i < 200 {
+        i = i + 1
+    }
+    10 - x
+}
+
+let aliasRank = rank
+let callbacks = map { "alias": aliasRank }
+
+let r = concurrent {
+    slow: {
+        let xs = [1, 3, 2]
+        match callbacks.get("alias") {
+            case Some(cb) => {
+                let sorted = xs.sortedBy(cb)
+                sorted[0] * 100000 + sorted[1] * 10000 + sorted[2] * 1000 + xs[0] * 100 + xs[1] * 10 + xs[2]
+            }
+            case None => -1
+        }
+    }
+    fast: 0
+}
+r.slow + r.fast

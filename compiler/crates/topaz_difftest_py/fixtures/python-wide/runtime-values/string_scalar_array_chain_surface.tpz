@@ -1,0 +1,16 @@
+
+function optIntText(value: Option<int>) -> string {
+    match value {
+        case Some(n) => "{n}"
+        case None => "none"
+    }
+}
+function main() -> string {
+    let text = "😀가é"
+    let firstTwo = text.slice(0, 2)
+    let scalarIndex = optIntText(text.indexOf("가"))
+    let emptyLast = optIntText(text.lastIndexOf(""))
+    let joinedScalars = text.scalars().slice(0, 3).join("|")
+    "{firstTwo}:{scalarIndex}:{emptyLast}:{joinedScalars}"
+}
+main()

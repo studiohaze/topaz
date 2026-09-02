@@ -1,0 +1,5 @@
+let n = 10
+let addn = (x) => x + n
+let dbl = (x) => x * 2
+let h = addn >> dbl
+h(5)

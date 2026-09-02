@@ -1,0 +1,6 @@
+function 로그쓰기(메시지: string) -> Result<(), string> {
+    let 파일 = open("app.log")?
+    defer { 파일.close() }
+    파일.write(메시지)?
+    return Ok(())
+}

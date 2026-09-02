@@ -1,0 +1,28 @@
+protocol Show<T> {
+  function show(value: T) -> string
+}
+
+using handle = open() {
+  defer handle.close()
+}
+
+let arrays = [for value in values if value > 0 => value * 2]
+let sets = set { for value in values => value }
+let maps = map { for value in values => value: value * 2 }
+
+let updated = User { ...base, name: "Ada" }
+let explicit = Map.new<string, List<int>>(entries)
+
+let result = loop 'search {
+  if ready {
+    break 'search 42
+  }
+  continue 'search
+}
+
+let joined = concurrent(timeout: 3s) {
+  left: loadLeft()
+  right: loadRight()
+} else {
+  fallback()
+}

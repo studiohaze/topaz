@@ -1,0 +1,11 @@
+// if expression (returns a value)
+let message = if age >= 20 {
+    "You are an adult"
+} else if age >= 13 {
+    "You are a teenager"
+} else {
+    "You are a child"
+}
+
+// Ternary-style
+let status = if online { "Connected" } else { "Offline" }

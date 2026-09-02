@@ -1,0 +1,122 @@
+{
+  "schema": "lispex.f15-final-semantic-surface-closure/v1",
+  "status": "qualified-final-provider-surface",
+  "evaluator_source_revision": "e3909e56491b53c61a63efaff51b6093019d8b27",
+  "language_profile_authority": {
+    "id": "lispex-profile-1.5",
+    "path": "product/contracts/lispex-profile-1.5.json",
+    "sha256": "f42ed5f9fb38ea0c8c84b597fbff2d9ebb47b853364b9c3eee118d8b03947fc0"
+  },
+  "executable_profile": {
+    "id": "lispex/r7rs-rule-current-profile-bounded/1",
+    "feature_set_sha256": "6ff16159ab9c6758c1485b67c928a9b3b4a896e4f2ecf96e4cf3cbaf5ac22fae"
+  },
+  "source_authorities": [
+    {
+      "path": "product/contracts/lispex-profile-1.5.json",
+      "sha256": "f42ed5f9fb38ea0c8c84b597fbff2d9ebb47b853364b9c3eee118d8b03947fc0"
+    },
+    {
+      "path": "product/contracts/source-frontend.v1.json",
+      "sha256": "0ac6287193141a914eecb2d814b239404ef55eab303b9bc4cc931e94517f17db"
+    },
+    {
+      "path": "product/contracts/primitive-capabilities.v2.json",
+      "sha256": "24c355f6a14cbec280f5951f408502d5aea45edc843b10f11fe6937ca2d444ce"
+    },
+    {
+      "path": "product/contracts/diagnostic-catalog.v1.json",
+      "sha256": "309b86ee8e3b55c88b693612974ce760e60eceb004852560fceb669078d7c5bd"
+    },
+    {
+      "path": "docs/bounded-execution/full-profile-surface-authority.v0.json",
+      "sha256": "964787599bffeae7ee772a0bf82fcc786a644b43e7d654152ddac6ae75cc03ba"
+    },
+    {
+      "path": "docs/bounded-execution/full-profile-surface.v0.json",
+      "sha256": "2e66575b8b3663ad74b67003e2603b7616d8dd50a6a7cfdbc8cea66dd00a18a1"
+    },
+    {
+      "path": "docs/bounded-execution/full-primitive-registry-authority.v0.json",
+      "sha256": "eec9a858dbaaf9d9aa66897501003e9bf0b8d7c6abf92f3ff5a47a4a3701edbd"
+    },
+    {
+      "path": "docs/bounded-execution/full-primitive-registry.v0.json",
+      "sha256": "ff96e68f4050ef83eb8eee12b5b05509963d7fbc805016f2533a7bdcad421121"
+    },
+    {
+      "path": "docs/bounded-execution/full-profile-cost-authority.v0.json",
+      "sha256": "cdfd292a09722d3cabb3b57a284b6b5adfa3ad5612773484afeb2ffa3c4bd29b"
+    },
+    {
+      "path": "docs/bounded-execution/full-profile-cost-classification.v0.json",
+      "sha256": "1f3c0c07561e994bd67adf2611e85259ce6711745150620936ad23eb89ebee5f"
+    },
+    {
+      "path": "docs/bounded-execution/full-guest-control-authority.v0.json",
+      "sha256": "eda70ccee10f33b66dd673ac0ab5826c8a0b7b8fda0eb6279af11dea73baf568"
+    },
+    {
+      "path": "docs/bounded-execution/full-guest-control-classification.v0.json",
+      "sha256": "3ebcf7562ac79a23b5d7b77a72c467e29c511643b32fcbaf8567f5665e90f720"
+    },
+    {
+      "path": "docs/bounded-execution/guest-kernel-roots.v0.json",
+      "sha256": "9e07800dad68fd3139c5a0ba5ffeb3b1a6ef5f5de64172daae6a7d230202540a"
+    },
+    {
+      "path": "docs/bounded-execution/evaluation-allocation-mir.v0.json",
+      "sha256": "a167dfe3e8d63e9cda69214f16a1d6135ff45099c3fdee3c620f6464d89cd377"
+    },
+    {
+      "path": "docs/bounded-execution/recursive-components.v0.json",
+      "sha256": "1d029f8412e76dfd968a153498fcd5947fca922b2e8e1796c726cc0daf35bfe5"
+    },
+    {
+      "path": "docs/bounded-execution/guest-kernel-dependency-allowlist.v0.json",
+      "sha256": "c463f4d93bed11614b5854049caea734c0c124c8cb2bf072a0683afbb14b611f"
+    }
+  ],
+  "denominator": {
+    "reader_comments": 2,
+    "reader_datums": 15,
+    "core_forms": 13,
+    "derived_forms": 12,
+    "bytecode_opcodes": 22,
+    "primitive_rows": 205,
+    "guest_calling_rows": 18,
+    "diagnostic_rows": 24
+  },
+  "construction_classification": {
+    "allowed": [
+      "Fixed",
+      "Precharged",
+      "Incremental",
+      "GuestCalling",
+      "Deferred"
+    ],
+    "counts": {
+      "Fixed": 70,
+      "Precharged": 19,
+      "Incremental": 98,
+      "GuestCalling": 18,
+      "Deferred": 0
+    },
+    "unclassified_rows": 0,
+    "deferred_rows": 0
+  },
+  "runtime_closure": {
+    "primitive_rows": 205,
+    "reached_primitive_rows": 205,
+    "bytecode_opcodes": 22,
+    "guest_calling_rows": 18,
+    "guest_calling_runtime_admitted_rows": 18,
+    "non_control_runtime_rows_pending": 0,
+    "deferred_executable_rows": 0
+  },
+  "boundary": {
+    "component_qualified_by_this_record": false,
+    "public_language_profile_changed": false,
+    "restricted_profile_changed": false
+  }
+}

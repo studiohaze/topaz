@@ -1,0 +1,10 @@
+
+function main() -> int {
+    let mut counter = 0
+    function bump() -> int {
+        counter = counter + 1
+        counter
+    }
+    bump()
+}
+main()

@@ -1,0 +1,24 @@
+// 나쁜 예: 중복된 조건
+let 점수 = 85
+if 점수 >= 90 {
+    print("A등급")
+} else {
+    if 점수 >= 80 {
+        print("B등급")
+    } else {
+        if 점수 >= 70 {
+            print("C등급")
+        } else {
+            print("F등급")
+        }
+    }
+}
+
+// 좋은 예: match 사용
+let 등급 = match 점수 {
+    case 90..100 => "A"
+    case 80..<90 => "B"
+    case 70..<80 => "C"
+    case _ => "F"
+}
+print("{등급}등급")

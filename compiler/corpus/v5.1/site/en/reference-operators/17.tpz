@@ -1,0 +1,30 @@
+// In canonical docs, demonstrate custom operator semantics with explicit helpers
+type Vector = { x: float, y: float }
+
+function addVector(left: Vector, right: Vector) -> Vector {
+    return { x: left.x + right.x, y: left.y + right.y }
+}
+
+function scaleVector(vector: Vector, scalar: float) -> Vector {
+    return { x: vector.x * scalar, y: vector.y * scalar }
+}
+
+function equalVector(left: Vector, right: Vector) -> bool {
+    return left.x == right.x && left.y == right.y
+}
+
+function vectorToString(vector: Vector) -> string {
+    return "Vector({vector.x}, {vector.y})"
+}
+
+// Usage examples
+let vector1: Vector = { x: 3.0, y: 4.0 }
+let vector2: Vector = { x: 1.0, y: 2.0 }
+
+let sum = addVector(vector1, vector2)       // Vector(4.0, 6.0)
+let scaled = scaleVector(vector1, 2.0)      // Vector(6.0, 8.0)
+let equal = equalVector(vector1, vector2)   // false
+
+print("Vector sum: {vectorToString(sum)}")
+print("Vector scaled: {vectorToString(scaled)}")
+print("Vectors equal: {equal}")

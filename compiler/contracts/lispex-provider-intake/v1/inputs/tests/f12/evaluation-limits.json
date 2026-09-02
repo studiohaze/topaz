@@ -1,0 +1,12 @@
+{
+  "canonical_input_bytes": 4096,
+  "eval_work": 1000000,
+  "logical_allocation": 1000000,
+  "semantic_frames": 1000,
+  "traversal_depth": 256,
+  "output_bytes": 1000000,
+  "diagnostic_bytes": 1000000,
+  "transcript_bytes": 1000000,
+  "transcript_events": 100,
+  "result_bytes": 1000000
+}

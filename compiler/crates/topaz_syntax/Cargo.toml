@@ -1,0 +1,13 @@
+[package]
+name = "topaz_syntax"
+description = "Token kinds and AST definitions for the Topaz language (types only)"
+version.workspace = true
+license.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+topaz_diag = { workspace = true }
+
+[lints]
+workspace = true

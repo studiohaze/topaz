@@ -1,0 +1,73 @@
+
+function numberSlot(root: JSONValue, index: int) -> string {
+    let value = match root.at(index) {
+        case Some(v) => v
+        case None => return "missing"
+    }
+    let text = match value.numberText() {
+        case Some(t) => t
+        case None => "no-text"
+    }
+    let intText = match value.asInt() {
+        case Some(n) => "{n}"
+        case None => "none"
+    }
+    "{text}/{intText}"
+}
+
+function hugeExponent(prefix: string) -> string {
+    let mut text = prefix
+    for i in 0..5000 {
+        text = "{text}9"
+    }
+    text
+}
+
+function zeroI128OverflowExponent() -> string {
+    "0e9999999999999999999999999999999999999999"
+}
+
+function i128MaxExponent(prefix: string) -> string {
+    "{prefix}170141183460469231731687303715884105727"
+}
+
+function f() -> Result<string, string> {
+    let root = match JSON.parse("[-0,9223372036854775807,9223372036854775808,1e2,100e-2,1.50]") {
+        case Ok(value) => value
+        case Err(e) => return Err(e.message)
+    }
+    let huge = match JSON.parse(hugeExponent("1e")) {
+        case Ok(value) => value
+        case Err(e) => return Err(e.message)
+    }
+    let zeroHuge = match JSON.parse(zeroI128OverflowExponent()) {
+        case Ok(value) => value
+        case Err(e) => return Err(e.message)
+    }
+    let atI128Max = match JSON.parse(i128MaxExponent("1e")) {
+        case Ok(value) => value
+        case Err(e) => return Err(e.message)
+    }
+    let zeroAtI128Max = match JSON.parse(i128MaxExponent("0e")) {
+        case Ok(value) => value
+        case Err(e) => return Err(e.message)
+    }
+    let hugeInt = match huge.asInt() {
+        case Some(n) => "{n}"
+        case None => "none"
+    }
+    let zeroHugeInt = match zeroHuge.asInt() {
+        case Some(n) => "{n}"
+        case None => "none"
+    }
+    let atI128MaxInt = match atI128Max.asInt() {
+        case Some(n) => "{n}"
+        case None => "none"
+    }
+    let zeroAtI128MaxInt = match zeroAtI128Max.asInt() {
+        case Some(n) => "{n}"
+        case None => "none"
+    }
+    Ok("{numberSlot(root, 0)}|{numberSlot(root, 1)}|{numberSlot(root, 2)}|{numberSlot(root, 3)}|{numberSlot(root, 4)}|{numberSlot(root, 5)}|huge/{hugeInt}|zeroHuge/{zeroHugeInt}|atI128Max/{atI128MaxInt}|zeroAtI128Max/{zeroAtI128MaxInt}")
+}
+f()

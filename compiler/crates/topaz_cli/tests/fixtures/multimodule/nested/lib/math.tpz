@@ -1,0 +1,1 @@
+export function triple(x: int) { x * 3 }

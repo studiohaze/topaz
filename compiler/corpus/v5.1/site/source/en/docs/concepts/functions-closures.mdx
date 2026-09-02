@@ -1,0 +1,540 @@
+---
+title: 'Functions and Closures'
+description: 'Master Topaz powerful function system. Learn function declarations, arrow functions, higher-order functions, closures, and functional programming patterns in depth.'
+covers: '§5, §7, §11, §18, §22'
+---
+
+> **Library names note**: Helper and member calls beyond the standard-library minimum — `Math.random`, `.split`, `.trim`, `.contains`, etc. — are illustrative placeholders, not canonical APIs.
+
+Functions are **first-class citizens** in Topaz. You can store them in variables, pass them as parameters to other functions, and return them from functions.
+
+Public docs use `(T) -> U` in type positions. Blocks may return their final expression implicitly, but this guide prefers explicit `return` in multi-step examples for readability.
+
+##  Basic Function Declaration
+
+### Standard Function Declaration
+
+```topaz
+// Basic function structure
+function greet(name: string) -> string {
+    return "Hello, {name}!"
+}
+
+// Function without parameters
+function getCurrentTime() -> string {
+    return "December 20, 2024"
+}
+
+// Function without return value (unit ())
+function logMessage(message: string) {
+    print("Log: {message}")
+}
+
+// Usage examples
+let greeting = greet("Topaz Developer")
+print(greeting)  // "Hello, Topaz Developer!"
+```
+
+### Parameters and Default Values
+
+```topaz
+// Default parameter values
+function calculate(a: int, b: int = 10, operation: string = "add") -> int {
+    return match operation {
+        case "add" => a + b
+        case "subtract" => a - b
+        case "multiply" => a * b
+        case _ => 0
+    }
+}
+
+// Various calling methods
+let result1 = calculate(5)                    // 5 + 10 = 15
+let result2 = calculate(5, 3)                 // 5 + 3 = 8
+let result3 = calculate(5, 3, "multiply")     // 5 * 3 = 15
+
+// Named parameters
+let result4 = calculate(a: 8, operation: "subtract", b: 3)  // 8 - 3 = 5
+```
+
+### Variadic Parameters
+
+```topaz
+// Variadic parameters
+function sum(...numbers: int) -> int {
+    let mut total = 0
+    for number in numbers {
+        total += number
+    }
+    return total
+}
+
+let total1 = sum(1, 2, 3, 4, 5)        // 15
+let total2 = sum(10, 20)               // 30
+
+// Combining a fixed parameter with a variadic tail
+function calculateStats(label: string, ...values: float) -> string {
+    let count = values.length
+    let mut total = 0.0
+    for value in values {
+        total += value
+    }
+    return "{label}: count={count}, total={total}"
+}
+
+print(calculateStats("Test Scores", 85.5, 92.0, 78.5, 89.0))
+
+// Spread an array into the variadic tail
+let scores = [85.5, 92.0, 78.5, 89.0]
+print(calculateStats("Test Scores", ...scores))
+
+// Function types spell a variadic tail the same way
+let statsFunction: (string, ...float) -> string = calculateStats
+```
+
+The canonical variadic spelling is `...args: T`, and the parameter collects its arguments into an `Array<T>`. A spread argument `...expr` must be an `Array` and can only feed the variadic tail — it cannot fill fixed positional parameters.
+
+```topaz
+// sum collects into Array<int>; spread refills it from an array
+let parts = [10, 20]
+let total3 = sum(...parts)             // 30
+let total4 = sum(1, ...parts, 4)       // 35
+```
+
+##  Arrow Functions
+
+### Basic Arrow Functions
+
+```topaz
+// Simple arrow function
+let square = (x: int) => x * x
+let greet = (name: string) => "Hi, {name}!"
+
+// Arrow function without parameters
+let randomNumber = () => Math.random() * 100.0
+
+// Complex arrow function
+let userInfo = (name: string, age: int) => {
+    let status = if age >= 18 { "adult" } else { "minor" }
+    return {
+        name: name,
+        age: age,
+        status: status
+    }
+}
+
+// Usage examples
+print("{square(5)}")               // 25
+print(greet("TopazDev"))           // "Hi, TopazDev!"
+let info = userInfo("John", 25)
+print("{info.name} is an {info.status}")  // "John is an adult"
+```
+
+### Array Methods with Arrow Functions
+
+```topaz
+let numbers = [1, 2, 3, 4, 5]
+
+// map transformation
+let squares = map(numbers, x => x * x)
+print("{squares}")  // [1, 4, 9, 16, 25]
+
+// filter filtering
+let evens = filter(numbers, x => x % 2 == 0)
+print("{evens}")  // [2, 4]
+
+// reduce reduction (initial value comes before the reducer)
+let total = reduce(numbers, 0, (acc, current) => acc + current)
+print("{total}")   // 15
+
+// Complex chaining
+let result = numbers
+    |> filter(_, x => x > 2)
+    |> map(_, x => x * 3)
+    |> reduce(_, 0, (a, b) => a + b)
+print("{result}")   // (3 + 4 + 5) * 3 = 36
+```
+
+##  Higher-Order Functions
+
+### Functions as Parameters
+
+```topaz
+// Higher-order function definition
+function applyOperation(array: Array<int>, operation: (int) -> int) -> Array<int> {
+    let mut result: Array<int> = []
+    for element in array {
+        result.push(operation(element))
+    }
+    return result
+}
+
+// Pass functions as parameters
+let numbers = [1, 2, 3, 4]
+let squareResult = applyOperation(numbers, x => x * x)
+let doubleResult = applyOperation(numbers, x => x * 2)
+
+print("{squareResult}")  // [1, 4, 9, 16]
+print("{doubleResult}")  // [2, 4, 6, 8]
+
+// Conditional processing function
+function conditionalProcess(value: int, condition: (int) -> bool, processor: (int) -> int) -> int {
+    if condition(value) {
+        return processor(value)
+    }
+    return value
+}
+
+let result = conditionalProcess(15, x => x > 10, x => x * 2)
+print("{result}")  // 30 (since 15 > 10, so 15 * 2)
+```
+
+### Returning Functions
+
+```topaz
+// Function factory
+function createMultiplier(factor: int) -> (int) -> int {
+    return (x: int) => x * factor
+}
+
+let doubler = createMultiplier(2)
+let tripler = createMultiplier(3)
+
+print("{doubler(5)}")  // 10
+print("{tripler(4)}")  // 12
+
+// Configurable validator function
+function createRangeValidator(min: int, max: int) -> (int) -> bool {
+    return (value: int) => value >= min && value <= max
+}
+
+let adultAgeValidator = createRangeValidator(18, 65)
+let studentAgeValidator = createRangeValidator(5, 18)
+
+print("{adultAgeValidator(25)}")    // true
+print("{studentAgeValidator(16)}")  // true
+print("{studentAgeValidator(25)}")  // false
+```
+
+### Generic Functions
+
+Topaz supports rank-1 generic function declarations. Type parameters are inferred at each call site — explicit call-site type arguments such as `applyTwice<int>(...)` are not part of Topaz v5.2; pin a type with an annotated binding, parameter, or return position instead (see the data-types page for generic type aliases).
+
+```topaz
+function applyTwice<T>(value: T, transform: (T) -> T) -> T {
+    transform(transform(value))
+}
+
+let five = applyTwice(3, x => x + 1)            // T inferred as int
+let loud = applyTwice("topaz", x => "{x}!")     // T inferred as string
+
+print("{five}")   // 5
+print(loud)       // "topaz!!"
+```
+
+Generic bounds, constraints, and interfaces remain deferred.
+
+##  Closures
+
+### Basic Closures
+
+```topaz
+function createCounter(initialValue: int) -> () -> int {
+    let mut count = initialValue  // Captured by closure
+    
+    return () => {
+        count += 1      // Access to outer variable
+        count
+    }
+}
+
+let counter1 = createCounter(0)
+let counter2 = createCounter(100)
+
+print("{counter1()}")  // 1
+print("{counter1()}")  // 2
+print("{counter2()}")  // 101
+print("{counter1()}")  // 3
+```
+
+### Complex Closure Patterns
+
+```topaz
+// Stateful closure
+function createAccount(initialBalance: float) -> { deposit: (float) -> float, withdraw: (float) -> float, checkBalance: () -> float } {
+    let mut balance = initialBalance
+    
+    return {
+        deposit: (amount: float) => {
+            balance += amount
+            balance
+        },
+        withdraw: (amount: float) => {
+            if amount <= balance {
+                balance -= amount
+            }
+            balance
+        },
+        checkBalance: () => balance
+    }
+}
+
+let myAccount = createAccount(1000.0)
+print("{myAccount.deposit(500.0)}")     // 1500.0
+print("{myAccount.withdraw(200.0)}")    // 1300.0
+print("{myAccount.checkBalance()}")     // 1300.0
+
+// Environment-capturing closure
+type AppConfig = { theme: string, language: string, notifications: bool }
+
+function createConfigManager(defaultConfig: AppConfig) -> { setTheme: (string) -> string, theme: () -> string } {
+    let mut currentConfig = defaultConfig
+    
+    return {
+        setTheme: (theme: string) => {
+            currentConfig = currentConfig{ theme: theme }
+            currentConfig.theme
+        },
+        theme: () => currentConfig.theme
+    }
+}
+
+let appConfig = createConfigManager({
+    theme: "dark",
+    language: "English",
+    notifications: true
+})
+
+print(appConfig.theme())          // "dark"
+appConfig.setTheme("light")
+print(appConfig.theme())          // "light"
+```
+
+##  Recursive Functions
+
+### Basic Recursion
+
+```topaz
+// Factorial calculation
+function factorial(n: int) -> int {
+    if n <= 1 {
+        return 1
+    }
+    return n * factorial(n - 1)
+}
+
+print("{factorial(5)}")  // 120
+
+// Fibonacci sequence
+function fibonacci(n: int) -> int {
+    if n <= 1 {
+        return n
+    }
+    return fibonacci(n - 1) + fibonacci(n - 2)
+}
+
+print("{fibonacci(8)}")  // 21
+
+// Array sum (recursive, by index — §22 has no slicing)
+function sumFrom(array: Array<int>, start: int) -> int {
+    return match array.get(start) {
+        case Some(value) => value + sumFrom(array, start + 1)
+        case None => 0
+    }
+}
+
+function arraySum(array: Array<int>) -> int {
+    return sumFrom(array, 0)
+}
+
+print("{arraySum([1, 2, 3, 4, 5])}")  // 15
+```
+
+### Tail Recursion Optimization
+
+```topaz
+// Tail recursive factorial
+function tailFactorial(n: int, accumulator: int = 1) -> int {
+    if n <= 1 {
+        return accumulator
+    }
+    return tailFactorial(n - 1, accumulator * n)  // Tail call
+}
+
+// Tail recursive fibonacci
+function tailFibonacci(n: int, a: int = 0, b: int = 1) -> int {
+    if n == 0 {
+        return a
+    }
+    return tailFibonacci(n - 1, b, a + b)  // Tail call
+}
+
+print("{tailFactorial(10)}")  // 3628800
+print("{tailFibonacci(10)}")  // 55
+```
+
+##  Functional Programming Patterns
+
+### Currying
+
+```topaz
+// Curried function
+function add(a: int) -> (int) -> int {
+    return (b: int) => a + b
+}
+
+let addFive = add(5)
+print("{addFive(3)}")  // 8
+
+// Multi-parameter currying
+function multiplyAndAdd(multiplier: float) -> (float) -> (float) -> float {
+    return (addend: float) => (value: float) => value * multiplier + addend
+}
+
+let doubleAndAddTen = multiplyAndAdd(2.0)(10.0)
+print("{doubleAndAddTen(5.0)}")  // 20.0 (5 * 2 + 10)
+```
+
+### Function Composition
+
+```topaz
+let square = (x: int) => x * x
+let double = (x: int) => x * 2
+let formatInt = (x: int) => "value: {x}"
+
+// Compose by piping a value through the stages
+let squareThenDouble = (x: int) => x |> square() |> double()
+let squareThenDoubleThenLabel = (x: int) => x |> square() |> double() |> formatInt()
+
+print("{squareThenDouble(3)}")           // 18 (3² * 2)
+print(squareThenDoubleThenLabel(4))      // "value: 32" (4² * 2 → label)
+```
+
+Topaz's public composition idiom is the `|>` pipeline, as above. A dedicated composition operator exists only at the SPEC level and is not part of any current profile surface — see the operators reference.
+
+### Memoization
+
+```topaz
+type MemoEntry = { input: int, output: int }
+
+function findCached(cache: Array<MemoEntry>, input: int) -> Option<int> {
+    match cache {
+        case [] => None
+        case [first, ..rest] => {
+            if first.input == input {
+                Some(first.output)
+            } else {
+                findCached(rest, input)
+            }
+        }
+    }
+}
+
+// Memoization decorator for int -> int functions
+function memoizeInt(func: (int) -> int) -> (int) -> int {
+    let mut cache: Array<MemoEntry> = []
+
+    return (input: int) => {
+        match findCached(cache, input) {
+            case Some(output) => output
+            case None => {
+                let result = func(input)
+                cache.push({ input: input, output: result })
+                result
+            }
+        }
+    }
+}
+
+function slowFibonacci(n: int) -> int {
+    if n <= 1 { n } else { slowFibonacci(n - 1) + slowFibonacci(n - 2) }
+}
+
+// Optimize slow fibonacci with memoization
+let memoFibonacci = memoizeInt(slowFibonacci)
+
+// Now large numbers calculate quickly
+print("{memoFibonacci(20)}")  // Calculated quickly
+```
+
+> Topaz supports rank-1 generic function declarations (see "Generic Functions" above), but `memoizeInt` stays concrete on purpose: a generic `memoize<T, R>` would need equality on `T` for the cache lookup, and generic bounds/constraints remain deferred. The same pattern works for other concrete types via separate functions.
+
+##  Function Optimization and Best Practices
+
+### 1. Using Pure Functions
+
+```topaz
+// Good: Pure function
+function calculateTax(income: float, taxRate: float) -> float {
+    return income * taxRate
+}
+
+// Avoid: Function with side effects
+let mut globalCounter = 0
+function badFunction(value: int) -> int {
+    globalCounter += 1  // Side effect!
+    return value * 2
+}
+
+// Good alternative: Return state
+function goodFunction(value: int, currentCounter: int) -> { result: int, newCounter: int } {
+    return {
+        result: value * 2,
+        newCounter: currentCounter + 1
+    }
+}
+```
+
+### 2. Function Naming and Structure
+
+```topaz
+// Clear function names
+function validateUserEmail(email: string) -> bool {
+    return email.contains("@") && email.contains(".")
+}
+
+function calculateOrderTotal(orderItems: Array<{ priceCents: int, quantity: int }>) -> int {
+    return orderItems
+        |> map(_, item => item.priceCents * item.quantity)
+        |> reduce(_, 0, (total, amount) => total + amount)
+}
+
+// Single responsibility principle
+function parseUserData(rawData: string) -> { name: string, age: int } {
+    // Only responsible for parsing — toInt returns Option<int>
+    let parts = rawData.split(",")
+    let age = match toInt(parts[1].trim()) {
+        case Some(value) => value
+        case None => 0
+    }
+    return {
+        name: parts[0].trim(),
+        age: age
+    }
+}
+
+function validateUserData(user: { name: string, age: int }) -> bool {
+    // Only responsible for validation
+    return user.name != "" && user.age > 0
+}
+```
+
+### 3. Error Handling
+
+```topaz
+// Safe function using Result type
+function safeDivide(numerator: float, denominator: float) -> Result<float, string> {
+    if denominator == 0.0 {
+        return Err("Cannot divide by zero")
+    }
+    return Ok(numerator / denominator)
+}
+
+// Usage
+match safeDivide(10.0, 2.0) {
+    case Ok(result) => print("Result: {result}")
+    case Err(error) => print("Error: {error}")
+}
+```
+
+Functions and closures are **core features** of Topaz. Using them effectively allows you to write **reusable and testable** code! 

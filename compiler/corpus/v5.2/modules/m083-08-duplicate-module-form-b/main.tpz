@@ -1,0 +1,3 @@
+import m { ok }
+import m { ok as o }
+let x = 1

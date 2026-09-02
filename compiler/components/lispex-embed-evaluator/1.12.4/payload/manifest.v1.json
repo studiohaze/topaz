@@ -1,0 +1,72 @@
+{
+  "schema": "lispex.embed-evaluator-bundle/v1",
+  "product_version": "1.12.4",
+  "public_contract": true,
+  "release_authority": false,
+  "source_revision": "5423eb32a1f456163de1a4898bef4eebd7f3c91e",
+  "source_files_sha256": {
+    "Cargo.lock": "2f2f4852e0f2c116fc9af1a26eea5def8b3b400dd4fd1f35e31cc2e06aa08f9d",
+    "Cargo.toml": "ee2a0db446d7df6193ef559f612851c06c5775f34881b602fbd986b7bcc3eb5d",
+    "embed-evaluator/Cargo.toml": "4f4d1db7f3fcd3cc626007380d893572b88bc9ce833b43cb5ecd5d1cffc4db19",
+    "embed-evaluator/src/lib.rs": "be7da0fb5363581fffa0828608aafaf03469bf0466e9e2c6bad11bf2d0170383",
+    "interp/Cargo.toml": "efc7c15c8eef2e28e3c92c32beed4803060dc3061521f394da7644204e51e472",
+    "interp/build.rs": "cf3d30d57d27cb5ff4e29c62d7d81d0c79007f975b5072a6d927787228f4c85e",
+    "interp/src/bounded_execution.rs": "9489dfa3653599820af5c656010b020365e4604d52e01b994c6fac8a5803ad05",
+    "interp/src/bytecode.rs": "9bb28496094cf247a872bd3ace93d12daafa5485a7d306f454ee3aa85364898d",
+    "interp/src/bytecode_vm.rs": "c19b688d7e40860d1065486b35fe8f7e46eb6b4a8740821a39b2a1a3e104d5ac",
+    "interp/src/draft_meter.rs": "76b195a8e5fd40d6d3612aae0a9823bb602a6334cd6b9c4710f6e7eae966e1fb",
+    "interp/src/canonical.rs": "ed6234168928dda2c83b9f640630a8be22685963742e107a4b1351544c4a547b",
+    "interp/src/embed_product.rs": "bbb9c5446d739370b20b4626ed6554b1279b788f96d0317f35acd3dd53373d8f",
+    "interp/src/embed_value.rs": "301725292ba727c99973deb62a45ce1b0367a2a02c54089a91b7e3e1b3c15185",
+    "interp/src/lib.rs": "88098e4f6ef980fffcde2d07b1bef465f1b35a04fc74290411e08c3292403525"
+  },
+  "toolchain": {
+    "rust": "1.88.0",
+    "target": "wasm32-unknown-unknown",
+    "profile": "release",
+    "rustflags": [
+      "--remap-path-prefix=<repository>=/workspace/lispex",
+      "-C link-arg=--max-memory=16777216"
+    ]
+  },
+  "artifact": {
+    "path": "lispex-embed-evaluator.wasm",
+    "bytes": 1387762,
+    "sha256": "fa6e52559e1f5a43e50a3b7ac0cc5add6930cff0aed8aaff462cff4609362870",
+    "imports": 0,
+    "memory": {
+      "minimum_pages": 18,
+      "maximum_pages": 256
+    }
+  },
+  "golden_vectors": {
+    "path": "golden-vectors.v1.json",
+    "sha256": "80c4bfe346c1c5feba1e010e254dca3cc6a4dbacd0bf253ae00ed6bb0c43a942",
+    "cases": 1
+  },
+  "contracts": {
+    "profile": "lispex/r7rs-rule-embedded-core/1",
+    "model": "lispex-vm-meter/1",
+    "abi": "lispex.embed-wasm-abi/v1",
+    "value_codec": "lispex.embed-value/v1",
+    "response_payload": "actual-result-value-bytes-or-empty-typed-disposition",
+    "receipt": "lispex.embed-receipt-core/v1",
+    "portable_receipt_allowed": "deterministic-semantic-outcome-or-request-refusal-only",
+    "vouch_eligible": false
+  },
+  "native_reference_product": {
+    "driver_source": "interp/src/embed_host.rs",
+    "commands": [
+      "prepare",
+      "evaluate",
+      "inspect",
+      "verify"
+    ],
+    "evaluator_selection": "compile-time-exact-bytes",
+    "fresh_instance_per_operation": true,
+    "discovery": false,
+    "fallback": false,
+    "host_capabilities": false,
+    "remote_transport": false
+  }
+}

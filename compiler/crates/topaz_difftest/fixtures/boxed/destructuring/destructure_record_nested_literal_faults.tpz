@@ -1,0 +1,3 @@
+let r = { status: 404 }
+let { status: 200 } = r
+1

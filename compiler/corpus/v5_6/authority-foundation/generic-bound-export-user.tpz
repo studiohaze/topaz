@@ -1,0 +1,3 @@
+protocol Label { function label(value: Self) -> string }
+export function labelOf<T: Label>(value: T) -> string { Label.label(value) }
+0

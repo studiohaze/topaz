@@ -1,0 +1,21 @@
+import std.dom { AppStep, BrowserEvent, Html, text }
+
+export record Model {
+  count: int,
+}
+
+export enum Msg {
+  Increment,
+}
+
+export function init() -> AppStep<Model, Msg> {
+  AppStep { model: Model { count: 0 }, commands: [] }
+}
+
+export function update(model: Model, message: Msg, event: BrowserEvent) -> AppStep<Model, Msg> {
+  AppStep { model: model, commands: [] }
+}
+
+export function view(model: Model) -> Html<Msg> {
+  text("Topaz application")
+}

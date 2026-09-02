@@ -1,0 +1,46 @@
+
+function jsonString(root: JSONValue, key: string) -> Result<string, string> {
+    let value = match root.get(key) {
+        case Some(found) => found
+        case None => return Err("missing {key}")
+    }
+    match value.asString() {
+        case Some(text) => Ok(text)
+        case None => Err("{key} must be string")
+    }
+}
+
+function render(status: int, body: string) -> Result<string, string> {
+    let raw = "\{\"body\":\"{body}\",\"status\":{status}\}"
+    let parsed = match JSON.parse(raw) {
+        case Ok(value) => value
+        case Err(e) => return Err(e.message)
+    }
+    JSON.stringify(parsed)
+}
+
+function handle(text: string) -> Result<string, string> {
+    let root = match JSON.parse(text) {
+        case Ok(value) => value
+        case Err(e) => return Err(e.message)
+    }
+    let path = jsonString(root, "path")?
+    if path == "/health" {
+        render(200, "ok")
+    } else {
+        render(404, path)
+    }
+}
+
+function f() -> string {
+    let ok = match handle("\{\"method\":\"GET\",\"path\":\"/health\"\}") {
+        case Ok(value) => value
+        case Err(e) => e
+    }
+    let missing = match handle("\{\"method\":\"GET\"\}") {
+        case Ok(value) => value
+        case Err(e) => e
+    }
+    "{ok}|{missing}"
+}
+f()

@@ -1,0 +1,9 @@
+
+const CAP = 5
+record Box { size: int = CAP }
+function main() -> string {
+    let CAP = 100
+    let b = Box { }
+    "{b.size}:{CAP}"
+}
+main()

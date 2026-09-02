@@ -1,0 +1,3 @@
+let r = { res: Ok(9) }
+match r { case { res: Ok(v) } => v
+case _ => 0 }

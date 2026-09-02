@@ -1,0 +1,2 @@
+let t = p"a\\b"
+"path: ${t}!"

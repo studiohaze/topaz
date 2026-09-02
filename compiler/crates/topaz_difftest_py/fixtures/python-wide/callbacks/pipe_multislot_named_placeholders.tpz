@@ -1,0 +1,24 @@
+
+function add(a: int, b: int) -> int {
+    a + b
+}
+function inc(x: int) -> int {
+    x + 1
+}
+function main() -> int {
+    let xs = [1, 2]
+    let reducedA = 0 |> xs.reduce(initial: _, f: add)
+    let reducedB = 0 |> xs.reduce(f: add)
+    let maybe: Option<Array<int>> = Some([3, 4])
+    let optionalReduced = 0 |> maybe?.reduce(initial: _, f: add)
+    let optionalValue = match optionalReduced {
+        case Some(n) => n
+        case None => 0
+    }
+    let mut m = map { "a": 1 }
+    10 |> m.update(k: "b", initial: _, f: inc)
+    "c" |> m.update(k: _, initial: 5, f: inc)
+    inc |> m.update(k: "a", initial: 0, f: _)
+    reducedA + reducedB + optionalValue + m.getOr("a", 0) + m.getOr("b", 0) + m.getOr("c", 0)
+}
+main()

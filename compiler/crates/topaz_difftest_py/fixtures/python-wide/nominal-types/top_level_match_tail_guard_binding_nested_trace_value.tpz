@@ -1,0 +1,19 @@
+
+function markInt(label: string, value: int) -> int {
+    print(label)
+    value
+}
+function guard(label: string, value: bool) -> bool {
+    print(label)
+    value
+}
+let opt: Option<int> = Some(4)
+match markInt("scrutinee", 2) {
+    case 1 if guard("guard-one", true) => 10
+    case n if guard("guard-two", true) => match opt {
+        case Some(x) => n + x
+        case None => 0
+    }
+    case n if guard("guard-three", true) => 99
+    case _ => 0
+}

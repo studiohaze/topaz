@@ -1,0 +1,7 @@
+
+export function makeOptionArray() -> Option<Array<int>> {
+    Some([1, 2])
+}
+export function makeResult() -> Result<int, string> {
+    Ok(5)
+}

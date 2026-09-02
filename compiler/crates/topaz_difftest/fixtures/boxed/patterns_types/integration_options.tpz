@@ -1,0 +1,6 @@
+function describe(v: Option<int>) { match v { case Some(n: int) => "got {n}"
+case None => "nothing" } }
+let results = [Some(1), None, Some(3)]
+let descs = map(results, describe)
+print("{descs}")
+descs

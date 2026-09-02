@@ -1,0 +1,10 @@
+
+function main() -> Array<int> {
+    let mut xs = [1]
+    xs.push(...loop {
+        print("push-spread")
+        break [2]
+    })
+    xs
+}
+main()

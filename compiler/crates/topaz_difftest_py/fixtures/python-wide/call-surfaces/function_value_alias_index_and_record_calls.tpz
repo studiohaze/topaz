@@ -1,0 +1,12 @@
+
+function add(a: int, b: int) -> int {
+    a + b
+}
+function main() -> int {
+    let base = [add]
+    let callbacks = base
+    let first = { plus: add }
+    let ops = first
+    callbacks[0](1, 2) + ops.plus(3, 4)
+}
+main()

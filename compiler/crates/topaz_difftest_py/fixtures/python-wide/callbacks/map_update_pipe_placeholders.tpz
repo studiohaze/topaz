@@ -1,0 +1,23 @@
+
+function bump(v: int) -> int {
+    v + 5
+}
+function main() {
+    let mut m = map { "a": 1 }
+    "a" |> m.update(_, 0, bump)
+    7 |> m.update("b", _, (v) => v / 0)
+    bump |> m.update("a", 0, _)
+    let mut om: Option<Map<string, int>> = Some(map { "x": 2 })
+    "x" |> om?.update(_, 0, bump)
+    9 |> om?.update("y", _, (v) => v / 0)
+    let updateResult = bump |> om?.update("x", 0, _)
+    let mut noneM: Option<Map<string, int>> = None
+    let skipped = ((v) => v / 0) |> noneM?.update("z", 0, _)
+    {
+        plain: m,
+        optional: om,
+        updateResult: updateResult,
+        skipped: skipped,
+    }
+}
+main()

@@ -1,0 +1,14 @@
+// Pipe operator (|>)
+let result = 10
+    |> (x => x * 2)        // 20
+    |> (x => x + 5)        // 25
+    |> (x => "{x}")        // "25"
+
+// Useful for function chaining
+let data = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    |> filter(_, x => x % 2 == 0)     // [2, 4, 6, 8, 10]
+    |> map(_, x => x * x)             // [4, 16, 36, 64, 100]
+    |> reduce(_, 0, (a, b) => a + b)  // 220
+
+print("Pipe result: {result}")
+print("Chaining result: {data}")

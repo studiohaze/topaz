@@ -1,0 +1,4 @@
+let mut m = Map.new()
+m.insert("k", 1)
+m.insert("k", 9)
+m.remove("k")

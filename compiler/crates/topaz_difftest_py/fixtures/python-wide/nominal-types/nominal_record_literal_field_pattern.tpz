@@ -1,0 +1,10 @@
+
+record User { name: string, age: int }
+function main() -> int {
+    let u = User { name: "Ada", age: 36 }
+    match u {
+        case User { age: 36 } => u.age
+        case _ => 0
+    }
+}
+main()

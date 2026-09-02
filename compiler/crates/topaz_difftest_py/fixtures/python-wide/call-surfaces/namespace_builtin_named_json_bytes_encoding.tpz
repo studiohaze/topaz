@@ -1,0 +1,17 @@
+
+function make(label: string, text: string) -> Bytes {
+    print(label)
+    Bytes.encodeUtf8(s: text)
+}
+function main() -> Result<string, string> {
+    let parsed = JSON.parse(text: "\{\"b\":2,\"a\":1\}")?
+    let canonical = JSON.stringify(value: parsed)?
+    let joined = Bytes.concat(b: make("b", "B"), a: make("a", "A"))
+    let hex = Encoding.hexEncode(bytes: joined)
+    let decoded = Encoding.utf8Decode(bytes: Encoding.hexDecode(text: hex)?)?
+    let fromArray = Encoding.utf8Decode(bytes: Bytes.fromArray(values: [65, 66])?)?
+    let b64 = Encoding.base64Encode(bytes: Encoding.utf8Encode(text: fromArray))
+    let round = Encoding.utf8Decode(bytes: Encoding.base64Decode(text: b64)?)?
+    Ok(value: "{canonical}:{decoded}:{round}")
+}
+main()

@@ -1,0 +1,13 @@
+newtype Id<T> = T
+
+function wrap<T>(value: T) -> Id<T> {
+    Id(value)
+}
+
+function unwrap<T>(id: Id<T>) -> T {
+    id.value()
+}
+
+let id: Id<string> = wrap("ok")
+let text: string = unwrap(id)
+print(text)

@@ -1,0 +1,20 @@
+[package]
+name = "topaz_lower"
+description = "Lowering from checked Topaz programs to engine-neutral IR"
+version.workspace = true
+license.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+topaz_check = { workspace = true }
+topaz_diag = { workspace = true }
+topaz_hir = { workspace = true }
+topaz_resolve = { workspace = true }
+topaz_syntax = { workspace = true }
+
+[dev-dependencies]
+topaz_parser = { workspace = true }
+
+[lints]
+workspace = true

@@ -1,0 +1,5 @@
+let oo: Option<Option<int>> = Some(None)
+let pp: Option<Option<int>> = Some(Some(5))
+let c = (() => "f") |> oo?.okOrElse()
+let d = (() => print("X")) |> pp?.okOrElse()
+"{c}/{d}"

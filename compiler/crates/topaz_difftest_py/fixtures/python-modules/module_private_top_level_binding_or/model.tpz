@@ -1,0 +1,4 @@
+
+let value: Result<int, int> = Err(7)
+let Ok(x) | Err(x) = value
+export let answer = x

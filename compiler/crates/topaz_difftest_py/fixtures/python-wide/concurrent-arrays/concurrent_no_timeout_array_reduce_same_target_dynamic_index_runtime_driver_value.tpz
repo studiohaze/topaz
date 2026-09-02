@@ -1,0 +1,21 @@
+
+function add(acc: int, x: int) -> int {
+    acc + x
+}
+
+function sub(acc: int, x: int) -> int {
+    acc - x
+}
+
+let seeds = [0, 1]
+let i = seeds[1]
+let callbacks = [sub, add]
+
+let r = concurrent {
+    slow: {
+        let xs = [1, 2, 3]
+        xs.reduce(10, callbacks[i])
+    }
+    fast: 0
+}
+r.slow + r.fast

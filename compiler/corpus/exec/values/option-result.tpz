@@ -1,0 +1,5 @@
+let a = Some(5)
+print("{a ?? 0}")
+let b: Option<int> = None
+print("{b ?? 7}")
+print("{Ok(1)}")

@@ -1,0 +1,19 @@
+let taskList = [
+    { kind: "email", priority: 1, content: "Check meeting schedule" },
+    { kind: "call", priority: 3, content: "Customer consultation" },
+    { kind: "document", priority: 2, content: "Write report" }
+]
+
+for task in taskList {
+    match task {
+        case { kind: "email", priority: 1, content } => {
+            print("Urgent email processing: {content}")
+        }
+        case { kind: taskKind, priority, content } if priority <= 2 => {
+            print("Important {taskKind} task: {content}")
+        }
+        case { kind, content } => {
+            print("Regular {kind} task: {content}")
+        }
+    }
+}

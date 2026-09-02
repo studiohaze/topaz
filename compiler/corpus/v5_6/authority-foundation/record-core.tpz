@@ -1,0 +1,11 @@
+record Node<T> {
+    value: T,
+    next: Node<T> | null = null,
+}
+
+record Empty {}
+
+let tail: Node<int> = Node { value: 2 }
+let head: Node<int> = Node { value: 1, next: tail }
+let empty: Empty = Empty {}
+print("{head.value}:{tail.value}:{empty}")

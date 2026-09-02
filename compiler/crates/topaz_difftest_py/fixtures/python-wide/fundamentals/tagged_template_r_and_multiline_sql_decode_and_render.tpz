@@ -1,0 +1,15 @@
+
+function main() -> int {
+    let flag = "yes"
+    let pattern = r"\\d+{flag}"
+    let block = sql"""
+select {flag}
+from t
+"""
+    print("{pattern}")
+    print("{pattern.tag}|{pattern.parts[0]}|{pattern.parts[1]}")
+    print("{block}")
+    print("{block.tag}|{block.parts[0]}|{block.parts[1]}")
+    if pattern.tag == "r" && block.tag == "sql" && pattern.parts.length == 2 && block.parts.length == 2 { 1 } else { 0 }
+}
+main()

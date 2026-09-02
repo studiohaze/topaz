@@ -1,0 +1,5 @@
+function make(label: string, n: float) -> float {
+  print(label)
+  n
+}
+Math.min(b: make("b", 2.0), a: make("a", 1.0))

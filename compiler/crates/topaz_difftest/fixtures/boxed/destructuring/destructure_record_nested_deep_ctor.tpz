@@ -1,0 +1,3 @@
+let r = { res: Ok(Some(9)) }
+let { res: Ok(Some(x)) } = r
+x

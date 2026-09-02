@@ -1,0 +1,2 @@
+import model
+Show.show(model.make())

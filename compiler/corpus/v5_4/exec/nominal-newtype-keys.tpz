@@ -1,0 +1,16 @@
+newtype UserId = int
+newtype OrderId = int
+
+let mut users = Map.new<UserId, string>()
+users.insert(UserId(1), "Ada")
+users.insert(UserId(2), "Grace")
+
+let ids = set { UserId(1), UserId(1), UserId(2) }
+let mixed = set { UserId(1), 1 }
+let orders = map { OrderId(1): "order" }
+
+let hit = users.getOr(UserId(1), "miss")
+let miss = users.getOr(UserId(3), "miss")
+let order = orders.getOr(OrderId(1), "miss")
+
+print("{hit}/{miss}/{ids.length}/{mixed.length}/{order}")

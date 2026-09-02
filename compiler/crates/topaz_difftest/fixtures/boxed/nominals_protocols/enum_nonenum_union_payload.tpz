@@ -1,0 +1,7 @@
+enum Box { Wrap(int | string) }
+let b: Box = Box.Wrap(7)
+let n = match b {
+  case Wrap(x) => 1
+}
+print("{n}")
+0

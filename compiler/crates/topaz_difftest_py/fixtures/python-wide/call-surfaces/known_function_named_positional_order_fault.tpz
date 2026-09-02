@@ -1,0 +1,12 @@
+
+function f(a: int, b: int) -> int {
+    a + b
+}
+function markInt(label: string, value: int) -> int {
+    print(label)
+    value
+}
+function main() -> int {
+    f(b: markInt("named", 2), markInt("pos", 1))
+}
+main()

@@ -1,0 +1,109 @@
+{
+  "schema": "lispex.observation-result/v1",
+  "profile": "lispex-profile-1.5",
+  "transport": "canonical-json-object-one-terminal-lf",
+  "required_fields": [
+    "schema",
+    "invocation_id",
+    "backend",
+    "status",
+    "stdout_bytes",
+    "diagnostics",
+    "warnings",
+    "exit_status",
+    "value_projection",
+    "resource_outcome",
+    "metrics",
+    "identity"
+  ],
+  "statuses": [
+    "ok",
+    "source-error",
+    "runtime-error",
+    "resource",
+    "infrastructure-error"
+  ],
+  "identity_fields": [
+    "source_sha256",
+    "artifact",
+    "profile_id",
+    "meter_id",
+    "capability_manifest_id",
+    "capability_manifest_digest",
+    "meter_manifest_digest",
+    "observation_schema_id",
+    "observation_contract_id",
+    "observation_contract_digest",
+    "capability_schema",
+    "observation_schema",
+    "resource_schema",
+    "forbidden_fallback_counts"
+  ],
+  "byte_channels": {
+    "encoding": "base64-plus-byte-length-plus-sha256",
+    "stdout_partial_on_resource": false,
+    "stderr_transport_noise_forbidden": true
+  },
+  "resource_outcome": {
+    "contract": "manifests/meter-manifest.v3.json",
+    "comparison_rule": "METER-USAGE-COMPARISON-1",
+    "usage_location": "resource_outcome.usage",
+    "usage_required_fields": [
+      "frontend_transitions",
+      "tokens",
+      "normalization_steps",
+      "machine_transitions",
+      "output_bytes"
+    ],
+    "usage_value_type": "u64",
+    "usage_always_present": true,
+    "family_equality": {
+      "compared": [
+        "profile_id",
+        "purpose",
+        "status",
+        "limit",
+        "limits"
+      ],
+      "usage_shape_and_axis_meaning": "normative",
+      "usage_numeric_values": "backend-local admitted work; not compared across families"
+    },
+    "non_meter_safety_limit": {
+      "rule_id": "HOST-SAFETY-RESOURCE-1",
+      "diagnostic_code": "recursion-limit",
+      "diagnostic_phase": "resource",
+      "diagnostic_family": "non-tail-call-depth",
+      "resource_outcome_limit": "non-tail-call-depth",
+      "meter_limits_and_usage": "retained unchanged",
+      "threshold_location": "metrics",
+      "threshold_scope": "exact backend artifact and build profile",
+      "cross_family_threshold_equality": false,
+      "clean_observation_required": true,
+      "transport_failure_permitted": false
+    }
+  },
+  "semantic_comparison_axes": [
+    "status",
+    "stdout-bytes",
+    "diagnostic-code-message-irritants-span-bytes",
+    "warning-order-and-bytes",
+    "exit-status",
+    "value-projection",
+    "resource-outcome"
+  ],
+  "nonsemantic_identity_axes": [
+    "backend-id",
+    "host-variant",
+    "artifact-sha256",
+    "executable-sha256",
+    "checker-version",
+    "wall-clock-duration"
+  ],
+  "forbidden_comparator_exclusions": [
+    "stdout",
+    "diagnostics",
+    "warnings",
+    "exit-status",
+    "resource-outcome"
+  ]
+}

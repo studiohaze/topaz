@@ -1,0 +1,3 @@
+record User derives Show { name: string }
+function keep<T: Show>(value: T) -> T { value }
+keep(User { name: "Ada" }).name

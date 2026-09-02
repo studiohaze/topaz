@@ -1,0 +1,565 @@
+---
+title: 'Control Flow'
+description: 'Master Topaz control flow structures. Learn how to effectively control program execution flow through conditionals, loops, pattern matching, and guard conditions.'
+covers: '§5, §6, §10'
+---
+
+> **Library names note**: Helper and member calls beyond the standard-library minimum — `Math.random`, `.endsWith`, `.contains`, `.all`, `getUserFromDatabase`, `validateUser`, `processUserData`, `createNewUser`, etc. — are illustrative placeholders, not canonical APIs. `JSON.parse` is a reserved standard-library name whose full typing is deferred.
+
+Control flow determines **the order in which your program executes**. Topaz provides a small, closed set of control-flow structures — one form for each intent.
+
+##  Conditional Statements
+
+### if Statements
+
+```topaz
+let age = 25
+let score = 85
+
+// Basic if statement
+if age >= 18 {
+    print("You are an adult")
+}
+
+// if-else statement
+if score >= 90 {
+    print("Grade A")
+} else {
+    print("More effort needed")
+}
+
+// if-else if chain
+if score >= 90 {
+    print("Grade A - Excellent")
+} else if score >= 80 {
+    print("Grade B - Good")
+} else if score >= 70 {
+    print("Grade C - Average")
+} else {
+    print("Retake required")
+}
+
+// Compound conditions
+let username = "TopazDev"
+let attempts = 3
+
+if username != "" && attempts < 5 {
+    print("You can attempt to login")
+}
+```
+
+### Conditional Expressions
+
+```topaz
+// Use if as an expression instead of a ternary.
+let adultStatus = if age >= 18 { "adult" } else { "minor" }
+let passStatus = if score >= 60 { "pass" } else { "fail" }
+
+// Nested conditions
+let grade = if score >= 90 { "A" }
+    else if score >= 80 { "B" }
+    else if score >= 70 { "C" }
+    else { "F" }
+
+// Conditional value
+let discount = if memberLevel == "VIP" { 0.2 }
+    else if memberLevel == "Gold" { 0.1 }
+    else { 0.05 }
+
+print("Age: {age}, Status: {adultStatus}")
+print("Score: {score}, Grade: {grade}")
+```
+
+### if as Expression
+
+```topaz
+// Using if as an expression
+let message = if time < 12 {
+    "Good morning!"
+} else if time < 18 {
+    "Good afternoon!"
+} else {
+    "Good evening!"
+}
+
+// Complex conditional calculation
+let shippingCost = if orderAmount >= 50000 {
+    0
+} else if distance <= 10 {
+    3000
+} else {
+    5000
+}
+
+print(message)
+print("Shipping cost: {shippingCost}")
+```
+
+##  Loops
+
+### for Loops
+
+```topaz
+// Range-based for loop
+for i in 0..5 {
+    print("Iteration {i}")
+}
+
+// Inclusive range
+for i in 1..10 {
+    print("Number: {i}")
+}
+
+// Array iteration
+let fruits = ["apple", "banana", "orange", "grape"]
+for fruit in fruits {
+    print("Fruit: {fruit}")
+}
+
+// Step iteration
+for i in 0..20 by 2 {
+    print("Even: {i}")
+}
+```
+
+### while Loops
+
+Topaz has general loops as statements. `while` repeats its body as long as a `bool` condition holds; the condition is checked before every iteration.
+
+```topaz
+// Accumulate until a budget is reached
+let mut total = 0
+let mut n = 1
+
+while total + n <= 100 {
+    total = total + n
+    n = n + 1
+}
+
+print("Sum within budget: {total}")
+
+// Countdown
+let mut countdown = 3
+while countdown > 0 {
+    print("T-minus {countdown}")
+    countdown = countdown - 1
+}
+```
+
+`while` is a statement and produces no value. Use a value-producing `for` or recursion when you need the loop to yield a result.
+
+### Loop Control
+
+`break` exits the innermost enclosing loop and `continue` skips to its next iteration. Both work inside `for` and `while` statements.
+
+```topaz
+let mut budget = 100
+
+for cost in [30, -1, 25, 80, 10] {
+    if cost < 0 { continue }      // skip invalid entries
+    if cost > budget { break }    // stop at the first unaffordable item
+    budget = budget - cost
+    print("Bought for {cost}, remaining budget {budget}")
+}
+```
+
+When every element is processed, plain exhaustive branches are often clearer than loop control:
+
+```topaz
+for i in 1..20 {
+    if i % 15 == 0 {
+        print("{i}: FizzBuzz")
+    } else if i % 3 == 0 {
+        print("{i}: Fizz")
+    } else if i % 5 == 0 {
+        print("{i}: Buzz")
+    } else {
+        print("{i}")
+    }
+}
+```
+
+> Labeled loops are not specified in Topaz v5.2. A `for` used as a value-collecting expression cannot contain a `break` or `continue` that targets it — use a statement `for` in that case.
+
+##  Pattern Matching (match)
+
+### Basic match Statement
+
+```topaz
+let dayOfWeek = "Monday"
+
+match dayOfWeek {
+    case "Monday" => print("Start of the week!")
+    case "Friday" => print("TGIF!")
+    case day if day in ["Saturday", "Sunday"] => print("Weekend!")
+    case _ => print("Regular day")
+}
+
+// match returning a value
+let weekend = ["Saturday", "Sunday"]
+let workType = match dayOfWeek {
+    case day if day in weekend => "weekend"
+    case _ => "workday"
+}
+
+print("Today is a {workType}")
+```
+
+### Type-narrowing match (TypePattern)
+
+```topaz
+let rawInput = "42"
+let value = JSON.parse(rawInput)
+
+match value {
+    case text: string => print("Text: {text}")
+    case count: int => print("Number: {count}")
+    case flag: bool => print("Flag: {flag}")
+    case _ => print("Unsupported value")
+}
+```
+
+### Number Pattern Matching
+
+```topaz
+let score = 87
+
+let grade = match score {
+    case 90..100 => "A"
+    case 80..<90 => "B"
+    case 70..<80 => "C"
+    case 60..<70 => "D"
+    case _ => "F"
+}
+
+// Using guard conditions
+let evaluation = match score {
+    case x if x >= 95 => "Perfect score!"
+    case x if x >= 90 => "Excellent performance"
+    case x if x >= 80 => "Good result"
+    case x if x >= 70 => "Average level"
+    case x if x >= 60 => "Pass"
+    case _ => "Retake required"
+}
+
+print("Score: {score}, Grade: {grade}, Evaluation: {evaluation}")
+```
+
+### Record Pattern Matching
+
+```topaz
+let user = {
+    name: "TopazDev",
+    age: 25,
+    job: "developer",
+    location: "Seoul"
+}
+
+// Record destructuring
+match user {
+    case { name: "TopazDev", age, job: "developer" } => {
+        print("Topaz developer, age: {age}")
+    }
+    case { age: userAge, location: "Seoul" } if userAge < 30 => {
+        print("Young user in Seoul")
+    }
+    case { job: "developer", location } => {
+        print("Developer in {location}")
+    }
+    case _ => {
+        print("Regular user")
+    }
+}
+
+// Nested record matching
+let order = {
+    customer: { name: "TopazUser", vip: true },
+    items: ["laptop", "mouse"],
+    total: 1500000
+}
+
+match order {
+    case { customer: { vip: true }, total: amount } if amount > 1000000 => {
+        print("VIP customer large order: {amount}")
+    }
+    case { customer: { name }, items } if items.length > 1 => {
+        print("{name}'s multi-item order")
+    }
+    case _ => {
+        print("Regular order")
+    }
+}
+```
+
+### Array Pattern Matching
+
+```topaz
+let numbers = [1, 2, 3, 4, 5]
+
+match numbers {
+    case [] => print("Empty array")
+    case [first] => print("Single element: {first}")
+    case [first, second] => print("Two elements: {first}, {second}")
+    case [first, ..rest] => {
+        print("First: {first}, Rest: {rest}")
+    }
+}
+
+// Specific pattern matching
+let scoreList = [95, 87, 92]
+
+match scoreList {
+    case [100, ..] => print("Starts with perfect score!")
+    case scores if scores.length > 0 && scores[scores.length - 1] == 100 => print("Ends with perfect score!")
+    case [a, b, c] if a > 90 && b > 90 && c > 90 => print("All scores above 90!")
+    case scores if filter(scores, x => x >= 80).length == scores.length => print("All scores above 80")
+    case _ => print("Regular score distribution")
+}
+```
+
+### Option and Result Pattern Matching
+
+```topaz
+// Option type matching
+let optionalValue: Option<string> = Some("Topaz")
+
+match optionalValue {
+    case Some(value) => print("Has value: {value}")
+    case None => print("No value")
+}
+
+// Result type matching
+function divide(a: int, b: int) -> Result<int, string> {
+    if b == 0 {
+        return Err("Cannot divide by zero")
+    }
+    return Ok(a / b)
+}
+
+let numerator = 10
+let denominator = 2
+
+match divide(numerator, denominator) {
+    case Ok(result) => print("Division result: {result}")
+    case Err(error) => print("Error: {error}")
+}
+```
+
+> User-defined sum types with constructors are not specified in Topaz v5.2. Use string-literal unions for simple tagged states (`type Status = "pending" | "processing" | "complete" | "err"`), `Option<T>` for nullable, and `Result<T, E>` for error-or-success patterns.
+
+##  Guard Conditions and Advanced Patterns
+
+### Complex Guard Conditions
+
+```topaz
+let temperature = 25
+let humidity = 60
+let season = "summer"
+
+match { temperature: temperature, humidity: humidity, season: season } {
+    case { temperature, humidity, season: "summer" } if temperature > 30 && humidity > 70 => print("Very hot and humid")
+    case { temperature, humidity, season: "summer" } if temperature > 25 && humidity < 50 => print("Warm and dry")
+    case { temperature, season: "winter" } if temperature < 0 => print("Very cold")
+    case { temperature, humidity } if temperature >= 20 && temperature <= 25 && humidity >= 40 && humidity <= 60 => print("Pleasant weather")
+    case _ => print("Regular weather")
+}
+```
+
+### Functional Pattern Matching
+
+```topaz
+// Recursive pattern matching for list processing
+function listSum(list: Array<int>) -> int {
+    match list {
+        case [] => 0
+        case [first, ..rest] => first + listSum(rest)
+    }
+}
+
+print("List sum: {listSum([1, 2, 3, 4, 5])}")  // 15
+```
+
+> Recursion on `Array<T>` is canonical, and Topaz supports rank-1 generic function declarations (`function listSum<T>(...)`-style, with type parameters inferred at call sites — see the data-types page). User-defined generic sum types (for example, binary tree variants) are not specified in Topaz v5.2.
+
+##  Advanced Control Flow Patterns
+
+### Combining Loops with Pattern Matching
+
+```topaz
+let taskList = [
+    { kind: "email", priority: 1, content: "Check meeting schedule" },
+    { kind: "call", priority: 3, content: "Customer consultation" },
+    { kind: "document", priority: 2, content: "Write report" }
+]
+
+for task in taskList {
+    match task {
+        case { kind: "email", priority: 1, content } => {
+            print("Urgent email processing: {content}")
+        }
+        case { kind: taskKind, priority, content } if priority <= 2 => {
+            print("Important {taskKind} task: {content}")
+        }
+        case { kind, content } => {
+            print("Regular {kind} task: {content}")
+        }
+    }
+}
+```
+
+### Error Handling and Control Flow
+
+```topaz
+// Result-first error handling
+function safeFileRead(filename: string) -> Result<string, string> {
+    if !filename.endsWith(".txt") {
+        return Err("Only text files are supported")
+    }
+    
+    // File reading simulation
+    if Math.random() > 0.7 {
+        return Err("File not found")
+    }
+    
+    return Ok("File content here")
+}
+
+// Control flow with error handling
+for filename in ["data.txt", "config.json", "readme.txt"] {
+    match safeFileRead(filename) {
+        case Ok(content) => {
+            print("Successfully read: {filename}")
+            print("Content: {content}")
+            // Success path for this file
+        }
+        case Err(errorMessage) => {
+            print("Error ({filename}): {errorMessage}")
+            if errorMessage.contains("supported") {
+                print("Unsupported file format, noted")
+            } else {
+                print("Critical error noted")
+            }
+        }
+    }
+}
+```
+
+### Conditional Execution Chains
+
+```topaz
+// Conditional chaining
+function processUser(userId: int) -> Result<string, string> {
+    let userData = match getUserFromDatabase(userId) {
+        case Ok(data) => data
+        case Err(error) => { return Err("User fetch failed: {error}") }
+    }
+    
+    let validationResult = match validateUser(userData) {
+        case Ok(_) => ()
+        case Err(error) => { return Err("Validation failed: {error}") }
+    }
+    
+    let processResult = match processUserData(userData) {
+        case Ok(result) => result
+        case Err(error) => { return Err("Processing failed: {error}") }
+    }
+    
+    return Ok("Processing complete: {processResult}")
+}
+
+```
+
+##  Optimization and Best Practices
+
+### 1. Conditional Optimization
+
+```topaz
+// Bad: Nested conditions
+let score = 85
+if score >= 90 {
+    print("Grade A")
+} else {
+    if score >= 80 {
+        print("Grade B")
+    } else {
+        if score >= 70 {
+            print("Grade C")
+        } else {
+            print("Grade F")
+        }
+    }
+}
+
+// Good: Using match
+let grade = match score {
+    case 90..100 => "A"
+    case 80..<90 => "B"
+    case 70..<80 => "C"
+    case _ => "F"
+}
+print("Grade {grade}")
+```
+
+### 2. Early Return Pattern
+
+```topaz
+function registerUser(name: string, email: string, age: int) -> Result<string, string> {
+    // Early validation and return
+    if name == "" {
+        return Err("Name is required")
+    }
+    
+    if !email.contains("@") {
+        return Err("Valid email is required")
+    }
+    
+    if age < 0 || age > 120 {
+        return Err("Valid age is required")
+    }
+    
+    // Process only when all validations pass
+    let user = createNewUser(name, email, age)
+    return Ok("User registration complete: {user.id}")
+}
+```
+
+### 3. Leveraging Pattern Matching
+
+```topaz
+// Express complex business logic with patterns
+type OrderStatus = "created" | "payment_complete" | "shipping" | "delivered" | "cancelled"
+
+function processOrder(status: OrderStatus, paymentAmount: int, isVip: bool) -> string {
+    match { status: status, amount: paymentAmount, vip: isVip } {
+        case { status: "created" } => "Please proceed with payment"
+        case { status: "payment_complete", amount, vip: true } if amount > 100000 => {
+            "VIP customer express shipping preparation"
+        }
+        case { status: "payment_complete", amount } if amount > 50000 => {
+            "Regular shipping preparation"
+        }
+        case { status: "payment_complete" } => "Standard shipping preparation"
+        case { status: "shipping", vip: true } => "VIP shipping tracking service"
+        case { status: "shipping" } => "In shipping"
+        case { status: "delivered" } => "Delivery complete"
+        case { status: "cancelled" } => "Order cancelled"
+        case _ => "Unknown order state"
+    }
+}
+```
+
+> When a `match` scrutinee is an ad-hoc record like this one, exhaustiveness may not be statically provable — a runtime miss is a fault, so canonical examples keep a catch-all case. Matching directly on a closed literal-union value (such as `OrderStatus` itself) is checked exhaustively and needs no catch-all.
+
+```topaz
+function shippingLabel(status: OrderStatus) -> string {
+    match status {
+        case "created" => "Awaiting payment"
+        case "payment_complete" => "Preparing shipment"
+        case "shipping" => "On the way"
+        case "delivered" => "Delivered"
+        case "cancelled" => "Cancelled"
+    }
+}
+```
+
+Topaz control flow is **small and predictable**. Combine conditionals, loops, and pattern matching appropriately to write **readable and maintainable** code!

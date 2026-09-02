@@ -1,0 +1,6 @@
+
+record User { name: string, age: int }
+let a = User { name: "Ada", age: 36 }
+let b = User { name: "Ada", age: 36 }
+print("{a == b}")
+a

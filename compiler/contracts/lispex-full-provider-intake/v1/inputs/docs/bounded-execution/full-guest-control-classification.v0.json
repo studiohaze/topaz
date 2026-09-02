@@ -1,0 +1,287 @@
+{
+  "schema": "lispex.full-guest-control-classification/v0",
+  "status": "private-runtime-control-slice-allocation-and-error-closed",
+  "semantic_profile": "lispex-profile-1.5",
+  "generated_from": {
+    "authority": {
+      "path": "docs/bounded-execution/full-guest-control-authority.v0.json",
+      "sha256": "eda70ccee10f33b66dd673ac0ab5826c8a0b7b8fda0eb6279af11dea73baf568"
+    },
+    "registry": {
+      "path": "docs/bounded-execution/primitive-cost-classification.v0.json",
+      "sha256": "3e0c76401be5053e55e1aea6d4b26b70a1f8c2a0a280181d96b39b7da8081b8e"
+    },
+    "cost_design": {
+      "path": "docs/bounded-execution/full-profile-cost-classification.v0.json",
+      "sha256": "1f3c0c07561e994bd67adf2611e85259ce6711745150620936ad23eb89ebee5f"
+    },
+    "runtime_sources": [
+      {
+        "path": "interp/src/bytecode_vm.rs",
+        "sha256": "0bd7e4a7a50fc705dcc19d4572f8e901af0acb9ce5bf020de5f1edb8d69db0b0"
+      },
+      {
+        "path": "interp/src/bounded_execution.rs",
+        "sha256": "a2a88ac7c753f16816f9f8cf16d85f26666491559d117e0072cbbc842f975131"
+      },
+      {
+        "path": "docs/bounded-execution/admitted-allocation-sinks.v0.json",
+        "sha256": "5c2f7e70e8787e8aedd600f9d4dc8b66dd449758d9ff9818161158eeea745fc9"
+      }
+    ]
+  },
+  "summary": {
+    "rows": 18,
+    "runtime_admitted_rows": 18,
+    "host_recursive_rows": 0,
+    "deferred_rows": 0,
+    "non_control_runtime_rows_pending": 0
+  },
+  "claims": {
+    "restricted_component_changed": false,
+    "full_evaluator_complete": false,
+    "physical_collection_closure_pending": false,
+    "callback_argument_closure_complete": true,
+    "output_construction_closure_complete": true,
+    "bounded_diagnostic_settlement_complete": true,
+    "partial_visibility_on_failure": false,
+    "native_cleanup_requires_fresh_instance": true,
+    "public_identity_assigned": false
+  },
+  "rows": [
+    {
+      "id": 13,
+      "name": "all?",
+      "kind": "list-predicate",
+      "result": "scalar",
+      "short_circuit": true,
+      "base_work": 1,
+      "base_allocation": 1,
+      "collection_tariff": "two-work-per-spine-probe-plus-snapshot-and-conservative-output",
+      "callback_tariff": "one-precharged-dispatch-per-callback-plus-independent-callee-meter",
+      "runtime_integration": "full-control-slice-admitted",
+      "public_identity_assigned": false
+    },
+    {
+      "id": 14,
+      "name": "any?",
+      "kind": "list-predicate",
+      "result": "scalar",
+      "short_circuit": true,
+      "base_work": 1,
+      "base_allocation": 1,
+      "collection_tariff": "two-work-per-spine-probe-plus-snapshot-and-conservative-output",
+      "callback_tariff": "one-precharged-dispatch-per-callback-plus-independent-callee-meter",
+      "runtime_integration": "full-control-slice-admitted",
+      "public_identity_assigned": false
+    },
+    {
+      "id": 16,
+      "name": "apply",
+      "kind": "apply-projection",
+      "result": "forwarded",
+      "short_circuit": false,
+      "base_work": 1,
+      "base_allocation": 1,
+      "collection_tariff": "prefix-plus-final-list-projection",
+      "callback_tariff": "one-precharged-dispatch-per-callback-plus-independent-callee-meter",
+      "runtime_integration": "full-control-slice-admitted",
+      "public_identity_assigned": false
+    },
+    {
+      "id": 40,
+      "name": "call-with-current-continuation",
+      "kind": "machine-transfer",
+      "result": "forwarded",
+      "short_circuit": false,
+      "base_work": 1,
+      "base_allocation": 1,
+      "collection_tariff": "machine-owned-control-permits",
+      "callback_tariff": "machine-owned",
+      "runtime_integration": "full-control-slice-admitted",
+      "public_identity_assigned": false
+    },
+    {
+      "id": 41,
+      "name": "call-with-values",
+      "kind": "producer-consumer",
+      "result": "forwarded",
+      "short_circuit": false,
+      "base_work": 1,
+      "base_allocation": 1,
+      "collection_tariff": "machine-owned-control-permits",
+      "callback_tariff": "one-precharged-dispatch-per-callback-plus-independent-callee-meter",
+      "runtime_integration": "full-control-slice-admitted",
+      "public_identity_assigned": false
+    },
+    {
+      "id": 42,
+      "name": "call/cc",
+      "kind": "machine-transfer",
+      "result": "forwarded",
+      "short_circuit": false,
+      "base_work": 1,
+      "base_allocation": 1,
+      "collection_tariff": "machine-owned-control-permits",
+      "callback_tariff": "machine-owned",
+      "runtime_integration": "full-control-slice-admitted",
+      "public_identity_assigned": false
+    },
+    {
+      "id": 83,
+      "name": "dynamic-wind",
+      "kind": "machine-transfer",
+      "result": "forwarded",
+      "short_circuit": false,
+      "base_work": 1,
+      "base_allocation": 1,
+      "collection_tariff": "machine-owned-control-permits",
+      "callback_tariff": "machine-owned",
+      "runtime_integration": "full-control-slice-admitted",
+      "public_identity_assigned": false
+    },
+    {
+      "id": 99,
+      "name": "filter",
+      "kind": "list-map",
+      "result": "list",
+      "short_circuit": false,
+      "base_work": 1,
+      "base_allocation": 1,
+      "collection_tariff": "two-work-per-spine-probe-plus-snapshot-and-conservative-output",
+      "callback_tariff": "one-precharged-dispatch-per-callback-plus-independent-callee-meter",
+      "runtime_integration": "full-control-slice-admitted",
+      "public_identity_assigned": false
+    },
+    {
+      "id": 105,
+      "name": "fold-left",
+      "kind": "list-fold",
+      "result": "scalar",
+      "short_circuit": false,
+      "base_work": 1,
+      "base_allocation": 1,
+      "collection_tariff": "two-work-per-spine-probe-plus-snapshot-and-conservative-output",
+      "callback_tariff": "one-precharged-dispatch-per-callback-plus-independent-callee-meter",
+      "runtime_integration": "full-control-slice-admitted",
+      "public_identity_assigned": false
+    },
+    {
+      "id": 106,
+      "name": "fold-right",
+      "kind": "list-fold",
+      "result": "scalar",
+      "short_circuit": false,
+      "base_work": 1,
+      "base_allocation": 1,
+      "collection_tariff": "two-work-per-spine-probe-plus-snapshot-and-conservative-output",
+      "callback_tariff": "one-precharged-dispatch-per-callback-plus-independent-callee-meter",
+      "runtime_integration": "full-control-slice-admitted",
+      "public_identity_assigned": false
+    },
+    {
+      "id": 107,
+      "name": "for-each",
+      "kind": "list-effect",
+      "result": "zero-values",
+      "short_circuit": false,
+      "base_work": 1,
+      "base_allocation": 1,
+      "collection_tariff": "two-work-per-spine-probe-plus-snapshot-and-conservative-output",
+      "callback_tariff": "one-precharged-dispatch-per-callback-plus-independent-callee-meter",
+      "runtime_integration": "full-control-slice-admitted",
+      "public_identity_assigned": false
+    },
+    {
+      "id": 129,
+      "name": "map",
+      "kind": "list-map",
+      "result": "list",
+      "short_circuit": false,
+      "base_work": 1,
+      "base_allocation": 1,
+      "collection_tariff": "two-work-per-spine-probe-plus-snapshot-and-conservative-output",
+      "callback_tariff": "one-precharged-dispatch-per-callback-plus-independent-callee-meter",
+      "runtime_integration": "full-control-slice-admitted",
+      "public_identity_assigned": false
+    },
+    {
+      "id": 153,
+      "name": "reduce",
+      "kind": "list-fold",
+      "result": "scalar",
+      "short_circuit": false,
+      "base_work": 1,
+      "base_allocation": 1,
+      "collection_tariff": "two-work-per-spine-probe-plus-snapshot-and-conservative-output",
+      "callback_tariff": "one-precharged-dispatch-per-callback-plus-independent-callee-meter",
+      "runtime_integration": "full-control-slice-admitted",
+      "public_identity_assigned": false
+    },
+    {
+      "id": 172,
+      "name": "string-for-each",
+      "kind": "string-effect",
+      "result": "zero-values",
+      "short_circuit": false,
+      "base_work": 1,
+      "base_allocation": 1,
+      "collection_tariff": "two-work-per-unicode-scalar-plus-snapshot-and-conservative-output",
+      "callback_tariff": "one-precharged-dispatch-per-callback-plus-independent-callee-meter",
+      "runtime_integration": "full-control-slice-admitted",
+      "public_identity_assigned": false
+    },
+    {
+      "id": 174,
+      "name": "string-map",
+      "kind": "string-map",
+      "result": "string",
+      "short_circuit": false,
+      "base_work": 1,
+      "base_allocation": 1,
+      "collection_tariff": "two-work-per-unicode-scalar-plus-snapshot-and-conservative-output",
+      "callback_tariff": "one-precharged-dispatch-per-callback-plus-independent-callee-meter",
+      "runtime_integration": "full-control-slice-admitted",
+      "public_identity_assigned": false
+    },
+    {
+      "id": 196,
+      "name": "vector-for-each",
+      "kind": "vector-effect",
+      "result": "zero-values",
+      "short_circuit": false,
+      "base_work": 1,
+      "base_allocation": 1,
+      "collection_tariff": "two-work-per-element-plus-snapshot-and-conservative-output",
+      "callback_tariff": "one-precharged-dispatch-per-callback-plus-independent-callee-meter",
+      "runtime_integration": "full-control-slice-admitted",
+      "public_identity_assigned": false
+    },
+    {
+      "id": 198,
+      "name": "vector-map",
+      "kind": "vector-map",
+      "result": "vector",
+      "short_circuit": false,
+      "base_work": 1,
+      "base_allocation": 1,
+      "collection_tariff": "two-work-per-element-plus-snapshot-and-conservative-output",
+      "callback_tariff": "one-precharged-dispatch-per-callback-plus-independent-callee-meter",
+      "runtime_integration": "full-control-slice-admitted",
+      "public_identity_assigned": false
+    },
+    {
+      "id": 202,
+      "name": "with-exception-handler",
+      "kind": "machine-transfer",
+      "result": "forwarded",
+      "short_circuit": false,
+      "base_work": 1,
+      "base_allocation": 1,
+      "collection_tariff": "machine-owned-control-permits",
+      "callback_tariff": "machine-owned",
+      "runtime_integration": "full-control-slice-admitted",
+      "public_identity_assigned": false
+    }
+  ]
+}

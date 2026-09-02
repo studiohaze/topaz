@@ -1,0 +1,5 @@
+
+match JSON.parseAs<Array<int>>("[1,\"x\"]") {
+    case Ok(_) => "unexpected"
+    case Err(error) => error
+}

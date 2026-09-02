@@ -1,0 +1,17 @@
+
+record User { name: string, age: int }
+record Admin { level: int }
+function label(value: User | Admin | null) -> string {
+    match value {
+        case User { name, age: 0 } => "zero:{name}"
+        case User { name } => "user:{name}"
+        case Admin { level } => "admin:{level}"
+        case null => "none"
+    }
+}
+function main() -> string {
+    let user: User = User { name: "Ada", age: 36 }
+    let admin: Admin = Admin { level: 3 }
+    "{label(user)}|{label(admin)}|{label(null)}"
+}
+main()

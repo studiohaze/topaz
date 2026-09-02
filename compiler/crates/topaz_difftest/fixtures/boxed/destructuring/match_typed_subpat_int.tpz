@@ -1,0 +1,2 @@
+match Some(5) { case Some(n: int) => n
+case _ => 0 }

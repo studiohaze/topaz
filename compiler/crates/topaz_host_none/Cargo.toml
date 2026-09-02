@@ -1,0 +1,20 @@
+[package]
+name = "topaz_host_none"
+description = "No-ambient-capability host for private bounded Topaz execution"
+version.workspace = true
+license.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+topaz_value = { workspace = true }
+
+[dev-dependencies]
+topaz_diag = { workspace = true }
+topaz_interp = { workspace = true }
+topaz_parser = { workspace = true }
+topaz_rt = { workspace = true }
+topaz_syntax = { workspace = true }
+
+[lints]
+workspace = true

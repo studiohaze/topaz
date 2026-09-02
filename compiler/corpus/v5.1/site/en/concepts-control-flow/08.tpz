@@ -1,0 +1,17 @@
+let dayOfWeek = "Monday"
+
+match dayOfWeek {
+    case "Monday" => print("Start of the week!")
+    case "Friday" => print("TGIF!")
+    case day if day in ["Saturday", "Sunday"] => print("Weekend!")
+    case _ => print("Regular day")
+}
+
+// match returning a value
+let weekend = ["Saturday", "Sunday"]
+let workType = match dayOfWeek {
+    case day if day in weekend => "weekend"
+    case _ => "workday"
+}
+
+print("Today is a {workType}")

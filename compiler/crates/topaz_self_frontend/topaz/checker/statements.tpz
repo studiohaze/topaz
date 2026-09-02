@@ -1,0 +1,1212 @@
+// Statement checking for bindings, assignment, effects, and control transfer.
+// Block sequencing is owned here; expression inference returns through the
+// checker service so imports remain one-way.
+
+import types {
+  PreviewAstAttribute,
+  SyntaxNode,
+}
+import checker_types { TypeValue }
+import checker.model {
+  CheckerService,
+  CheckerState,
+  LoopFrame,
+  MAX_CONSTANT_EXPONENT,
+  MINIMUM_INT_DECIMAL,
+  ModuleSyntax,
+  constructor,
+  emptyType,
+  functionType,
+  inference,
+  primitive,
+}
+import checker.type_algebra {
+  assignable,
+  hasHole,
+  typeText,
+  widen,
+}
+import checker.syntax_index {
+  addDiagnostic,
+  addNode,
+  attribute,
+  bindSymbol,
+  boolAttribute,
+  child,
+  children,
+  functionIndexForReference,
+  referenceFor,
+  replaceNodeType,
+  spanKey,
+  text,
+  unwrapExport,
+}
+import checker.nominals {
+  formType,
+  substitute,
+  targetType,
+}
+import checker.patterns {
+  bindNamedPatternType,
+  patternBindingType,
+  patternIsIrrefutable,
+}
+import checker.call_facts {
+  checkExpressionExpected,
+  checkReturn,
+  inferExpressionContext,
+  inferExpressionWithExpected,
+  refineExpressionToExpected,
+  reportExpectedType,
+}
+import checker.expression_core {
+  checkAssignmentRootMutable,
+  hasLiteralJoinContext,
+  inferLambda,
+  optionalReceiver,
+}
+import checker.expression_control {
+  checkLoopExitStatement,
+  inferBinaryExpression,
+  inferExpression,
+}
+
+function bindingAnnotationType(
+  service: CheckerService,
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  item: SyntaxNode,
+) -> Option<TypeValue> {
+  match child(item, "type") {
+    case Some(found) => return Some(formType(
+      service,
+      state,
+      moduleIndex,
+      source,
+      found,
+      [],
+      "binding",
+    ))
+    case None => ()
+  }
+  match child(item, "pattern") {
+    case Some(pattern) => if pattern.kind == "pattern/typed" {
+      match child(pattern, "type") {
+        case Some(found) => return Some(formType(
+          service,
+          state,
+          moduleIndex,
+          source,
+          found,
+          [],
+          "binding",
+        ))
+        case None => ()
+      }
+    }
+    case None => ()
+  }
+  None
+}
+
+function inferBindingValue(
+  service: CheckerService,
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  item: SyntaxNode,
+  annotation: Option<TypeValue>,
+) -> TypeValue {
+  match child(item, "value") {
+    case Some(value) => match annotation {
+      case Some(expected) => if value.kind == "expression/lambda" &&
+        expected.kind == "function" {
+        let inferred = inferLambda(
+          service,
+          state,
+          moduleIndex,
+          source,
+          value,
+          Some(expected),
+        )
+        addNode(state, moduleIndex, "expression", value, inferred)
+        inferred
+      } else {
+        inferExpressionWithExpected(
+          service,
+          state,
+          moduleIndex,
+          source,
+          value,
+          expected,
+          true,
+        )
+      }
+      case None => inferExpression(service, state, moduleIndex, source, value)
+    }
+    case None => emptyType("unknown")
+  }
+}
+
+function bindCheckedDeclaration(
+  service: CheckerService,
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  item: SyntaxNode,
+  expected: TypeValue,
+) -> () {
+  if item.kind == "statement/let" {
+    match child(item, "pattern") {
+      case Some(pattern) => {
+        if !patternIsIrrefutable(pattern) {
+          addDiagnostic(
+            state,
+            moduleIndex,
+            "TPZ5026",
+            "refutable pattern in `let`: it does not match every value of the type — use `if let` to handle the non-matching case",
+            "",
+            pattern,
+          )
+        }
+        if pattern.kind == "pattern/typed" {
+          bindNamedPatternType(
+            state,
+            moduleIndex,
+            source,
+            pattern,
+            expected,
+            expected,
+            boolAttribute(item, "mutable"),
+          )
+        } else {
+          patternBindingType(
+            service,
+            state,
+            moduleIndex,
+            source,
+            pattern,
+            expected,
+            boolAttribute(item, "mutable"),
+          )
+        }
+      }
+      case None => ()
+    }
+    return ()
+  }
+  let nameNode = match child(item, "name") {
+    case Some(found) => found
+    case None => item
+  }
+  bindSymbol(
+    state,
+    moduleIndex,
+    nameNode.lo,
+    nameNode.hi,
+    text(source, nameNode),
+    expected,
+    false,
+  )
+  addNode(state, moduleIndex, "binding", nameNode, expected)
+}
+
+function aliasReferenceNode(node: SyntaxNode) -> Option<SyntaxNode> {
+  if node.kind == "expression/identifier" {
+    return Some(node)
+  }
+  if node.kind == "expression/parenthesized" {
+    return match child(node, "operand") {
+      case Some(found) => aliasReferenceNode(found)
+      case None => None
+    }
+  }
+  if node.kind == "expression/block" {
+    return match child(node, "block") {
+      case Some(block) => if children(block, "statements").length == 0 {
+        match child(block, "tail") {
+          case Some(found) => aliasReferenceNode(found)
+          case None => None
+        }
+      } else {
+        None
+      }
+      case None => None
+    }
+  }
+  None
+}
+
+function bindingDeclarationNode(item: SyntaxNode) -> Option<SyntaxNode> {
+  if item.kind == "statement/const" {
+    return child(item, "name")
+  }
+  match child(item, "pattern") {
+    case Some(pattern) => if pattern.kind == "pattern/binding" ||
+      pattern.kind == "pattern/typed" {
+      child(pattern, "name")
+    } else {
+      None
+    }
+    case None => None
+  }
+}
+
+function recordFunctionAlias(
+  state: CheckerState,
+  moduleIndex: int,
+  item: SyntaxNode,
+) -> () {
+  let declaration = match bindingDeclarationNode(item) {
+    case Some(found) => found
+    case None => return ()
+  }
+  let value = match child(item, "value") {
+    case Some(found) => found
+    case None => return ()
+  }
+  let referenceNode = match aliasReferenceNode(value) {
+    case Some(found) => found
+    case None => return ()
+  }
+  match referenceFor(
+    state,
+    moduleIndex,
+    referenceNode.lo,
+    referenceNode.hi,
+  ) {
+    case Some(reference) => {
+      let functionIndex = functionIndexForReference(state, reference)
+      if functionIndex >= 0 {
+        let mut aliases = state.functionAliases
+        aliases.insert(
+          spanKey(
+            moduleIndex,
+            declaration.lo,
+            declaration.hi,
+          ),
+          functionIndex,
+        )
+      }
+    }
+    case None => ()
+  }
+  ()
+}
+
+function functionAliasSemanticType(
+  state: CheckerState,
+  moduleIndex: int,
+  item: SyntaxNode,
+) -> Option<TypeValue> {
+  let declaration = match bindingDeclarationNode(item) {
+    case Some(found) => found
+    case None => return None
+  }
+  let functionIndex = match state.functionAliases.get(spanKey(
+    moduleIndex,
+    declaration.lo,
+    declaration.hi,
+  )) {
+    case Some(found) => found
+    case None => return None
+  }
+  let definition = match state.functions.get(functionIndex) {
+    case Some(found) => found
+    case None => return None
+  }
+  if definition.typeParameters.length == 0 {
+    return None
+  }
+  let mut arguments: Array<TypeValue> = []
+  let mut index = 0
+  for _ in definition.typeParameters {
+    arguments.push(inference(index))
+    index += 1
+  }
+  Some(substitute(
+    functionType(
+      definition.parameterTypes,
+      definition.variadic,
+      definition.result,
+    ),
+    definition.typeParameters,
+    arguments,
+  ))
+}
+
+function checkBindingStatement(
+  service: CheckerService,
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  item: SyntaxNode,
+) -> () {
+  let annotation = bindingAnnotationType(service, state, moduleIndex, source, item)
+  let mut value = inferBindingValue(
+    service,
+    state,
+    moduleIndex,
+    source,
+    item,
+    annotation,
+  )
+  let expected = match annotation {
+    case Some(found) => found
+    case None => if item.kind == "statement/const" { value } else { widen(value) }
+  }
+  match annotation {
+    case Some(_) => ()
+    case None => match child(item, "value") {
+      case Some(found) => if found.kind == "expression/comprehension" &&
+        hasHole(value) {
+        addDiagnostic(
+          state,
+          moduleIndex,
+          "TPZ5612",
+          "this comprehension's element type cannot be inferred (§6.4): annotate the binding with its collection type",
+          "",
+          found,
+        )
+      }
+      case None => ()
+    }
+  }
+  match child(item, "value") {
+    case Some(found) => {
+      value = refineExpressionToExpected(
+        state,
+        moduleIndex,
+        found,
+        value,
+        expected,
+      )
+    }
+    case None => ()
+  }
+  if !assignable(expected, value) {
+    match child(item, "value") {
+      case Some(found) => addDiagnostic(
+        state,
+        moduleIndex,
+        "TPZ5001",
+        "expected `{typeText(expected)}`, found `{typeText(widen(value))}`",
+        "",
+        found,
+      )
+      case None => ()
+    }
+  }
+  if item.kind == "statement/const" {
+    match child(item, "value") {
+      case Some(found) => { let _ = foldConstantInteger(
+        state,
+        moduleIndex,
+        found,
+      ) }
+      case None => ()
+    }
+  }
+  bindCheckedDeclaration(service, state, moduleIndex, source, item, expected)
+  recordFunctionAlias(state, moduleIndex, item)
+  match annotation {
+    case None => match functionAliasSemanticType(state, moduleIndex, item) {
+      case Some(projected) => match bindingDeclarationNode(item) {
+        case Some(declaration) => replaceNodeType(
+          state,
+          moduleIndex,
+          "binding",
+          declaration,
+          projected,
+        )
+        case None => ()
+      }
+      case None => ()
+    }
+    case Some(_) => ()
+  }
+  ()
+}
+
+function checkUsingStatement(
+  service: CheckerService,
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  item: SyntaxNode,
+) -> () {
+  match child(item, "value") {
+    case Some(found) => {
+      let _ = checkExpressionExpected(
+        service,
+        state,
+        moduleIndex,
+        source,
+        found,
+        emptyType("file"),
+      )
+    }
+    case None => ()
+  }
+  match child(item, "name") {
+    case Some(name) => {
+      bindSymbol(
+        state,
+        moduleIndex,
+        name.lo,
+        name.hi,
+        text(source, name),
+        emptyType("file"),
+        false,
+      )
+      addNode(state, moduleIndex, "binding", name, emptyType("file"))
+    }
+    case None => ()
+  }
+  match child(item, "body") {
+    case Some(body) => {
+      let _ = checkBlock(service, state, moduleIndex, source, body)
+    }
+    case None => ()
+  }
+  ()
+}
+
+function checkEffectStatement(
+  service: CheckerService,
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  item: SyntaxNode,
+) -> () {
+  let expression = if item.kind == "statement/defer" {
+    child(item, "value")
+  } else {
+    item.children.get(0)
+  }
+  match expression {
+    case Some(found) => if found.kind == "expression/for" {
+      let mut contexts = state.statementExpressionContexts
+      contexts.push(found.lo)
+      let _ = inferExpression(service, state, moduleIndex, source, found)
+      contexts.pop()
+    } else {
+      let _ = inferExpression(service, state, moduleIndex, source, found)
+    }
+    case None => ()
+  }
+  ()
+}
+
+function assignmentTargetHasOptional(node: SyntaxNode) -> bool {
+  if node.kind == "expression/optional-access" {
+    return true
+  }
+  match child(node, "object") {
+    case Some(object) => assignmentTargetHasOptional(object)
+    case None => false
+  }
+}
+
+function lastAssignmentIndex(node: SyntaxNode) -> Option<SyntaxNode> {
+  if node.kind == "expression/member" {
+    return match child(node, "object") {
+      case Some(object) => lastAssignmentIndex(object)
+      case None => None
+    }
+  }
+  if node.kind == "expression/index" {
+    return Some(node)
+  }
+  None
+}
+
+function reportMapAssignmentTarget(
+  service: CheckerService,
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  target: SyntaxNode,
+) -> () {
+  match lastAssignmentIndex(target) {
+    case Some(index) => match child(index, "object") {
+      case Some(object) => {
+        let objectType = inferExpression(service, state, moduleIndex, source, object)
+        if objectType.kind == "constructor" && objectType.name == "Map" {
+          addDiagnostic(
+            state,
+            moduleIndex,
+            "TPZ5001",
+            "a Map is not index-assignable; use `m.insert` (§22)",
+            "",
+            target,
+          )
+        }
+      }
+      case None => ()
+    }
+    case None => ()
+  }
+  ()
+}
+
+function assignmentBinaryNode(
+  item: SyntaxNode,
+  target: SyntaxNode,
+  value: SyntaxNode,
+) -> SyntaxNode {
+  SyntaxNode {
+    kind: "expression/binary",
+    lo: item.lo,
+    hi: item.hi,
+    field: "",
+    index: 0,
+    attributes: [PreviewAstAttribute {
+      name: "operator",
+      kind: "string",
+      value: attribute(item, "operator"),
+    }],
+    children: [
+      SyntaxNode { ...target, field: "left", index: 0 },
+      SyntaxNode { ...value, field: "right", index: 1 },
+    ],
+  }
+}
+
+function checkAssignmentStatement(
+  service: CheckerService,
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  item: SyntaxNode,
+) -> () {
+  let target = match child(item, "target") {
+    case Some(found) => found
+    case None => return ()
+  }
+  let value = match child(item, "value") {
+    case Some(found) => found
+    case None => return ()
+  }
+  checkAssignmentRootMutable(state, moduleIndex, source, target, false)
+  if assignmentTargetHasOptional(target) {
+    addDiagnostic(
+      state,
+      moduleIndex,
+      "TPZ5001",
+      "cannot assign through optional access `?.` (§4)",
+      "",
+      target,
+    )
+  }
+  reportMapAssignmentTarget(service, state, moduleIndex, source, target)
+  let operator = attribute(item, "operator")
+  if operator == "assign" {
+    let targetType = inferExpression(service, state, moduleIndex, source, target)
+    let _ = checkExpressionExpected(
+      service,
+      state,
+      moduleIndex,
+      source,
+      value,
+      targetType,
+    )
+    return ()
+  }
+  if operator == "coalesce" {
+    let targetType = inferExpression(service, state, moduleIndex, source, target)
+    match optionalReceiver(targetType) {
+      case Some(_) => {
+        let _ = checkExpressionExpected(
+          service,
+          state,
+          moduleIndex,
+          source,
+          value,
+          targetType,
+        )
+      }
+      case None => {
+        if !hasHole(targetType) {
+          addDiagnostic(
+            state,
+            moduleIndex,
+            "TPZ5001",
+            "`??=` needs an Option or nullable target, found `{typeText(targetType)}`",
+            "",
+            target,
+          )
+        }
+        let _ = inferExpression(service, state, moduleIndex, source, value)
+      }
+    }
+    return ()
+  }
+  let targetType = inferExpression(service, state, moduleIndex, source, target)
+  let result = inferBinaryExpression(
+    service,
+    state,
+    moduleIndex,
+    source,
+    assignmentBinaryNode(item, target, value),
+  )
+  reportExpectedType(
+    state,
+    moduleIndex,
+    item,
+    widen(targetType),
+    result,
+  )
+  ()
+}
+
+function checkWhileStatement(
+  service: CheckerService,
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  item: SyntaxNode,
+) -> () {
+  match child(item, "condition") {
+    case Some(found) => {
+      let _ = checkExpressionExpected(
+        service,
+        state,
+        moduleIndex,
+        source,
+        found,
+        primitive("bool"),
+      )
+    }
+    case None => ()
+  }
+  let mut frames = state.loopFrames
+  frames.push(LoopFrame {
+    label: "",
+    valueLoop: false,
+    bareTarget: true,
+    bareError: "",
+    expected: None,
+    breaks: [],
+  })
+  match child(item, "body") {
+    case Some(found) => {
+      let _ = checkBlock(service, state, moduleIndex, source, found)
+    }
+    case None => ()
+  }
+  frames.pop()
+  ()
+}
+
+function checkNestedProtocolStatement(
+  state: CheckerState,
+  moduleIndex: int,
+  statement: SyntaxNode,
+) -> () {
+  match child(statement, "name") {
+    case Some(name) => addDiagnostic(
+      state,
+      moduleIndex,
+      "TPZ5022",
+      "protocol declarations are module-top-level only",
+      "",
+      name,
+    )
+    case None => ()
+  }
+  ()
+}
+
+function checkNestedImplStatement(
+  state: CheckerState,
+  moduleIndex: int,
+  statement: SyntaxNode,
+) -> () {
+  match child(statement, "name") {
+    case Some(name) => addDiagnostic(
+      state,
+      moduleIndex,
+      "TPZ5022",
+      "impl declarations are module-top-level only",
+      "",
+      name,
+    )
+    case None => ()
+  }
+  ()
+}
+
+export function checkStatement(
+  service: CheckerService,
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  statement: SyntaxNode,
+) -> () {
+  let item = unwrapExport(statement)
+  match item.kind {
+    case "statement/let" | "statement/const" =>
+      checkBindingStatement(service, state, moduleIndex, source, item)
+    case "statement/using" => checkUsingStatement(
+      service,
+      state,
+      moduleIndex,
+      source,
+      item,
+    )
+    case "statement/return" =>
+      checkReturn(service, state, moduleIndex, source, item)
+    case "statement/break" | "statement/continue" =>
+      checkLoopExitStatement(service, state, moduleIndex, source, item)
+    case "statement/expression" | "statement/defer" =>
+      checkEffectStatement(service, state, moduleIndex, source, item)
+    case "statement/assign" =>
+      checkAssignmentStatement(service, state, moduleIndex, source, item)
+    case "statement/while" => checkWhileStatement(
+      service,
+      state,
+      moduleIndex,
+      source,
+      item,
+    )
+    case "statement/protocol" => checkNestedProtocolStatement(
+      state,
+      moduleIndex,
+      item,
+    )
+    case "statement/impl" => checkNestedImplStatement(
+      state,
+      moduleIndex,
+      item,
+    )
+    case _ => ()
+  }
+}
+
+export function checkBlock(
+  service: CheckerService,
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  block: SyntaxNode,
+) -> TypeValue {
+  let inheritedContext = hasLiteralJoinContext(state, block)
+  if inheritedContext {
+    let mut contexts = state.literalJoinContexts
+    contexts.pop()
+  }
+  for statement in children(block, "statements") {
+    checkStatement(service, state, moduleIndex, source, statement)
+  }
+  let result = match child(block, "tail") {
+    case Some(found) => {
+      if inheritedContext {
+        inferExpressionContext(service, state, moduleIndex, source, found)
+      } else {
+        inferExpression(service, state, moduleIndex, source, found)
+      }
+    }
+    case None => primitive("unit")
+  }
+  if inheritedContext {
+    let mut contexts = state.literalJoinContexts
+    contexts.push(block.lo)
+  }
+  result
+}
+
+export function checkBlockExpected(
+  service: CheckerService,
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  block: SyntaxNode,
+  expectedReturn: TypeValue,
+) -> TypeValue {
+  for statement in children(block, "statements") {
+    checkStatement(service, state, moduleIndex, source, statement)
+  }
+  match child(block, "tail") {
+    case Some(found) => {
+      let inferred = inferExpressionWithExpected(
+        service,
+        state,
+        moduleIndex,
+        source,
+        found,
+        expectedReturn,
+        true,
+      )
+      let refined = refineExpressionToExpected(
+        state,
+        moduleIndex,
+        found,
+        inferred,
+        expectedReturn,
+      )
+      reportExpectedType(
+        state,
+        moduleIndex,
+        found,
+        expectedReturn,
+        refined,
+      )
+      refined
+    }
+    case None => primitive("unit")
+  }
+}
+
+export function orderedModules(state: CheckerState) -> Array<ModuleSyntax> {
+  let mut ordered: Array<ModuleSyntax> = []
+  for module in state.modules {
+    let mut inserted = false
+    let mut index = 0
+    while index < ordered.length {
+      let existing = match ordered.get(index) {
+        case Some(found) => found
+        case None => module
+      }
+      if module.identity < existing.identity {
+        ordered.insert(index, module)
+        inserted = true
+        break
+      }
+      index += 1
+    }
+    if !inserted {
+      ordered.push(module)
+    }
+  }
+  ordered
+}
+
+export function precheckTopLevelBindings(
+  service: CheckerService,
+  state: CheckerState,
+  module: ModuleSyntax,
+) -> () {
+  for statement in module.root.children {
+    let item = unwrapExport(statement)
+    if item.kind == "statement/const" {
+      checkStatement(
+        service,
+        state,
+        module.moduleIndex,
+        module.source,
+        statement,
+      )
+    } else if item.kind == "statement/let" {
+      let mut suppressions = state.typeCapabilitySuppressions
+      suppressions.push(true)
+      match child(item, "pattern") {
+        case Some(pattern) => {
+          let mut expectedValues: Array<TypeValue> = []
+          match child(item, "type") {
+            case Some(typeNode) => expectedValues.push(formType(
+              service,
+              state,
+              module.moduleIndex,
+              module.source,
+              typeNode,
+              [],
+              "binding",
+            ))
+            case None => if pattern.kind == "pattern/typed" {
+              match child(pattern, "type") {
+                case Some(typeNode) => expectedValues.push(formType(
+                  service,
+                  state,
+                  module.moduleIndex,
+                  module.source,
+                  typeNode,
+                  [],
+                  "binding",
+                ))
+                case None => ()
+              }
+            } else {
+              ()
+            }
+          }
+          match expectedValues.get(0) {
+            case Some(expected) => patternBindingType(
+              service,
+              state,
+              module.moduleIndex,
+              module.source,
+              pattern,
+              expected,
+              boolAttribute(item, "mutable"),
+            )
+            case None => ()
+          }
+        }
+        case None => ()
+      }
+      suppressions.pop()
+    }
+  }
+  ()
+}
+
+export function constantExpressionShape(node: SyntaxNode) -> bool {
+  if node.kind == "expression/integer" ||
+    node.kind == "expression/float" ||
+    node.kind == "expression/boolean" ||
+    node.kind == "expression/null" ||
+    node.kind == "expression/unit" ||
+    node.kind == "expression/identifier" {
+    return true
+  }
+  if node.kind == "expression/string" {
+    for part in node.children {
+      if part.kind != "string-part/text" {
+        return false
+      }
+    }
+    return true
+  }
+  if node.kind == "expression/parenthesized" ||
+    node.kind == "expression/unary" {
+    return match child(node, "operand") {
+      case Some(found) => constantExpressionShape(found)
+      case None => false
+    }
+  }
+  if node.kind != "expression/binary" {
+    return false
+  }
+  let operator = attribute(node, "operator")
+  if operator == "and" || operator == "or" || operator == "coalesce" {
+    return false
+  }
+  match child(node, "left") {
+    case Some(left) => match child(node, "right") {
+      case Some(right) => constantExpressionShape(left) &&
+        constantExpressionShape(right)
+      case None => false
+    }
+    case None => false
+  }
+}
+
+function minimumInt() -> int {
+  match toInt(MINIMUM_INT_DECIMAL) {
+    case Some(found) => found
+    case None => 0
+  }
+}
+
+function constantExpressionFault(
+  state: CheckerState,
+  moduleIndex: int,
+  node: SyntaxNode,
+  message: string,
+) -> () {
+  addDiagnostic(
+    state,
+    moduleIndex,
+    "TPZ5001",
+    "constant expression error: {message}",
+    "",
+    node,
+  )
+}
+
+function constantIntegerResult(
+  state: CheckerState,
+  moduleIndex: int,
+  node: SyntaxNode,
+  value: BigInt,
+  overflow: string,
+) -> Option<BigInt> {
+  match value.toInt() {
+    case Some(_) => Some(value)
+    case None => {
+      constantExpressionFault(state, moduleIndex, node, overflow)
+      None
+    }
+  }
+}
+
+function constantIntegerPower(base: BigInt, exponent: int) -> BigInt {
+  let mut result = BigInt.fromInt(1)
+  let mut factor = base
+  let mut remaining = exponent
+  while remaining > 0 {
+    if remaining % 2 == 1 {
+      result = result * factor
+    }
+    remaining = remaining / 2
+    if remaining > 0 {
+      factor = factor * factor
+    }
+  }
+  result
+}
+
+export function foldConstantInteger(
+  state: CheckerState,
+  moduleIndex: int,
+  node: SyntaxNode,
+) -> Option<BigInt> {
+  if node.kind == "expression/integer" {
+    return match toInt(attribute(node, "valueDecimal")) {
+      case Some(found) => Some(BigInt.fromInt(found))
+      case None => None
+    }
+  }
+  if node.kind == "expression/parenthesized" {
+    return match child(node, "operand") {
+      case Some(found) => foldConstantInteger(state, moduleIndex, found)
+      case None => None
+    }
+  }
+  if node.kind == "expression/unary" {
+    let operand = match child(node, "operand") {
+      case Some(found) => found
+      case None => return None
+    }
+    let value = match foldConstantInteger(state, moduleIndex, operand) {
+      case Some(found) => found
+      case None => return None
+    }
+    let operator = attribute(node, "operator")
+    if operator == "plus" {
+      return Some(value)
+    }
+    if operator != "minus" {
+      return None
+    }
+    return constantIntegerResult(
+      state,
+      moduleIndex,
+      node,
+      -value,
+      "integer negation overflows",
+    )
+  }
+  if node.kind != "expression/binary" {
+    return None
+  }
+  let operator = attribute(node, "operator")
+  if operator == "and" || operator == "or" || operator == "coalesce" {
+    return None
+  }
+  let left = match child(node, "left") {
+    case Some(found) => match foldConstantInteger(state, moduleIndex, found) {
+      case Some(value) => value
+      case None => return None
+    }
+    case None => return None
+  }
+  let right = match child(node, "right") {
+    case Some(found) => match foldConstantInteger(state, moduleIndex, found) {
+      case Some(value) => value
+      case None => return None
+    }
+    case None => return None
+  }
+  let leftInt = match left.toInt() {
+    case Some(found) => found
+    case None => return None
+  }
+  let rightInt = match right.toInt() {
+    case Some(found) => found
+    case None => return None
+  }
+  match operator {
+    case "add" => constantIntegerResult(
+      state,
+      moduleIndex,
+      node,
+      left + right,
+      "integer addition overflows",
+    )
+    case "subtract" => constantIntegerResult(
+      state,
+      moduleIndex,
+      node,
+      left - right,
+      "integer subtraction overflows",
+    )
+    case "multiply" => constantIntegerResult(
+      state,
+      moduleIndex,
+      node,
+      left * right,
+      "integer multiplication overflows",
+    )
+    case "divide" => if rightInt == 0 {
+      constantExpressionFault(
+        state,
+        moduleIndex,
+        node,
+        "integer division by zero",
+      )
+      None
+    } else {
+      match left.div(right) {
+        case Ok(found) => constantIntegerResult(
+          state,
+          moduleIndex,
+          node,
+          found,
+          "integer division overflows",
+        )
+        case Err(_) => None
+      }
+    }
+    case "remainder" => if rightInt == 0 {
+      constantExpressionFault(
+        state,
+        moduleIndex,
+        node,
+        "integer remainder by zero",
+      )
+      None
+    } else if leftInt == minimumInt() && rightInt == -1 {
+      constantExpressionFault(
+        state,
+        moduleIndex,
+        node,
+        "integer remainder overflows",
+      )
+      None
+    } else {
+      match left.mod(right) {
+        case Ok(found) => Some(found)
+        case Err(_) => None
+      }
+    }
+    case "power" => if rightInt < 0 {
+      constantExpressionFault(
+        state,
+        moduleIndex,
+        node,
+        "integer exponent must be non-negative; use float operands",
+      )
+      None
+    } else if rightInt > MAX_CONSTANT_EXPONENT {
+      constantExpressionFault(
+        state,
+        moduleIndex,
+        node,
+        "integer exponentiation overflows",
+      )
+      None
+    } else {
+      constantIntegerResult(
+        state,
+        moduleIndex,
+        node,
+        constantIntegerPower(left, rightInt),
+        "integer exponentiation overflows",
+      )
+    }
+    case _ => return None
+  }
+}

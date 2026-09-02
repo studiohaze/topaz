@@ -1,0 +1,7 @@
+function f() -> int { 1 }
+function main() -> int {
+let r = concurrent(timeout: 0ms) { x: f()
+y: 2 } else { { x: 0, y: 0 } }
+r.x
+}
+main()

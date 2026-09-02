@@ -1,0 +1,7 @@
+function markKey(x: int) -> string { print("k{x}")
+  "same"
+}
+function markValue(x: int) -> int { print("v{x}")
+  x
+}
+map { for x in [1, 2] => markKey(x): markValue(x) }

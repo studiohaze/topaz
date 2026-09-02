@@ -1,0 +1,18 @@
+let x = 10
+let y = 20
+let z = 10
+
+// Equality comparison
+let equal = x == z         // true
+let notEqual = x != y      // true
+
+// Size comparison
+let lessThan = x < y            // true
+let lessThanOrEqual = x <= z    // true
+let greaterThan = y > x         // true
+let greaterThanOrEqual = z >= x // true
+
+print("x == z: {equal}")
+print("x != y: {notEqual}")
+print("x < y: {lessThan}")
+print("y > x: {greaterThan}")

@@ -1,0 +1,10 @@
+
+function mark() -> int {
+    print("field")
+    1
+}
+function f() -> int {
+    let x = 7
+    x { value: mark() }
+}
+f()

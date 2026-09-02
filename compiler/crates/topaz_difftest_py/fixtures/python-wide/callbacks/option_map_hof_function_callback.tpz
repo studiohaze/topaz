@@ -1,0 +1,12 @@
+
+function inc(x: int) -> int {
+    x + 1
+}
+function main() -> int {
+    let opt = Some(1).map(inc)
+    match opt {
+        case Some(n) => n
+        case None => 0
+    }
+}
+main()

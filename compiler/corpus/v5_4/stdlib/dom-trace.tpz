@@ -1,0 +1,44 @@
+import std.dom { Html, Element, JSONValue, TraceCommand, TraceElement, TraceEvent, TraceHtml, addClass, attr, dispatch, event, focus, setText, text }
+
+function makeNode(click: TraceEvent, label: TraceHtml) -> TraceElement {
+  Element {
+    tag: "button",
+    attrs: [attr("id", "save"), attr("type", "button")],
+    events: [click],
+    children: [label],
+  }
+}
+
+function wrapNode(node: TraceElement) -> TraceHtml {
+  Html.Element(node)
+}
+
+function render(view: TraceHtml, commands: Array<TraceCommand>) -> string {
+  "{view}|{commands.join(";")}"
+}
+
+function demo() -> Result<string, string> {
+  let msg = match JSON.parse("true") {
+    case Ok(value) => value
+    case Err(error) => return Err(error.message)
+  }
+  let label = text<JSONValue>("Save")
+  let click = event<JSONValue>("click", msg)
+  let view = wrapNode(makeNode(click, label))
+  let setStatus = setText<JSONValue>("#status", "saved")
+  let markOk = addClass<JSONValue>("#status", "ok")
+  let focusSave = focus<JSONValue>("#save")
+  let bounce = dispatch<JSONValue>(msg)
+  let commands = [
+    setStatus,
+    markOk,
+    focusSave,
+    bounce
+  ]
+  Ok(render(view, commands))
+}
+
+match demo() {
+  case Ok(line) => print(line)
+  case Err(error) => print("error: {error}")
+}

@@ -1,0 +1,5 @@
+function read(path: string) -> Result<string, string> {
+    using file = open(path)? {
+        return file.read()
+    }
+}

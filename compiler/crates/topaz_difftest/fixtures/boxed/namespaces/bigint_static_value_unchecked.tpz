@@ -1,0 +1,3 @@
+let parse = BigInt.parse
+match parse("ff", 16) { case Some(n) => n.toString(10)
+case None => "none" }

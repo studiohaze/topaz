@@ -1,0 +1,3 @@
+print("{map([1, 2, 3], (x: int) => x * 2)}")
+print("{filter(1..<6, (x: int) => x % 2 == 0)}")
+print("{reduce([1, 2, 3], 10, (a: int, x: int) => a + x)}")

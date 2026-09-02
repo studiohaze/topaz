@@ -1,0 +1,5 @@
+let a = Some(5).okOr("e")
+let b = (None).okOr("e")
+let c = Some(5).okOrElse(() => "f")
+let d = (None).okOrElse(() => "f")
+"{a}/{b}/{c}/{d}"

@@ -1,0 +1,14 @@
+let defaultAge = 36
+
+record User {
+    name: string,
+    age: int = defaultAge,
+}
+
+function main() -> string {
+    let defaultAge = 999
+    let user: User = User { name: "Ada" }
+    "{user.age}:{defaultAge}"
+}
+
+print(main())

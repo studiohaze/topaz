@@ -1,0 +1,2 @@
+match 7 { case 1 => 0
+case n => n + 1 }

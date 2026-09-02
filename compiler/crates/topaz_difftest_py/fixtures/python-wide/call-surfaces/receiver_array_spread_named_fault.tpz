@@ -1,0 +1,13 @@
+
+function markArray(label: string, xs: Array<int>) -> Array<int> {
+    print(label)
+    xs
+}
+function markInt(label: string, value: int) -> int {
+    print(label)
+    value
+}
+function main() -> Option<int> {
+    [10].get(...markArray("spread", [0]), i: markInt("named", 0))
+}
+main()

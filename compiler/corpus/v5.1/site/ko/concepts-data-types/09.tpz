@@ -1,0 +1,4 @@
+let 숫자들: Array<int> = [1, 2, 3]
+let 이름옵션: Option<string> = Some("Alice")
+let 파싱결과: Result<사용자, string> = 사용자파싱(rawJson)
+let 캐시: Map<string, int> = Map.new()

@@ -1,0 +1,2 @@
+enum Status { Pending, Failed(string) }
+JSON.parseAs<Status>("\{\"tag\":\"Failed\",\"values\":[\"bad\"]\}")

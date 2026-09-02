@@ -1,0 +1,13 @@
+export record OrderedNames {
+  keys: Array<string>,
+  utf8Widths: Map<string, int>,
+}
+
+export function orderNames(names: Array<string>) -> OrderedNames {
+  let keys = set { for name in names => name }.toArray().sorted()
+  let utf8Widths = map { for key in keys => key: key.byteLength() }
+  OrderedNames {
+    keys: keys,
+    utf8Widths: utf8Widths,
+  }
+}

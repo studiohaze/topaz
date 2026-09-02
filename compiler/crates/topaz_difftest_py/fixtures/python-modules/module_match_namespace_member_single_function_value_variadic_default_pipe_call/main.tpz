@@ -1,0 +1,17 @@
+
+import util
+function main() -> int {
+    let seeds = [1, 0]
+    let f = match seeds[0] {
+        case n if n == 1 => util.sum
+        case _ => util.pack
+    }
+    let g = match seeds[1] {
+        case n if n == 1 => util.sum
+        case _ => util.pack
+    }
+    let a = 5 |> f(_, ...[1, 2])
+    let b = 5 |> g(_, ...[1, 2])
+    a * 1000 + b
+}
+main()

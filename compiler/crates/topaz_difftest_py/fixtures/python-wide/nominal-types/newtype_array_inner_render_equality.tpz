@@ -1,0 +1,12 @@
+
+newtype Ints = Array<int>
+function main() -> string {
+    let a = Ints([1, 2])
+    let b = Ints([1, 2])
+    let c = Ints([2, 1])
+    let inner = a.value()
+    let same = a == b
+    let different = a == c
+    "{a}:{inner[0]}:{inner[1]}:{inner.length}:{same}:{different}"
+}
+main()

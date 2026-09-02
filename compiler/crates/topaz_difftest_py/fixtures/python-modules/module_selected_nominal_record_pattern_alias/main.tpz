@@ -1,0 +1,10 @@
+
+import model { User as Person }
+function label(person: Person) -> string {
+    match person {
+        case Person { name, age: 0 } => "zero:{name}"
+        case Person { name, age } => "{name}:{age}"
+    }
+}
+let person: Person = Person { name: "Ada", age: 36 }
+label(person)

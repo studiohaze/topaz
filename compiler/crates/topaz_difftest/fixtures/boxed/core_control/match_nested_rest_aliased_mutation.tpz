@@ -1,0 +1,8 @@
+let mut xs = [[1, 2, 3]]
+match xs[0] {
+  case [..[a, b, c]] => {
+    xs[0].push(4)
+    a + b + c
+  }
+  case _ => 0
+}

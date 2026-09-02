@@ -1,0 +1,5 @@
+
+function neg(x: float) -> float {
+    -x
+}
+"{neg(2.5)}"

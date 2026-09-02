@@ -1,0 +1,27 @@
+let user = {
+    name: "John Topaz",
+    age: 28,
+    job: "Developer"
+}
+
+// Destructuring creates new variables
+let { name, age } = user
+print("Name: {name}, Age: {age}")
+
+// Variable binding in match
+match user.age {
+    case age if age < 20 => print("Likely a student")
+    case age if age < 30 => print("Young professional")
+    case age => print("Experienced: {age} years old")
+}
+
+// Array pattern matching
+let scores = [95, 87, 92, 88]
+match scores {
+    case [first, second, ..rest] => {
+        print("First: {first}")
+        print("Second: {second}")
+        print("Rest: {rest}")
+    }
+    case _ => print("Need at least two scores")
+}

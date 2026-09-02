@@ -1,0 +1,2 @@
+match Ok(Some(7)) { case Ok(Some(x)) => x
+case _ => 0 }

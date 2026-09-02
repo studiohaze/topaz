@@ -1,0 +1,6 @@
+// One step per line, top to bottom
+let result = rawData
+    |> normalize()
+    |> filter(x => x > 0)
+    |> map(x => x * 2)
+    |> sort()

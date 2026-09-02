@@ -1,0 +1,10 @@
+record User {
+    name: string,
+}
+
+function label<T>(value: T) -> string {
+    match value {
+        case User { name } => name
+        case _ => "none"
+    }
+}

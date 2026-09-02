@@ -1,0 +1,4 @@
+import mathlib { double as d, ANSWER }
+let r = d(ANSWER)
+print("selected {r}")
+r

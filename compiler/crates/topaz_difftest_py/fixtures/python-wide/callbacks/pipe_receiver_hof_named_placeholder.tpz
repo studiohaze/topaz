@@ -1,0 +1,20 @@
+
+function inc(x: int) -> int {
+    x + 1
+}
+function isBig(x: int) -> bool {
+    x > 1
+}
+function main() -> int {
+    let xs = [1, 2, 3]
+    let maybe: Option<Array<int>> = Some([2, 3])
+    let mapped = inc |> xs.map(f: _)
+    let filtered = isBig |> xs.filter(f: _)
+    let optionalMapped = inc |> maybe?.map(f: _)
+    let optionalValue = match optionalMapped {
+        case Some(ys) => ys[0] + ys[1]
+        case None => 0
+    }
+    mapped[0] + mapped[2] + filtered.length + optionalValue
+}
+main()

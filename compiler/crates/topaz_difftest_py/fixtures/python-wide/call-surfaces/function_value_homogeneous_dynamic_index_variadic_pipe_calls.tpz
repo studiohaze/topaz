@@ -1,0 +1,18 @@
+
+function sum(seed: int = 0, ...xs: int) -> int {
+    let mut total = seed
+    for x in xs {
+        total = total + x
+    }
+    total
+}
+function main() -> int {
+    let seeds = [0, 1]
+    let i = seeds[1]
+    let j = seeds[0]
+    let callbacks = [sum, sum]
+    let a = 1 |> callbacks[i](seed: _)
+    let b = 2 |> callbacks[j](...[3, 4], seed: _)
+    a * 10 + b
+}
+main()

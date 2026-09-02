@@ -1,0 +1,7 @@
+let mut m: Map<string, int> = Map.new()
+m.insert("a", 1)
+m.insert("b", 2)
+let mut calls = 0
+let mutate = (v: int) => { calls += 1; m.insert("c", 3); v * 10 }
+let mapped = m.mapValues(mutate)
+{ source: m.keys, mapped: mapped.values, calls: calls }

@@ -1,0 +1,6 @@
+function fail() -> Result<int, string> { return Err("boom") }
+{
+    defer fail()
+    print("body")
+}
+print("end")

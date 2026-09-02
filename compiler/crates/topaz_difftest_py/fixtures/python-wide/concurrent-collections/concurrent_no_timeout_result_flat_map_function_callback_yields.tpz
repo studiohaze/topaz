@@ -1,0 +1,16 @@
+
+function next(x: int) -> Result<int, string> {
+    let mut i = 0
+    while i < 200 {
+        i = i + 1
+    }
+    Ok(1 / 0)
+}
+
+concurrent {
+    slow: {
+        let value: Result<int, string> = Ok(1)
+        value.flatMap(next)
+    }
+}
+0

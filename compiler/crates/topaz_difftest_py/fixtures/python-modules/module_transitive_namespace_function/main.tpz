@@ -1,0 +1,8 @@
+
+import util
+function main() -> int {
+    let total = util.answer(20)
+    print("{total}")
+    total
+}
+main()

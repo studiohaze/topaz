@@ -1,0 +1,7 @@
+// Put expensive function calls later
+let result = simpleCondition() && expensiveFunction()
+
+// Optimize null checks with Option helpers
+let defaultValue = "fallback"
+let object: Option<{ property: Option<{ subProperty: string }> }> = None
+let value = object?.property?.subProperty ?? defaultValue

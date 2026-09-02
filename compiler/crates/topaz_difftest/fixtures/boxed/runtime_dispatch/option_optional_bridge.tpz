@@ -1,0 +1,7 @@
+let oo: Option<Option<int>> = Some(None)
+let pp: Option<Option<int>> = Some(Some(5))
+let a = oo?.okOr("e")
+let b = pp?.okOr("e")
+let c = oo?.okOrElse(() => "f")
+let d = pp?.okOrElse(() => print("X"))
+"{a}/{b}/{c}/{d}"

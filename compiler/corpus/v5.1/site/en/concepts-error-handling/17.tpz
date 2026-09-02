@@ -1,0 +1,41 @@
+// Structured error logging
+function handleStringWithLogging(
+    result: Result<string, string>,
+    context: string,
+    logLevel: string = "error"
+) -> Result<string, string> {
+    match result {
+        case Ok(value) => {
+            if logLevel == "debug" {
+                print("[DEBUG] {context}: Success")
+            }
+            Ok(value)
+        }
+        case Err(error) => {
+            print("[{logLevel}] {context}: {error}")
+            
+            // Collect metrics
+            incrementErrorMetric(context, logLevel)
+            
+            Err(error)
+        }
+    }
+}
+
+// Usage example
+let result = databaseQuery("SELECT * FROM users")
+    |> handleStringWithLogging(_, context: "User list query", logLevel: "error")
+
+// Error aggregation and alerting
+function errorAlertSystem() {
+    let recentErrors = collectErrorLogs(lastHours: 1)  // 1 hour
+    
+    if recentErrors.length > 100 {
+        sendAlert("High error rate detected: {recentErrors.length} errors/hour")
+    }
+    
+    let criticalErrors = filter(recentErrors, error => error.level == "critical")
+    if criticalErrors.length > 0 {
+        sendUrgentAlert("Critical errors occurred", criticalErrors)
+    }
+}

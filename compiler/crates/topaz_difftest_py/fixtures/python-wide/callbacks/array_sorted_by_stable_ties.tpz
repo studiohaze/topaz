@@ -1,0 +1,7 @@
+
+function main() -> string {
+    let xs = [{ name: "b", k: 1 }, { name: "a", k: 1 }, { name: "z", k: 0 }]
+    let out = xs.sortedBy((r) => r.k)
+    out[1].name
+}
+main()

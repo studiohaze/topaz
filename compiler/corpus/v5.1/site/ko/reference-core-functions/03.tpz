@@ -1,0 +1,4 @@
+let 단어 = "topaz"
+let 스칼라들 = 단어.scalars()           // ["t", "o", "p", "a", "z"]
+let 길이 = 단어.scalars().length        // 5
+print("스칼라 개수: {길이}")

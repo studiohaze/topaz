@@ -1,0 +1,36 @@
+// 실제 프로젝트에서 사용할 만한 타입 정의
+type 사용자 = {
+    id: int,
+    이름: string,
+    이메일: string,
+    생성일시: string
+}
+
+type 사용자응답 = {
+    성공: bool,
+    데이터: Option<사용자>,
+    에러: Option<string>,
+    상태코드: int
+}
+
+// 사용자 조회 API
+function 사용자가져오기(id: int) -> 사용자응답 {
+    let 응답 = fetch("/api/users/{id}")
+    
+    if 응답.ok {
+        let 사용자데이터 = 응답.json()
+        return {
+            성공: true,
+            데이터: Some(사용자데이터),
+            에러: None,
+            상태코드: 응답.status
+        }
+    } else {
+        return {
+            성공: false,
+            데이터: None,
+            에러: Some("사용자를 찾을 수 없습니다"),
+            상태코드: 응답.status
+        }
+    }
+}

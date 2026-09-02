@@ -1,0 +1,9 @@
+
+function mark(label: string, xs: Array<int>) -> Array<int> {
+    print(label)
+    xs
+}
+function main() -> Result<int, string> {
+    Ok(1).map(...mark("result-map", [0]))
+}
+main()

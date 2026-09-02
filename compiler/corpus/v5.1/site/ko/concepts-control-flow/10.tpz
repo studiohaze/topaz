@@ -1,0 +1,21 @@
+let 점수 = 87
+
+let 등급 = match 점수 {
+    case 90..100 => "A"
+    case 80..<90 => "B"
+    case 70..<80 => "C"
+    case 60..<70 => "D"
+    case _ => "F"
+}
+
+// 가드 조건 사용
+let 평가 = match 점수 {
+    case x if x >= 95 => "완벽한 점수!"
+    case x if x >= 90 => "우수한 성과"
+    case x if x >= 80 => "양호한 결과"
+    case x if x >= 70 => "보통 수준"
+    case x if x >= 60 => "통과"
+    case _ => "재시험 필요"
+}
+
+print("점수: {점수}, 등급: {등급}, 평가: {평가}")

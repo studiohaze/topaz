@@ -1,0 +1,10 @@
+
+function mark(label: string, xs: Array<string>) -> Array<string> {
+    print(label)
+    xs
+}
+function main() -> Option<Array<string>> {
+    let text: Option<string> = Some("a,b")
+    text?.split(...mark("string", [","]))
+}
+main()

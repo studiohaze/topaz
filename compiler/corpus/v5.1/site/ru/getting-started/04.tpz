@@ -1,0 +1,17 @@
+function classify(n: int) -> string {
+    return match n {
+        case 0 => "zero"
+        case x if x < 0 => "negative"
+        case 1..99 => "small"
+        case _ => "large"
+    }
+}
+
+let mut report: Map<string, string> = Map.new()
+for n in [-5, 0, 42, 1000] {
+    report.insert("{n}", classify(n))
+}
+
+print("{report.keys}")
+print("{map([1, 2, 3], (x: int) => x * x)}")
+print("{toInt("42") ?? 0}")

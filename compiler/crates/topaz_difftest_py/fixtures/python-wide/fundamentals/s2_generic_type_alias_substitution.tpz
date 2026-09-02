@@ -1,0 +1,4 @@
+type Box<T> = Array<T>
+function main() -> int { let xs: Box<int> = [1]
+xs[0] }
+main()

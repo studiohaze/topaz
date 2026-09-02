@@ -1,0 +1,30 @@
+enum Step {
+  Done(int),
+  More(int, int),
+}
+
+function advance(step: Step) -> Step {
+  match step {
+    case Done(value) => Step.Done(value)
+    case More(remaining, total) => {
+      if remaining == 0 {
+        Step.Done(total)
+      } else {
+        Step.More(remaining - 1, total + remaining)
+      }
+    }
+  }
+}
+
+function trampoline(initial: Step) -> int {
+  let mut current = initial
+  loop {
+    current = advance(current)
+    match current {
+      case Done(value) => { break value }
+      case More(_, _) => ()
+    }
+  }
+}
+
+print("trampoline={trampoline(Step.More(10000, 0))}")

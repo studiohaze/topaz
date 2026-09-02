@@ -1,0 +1,19 @@
+# corpus/v5_4/check -- v5.4 checker surface
+
+[totals]
+recorded = 2
+runnable = 2
+pending = 0
+
+[[fixture]]
+file = "protocol-bound.tpz"
+phase = "check"
+versions = "5.4"
+result = "ok"
+
+[[fixture]]
+file = "protocol-bound-nonconforming.tpz"
+phase = "check"
+versions = "5.4"
+result = "error"
+code = "TPZ5522"

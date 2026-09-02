@@ -1,0 +1,20 @@
+
+function mark(label: string, n: int) -> int {
+    print(label)
+    n
+}
+function add(acc: int, x: int) -> int {
+    acc + x
+}
+function double(x: int) -> int {
+    x * 2
+}
+function keep(x: int) -> bool {
+    x > 2
+}
+function main() -> int {
+    let ys = map(f: double, xs: [mark("map-xs", 1), 2])
+    let zs = filter(xs: ys, f: keep)
+    reduce(f: add, initial: mark("init", 0), xs: [mark("reduce-xs", 3), zs[0]])
+}
+main()

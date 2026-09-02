@@ -1,0 +1,4 @@
+function 더하기(가: int, 나: int) -> int { 가 + 나 }
+let mut 총합 = 0
+for 값 in [1, 2, 3] { 총합 = 총합 + 더하기(값, 10) }
+총합

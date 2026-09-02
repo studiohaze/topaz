@@ -1,0 +1,4 @@
+import tbase
+export function left() -> int {
+  return tbase.BASE
+}

@@ -1,0 +1,15 @@
+
+function plusImpl(a: int, b: int = 2) -> int {
+    a + b
+}
+function bumpImpl(x: int, y: int = 9) -> int {
+    x * 10 + y
+}
+export let plus = plusImpl
+export let bump = bumpImpl
+export function add(a: int, b: int = 2) -> int {
+    a + b
+}
+export function grow(x: int, y: int = 9) -> int {
+    x * 10 + y
+}

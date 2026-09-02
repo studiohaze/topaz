@@ -1,0 +1,23 @@
+
+function spinImpl(x: int) -> int {
+    let mut i = 0
+    while i < 200 {
+        i = i + 1
+    }
+    1 / 0
+}
+function fastImpl(x: int) -> int {
+    x
+}
+export let spin = spinImpl
+export let fast = fastImpl
+export function sortedBy(x: int) -> int {
+    let mut i = 0
+    while i < 200 {
+        i = i + 1
+    }
+    1 / 0
+}
+export function otherSorted(x: int) -> int {
+    x
+}

@@ -1,0 +1,14 @@
+function 텍스트읽기(경로: string) -> Result<string, string> {
+    let 파일 = open(경로)?
+    defer { 파일.close() }
+
+    let 내용 = 파일.read()?
+    Ok(내용)
+}
+
+function 텍스트쓰기(경로: string, 내용: string) -> Result<(), string> {
+    let 파일 = open(경로)?
+    defer { 파일.close() }
+
+    파일.write(내용)
+}

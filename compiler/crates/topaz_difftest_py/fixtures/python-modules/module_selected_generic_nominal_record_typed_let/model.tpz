@@ -1,0 +1,5 @@
+
+export record Box<T> { value: T }
+export function makeBox(value: int) -> Box<int> {
+    Box { value: value }
+}

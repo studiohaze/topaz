@@ -1,0 +1,29 @@
+
+let xs = [10, 20, 30]
+let pickedOption = xs.get(i: loop {
+    print("idx")
+    break 1
+})
+let picked = pickedOption ?? 0
+let m = map { "a": 1, "b": 2 }
+let got = m.getOr(default: loop {
+    print("default")
+    break 9
+}, k: loop {
+    print("key")
+    break "b"
+})
+let bytes = Bytes.encodeUtf8(s: "abcd")
+let sliced = bytes.slice(end: loop {
+    print("end")
+    break 3
+}, start: loop {
+    print("start")
+    break 1
+})
+let text = match sliced.decodeUtf8() {
+    case Ok(s) => s
+    case Err(_) => ""
+}
+print("{picked}:{got}:{text}")
+0

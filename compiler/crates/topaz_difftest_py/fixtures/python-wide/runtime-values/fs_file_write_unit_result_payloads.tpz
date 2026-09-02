@@ -1,0 +1,20 @@
+
+function resultText(value: Result<(), string>) -> string {
+    match value {
+        case Ok(unit) => "{unit}"
+        case Err(e) => e
+    }
+}
+
+function main() -> Result<int, string> {
+    let fsText = resultText(FS.writeText(path: "config.txt", text: "v=2"))
+    let raw = Bytes.fromArray([67, 68])?
+    let fsBytes = resultText(FS.writeBytes(path: "raw.bin", bytes: raw))
+    let file = open("config.txt")?
+    let fileWrite = resultText(file.write("v=3"))
+    file.close()
+    let after = FS.readText("config.txt")?
+    print("{fsText}|{fsBytes}|{fileWrite}|{after}")
+    Ok(0)
+}
+let ignored = main()

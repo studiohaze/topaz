@@ -1,0 +1,26 @@
+
+function main() {
+    let mut xs: Option<Array<int>> = Some([3, 1, 2])
+    let sortedResult = xs?.sortBy((x) => x)
+    let mut kept: Option<Array<int>> = Some([1, 2, 3, 4])
+    let retainedResult = kept?.retain((x) => x > 2)
+    let mut noneXs: Option<Array<int>> = None
+    let skippedResult = noneXs?.retain((x) => x / 0 == 0)
+    let mut m = Map.new()
+    m.insert("a", 1)
+    let mut om: Option<Map<string, int>> = Some(m)
+    let updatedResult = om?.update("a", 0, (v) => v + 5)
+    let insertedResult = om?.update("b", 7, (v) => v / 0)
+    {
+        sorted: xs,
+        sortedResult: sortedResult,
+        retained: kept,
+        retainedResult: retainedResult,
+        skipped: noneXs,
+        skippedResult: skippedResult,
+        updated: om,
+        updatedResult: updatedResult,
+        insertedResult: insertedResult,
+    }
+}
+main()

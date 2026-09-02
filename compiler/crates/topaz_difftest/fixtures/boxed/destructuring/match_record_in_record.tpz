@@ -1,0 +1,2 @@
+match { a: { b: 5 } } { case { a: { b } } => b
+case _ => 0 }

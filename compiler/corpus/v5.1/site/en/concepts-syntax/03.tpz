@@ -1,0 +1,19 @@
+// Basic function
+function greet(name: string) -> string {
+    "Hello, {name}!"
+}
+
+// Default parameters
+function calculate(x: int, y: int = 10) -> int {
+    x + y
+}
+
+// Record return value
+function getCoordinates() -> { x: int, y: int } {
+    { x: 100, y: 200 }
+}
+
+// Higher-order functions
+function transform(data: Array<int>, fn: (int) -> int) -> Array<int> {
+    map(data, fn)
+}

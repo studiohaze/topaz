@@ -1,0 +1,9 @@
+
+function main() -> string {
+    let m: Option<Map<string, int>> = Some(map { "x": 1 })
+    match m?.entries {
+        case Some(rows) => "{rows[0].key}:{rows[0].value}:{rows.length}"
+        case None => "none"
+    }
+}
+main()

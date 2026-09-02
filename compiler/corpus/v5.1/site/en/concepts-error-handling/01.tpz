@@ -1,0 +1,32 @@
+// Result<SuccessType, ErrorType>
+function divide(numerator: float, denominator: float) -> Result<float, string> {
+    if denominator == 0.0 {
+        return Err("Cannot divide by zero")
+    }
+    return Ok(numerator / denominator)
+}
+
+// Handling Result
+let result = divide(10.0, 2.0)
+match result {
+    case Ok(value) => print("Result: {value}")
+    case Err(errorMessage) => print("Error: {errorMessage}")
+}
+
+// Various error cases
+function readFile(path: string) -> Result<string, string> {
+    if path == "" {
+        return Err("File path is empty")
+    }
+    
+    if !path.endsWith(".txt") {
+        return Err("Only text files are supported")
+    }
+    
+    if !fileExists(path) {
+        return Err("File not found: {path}")
+    }
+    
+    // Actual file reading logic
+    return Ok("File content")
+}

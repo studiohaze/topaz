@@ -1,0 +1,8 @@
+function grade(score: int) -> string {
+    match score {
+        case 90..100 => "A"
+        case 80..<90 => "B"
+        case 70..<80 => "C"
+        case _ => "F"
+    }
+}

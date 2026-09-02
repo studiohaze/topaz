@@ -1,0 +1,2 @@
+function g(a: int, b: int) -> int { a + b }
+g(...[1, 2])

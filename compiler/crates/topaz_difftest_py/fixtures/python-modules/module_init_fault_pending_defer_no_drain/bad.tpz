@@ -1,0 +1,7 @@
+
+export let value = {
+    defer print("module-clean")
+    print("module-before")
+    let z = 0
+    1 / z
+}

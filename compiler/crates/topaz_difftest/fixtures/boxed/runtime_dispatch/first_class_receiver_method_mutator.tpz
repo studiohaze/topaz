@@ -1,0 +1,4 @@
+let mut xs = [1]
+let push = xs.push
+push(x: 2)
+xs

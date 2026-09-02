@@ -1,0 +1,10 @@
+
+function spin(x: int) -> int {
+    let mut i = 0
+    while i < 3 {
+        i = i + 1
+    }
+    x
+}
+export let callbacks = [42, spin]
+export let handlers = { primary: spin }

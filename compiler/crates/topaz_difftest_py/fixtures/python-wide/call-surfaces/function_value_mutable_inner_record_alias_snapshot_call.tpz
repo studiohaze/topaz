@@ -1,0 +1,14 @@
+
+function addDefault(a: int, b: int = 2) -> int {
+    a + b
+}
+function subDefault(a: int, b: int = 2) -> int {
+    a - b
+}
+function main() -> int {
+    let mut inner = { plus: addDefault }
+    let callbacks = { nested: inner }
+    inner.plus = subDefault
+    callbacks.nested.plus(a: 5) + inner.plus(a: 5)
+}
+main()

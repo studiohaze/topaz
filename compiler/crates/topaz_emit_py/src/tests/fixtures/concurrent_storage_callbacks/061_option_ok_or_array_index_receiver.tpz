@@ -1,0 +1,7 @@
+
+let values: Array<Option<int>> = [None, Some(5)]
+let out = values[0].okOr(7)
+match out {
+    case Ok(v) => v
+    case Err(code) => code
+}

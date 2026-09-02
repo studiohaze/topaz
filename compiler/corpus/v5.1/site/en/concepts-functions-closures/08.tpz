@@ -1,0 +1,22 @@
+// Function factory
+function createMultiplier(factor: int) -> (int) -> int {
+    return (x: int) => x * factor
+}
+
+let doubler = createMultiplier(2)
+let tripler = createMultiplier(3)
+
+print("{doubler(5)}")  // 10
+print("{tripler(4)}")  // 12
+
+// Configurable validator function
+function createRangeValidator(min: int, max: int) -> (int) -> bool {
+    return (value: int) => value >= min && value <= max
+}
+
+let adultAgeValidator = createRangeValidator(18, 65)
+let studentAgeValidator = createRangeValidator(5, 18)
+
+print("{adultAgeValidator(25)}")    // true
+print("{studentAgeValidator(16)}")  // true
+print("{studentAgeValidator(25)}")  // false

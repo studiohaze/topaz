@@ -1,0 +1,10 @@
+let arrayOf = Array.of
+let mapNew = Map.new
+let setOf = Set.of
+let jsonParse = JSON.parse
+let mathAbs = Math.abs
+let xs = arrayOf(1, 2)
+let mapValue = mapNew()
+let setValue = setOf(1, 2)
+let parsed = jsonParse("1")
+[xs.length, mapValue.length, setValue.length, parsed.isOk(), mathAbs(-2.5)]

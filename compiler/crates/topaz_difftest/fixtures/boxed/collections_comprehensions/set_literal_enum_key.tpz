@@ -1,0 +1,2 @@
+enum Color { Red, Blue }
+set { Color.Red, Color.Red, Color.Blue }.toArray()

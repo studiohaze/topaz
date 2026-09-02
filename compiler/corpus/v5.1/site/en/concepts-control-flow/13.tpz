@@ -1,0 +1,23 @@
+// Option type matching
+let optionalValue: Option<string> = Some("Topaz")
+
+match optionalValue {
+    case Some(value) => print("Has value: {value}")
+    case None => print("No value")
+}
+
+// Result type matching
+function divide(a: int, b: int) -> Result<int, string> {
+    if b == 0 {
+        return Err("Cannot divide by zero")
+    }
+    return Ok(a / b)
+}
+
+let numerator = 10
+let denominator = 2
+
+match divide(numerator, denominator) {
+    case Ok(result) => print("Division result: {result}")
+    case Err(error) => print("Error: {error}")
+}

@@ -1,0 +1,30 @@
+
+function dbl(x: int) -> int {
+    x * 2
+}
+
+function inc(x: int) -> int {
+    x + 1
+}
+
+function zero(x: int) -> int {
+    0
+}
+
+function choose(i: int) -> int {
+    let mut cbs = [zero, inc]
+    let r = concurrent {
+        slow: {
+            let xs = [1, 2, 3]
+            let out = xs.map(cbs[i])
+            0
+        }
+        flip: {
+            cbs[i] = dbl
+            0
+        }
+    }
+    r.slow + r.flip
+}
+
+choose(1)

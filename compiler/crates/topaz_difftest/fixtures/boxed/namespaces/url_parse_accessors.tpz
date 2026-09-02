@@ -1,0 +1,3 @@
+match URL.parse("HTTPS://Example.COM/a?q=topaz&tag=a&tag=b#frag") { case Ok(u) => { let q = JSON.stringify(u.query())
+"{u.scheme()}/{u.host()}/{u.path()}/{q}/{u.fragment()}/{u.toString()}" }
+case Err(e) => e }

@@ -1,0 +1,13 @@
+let mut acquisitions = 0
+function acquire() -> Result<File, string> {
+  acquisitions += 1
+  open("input.txt")
+}
+function scenario() -> Result<int, string> {
+  using file = acquire()? {
+    file.read()
+    99
+  }
+  Ok(acquisitions)
+}
+scenario()

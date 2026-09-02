@@ -1,0 +1,14 @@
+
+import util
+function main() -> int {
+    let callbacks = match true {
+        case true => util.callbacks
+        case _ => util.callbacks
+    }
+    let handlers = match "ko" {
+        case "en" => util.handlers
+        case _ => util.handlers
+    }
+    callbacks[0](a: 5) + callbacks[1](b: 3, a: 10) + handlers.primary(a: 7)
+}
+main()

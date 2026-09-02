@@ -1,0 +1,9 @@
+function makeBytes(label: string, text: string) -> Bytes {
+  print(label)
+  Bytes.encodeUtf8(text)
+}
+function makeLevel(label: string, n: int) -> int {
+  print(label)
+  n
+}
+Codec.zstdCompress(level: makeLevel("level", 3), bytes: makeBytes("bytes", "topaz")).flatMap((zs) => Codec.zstdDecompress(bytes: zs)).flatMap((b) => b.decodeUtf8())

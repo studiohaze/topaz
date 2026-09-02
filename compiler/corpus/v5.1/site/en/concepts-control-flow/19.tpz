@@ -1,0 +1,24 @@
+// Bad: Nested conditions
+let score = 85
+if score >= 90 {
+    print("Grade A")
+} else {
+    if score >= 80 {
+        print("Grade B")
+    } else {
+        if score >= 70 {
+            print("Grade C")
+        } else {
+            print("Grade F")
+        }
+    }
+}
+
+// Good: Using match
+let grade = match score {
+    case 90..100 => "A"
+    case 80..<90 => "B"
+    case 70..<80 => "C"
+    case _ => "F"
+}
+print("Grade {grade}")

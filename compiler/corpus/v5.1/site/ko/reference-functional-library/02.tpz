@@ -1,0 +1,8 @@
+function 더하기함수(양: int) -> (int) -> int {
+    return (값: int) => 값 + 양
+}
+
+let 십더하기 = 더하기함수(10)
+let 합계 = 십더하기(5)
+
+print("합계: {합계}")  // 15

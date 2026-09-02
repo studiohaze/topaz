@@ -1,0 +1,3 @@
+type Count = int
+let x: Count = "no"
+x

@@ -1,0 +1,4 @@
+function readBox(b: { read: () -> int }) -> int { b.read() }
+let box = { read: () => config }
+export let cache = readBox(box)
+export let config = 1

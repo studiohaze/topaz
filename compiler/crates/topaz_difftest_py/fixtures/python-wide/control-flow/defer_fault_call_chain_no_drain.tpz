@@ -1,0 +1,16 @@
+
+function h() -> int {
+    defer print("h-clean")
+    print("h-body")
+    let z = 0
+    1 / z
+}
+function g() -> int {
+    defer print("g-clean")
+    h()
+}
+function f() -> int {
+    defer print("f-clean")
+    g()
+}
+f()

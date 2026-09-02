@@ -1,0 +1,29 @@
+
+function main() {
+    let mut inc = 0
+    for x in 1..4 {
+        inc = inc + x
+    }
+    let mut exc = 0
+    for x in 1..<4 {
+        exc = exc + x
+    }
+    let mut step = 0
+    for x in 0..<10 by 2 {
+        step = step + x
+    }
+    let mut downInc = 0
+    for x in 5..1 by -2 {
+        downInc = downInc + x
+    }
+    let mut downExc = 0
+    for x in 5..<1 by -2 {
+        downExc = downExc + x
+    }
+    let mut empty = 0
+    for x in 5..1 {
+        empty = empty + x
+    }
+    { text: "{inc}:{exc}:{step}:{downInc}:{downExc}:{empty}:{5..1 by -2}", range: 5..1 by -2 }
+}
+main()

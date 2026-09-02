@@ -1,0 +1,1504 @@
+enum GuestValue {
+  VBool(bool),
+  VInt(int),
+  VString(string),
+  VSymbol(string),
+  VNil,
+  VPair(GuestValue, GuestValue),
+  VVector(Array<GuestValue>, bool),
+  VClosure(int),
+  VPrimitive(int),
+  VUninitialized,
+}
+
+enum ValuePacket {
+  One(GuestValue),
+  Many(Array<GuestValue>),
+}
+
+enum NodeOp {
+  Literal(int),
+  LocalRef(int, int, int),
+  GlobalRef(int, int),
+  Capability(int),
+  IfNode(int, int, int),
+  Begin(Array<int>),
+  Lambda(Array<int>, int),
+  Apply(int, Array<int>),
+  SetLocal(int, int, int, int),
+  SetGlobal(int, int, int),
+  Letrec(Array<int>, Array<int>, int),
+}
+
+record SpanRow {
+  startByte: int,
+  endByte: int,
+}
+
+record OriginRow {
+  kind: string,
+  span: int,
+  rule: string,
+  parent: int,
+}
+
+record BinderRow {
+  name: string,
+  owner: int,
+  slot: int,
+  origin: int,
+}
+
+record GlobalRow {
+  name: string,
+  slot: int,
+  origin: int,
+  capability: int,
+}
+
+record NodeRow {
+  span: int,
+  origin: int,
+  op: NodeOp,
+}
+
+record Kernel {
+  sourceId: string,
+  spans: Array<SpanRow>,
+  origins: Array<OriginRow>,
+  binders: Array<BinderRow>,
+  globals: Array<GlobalRow>,
+  roots: Array<int>,
+  nodes: Array<NodeRow>,
+  quotes: Array<GuestValue>,
+  capabilities: Array<string>,
+}
+
+record Request {
+  invocationId: string,
+  kernel: Kernel,
+  transitionLimit: int,
+  outputLimit: int,
+}
+
+record EnvironmentRow {
+  parent: int,
+  cells: Array<int>,
+}
+
+record ClosureRow {
+  arity: int,
+  body: int,
+  environment: int,
+}
+
+enum ContinuationFrame {
+  HaltFrame,
+  IfFrame(int, int, int),
+  BeginFrame(Array<int>, int, int),
+  OperatorFrame(Array<int>, int),
+  OperandFrame(GuestValue, Array<int>, int, Array<GuestValue>, int),
+  SetLocalFrame(int, int, int),
+  SetGlobalFrame(int),
+  LetrecFrame(Array<int>, Array<int>, int, int, int),
+  ProducerFrame(GuestValue),
+}
+
+record ContinuationRow {
+  frame: ContinuationFrame,
+  parent: int,
+  depth: int,
+}
+
+enum MachineSignal {
+  RuntimeSignal(string),
+  ResourceSignal(string),
+}
+
+enum MachineMode {
+  EvalMode(int, int, int),
+  DeliverMode(ValuePacket, int),
+  InvokeMode(GuestValue, Array<GuestValue>, int),
+  TransferMode(MachineSignal, int),
+  HaltMode,
+}
+
+record RunResult {
+  status: string,
+  packet: Option<ValuePacket>,
+  diagnostic: Option<string>,
+  exitStatus: int,
+  transitionLimit: int,
+  transitions: int,
+  exhausted: bool,
+  maxContinuationDepth: int,
+  allocations: int,
+  transfers: int,
+}
+
+function expectArray(value: JSONValue, label: string) -> Result<Array<JSONValue>, string> {
+  match value.asArray() {
+    case Some(items) => Ok(items)
+    case None => Err("LIT100 {label}: expected array")
+  }
+}
+
+function expectString(value: JSONValue, label: string) -> Result<string, string> {
+  match value.asString() {
+    case Some(text) => Ok(text)
+    case None => Err("LIT100 {label}: expected string")
+  }
+}
+
+function expectInt(value: JSONValue, label: string) -> Result<int, string> {
+  match value.asInt() {
+    case Some(number) => Ok(number)
+    case None => Err("LIT100 {label}: expected integer")
+  }
+}
+
+function expectBool(value: JSONValue, label: string) -> Result<bool, string> {
+  match value.asBool() {
+    case Some(flag) => Ok(flag)
+    case None => Err("LIT100 {label}: expected boolean")
+  }
+}
+
+function requireLength(items: Array<JSONValue>, expected: int, label: string) -> Result<(), string> {
+  if items.length != expected {
+    return Err("LIT101 {label}: expected {expected} fields, got {items.length}")
+  }
+  Ok(())
+}
+
+function expectMinusOne(value: JSONValue, label: string) -> Result<(), string> {
+  let number = expectInt(value, label)?
+  if number != -1 { return Err("LIT102 {label}: reserved field must be -1") }
+  Ok(())
+}
+
+function decodeIntVector(value: JSONValue, label: string) -> Result<Array<int>, string> {
+  let raw = expectArray(value, label)?
+  let mut result: Array<int> = []
+  let mut index = 0
+  while index < raw.length {
+    result.push(expectInt(raw[index], "{label}[{index}]")?)
+    index += 1
+  }
+  Ok(result)
+}
+
+function validSha256(text: string) -> bool {
+  if text.byteLength() != 64 { return false }
+  let digits = "0123456789abcdef"
+  for scalar in text.scalars() {
+    if !digits.contains(scalar) { return false }
+  }
+  true
+}
+
+function pathNeutral(sourceId: string) -> bool {
+  if sourceId.byteLength() == 0 { return false }
+  if sourceId.startsWith("/") || sourceId.startsWith("\\") { return false }
+  if sourceId.contains(":\\") || sourceId.contains("/Users/") || sourceId.contains("/home/") {
+    return false
+  }
+  true
+}
+
+function decodeDatum(value: JSONValue, label: string) -> Result<GuestValue, string> {
+  let row = expectArray(value, label)?
+  if row.length == 0 { return Err("LIT110 {label}: datum row is empty") }
+  let tag = expectString(row[0], "{label}.tag")?
+  match tag {
+    case "bool" => {
+      requireLength(row, 2, label)?
+      Ok(GuestValue.VBool(expectBool(row[1], "{label}.value")?))
+    }
+    case "int" => {
+      requireLength(row, 2, label)?
+      let text = expectString(row[1], "{label}.value")?
+      match toInt(text) {
+        case Some(number) => {
+          if "{number}" != text { return Err("LIT111 {label}: noncanonical integer") }
+          Ok(GuestValue.VInt(number))
+        }
+        case None => Err("LIT111 {label}: invalid integer")
+      }
+    }
+    case "string" => {
+      requireLength(row, 2, label)?
+      Ok(GuestValue.VString(expectString(row[1], "{label}.value")?))
+    }
+    case "symbol" => {
+      requireLength(row, 2, label)?
+      Ok(GuestValue.VSymbol(expectString(row[1], "{label}.value")?))
+    }
+    case "nil" => {
+      requireLength(row, 1, label)?
+      Ok(GuestValue.VNil)
+    }
+    case "pair" => {
+      requireLength(row, 3, label)?
+      Ok(GuestValue.VPair(
+        decodeDatum(row[1], "{label}.car")?,
+        decodeDatum(row[2], "{label}.cdr")?,
+      ))
+    }
+    case "vector" => {
+      requireLength(row, 2, label)?
+      let values = expectArray(row[1], "{label}.values")?
+      let mut decoded: Array<GuestValue> = []
+      let mut index = 0
+      while index < values.length {
+        decoded.push(decodeDatum(values[index], "{label}.values[{index}]")?)
+        index += 1
+      }
+      Ok(GuestValue.VVector(decoded, false))
+    }
+    case "rational" | "real" | "char" | "bytevector" =>
+      Err("LIT190 {label}: datum tag {tag} is valid but outside LIT-H0")
+    case _ => Err("LIT112 {label}: unknown or internal datum tag {tag}")
+  }
+}
+
+function decodeSpans(value: JSONValue) -> Result<Array<SpanRow>, string> {
+  let raw = expectArray(value, "kernel.spans")?
+  let mut spans: Array<SpanRow> = []
+  let mut index = 0
+  while index < raw.length {
+    let row = expectArray(raw[index], "kernel.spans[{index}]")?
+    requireLength(row, 3, "kernel.spans[{index}]")?
+    let id = expectInt(row[0], "kernel.spans[{index}].id")?
+    let start = expectInt(row[1], "kernel.spans[{index}].start")?
+    let end = expectInt(row[2], "kernel.spans[{index}].end")?
+    if id != index { return Err("LIT120 kernel.spans: ids must be contiguous") }
+    if start < 0 || end < start { return Err("LIT121 kernel.spans[{index}]: invalid half-open span") }
+    spans.push(SpanRow { startByte: start, endByte: end })
+    index += 1
+  }
+  Ok(spans)
+}
+
+function decodeOrigins(value: JSONValue, spanCount: int) -> Result<Array<OriginRow>, string> {
+  let raw = expectArray(value, "kernel.origins")?
+  let mut origins: Array<OriginRow> = []
+  let mut index = 0
+  while index < raw.length {
+    let row = expectArray(raw[index], "kernel.origins[{index}]")?
+    requireLength(row, 5, "kernel.origins[{index}]")?
+    let id = expectInt(row[0], "kernel.origins[{index}].id")?
+    let kind = expectString(row[1], "kernel.origins[{index}].kind")?
+    let span = expectInt(row[2], "kernel.origins[{index}].span")?
+    let rule = expectString(row[3], "kernel.origins[{index}].rule")?
+    let parent = expectInt(row[4], "kernel.origins[{index}].parent")?
+    if id != index { return Err("LIT122 kernel.origins: ids must be contiguous") }
+    if kind != "source" && kind != "generated" && kind != "intrinsic" {
+      return Err("LIT123 kernel.origins[{index}]: unknown origin kind {kind}")
+    }
+    if span < 0 || span >= spanCount { return Err("LIT124 kernel.origins[{index}]: broken span reference") }
+    if parent < -1 || parent >= raw.length || parent == index {
+      return Err("LIT125 kernel.origins[{index}]: broken parent reference")
+    }
+    if kind == "source" && (rule.byteLength() != 0 || parent != -1) {
+      return Err("LIT126 kernel.origins[{index}]: source origin cannot have rule or parent")
+    }
+    origins.push(OriginRow { kind: kind, span: span, rule: rule, parent: parent })
+    index += 1
+  }
+  index = 0
+  while index < origins.length {
+    let mut cursor = origins[index].parent
+    let mut hops = 0
+    while cursor != -1 {
+      hops += 1
+      if hops > origins.length { return Err("LIT127 kernel.origins[{index}]: origin cycle") }
+      cursor = origins[cursor].parent
+    }
+    index += 1
+  }
+  Ok(origins)
+}
+
+function decodeBinders(value: JSONValue, originCount: int) -> Result<Array<BinderRow>, string> {
+  let raw = expectArray(value, "kernel.binders")?
+  let mut binders: Array<BinderRow> = []
+  let mut index = 0
+  while index < raw.length {
+    let row = expectArray(raw[index], "kernel.binders[{index}]")?
+    requireLength(row, 5, "kernel.binders[{index}]")?
+    let id = expectInt(row[0], "kernel.binders[{index}].id")?
+    let name = expectString(row[1], "kernel.binders[{index}].name")?
+    let owner = expectInt(row[2], "kernel.binders[{index}].owner")?
+    let slot = expectInt(row[3], "kernel.binders[{index}].slot")?
+    let origin = expectInt(row[4], "kernel.binders[{index}].origin")?
+    if id != index { return Err("LIT130 kernel.binders: ids must be contiguous") }
+    if name.byteLength() == 0 || owner < 0 || slot < 0 {
+      return Err("LIT131 kernel.binders[{index}]: invalid binder row")
+    }
+    if origin < 0 || origin >= originCount { return Err("LIT132 kernel.binders[{index}]: broken origin") }
+    binders.push(BinderRow { name: name, owner: owner, slot: slot, origin: origin })
+    index += 1
+  }
+  Ok(binders)
+}
+
+function decodeGlobals(value: JSONValue, originCount: int) -> Result<Array<GlobalRow>, string> {
+  let raw = expectArray(value, "kernel.globals")?
+  let mut globals: Array<GlobalRow> = []
+  let mut index = 0
+  while index < raw.length {
+    let row = expectArray(raw[index], "kernel.globals[{index}]")?
+    requireLength(row, 5, "kernel.globals[{index}]")?
+    let id = expectInt(row[0], "kernel.globals[{index}].id")?
+    let name = expectString(row[1], "kernel.globals[{index}].name")?
+    let slot = expectInt(row[2], "kernel.globals[{index}].slot")?
+    let origin = expectInt(row[3], "kernel.globals[{index}].origin")?
+    let capability = expectInt(row[4], "kernel.globals[{index}].capability")?
+    if id != index || slot != index { return Err("LIT133 kernel.globals: ids and slots must be contiguous") }
+    if name.byteLength() == 0 || origin < 0 || origin >= originCount || capability < -1 {
+      return Err("LIT134 kernel.globals[{index}]: invalid global row")
+    }
+    globals.push(GlobalRow { name: name, slot: slot, origin: origin, capability: capability })
+    index += 1
+  }
+  Ok(globals)
+}
+
+function decodeNodes(value: JSONValue, spanCount: int, originCount: int) -> Result<Array<NodeRow>, string> {
+  let raw = expectArray(value, "kernel.nodes")?
+  let mut nodes: Array<NodeRow> = []
+  let mut index = 0
+  while index < raw.length {
+    let row = expectArray(raw[index], "kernel.nodes[{index}]")?
+    requireLength(row, 8, "kernel.nodes[{index}]")?
+    let id = expectInt(row[0], "kernel.nodes[{index}].id")?
+    let opcode = expectString(row[1], "kernel.nodes[{index}].opcode")?
+    let span = expectInt(row[2], "kernel.nodes[{index}].span")?
+    let origin = expectInt(row[3], "kernel.nodes[{index}].origin")?
+    if id != index { return Err("LIT140 kernel.nodes: ids must be contiguous") }
+    if span < 0 || span >= spanCount || origin < 0 || origin >= originCount {
+      return Err("LIT141 kernel.nodes[{index}]: broken span or origin")
+    }
+    let op = match opcode {
+      case "literal" => {
+        expectMinusOne(row[5], "node[{index}].b")?
+        expectMinusOne(row[6], "node[{index}].c")?
+        expectMinusOne(row[7], "node[{index}].d")?
+        NodeOp.Literal(expectInt(row[4], "node[{index}].quote")?)
+      }
+      case "local-ref" => {
+        expectMinusOne(row[7], "node[{index}].d")?
+        NodeOp.LocalRef(
+          expectInt(row[4], "node[{index}].binder")?,
+          expectInt(row[5], "node[{index}].depth")?,
+          expectInt(row[6], "node[{index}].slot")?,
+        )
+      }
+      case "global-ref" => {
+        expectMinusOne(row[6], "node[{index}].c")?
+        expectMinusOne(row[7], "node[{index}].d")?
+        NodeOp.GlobalRef(
+          expectInt(row[4], "node[{index}].global")?,
+          expectInt(row[5], "node[{index}].slot")?,
+        )
+      }
+      case "capability" => {
+        expectMinusOne(row[5], "node[{index}].b")?
+        expectMinusOne(row[6], "node[{index}].c")?
+        expectMinusOne(row[7], "node[{index}].d")?
+        NodeOp.Capability(expectInt(row[4], "node[{index}].capability")?)
+      }
+      case "if" => {
+        expectMinusOne(row[7], "node[{index}].d")?
+        NodeOp.IfNode(
+          expectInt(row[4], "node[{index}].test")?,
+          expectInt(row[5], "node[{index}].then")?,
+          expectInt(row[6], "node[{index}].else")?,
+        )
+      }
+      case "begin" => {
+        expectMinusOne(row[5], "node[{index}].b")?
+        expectMinusOne(row[6], "node[{index}].c")?
+        expectMinusOne(row[7], "node[{index}].d")?
+        let children = decodeIntVector(row[4], "node[{index}].children")?
+        if children.length == 0 { return Err("LIT142 node[{index}]: begin cannot be empty") }
+        NodeOp.Begin(children)
+      }
+      case "lambda" => {
+        expectMinusOne(row[6], "node[{index}].rest")?
+        expectMinusOne(row[7], "node[{index}].d")?
+        NodeOp.Lambda(
+          decodeIntVector(row[4], "node[{index}].binders")?,
+          expectInt(row[5], "node[{index}].body")?,
+        )
+      }
+      case "app" => {
+        expectMinusOne(row[6], "node[{index}].c")?
+        expectMinusOne(row[7], "node[{index}].d")?
+        NodeOp.Apply(
+          expectInt(row[4], "node[{index}].operator")?,
+          decodeIntVector(row[5], "node[{index}].operands")?,
+        )
+      }
+      case "set-local" => NodeOp.SetLocal(
+        expectInt(row[4], "node[{index}].binder")?,
+        expectInt(row[5], "node[{index}].depth")?,
+        expectInt(row[6], "node[{index}].slot")?,
+        expectInt(row[7], "node[{index}].rhs")?,
+      )
+      case "set-global" => {
+        expectMinusOne(row[7], "node[{index}].d")?
+        NodeOp.SetGlobal(
+          expectInt(row[4], "node[{index}].global")?,
+          expectInt(row[5], "node[{index}].slot")?,
+          expectInt(row[6], "node[{index}].rhs")?,
+        )
+      }
+      case "letrec" => {
+        expectMinusOne(row[7], "node[{index}].d")?
+        NodeOp.Letrec(
+          decodeIntVector(row[4], "node[{index}].binders")?,
+          decodeIntVector(row[5], "node[{index}].initializers")?,
+          expectInt(row[6], "node[{index}].body")?,
+        )
+      }
+      case _ => return Err("LIT143 kernel.nodes[{index}]: unknown opcode {opcode}")
+    }
+    nodes.push(NodeRow { span: span, origin: origin, op: op })
+    index += 1
+  }
+  Ok(nodes)
+}
+
+function decodeQuotes(value: JSONValue) -> Result<Array<GuestValue>, string> {
+  let raw = expectArray(value, "kernel.quotes")?
+  let mut quotes: Array<GuestValue> = []
+  let mut index = 0
+  while index < raw.length {
+    let row = expectArray(raw[index], "kernel.quotes[{index}]")?
+    requireLength(row, 2, "kernel.quotes[{index}]")?
+    let id = expectInt(row[0], "kernel.quotes[{index}].id")?
+    if id != index { return Err("LIT150 kernel.quotes: ids must be contiguous") }
+    quotes.push(decodeDatum(row[1], "kernel.quotes[{index}].datum")?)
+    index += 1
+  }
+  Ok(quotes)
+}
+
+function decodeCapabilities(value: JSONValue) -> Result<Array<string>, string> {
+  let raw = expectArray(value, "kernel.capabilities")?
+  let expected = ["+", "-", "=", "cons", "null?", "values", "call-with-values", "apply", "vector-ref", "vector-set!"]
+  if raw.length != expected.length { return Err("LIT151 kernel.capabilities: expected exact H0 denominator") }
+  let mut names: Array<string> = []
+  let mut index = 0
+  while index < raw.length {
+    let row = expectArray(raw[index], "kernel.capabilities[{index}]")?
+    requireLength(row, 2, "kernel.capabilities[{index}]")?
+    let id = expectInt(row[0], "kernel.capabilities[{index}].id")?
+    let name = expectString(row[1], "kernel.capabilities[{index}].name")?
+    if id != index || name != expected[index] {
+      return Err("LIT152 kernel.capabilities[{index}]: noncanonical capability row")
+    }
+    names.push(name)
+    index += 1
+  }
+  Ok(names)
+}
+
+function validNodeId(id: int, count: int) -> bool { id >= 0 && id < count }
+
+function validateReferences(kernel: Kernel) -> Result<(), string> {
+  let nodeCount = kernel.nodes.length
+  let mut index = 0
+  while index < kernel.binders.length {
+    let binder = kernel.binders[index]
+    if !validNodeId(binder.owner, nodeCount) {
+      return Err("LIT160 binder[{index}]: broken owner node")
+    }
+    index += 1
+  }
+  index = 0
+  while index < kernel.globals.length {
+    let global = kernel.globals[index]
+    if global.capability >= kernel.capabilities.length {
+      return Err("LIT161 global[{index}]: broken capability reference")
+    }
+    index += 1
+  }
+  index = 0
+  while index < kernel.roots.length {
+    if !validNodeId(kernel.roots[index], nodeCount) { return Err("LIT162 roots[{index}]: broken node reference") }
+    index += 1
+  }
+  if kernel.roots.length != 1 { return Err("LIT190 H0 supports exactly one root") }
+  index = 0
+  while index < kernel.nodes.length {
+    let op = kernel.nodes[index].op
+    match op {
+      case Literal(quote) => {
+        if quote < 0 || quote >= kernel.quotes.length { return Err("LIT163 node[{index}]: broken quote reference") }
+      }
+      case LocalRef(binder, depth, slot) => {
+        if binder < 0 || binder >= kernel.binders.length || depth < 0 || slot < 0 {
+          return Err("LIT164 node[{index}]: invalid local reference")
+        }
+        if kernel.binders[binder].slot != slot { return Err("LIT165 node[{index}]: binder/slot mismatch") }
+      }
+      case GlobalRef(global, slot) => {
+        if global < 0 || global >= kernel.globals.length || kernel.globals[global].slot != slot {
+          return Err("LIT166 node[{index}]: invalid global reference")
+        }
+      }
+      case Capability(capability) => {
+        if capability < 0 || capability >= kernel.capabilities.length {
+          return Err("LIT167 node[{index}]: invalid capability reference")
+        }
+      }
+      case IfNode(test, thenNode, elseNode) => {
+        if !validNodeId(test, nodeCount) || !validNodeId(thenNode, nodeCount) || !validNodeId(elseNode, nodeCount) {
+          return Err("LIT168 node[{index}]: broken if reference")
+        }
+      }
+      case Begin(children) => {
+        for child in children {
+          if !validNodeId(child, nodeCount) { return Err("LIT169 node[{index}]: broken begin reference") }
+        }
+      }
+      case Lambda(binders, body) => {
+        if !validNodeId(body, nodeCount) { return Err("LIT170 node[{index}]: broken lambda body") }
+        let mut slot = 0
+        for binder in binders {
+          if binder < 0 || binder >= kernel.binders.length || kernel.binders[binder].owner != index || kernel.binders[binder].slot != slot {
+            return Err("LIT171 node[{index}]: invalid lambda binder layout")
+          }
+          slot += 1
+        }
+      }
+      case Apply(operator, operands) => {
+        if !validNodeId(operator, nodeCount) { return Err("LIT172 node[{index}]: broken operator reference") }
+        for operand in operands {
+          if !validNodeId(operand, nodeCount) { return Err("LIT173 node[{index}]: broken operand reference") }
+        }
+      }
+      case SetLocal(binder, depth, slot, rhs) => {
+        if binder < 0 || binder >= kernel.binders.length || depth < 0 || slot < 0 || kernel.binders[binder].slot != slot || !validNodeId(rhs, nodeCount) {
+          return Err("LIT174 node[{index}]: invalid set-local reference")
+        }
+      }
+      case SetGlobal(global, slot, rhs) => {
+        if global < 0 || global >= kernel.globals.length || kernel.globals[global].slot != slot || !validNodeId(rhs, nodeCount) {
+          return Err("LIT175 node[{index}]: invalid set-global reference")
+        }
+      }
+      case Letrec(binders, initializers, body) => {
+        if binders.length != initializers.length || !validNodeId(body, nodeCount) {
+          return Err("LIT176 node[{index}]: invalid letrec shape")
+        }
+        let mut slot = 0
+        while slot < binders.length {
+          let binder = binders[slot]
+          if binder < 0 || binder >= kernel.binders.length || kernel.binders[binder].owner != index || kernel.binders[binder].slot != slot || !validNodeId(initializers[slot], nodeCount) {
+            return Err("LIT177 node[{index}]: invalid letrec binder layout")
+          }
+          slot += 1
+        }
+      }
+    }
+    index += 1
+  }
+  Ok(())
+}
+
+function decodeRequest(text: string) -> Result<Request, string> {
+  let parsed = match JSON.parse(text) {
+    case Ok(value) => value
+    case Err(error) => return Err("LIT100 json:{error.line}:{error.column}:{error.message}")
+  }
+  let request = expectArray(parsed, "request")?
+  requireLength(request, 4, "request")?
+  if expectString(request[0], "request.tag")? != "lispex.hosted-kernel-request/v0" {
+    return Err("LIT103 request: unsupported version")
+  }
+  let invocationId = expectString(request[1], "request.invocation-id")?
+  if invocationId.byteLength() == 0 { return Err("LIT104 request: empty invocation id") }
+  let limits = expectArray(request[3], "request.limits")?
+  requireLength(limits, 2, "request.limits")?
+  let transitionLimit = expectInt(limits[0], "request.limits.transition")?
+  let outputLimit = expectInt(limits[1], "request.limits.output")?
+  if transitionLimit <= 0 || outputLimit <= 0 { return Err("LIT105 request: limits must be positive") }
+
+  let raw = expectArray(request[2], "kernel")?
+  requireLength(raw, 13, "kernel")?
+  if expectString(raw[0], "kernel.tag")? != "lispex.hosted-kernel/v0" {
+    return Err("LIT106 kernel: unsupported schema")
+  }
+  if expectString(raw[1], "kernel.profile")? != "lispex-r7rs-small-pinned/v1.4" {
+    return Err("LIT107 kernel: unsupported executable profile")
+  }
+  if expectString(raw[2], "kernel.feature")? != "hosted-kernel-h0/v0" {
+    return Err("LIT108 kernel: unsupported feature set")
+  }
+  let sourceId = expectString(raw[3], "kernel.source-id")?
+  if !pathNeutral(sourceId) { return Err("LIT109 kernel: source id is empty or host-path-shaped") }
+  let sourceSha = expectString(raw[4], "kernel.source-sha256")?
+  if !validSha256(sourceSha) { return Err("LIT109 kernel: invalid source sha256") }
+
+  let spans = decodeSpans(raw[5])?
+  let origins = decodeOrigins(raw[6], spans.length)?
+  let binders = decodeBinders(raw[7], origins.length)?
+  let globals = decodeGlobals(raw[8], origins.length)?
+  let roots = decodeIntVector(raw[9], "kernel.roots")?
+  let nodes = decodeNodes(raw[10], spans.length, origins.length)?
+  let quotes = decodeQuotes(raw[11])?
+  let capabilities = decodeCapabilities(raw[12])?
+  let kernel = Kernel {
+    sourceId: sourceId,
+    spans: spans,
+    origins: origins,
+    binders: binders,
+    globals: globals,
+    roots: roots,
+    nodes: nodes,
+    quotes: quotes,
+    capabilities: capabilities,
+  }
+  validateReferences(kernel)?
+  Ok(Request {
+    invocationId: invocationId,
+    kernel: kernel,
+    transitionLimit: transitionLimit,
+    outputLimit: outputLimit,
+  })
+}
+
+function cloneGuest(value: GuestValue) -> GuestValue {
+  match value {
+    case VBool(flag) => GuestValue.VBool(flag)
+    case VInt(number) => GuestValue.VInt(number)
+    case VString(text) => GuestValue.VString(text)
+    case VSymbol(name) => GuestValue.VSymbol(name)
+    case VNil => GuestValue.VNil
+    case VPair(car, cdr) => GuestValue.VPair(cloneGuest(car), cloneGuest(cdr))
+    case VVector(values, mutable) => {
+      let mut copied: Array<GuestValue> = []
+      for item in values { copied.push(cloneGuest(item)) }
+      GuestValue.VVector(copied, mutable)
+    }
+    case VClosure(id) => GuestValue.VClosure(id)
+    case VPrimitive(id) => GuestValue.VPrimitive(id)
+    case VUninitialized => GuestValue.VUninitialized
+  }
+}
+
+function packetValues(packet: ValuePacket) -> Array<GuestValue> {
+  match packet {
+    case One(value) => [value]
+    case Many(values) => values
+  }
+}
+
+function packetFrom(values: Array<GuestValue>) -> ValuePacket {
+  if values.length == 1 { ValuePacket.One(values[0]) } else { ValuePacket.Many(values) }
+}
+
+function appendGuest(values: Array<GuestValue>, value: GuestValue) -> Array<GuestValue> {
+  let mut result = values
+  result.push(value)
+  result
+}
+
+function packetOne(packet: ValuePacket, context: string) -> Result<GuestValue, string> {
+  match packet {
+    case One(value) => Ok(value)
+    case Many(values) => Err("E320 multiple values in {context}: got {values.length}")
+  }
+}
+
+function truthy(value: GuestValue) -> bool {
+  match value {
+    case VBool(false) => false
+    case _ => true
+  }
+}
+
+function allocateCell(cells: Array<GuestValue>, value: GuestValue) -> int {
+  let mut store = cells
+  let id = store.length
+  store.push(value)
+  id
+}
+
+function writeCell(cells: Array<GuestValue>, id: int, value: GuestValue) -> Result<(), string> {
+  if id < 0 || id >= cells.length { return Err("LIT200 internal cell reference") }
+  let mut store = cells
+  store[id] = value
+  Ok(())
+}
+
+function allocateEnvironment(environments: Array<EnvironmentRow>, parent: int, cells: Array<int>) -> int {
+  let mut store = environments
+  let id = store.length
+  store.push(EnvironmentRow { parent: parent, cells: cells })
+  id
+}
+
+function allocateClosure(closures: Array<ClosureRow>, arity: int, body: int, environment: int) -> int {
+  let mut store = closures
+  let id = store.length
+  store.push(ClosureRow { arity: arity, body: body, environment: environment })
+  id
+}
+
+function allocateContinuation(
+  continuations: Array<ContinuationRow>,
+  frame: ContinuationFrame,
+  parent: int,
+) -> int {
+  let mut store = continuations
+  let depth = if parent < 0 { 1 } else { store[parent].depth + 1 }
+  let id = store.length
+  store.push(ContinuationRow { frame: frame, parent: parent, depth: depth })
+  id
+}
+
+function localCell(environments: Array<EnvironmentRow>, environment: int, depth: int, slot: int) -> Result<int, string> {
+  let mut cursor = environment
+  let mut remaining = depth
+  while remaining > 0 {
+    if cursor < 0 || cursor >= environments.length { return Err("E300 invalid lexical depth") }
+    cursor = environments[cursor].parent
+    remaining -= 1
+  }
+  if cursor < 0 || cursor >= environments.length { return Err("E300 invalid lexical environment") }
+  let row = environments[cursor]
+  if slot < 0 || slot >= row.cells.length { return Err("E300 invalid lexical slot") }
+  Ok(row.cells[slot])
+}
+
+function guestInt(value: GuestValue, name: string) -> Result<int, string> {
+  match value {
+    case VInt(number) => Ok(number)
+    case _ => Err("E312 {name}: exact integer required")
+  }
+}
+
+function requireArity(name: string, actual: int, minimum: int, maximum: int) -> Result<(), string> {
+  if actual < minimum || (maximum >= 0 && actual > maximum) {
+    let expected = if maximum == minimum { "{minimum}" } else if maximum < 0 { "at least {minimum}" } else { "{minimum}..{maximum}" }
+    return Err("E302 {name}: expected {expected} arguments, got {actual}")
+  }
+  Ok(())
+}
+
+function properList(value: GuestValue) -> Result<Array<GuestValue>, string> {
+  let mut result: Array<GuestValue> = []
+  let mut cursor = value
+  loop {
+    match cursor {
+      case VNil => { break }
+      case VPair(car, cdr) => {
+        result.push(car)
+        cursor = cdr
+      }
+      case _ => return Err("E312 apply: final argument must be a proper list")
+    }
+  }
+  Ok(result)
+}
+
+function renderGuest(value: GuestValue) -> string {
+  match value {
+    case VBool(flag) => if flag { "#t" } else { "#f" }
+    case VInt(number) => "{number}"
+    case VString(text) => "\"{escapeJson(text)}\""
+    case VSymbol(name) => name
+    case VNil => "()"
+    case VPair(_, _) => {
+      let mut parts: Array<string> = []
+      let mut cursor = value
+      let mut dotted = ""
+      loop {
+        match cursor {
+          case VPair(car, cdr) => {
+            parts.push(renderGuest(car))
+            cursor = cdr
+          }
+          case VNil => { break }
+          case _ => {
+            dotted = " . {renderGuest(cursor)}"
+            break
+          }
+        }
+      }
+      "({parts.join(" ")}{dotted})"
+    }
+    case VVector(values, _) => {
+      let mut parts: Array<string> = []
+      for item in values { parts.push(renderGuest(item)) }
+      "#({parts.join(" ")})"
+    }
+    case VClosure(_) => "#<procedure>"
+    case VPrimitive(_) => "#<procedure>"
+    case VUninitialized => "#<internal-uninitialized>"
+  }
+}
+
+function escapeJson(text: string) -> string {
+  let mut result = ""
+  for scalar in text.scalars() {
+    if scalar == "\\" { result += "\\\\" }
+    else if scalar == "\"" { result += "\\\"" }
+    else if scalar == "\n" { result += "\\n" }
+    else if scalar == "\r" { result += "\\r" }
+    else if scalar == "\t" { result += "\\t" }
+    else { result += scalar }
+  }
+  result
+}
+
+function renderPacket(packet: ValuePacket) -> string {
+  match packet {
+    case One(value) => "[\"one\",\"{escapeJson(renderGuest(value))}\"]"
+    case Many(values) => {
+      let mut rendered: Array<string> = []
+      for value in values { rendered.push("\"{escapeJson(renderGuest(value))}\"") }
+      "[\"many\",[{rendered.join(",")}]]"
+    }
+  }
+}
+
+function runKernel(request: Request) -> RunResult {
+  let kernel = request.kernel
+  let mut cells: Array<GuestValue> = []
+  let mut environments: Array<EnvironmentRow> = []
+  let mut closures: Array<ClosureRow> = []
+  let mut continuations: Array<ContinuationRow> = []
+  let mut allocations = 0
+  for global in kernel.globals {
+    let value = if global.capability >= 0 {
+      GuestValue.VPrimitive(global.capability)
+    } else {
+      GuestValue.VUninitialized
+    }
+    allocateCell(cells, value)
+    allocations += 1
+  }
+  let haltContinuation = allocateContinuation(continuations, ContinuationFrame.HaltFrame, -1)
+  allocations += 1
+  let mut maxContinuationDepth = 1
+  let mut transitions = 0
+  let mut transfers = 0
+  let mut exhausted = false
+  let mut finalPacket: Option<ValuePacket> = None
+  let mut finalDiagnostic: Option<string> = None
+  let mut finalStatus = "error"
+  let mut finalExit = 1
+  let mut mode = MachineMode.EvalMode(kernel.roots[0], -1, haltContinuation)
+
+  loop {
+    if transitions >= request.transitionLimit && !exhausted {
+      exhausted = true
+      transfers += 1
+      mode = MachineMode.TransferMode(
+        MachineSignal.ResourceSignal("recursion-limit logical transition budget exhausted"),
+        haltContinuation,
+      )
+    } else {
+      transitions += 1
+    }
+
+    match mode {
+      case EvalMode(nodeId, environment, continuation) => {
+        if nodeId < 0 || nodeId >= kernel.nodes.length {
+          transfers += 1
+          mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal("LIT200 internal node reference"), continuation)
+        } else {
+          let node = kernel.nodes[nodeId]
+          match node.op {
+            case Literal(quoteId) => {
+              mode = MachineMode.DeliverMode(ValuePacket.One(cloneGuest(kernel.quotes[quoteId])), continuation)
+            }
+            case LocalRef(_, depth, slot) => {
+              match localCell(environments, environment, depth, slot) {
+                case Ok(cell) => {
+                  let value = cells[cell]
+                  match value {
+                    case VUninitialized => {
+                      transfers += 1
+                      mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal("E321 uninitialized letrec binding"), continuation)
+                    }
+                    case _ => {
+                      mode = MachineMode.DeliverMode(ValuePacket.One(value), continuation)
+                    }
+                  }
+                }
+                case Err(error) => {
+                  transfers += 1
+                  mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+                }
+              }
+            }
+            case GlobalRef(_, slot) => {
+              let value = cells[slot]
+              match value {
+                case VUninitialized => {
+                  transfers += 1
+                  mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal("E300 uninitialized global"), continuation)
+                }
+                case _ => {
+                  mode = MachineMode.DeliverMode(ValuePacket.One(value), continuation)
+                }
+              }
+            }
+            case Capability(capability) => {
+              mode = MachineMode.DeliverMode(ValuePacket.One(GuestValue.VPrimitive(capability)), continuation)
+            }
+            case IfNode(testNode, thenNode, elseNode) => {
+              let frame = allocateContinuation(
+                continuations,
+                ContinuationFrame.IfFrame(thenNode, elseNode, environment),
+                continuation,
+              )
+              allocations += 1
+              if continuations[frame].depth > maxContinuationDepth { maxContinuationDepth = continuations[frame].depth }
+              mode = MachineMode.EvalMode(testNode, environment, frame)
+            }
+            case Begin(children) => {
+              if children.length == 1 {
+                mode = MachineMode.EvalMode(children[0], environment, continuation)
+              } else {
+                let frame = allocateContinuation(
+                  continuations,
+                  ContinuationFrame.BeginFrame(children, 1, environment),
+                  continuation,
+                )
+                allocations += 1
+                if continuations[frame].depth > maxContinuationDepth { maxContinuationDepth = continuations[frame].depth }
+                mode = MachineMode.EvalMode(children[0], environment, frame)
+              }
+            }
+            case Lambda(binders, body) => {
+              let closure = allocateClosure(closures, binders.length, body, environment)
+              allocations += 1
+              mode = MachineMode.DeliverMode(ValuePacket.One(GuestValue.VClosure(closure)), continuation)
+            }
+            case Apply(operator, operands) => {
+              let frame = allocateContinuation(
+                continuations,
+                ContinuationFrame.OperatorFrame(operands, environment),
+                continuation,
+              )
+              allocations += 1
+              if continuations[frame].depth > maxContinuationDepth { maxContinuationDepth = continuations[frame].depth }
+              mode = MachineMode.EvalMode(operator, environment, frame)
+            }
+            case SetLocal(_, depth, slot, rhs) => {
+              match localCell(environments, environment, depth, slot) {
+                case Ok(cell) => {
+                  let frame = allocateContinuation(continuations, ContinuationFrame.SetLocalFrame(cell, environment, slot), continuation)
+                  allocations += 1
+                  if continuations[frame].depth > maxContinuationDepth { maxContinuationDepth = continuations[frame].depth }
+                  mode = MachineMode.EvalMode(rhs, environment, frame)
+                }
+                case Err(error) => {
+                  transfers += 1
+                  mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+                }
+              }
+            }
+            case SetGlobal(_, slot, rhs) => {
+              let frame = allocateContinuation(continuations, ContinuationFrame.SetGlobalFrame(slot), continuation)
+              allocations += 1
+              if continuations[frame].depth > maxContinuationDepth { maxContinuationDepth = continuations[frame].depth }
+              mode = MachineMode.EvalMode(rhs, environment, frame)
+            }
+            case Letrec(binders, initializers, body) => {
+              let mut frameCells: Array<int> = []
+              let mut binderIndex = 0
+              while binderIndex < binders.length {
+                frameCells.push(allocateCell(cells, GuestValue.VUninitialized))
+                allocations += 1
+                binderIndex += 1
+              }
+              let localEnvironment = allocateEnvironment(environments, environment, frameCells)
+              allocations += 1
+              if initializers.length == 0 {
+                mode = MachineMode.EvalMode(body, localEnvironment, continuation)
+              } else {
+                let frame = allocateContinuation(
+                  continuations,
+                  ContinuationFrame.LetrecFrame(binders, initializers, 0, localEnvironment, body),
+                  continuation,
+                )
+                allocations += 1
+                if continuations[frame].depth > maxContinuationDepth { maxContinuationDepth = continuations[frame].depth }
+                mode = MachineMode.EvalMode(initializers[0], localEnvironment, frame)
+              }
+            }
+          }
+        }
+      }
+      case DeliverMode(packet, continuation) => {
+        let row = continuations[continuation]
+        match row.frame {
+          case HaltFrame => {
+            finalPacket = Some(packet)
+            finalStatus = "ok"
+            finalExit = 0
+            mode = MachineMode.HaltMode
+          }
+          case IfFrame(thenNode, elseNode, environment) => {
+            match packetOne(packet, "if test") {
+              case Ok(value) => {
+                mode = MachineMode.EvalMode(if truthy(value) { thenNode } else { elseNode }, environment, row.parent)
+              }
+              case Err(error) => {
+                transfers += 1
+                mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), row.parent)
+              }
+            }
+          }
+          case BeginFrame(children, nextIndex, environment) => {
+            if nextIndex + 1 >= children.length {
+              mode = MachineMode.EvalMode(children[nextIndex], environment, row.parent)
+            } else {
+              let frame = allocateContinuation(
+                continuations,
+                ContinuationFrame.BeginFrame(children, nextIndex + 1, environment),
+                row.parent,
+              )
+              allocations += 1
+              if continuations[frame].depth > maxContinuationDepth { maxContinuationDepth = continuations[frame].depth }
+              mode = MachineMode.EvalMode(children[nextIndex], environment, frame)
+            }
+          }
+          case OperatorFrame(operands, environment) => {
+            match packetOne(packet, "application operator") {
+              case Ok(procedure) => {
+                if operands.length == 0 {
+                  mode = MachineMode.InvokeMode(procedure, [], row.parent)
+                } else {
+                  let frame = allocateContinuation(
+                    continuations,
+                    ContinuationFrame.OperandFrame(procedure, operands, 0, [], environment),
+                    row.parent,
+                  )
+                  allocations += 1
+                  if continuations[frame].depth > maxContinuationDepth { maxContinuationDepth = continuations[frame].depth }
+                  mode = MachineMode.EvalMode(operands[0], environment, frame)
+                }
+              }
+              case Err(error) => {
+                transfers += 1
+                mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), row.parent)
+              }
+            }
+          }
+          case OperandFrame(procedure, operands, operandIndex, priorValues, environment) => {
+            match packetOne(packet, "application operand") {
+              case Ok(value) => {
+                let values = appendGuest(priorValues, value)
+                let next = operandIndex + 1
+                if next >= operands.length {
+                  mode = MachineMode.InvokeMode(procedure, values, row.parent)
+                } else {
+                  let frame = allocateContinuation(
+                    continuations,
+                    ContinuationFrame.OperandFrame(procedure, operands, next, values, environment),
+                    row.parent,
+                  )
+                  allocations += 1
+                  if continuations[frame].depth > maxContinuationDepth { maxContinuationDepth = continuations[frame].depth }
+                  mode = MachineMode.EvalMode(operands[next], environment, frame)
+                }
+              }
+              case Err(error) => {
+                transfers += 1
+                mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), row.parent)
+              }
+            }
+          }
+          case SetLocalFrame(cell, _, _) => {
+            match packetOne(packet, "set! rhs") {
+              case Ok(value) => {
+                match writeCell(cells, cell, value) {
+                  case Ok(_) => {
+                    mode = MachineMode.DeliverMode(ValuePacket.Many([]), row.parent)
+                  }
+                  case Err(error) => {
+                    transfers += 1
+                    mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), row.parent)
+                  }
+                }
+              }
+              case Err(error) => {
+                transfers += 1
+                mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), row.parent)
+              }
+            }
+          }
+          case SetGlobalFrame(cell) => {
+            match packetOne(packet, "set! rhs") {
+              case Ok(value) => {
+                match writeCell(cells, cell, value) {
+                  case Ok(_) => {
+                    mode = MachineMode.DeliverMode(ValuePacket.Many([]), row.parent)
+                  }
+                  case Err(error) => {
+                    transfers += 1
+                    mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), row.parent)
+                  }
+                }
+              }
+              case Err(error) => {
+                transfers += 1
+                mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), row.parent)
+              }
+            }
+          }
+          case LetrecFrame(_, initializers, initializerIndex, environment, body) => {
+            match packetOne(packet, "letrec initializer") {
+              case Ok(value) => {
+                let cell = environments[environment].cells[initializerIndex]
+                match writeCell(cells, cell, value) {
+                  case Err(error) => {
+                    transfers += 1
+                    mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), row.parent)
+                  }
+                  case Ok(_) => {
+                    let next = initializerIndex + 1
+                    if next >= initializers.length {
+                      mode = MachineMode.EvalMode(body, environment, row.parent)
+                    } else {
+                      let frame = allocateContinuation(
+                        continuations,
+                        ContinuationFrame.LetrecFrame([], initializers, next, environment, body),
+                        row.parent,
+                      )
+                      allocations += 1
+                      if continuations[frame].depth > maxContinuationDepth { maxContinuationDepth = continuations[frame].depth }
+                      mode = MachineMode.EvalMode(initializers[next], environment, frame)
+                    }
+                  }
+                }
+              }
+              case Err(error) => {
+                transfers += 1
+                mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), row.parent)
+              }
+            }
+          }
+          case ProducerFrame(consumer) => {
+            mode = MachineMode.InvokeMode(consumer, packetValues(packet), row.parent)
+          }
+        }
+      }
+      case InvokeMode(procedure, arguments, continuation) => {
+        match procedure {
+          case VClosure(closureId) => {
+            if closureId < 0 || closureId >= closures.length {
+              transfers += 1
+              mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal("LIT200 invalid closure id"), continuation)
+            } else {
+              let closure = closures[closureId]
+              if closure.arity != arguments.length {
+                transfers += 1
+                mode = MachineMode.TransferMode(
+                  MachineSignal.RuntimeSignal("E302 closure: expected {closure.arity} arguments, got {arguments.length}"),
+                  continuation,
+                )
+              } else {
+                let mut frameCells: Array<int> = []
+                for argument in arguments {
+                  frameCells.push(allocateCell(cells, argument))
+                  allocations += 1
+                }
+                let environment = allocateEnvironment(environments, closure.environment, frameCells)
+                allocations += 1
+                mode = MachineMode.EvalMode(closure.body, environment, continuation)
+              }
+            }
+          }
+          case VPrimitive(capability) => {
+            let name = kernel.capabilities[capability]
+            match name {
+              case "+" => {
+                let mut total = 0
+                let mut failed: Option<string> = None
+                for argument in arguments {
+                  match guestInt(argument, "+") {
+                    case Ok(number) => { total += number }
+                    case Err(error) => { failed = Some(error) }
+                  }
+                }
+                match failed {
+                  case Some(error) => {
+                    transfers += 1
+                    mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+                  }
+                  case None => {
+                    mode = MachineMode.DeliverMode(ValuePacket.One(GuestValue.VInt(total)), continuation)
+                  }
+                }
+              }
+              case "-" => {
+                match requireArity("-", arguments.length, 1, -1) {
+                  case Err(error) => {
+                    transfers += 1
+                    mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+                  }
+                  case Ok(_) => {
+                    match guestInt(arguments[0], "-") {
+                      case Err(error) => {
+                        transfers += 1
+                        mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+                      }
+                      case Ok(first) => {
+                        let mut total = if arguments.length == 1 { -first } else { first }
+                        let mut index = 1
+                        let mut failed: Option<string> = None
+                        while index < arguments.length {
+                          match guestInt(arguments[index], "-") {
+                            case Ok(number) => { total -= number }
+                            case Err(error) => { failed = Some(error) }
+                          }
+                          index += 1
+                        }
+                        match failed {
+                          case Some(error) => {
+                            transfers += 1
+                            mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+                          }
+                          case None => {
+                            mode = MachineMode.DeliverMode(ValuePacket.One(GuestValue.VInt(total)), continuation)
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+              case "=" => {
+                match requireArity("=", arguments.length, 2, -1) {
+                  case Err(error) => {
+                    transfers += 1
+                    mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+                  }
+                  case Ok(_) => {
+                    let mut equal = true
+                    let mut index = 0
+                    let mut failed: Option<string> = None
+                    while index + 1 < arguments.length {
+                      match guestInt(arguments[index], "=") {
+                        case Err(error) => { failed = Some(error) }
+                        case Ok(left) => match guestInt(arguments[index + 1], "=") {
+                          case Err(error) => { failed = Some(error) }
+                          case Ok(right) => {
+                            if left != right { equal = false }
+                          }
+                        }
+                      }
+                      index += 1
+                    }
+                    match failed {
+                      case Some(error) => {
+                        transfers += 1
+                        mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+                      }
+                      case None => {
+                        mode = MachineMode.DeliverMode(ValuePacket.One(GuestValue.VBool(equal)), continuation)
+                      }
+                    }
+                  }
+                }
+              }
+              case "cons" => match requireArity("cons", arguments.length, 2, 2) {
+                case Err(error) => {
+                  transfers += 1
+                  mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+                }
+                case Ok(_) => {
+                  mode = MachineMode.DeliverMode(
+                    ValuePacket.One(GuestValue.VPair(arguments[0], arguments[1])),
+                    continuation,
+                  )
+                }
+              }
+              case "null?" => match requireArity("null?", arguments.length, 1, 1) {
+                case Err(error) => {
+                  transfers += 1
+                  mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+                }
+                case Ok(_) => {
+                  let isNull = match arguments[0] {
+                    case VNil => true
+                    case _ => false
+                  }
+                  mode = MachineMode.DeliverMode(ValuePacket.One(GuestValue.VBool(isNull)), continuation)
+                }
+              }
+              case "values" => {
+                mode = MachineMode.DeliverMode(packetFrom(arguments), continuation)
+              }
+              case "call-with-values" => match requireArity("call-with-values", arguments.length, 2, 2) {
+                case Err(error) => {
+                  transfers += 1
+                  mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+                }
+                case Ok(_) => {
+                  let frame = allocateContinuation(continuations, ContinuationFrame.ProducerFrame(arguments[1]), continuation)
+                  allocations += 1
+                  if continuations[frame].depth > maxContinuationDepth { maxContinuationDepth = continuations[frame].depth }
+                  mode = MachineMode.InvokeMode(arguments[0], [], frame)
+                }
+              }
+              case "apply" => match requireArity("apply", arguments.length, 2, -1) {
+                case Err(error) => {
+                  transfers += 1
+                  mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+                }
+                case Ok(_) => {
+                  match properList(arguments[arguments.length - 1]) {
+                    case Err(error) => {
+                      transfers += 1
+                      mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+                    }
+                    case Ok(tail) => {
+                      let mut expanded: Array<GuestValue> = []
+                      let mut index = 1
+                      while index + 1 < arguments.length {
+                        expanded.push(arguments[index])
+                        index += 1
+                      }
+                      for value in tail { expanded.push(value) }
+                      mode = MachineMode.InvokeMode(arguments[0], expanded, continuation)
+                    }
+                  }
+                }
+              }
+              case "vector-ref" => match requireArity("vector-ref", arguments.length, 2, 2) {
+                case Err(error) => {
+                  transfers += 1
+                  mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+                }
+                case Ok(_) => match arguments[0] {
+                  case VVector(values, _) => match guestInt(arguments[1], "vector-ref") {
+                    case Ok(index) => if index >= 0 && index < values.length {
+                      mode = MachineMode.DeliverMode(ValuePacket.One(values[index]), continuation)
+                    } else {
+                      transfers += 1
+                      mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal("E311 vector-ref: index out of range"), continuation)
+                    }
+                    case Err(error) => {
+                      transfers += 1
+                      mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+                    }
+                  }
+                  case _ => {
+                    transfers += 1
+                    mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal("E312 vector-ref: vector required"), continuation)
+                  }
+                }
+              }
+              case "vector-set!" => match requireArity("vector-set!", arguments.length, 3, 3) {
+                case Err(error) => {
+                  transfers += 1
+                  mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+                }
+                case Ok(_) => match arguments[0] {
+                  case VVector(values, mutable) => if !mutable {
+                    transfers += 1
+                    mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal("E312 vector-set!: immutable quoted vector"), continuation)
+                  } else {
+                    match guestInt(arguments[1], "vector-set!") {
+                      case Ok(index) => if index >= 0 && index < values.length {
+                        let mut mutableValues = values
+                        mutableValues[index] = arguments[2]
+                        mode = MachineMode.DeliverMode(ValuePacket.Many([]), continuation)
+                      } else {
+                        transfers += 1
+                        mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal("E311 vector-set!: index out of range"), continuation)
+                      }
+                      case Err(error) => {
+                        transfers += 1
+                        mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+                      }
+                    }
+                  }
+                  case _ => {
+                    transfers += 1
+                    mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal("E312 vector-set!: vector required"), continuation)
+                  }
+                }
+              }
+              case _ => {
+                transfers += 1
+                mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal("LIT200 unknown primitive"), continuation)
+              }
+            }
+          }
+          case _ => {
+            transfers += 1
+            mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal("E301 attempted to call a non-procedure"), continuation)
+          }
+        }
+      }
+      case TransferMode(signal, _) => {
+        match signal {
+          case RuntimeSignal(diagnostic) => {
+            finalStatus = "error"
+            finalDiagnostic = Some(diagnostic)
+            finalExit = 1
+          }
+          case ResourceSignal(diagnostic) => {
+            finalStatus = "resource"
+            finalDiagnostic = Some(diagnostic)
+            finalExit = 2
+          }
+        }
+        mode = MachineMode.HaltMode
+      }
+      case HaltMode => { break }
+    }
+  }
+
+  RunResult {
+    status: finalStatus,
+    packet: finalPacket,
+    diagnostic: finalDiagnostic,
+    exitStatus: finalExit,
+    transitionLimit: request.transitionLimit,
+    transitions: transitions,
+    exhausted: exhausted,
+    maxContinuationDepth: maxContinuationDepth,
+    allocations: allocations,
+    transfers: transfers,
+  }
+}
+
+function renderRunResult(invocationId: string, result: RunResult) -> string {
+  let packet = match result.packet {
+    case Some(value) => renderPacket(value)
+    case None => "false"
+  }
+  let diagnostic = match result.diagnostic {
+    case Some(value) => "\"{escapeJson(value)}\""
+    case None => "false"
+  }
+  let exhausted = if result.exhausted { "true" } else { "false" }
+  "[\"lispex.lit-kernel-result/v0\",\"{escapeJson(invocationId)}\",\"{result.status}\",{packet},{diagnostic},{result.exitStatus},[[\"transition-limit\",{result.transitionLimit}],[\"transitions\",{result.transitions}],[\"exhausted\",{exhausted}],[\"max-continuation-depth\",{result.maxContinuationDepth}],[\"allocations\",{result.allocations}],[\"transfers\",{result.transfers}]]]"
+}
+
+function renderDecodeError(error: string) -> string {
+  "[\"lispex.lit-kernel-result/v0\",\"\",\"invalid\",false,\"{escapeJson(error)}\",2,[[\"transition-limit\",0],[\"transitions\",0],[\"exhausted\",false],[\"max-continuation-depth\",0],[\"allocations\",0],[\"transfers\",0]]]"
+}
+
+export function main(args: Array<string>, stdin: string) -> Result<int, string> {
+  let rendered = match decodeRequest(stdin) {
+    case Ok(request) => renderRunResult(request.invocationId, runKernel(request))
+    case Err(error) => renderDecodeError(error)
+  }
+  print(rendered)
+  Ok(0)
+}

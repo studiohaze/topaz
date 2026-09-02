@@ -1,0 +1,5 @@
+let label = match value {
+    case 0 => "zero"
+    case n if n > 0 => "positive"
+    case _ => "negative"
+}

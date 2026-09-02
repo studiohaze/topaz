@@ -1,0 +1,18 @@
+let x = 10
+let y = 20
+let z = 10
+
+// 동등성 비교
+let 같음 = x == z         // true
+let 다름 = x != y         // true
+
+// 크기 비교
+let 작음 = x < y          // true
+let 작거나같음 = x <= z   // true
+let 큼 = y > x            // true
+let 크거나같음 = z >= x   // true
+
+print("x == z: {같음}")
+print("x != y: {다름}")
+print("x < y: {작음}")
+print("y > x: {큼}")

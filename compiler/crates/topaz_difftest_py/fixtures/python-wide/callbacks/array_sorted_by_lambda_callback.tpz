@@ -1,0 +1,7 @@
+
+function main() -> int {
+    let xs = [3, 1, 2]
+    let out = xs.sortedBy((x) => 0 - x)
+    out[0] + out[2]
+}
+main()

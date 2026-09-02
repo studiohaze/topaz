@@ -1,0 +1,10 @@
+function calculator(a: int, b: int) -> int {
+    // Function parameters also belong to function scope
+    let result = a + b        // Function scope
+    let mut tempValue = a * 2     // Function scope
+    
+    print("Result: {result}")
+    return result
+}
+
+// print(result)  // Error! Cannot access outside function

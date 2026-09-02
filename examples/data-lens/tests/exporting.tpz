@@ -1,0 +1,24 @@
+import data_lens_core { DataFormat, DataRow, ExportDocument, exportRows }
+
+let rows = [
+  DataRow { name: "서울 alpha", category: "city", value: 12, active: true },
+  DataRow { name: "Lispex", category: "language", value: 9, active: false },
+]
+
+match exportRows(rows, DataFormat.Csv) {
+  case Ok(document) => {
+    assert(document.filename == "data-lens.csv", "CSV filename")
+    assert(document.text.contains("name,category,value,active"), "CSV header")
+    assert(document.text.contains("서울 alpha,city,12,true"), "CSV Unicode row")
+  }
+  case Err(error) => assert(false, error)
+}
+
+match exportRows(rows, DataFormat.Json) {
+  case Ok(document) => {
+    assert(document.filename == "data-lens.json", "JSON filename")
+    assert(document.text.contains("\"name\":\"서울 alpha\""), "JSON Unicode row")
+    assert(document.text.contains("\"active\":false"), "JSON boolean")
+  }
+  case Err(error) => assert(false, error)
+}

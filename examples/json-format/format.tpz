@@ -1,0 +1,235 @@
+// JSON 포매터/검증기. Topaz로만 작성한 완전한 재귀 하강 JSON 파서다.
+// 전체 JSON 문법을 검증하고 2칸 들여쓰기로 정렬 출력한다. 구문 오류가 나면
+// line:column 형식으로 한국어 메시지를 보고한다. 숫자 토큰은 그대로 보존한다(검증만 하고
+// 수치로 재해석하지 않는다. 따라서 부동소수점 없음). 문자열 토큰도 보존하되, 안전한
+// \uXXXX 이스케이프(" 나 \ 가 아닌 출력 가능한 스칼라)는 해당 문자로 디코딩한다.
+// 순수하고 결정적이다. 같은 입력은 인터프리터와 네이티브/wasm 빌드에서 같은 출력을 낸다.
+
+type 오류 = { 위치: int, 메시지: string }
+type 조각 = { 출력: string, 다음: int }
+
+let 최대깊이 = 200
+
+function 글자화(s: string) -> Array<string> { s.scalars() }
+
+function 공백인가(글: string) -> bool {
+  글 == " " || 글 == "\n" || 글 == "\t" || 글 == "\r"
+}
+
+function 공백건너뛰기(글자들: Array<string>, 색인: int) -> int {
+  let mut i = 색인
+  while i < 글자들.length && 공백인가(글자들[i]) { i = i + 1 }
+  i
+}
+
+function 숫자인가(글: string) -> bool {
+  글 == "0" || 글 == "1" || 글 == "2" || 글 == "3" || 글 == "4"
+    || 글 == "5" || 글 == "6" || 글 == "7" || 글 == "8" || 글 == "9"
+}
+
+function 십육진인가(글: string) -> bool {
+  숫자인가(글) || 글 == "a" || 글 == "b" || 글 == "c" || 글 == "d" || 글 == "e" || 글 == "f"
+    || 글 == "A" || 글 == "B" || 글 == "C" || 글 == "D" || 글 == "E" || 글 == "F"
+}
+
+function 매치(글자들: Array<string>, 색인: int, 낱말: string) -> bool {
+  let w = 글자화(낱말)
+  if 색인 + w.length > 글자들.length { return false }
+  let mut k = 0
+  while k < w.length {
+    if 글자들[색인 + k] != w[k] { return false }
+    k = k + 1
+  }
+  true
+}
+
+function 들여쓰기(깊이: int) -> string {
+  let mut s = ""
+  let mut i = 0
+  while i < 깊이 { s = s + "  "; i = i + 1 }
+  s
+}
+
+function 글자정리(글: string) -> string {
+  if 글 == "&" { "&amp;" } else if 글 == "<" { "&lt;" } else if 글 == ">" { "&gt;" } else { 글 }
+}
+
+function 이스케이프HTML(s: string) -> string {
+  let mut 출력 = ""
+  for 글 in s.scalars() { 출력 = 출력 + 글자정리(글) }
+  출력
+}
+
+// JSON 문자열을 읽는다. 여는 따옴표부터 닫는 따옴표까지 이스케이프를 검증하며 텍스트는 보존한다.
+// 단 안전한 \uXXXX 이스케이프는 해당 문자로 디코딩한다(아래 \u 블록 참고).
+function 문자열읽기(글자들: Array<string>, 색인: int) -> Result<조각, 오류> {
+  let mut i = 색인 + 1
+  let mut 원문 = "\""
+  while i < 글자들.length {
+    let c = 글자들[i]
+    if c == "\"" {
+      return Ok({ 출력: 원문 + "\"", 다음: i + 1 })
+    } else if c == "\\" {
+      if i + 1 >= 글자들.length { return Err({ 위치: i, 메시지: "문자열이 끝나지 않았습니다" }) }
+      let e = 글자들[i + 1]
+      if e == "\"" || e == "\\" || e == "/" || e == "b" || e == "f" || e == "n" || e == "r" || e == "t" {
+        원문 = 원문 + c + e
+        i = i + 2
+      } else if e == "u" {
+        if i + 5 >= 글자들.length { return Err({ 위치: i, 메시지: "\\u 뒤에 16진수 4자리가 필요합니다" }) }
+        let mut k = 0
+        while k < 4 {
+          if !십육진인가(글자들[i + 2 + k]) {
+            return Err({ 위치: i + 2 + k, 메시지: "\\u 뒤에 16진수 4자리가 필요합니다" })
+          }
+          k = k + 1
+        }
+        // JSON 문자열에서 안전할 때 \uXXXX 이스케이프를 실제 문자로 디코딩한다.
+        // 즉 `"`(34) 나 `\`(92) 가 아닌 출력 가능한 스칼라. 제어문자, 따옴표,
+        // 백슬래시, 잘못된 스칼라(고립 대리쌍)는 이스케이프 상태로 둔다. 이 앱이 끌어낸 컴파일러
+        // 기능을 연결한다. toIntRadix(hex, 16) 다음 fromCodePoint(codepoint).
+        let 십육 = 글자들[i + 2] + 글자들[i + 3] + 글자들[i + 4] + 글자들[i + 5]
+        let 코드 = toIntRadix(십육, 16) ?? -1
+        let 문자 = fromCodePoint(코드) ?? ""
+        if 코드 >= 32 && 코드 != 34 && 코드 != 92 && 문자.byteLength() > 0 {
+          원문 = 원문 + 문자
+        } else {
+          원문 = 원문 + "\\u" + 십육
+        }
+        i = i + 6
+      } else {
+        return Err({ 위치: i + 1, 메시지: "잘못된 이스케이프 문자입니다" })
+      }
+    } else {
+      // RFC 8259. 원시 제어문자 U+0000..U+001F는 문자열 안에서 반드시 이스케이프해야 한다.
+      let 코드 = c.codePointAt(0) ?? 0
+      if 코드 < 32 { return Err({ 위치: i, 메시지: "문자열 안의 제어문자는 이스케이프해야 합니다" }) }
+      원문 = 원문 + c
+      i = i + 1
+    }
+  }
+  Err({ 위치: 색인, 메시지: "문자열이 끝나지 않았습니다" })
+}
+
+// JSON 숫자. -? (0 | [1-9][0-9]*) (. [0-9]+)? ([eE][+-]?[0-9]+)? 형식이며 텍스트는 보존한다.
+function 숫자읽기(글자들: Array<string>, 색인: int) -> Result<조각, 오류> {
+  let mut i = 색인
+  if i < 글자들.length && 글자들[i] == "-" { i = i + 1 }
+  // RFC 8259 정수부. `0` 단독, 또는 `[1-9][0-9]*`. 앞자리 0(01, 00)은 잘못된 값이다.
+  if i >= 글자들.length || !숫자인가(글자들[i]) { return Err({ 위치: i, 메시지: "숫자가 필요합니다" }) }
+  if 글자들[i] == "0" {
+    i = i + 1
+  } else {
+    while i < 글자들.length && 숫자인가(글자들[i]) { i = i + 1 }
+  }
+  if i < 글자들.length && 글자들[i] == "." {
+    i = i + 1
+    let 소수시작 = i
+    while i < 글자들.length && 숫자인가(글자들[i]) { i = i + 1 }
+    if i == 소수시작 { return Err({ 위치: i, 메시지: "소수점 뒤에 숫자가 필요합니다" }) }
+  }
+  if i < 글자들.length && (글자들[i] == "e" || 글자들[i] == "E") {
+    i = i + 1
+    if i < 글자들.length && (글자들[i] == "+" || 글자들[i] == "-") { i = i + 1 }
+    let 지수시작 = i
+    while i < 글자들.length && 숫자인가(글자들[i]) { i = i + 1 }
+    if i == 지수시작 { return Err({ 위치: i, 메시지: "지수 뒤에 숫자가 필요합니다" }) }
+  }
+  let mut 원문 = ""
+  let mut k = 색인
+  while k < i { 원문 = 원문 + 글자들[k]; k = k + 1 }
+  Ok({ 출력: 원문, 다음: i })
+}
+
+function 값읽기(글자들: Array<string>, 색인: int, 깊이: int) -> Result<조각, 오류> {
+  if 깊이 > 최대깊이 {
+    return Err({ 위치: 색인, 메시지: "중첩이 너무 깊습니다 (최대 200단계)" })
+  }
+  let i = 공백건너뛰기(글자들, 색인)
+  if i >= 글자들.length { return Err({ 위치: i, 메시지: "값이 필요합니다" }) }
+  let c = 글자들[i]
+  if c == "\{" { return 객체읽기(글자들, i, 깊이) }
+  if c == "[" { return 배열읽기(글자들, i, 깊이) }
+  if c == "\"" { return 문자열읽기(글자들, i) }
+  if c == "-" || 숫자인가(c) { return 숫자읽기(글자들, i) }
+  if 매치(글자들, i, "true") { return Ok({ 출력: "true", 다음: i + 4 }) }
+  if 매치(글자들, i, "false") { return Ok({ 출력: "false", 다음: i + 5 }) }
+  if 매치(글자들, i, "null") { return Ok({ 출력: "null", 다음: i + 4 }) }
+  Err({ 위치: i, 메시지: "알 수 없는 값입니다" })
+}
+
+function 객체읽기(글자들: Array<string>, 색인: int, 깊이: int) -> Result<조각, 오류> {
+  let mut j = 공백건너뛰기(글자들, 색인 + 1)
+  if j < 글자들.length && 글자들[j] == "\}" { return Ok({ 출력: "\{\}", 다음: j + 1 }) }
+  let mut 출력 = "\{\n"
+  let mut 처음 = true
+  while true {
+    j = 공백건너뛰기(글자들, j)
+    if j >= 글자들.length || 글자들[j] != "\"" { return Err({ 위치: j, 메시지: "키(문자열)가 필요합니다" }) }
+    let 키 = 문자열읽기(글자들, j)?
+    j = 공백건너뛰기(글자들, 키.다음)
+    if j >= 글자들.length || 글자들[j] != ":" { return Err({ 위치: j, 메시지: "콜론(:)이 필요합니다" }) }
+    let 값 = 값읽기(글자들, j + 1, 깊이 + 1)?
+    if !처음 { 출력 = 출력 + ",\n" }
+    출력 = 출력 + 들여쓰기(깊이 + 1) + 키.출력 + ": " + 값.출력
+    처음 = false
+    j = 공백건너뛰기(글자들, 값.다음)
+    if j >= 글자들.length { return Err({ 위치: j, 메시지: "닫는 중괄호(\})가 필요합니다" }) }
+    if 글자들[j] == "\}" { return Ok({ 출력: 출력 + "\n" + 들여쓰기(깊이) + "\}", 다음: j + 1 }) }
+    if 글자들[j] != "," { return Err({ 위치: j, 메시지: "쉼표(,)나 닫는 중괄호(\})가 필요합니다" }) }
+    j = j + 1
+  }
+  Err({ 위치: j, 메시지: "도달 불가" })
+}
+
+function 배열읽기(글자들: Array<string>, 색인: int, 깊이: int) -> Result<조각, 오류> {
+  let mut j = 공백건너뛰기(글자들, 색인 + 1)
+  if j < 글자들.length && 글자들[j] == "]" { return Ok({ 출력: "[]", 다음: j + 1 }) }
+  let mut 출력 = "[\n"
+  let mut 처음 = true
+  while true {
+    let 값 = 값읽기(글자들, j, 깊이 + 1)?
+    if !처음 { 출력 = 출력 + ",\n" }
+    출력 = 출력 + 들여쓰기(깊이 + 1) + 값.출력
+    처음 = false
+    j = 공백건너뛰기(글자들, 값.다음)
+    if j >= 글자들.length { return Err({ 위치: j, 메시지: "닫는 대괄호(])가 필요합니다" }) }
+    if 글자들[j] == "]" { return Ok({ 출력: 출력 + "\n" + 들여쓰기(깊이) + "]", 다음: j + 1 }) }
+    if 글자들[j] != "," { return Err({ 위치: j, 메시지: "쉼표(,)나 닫는 대괄호(])가 필요합니다" }) }
+    j = j + 1
+  }
+  Err({ 위치: j, 메시지: "도달 불가" })
+}
+
+// 스칼라 색인을 "line:col"(1부터 시작)로 바꾼다. 해당 위치 앞의 개행 수를 센다.
+function 줄열(글자들: Array<string>, 위치: int) -> string {
+  let mut 줄 = 1
+  let mut 열 = 1
+  let mut i = 0
+  while i < 위치 && i < 글자들.length {
+    if 글자들[i] == "\n" { 줄 = 줄 + 1; 열 = 1 } else { 열 = 열 + 1 }
+    i = i + 1
+  }
+  "{줄}:{열}"
+}
+
+function 포맷(원본: string) -> string {
+  let 글자들 = 글자화(원본)
+  match 값읽기(글자들, 0, 0) {
+    case Ok(조) => {
+      let 끝 = 공백건너뛰기(글자들, 조.다음)
+      if 끝 < 글자들.length {
+        let 위치 = 줄열(글자들, 끝)
+        "<div class=\"err\">오류 {위치}: 값 뒤에 불필요한 내용이 있습니다</div>"
+      } else {
+        "<pre class=\"ok\">" + 이스케이프HTML(조.출력) + "</pre>"
+      }
+    }
+    case Err(오) => {
+      let 위치 = 줄열(글자들, 오.위치)
+      "<div class=\"err\">오류 " + 위치 + ": " + 이스케이프HTML(오.메시지) + "</div>"
+    }
+  }
+}
+
+print(포맷(input()))

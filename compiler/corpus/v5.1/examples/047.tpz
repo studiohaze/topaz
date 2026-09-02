@@ -1,0 +1,8 @@
+function head<T>(xs: Array<T>) -> Option<T> {
+    match xs {
+        case [] => None
+        case [first, ..] => Some(first)
+    }
+}
+
+let first: Option<int> = head([1, 2, 3])

@@ -1,0 +1,3 @@
+match CSV.parseWithHeader("name,age\nAda,36") { case Ok(rows) => { let f = CSV.stringifyWithHeader
+f(rows, ["name", "age"]) }
+case Err(e) => e }

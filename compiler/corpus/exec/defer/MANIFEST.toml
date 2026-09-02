@@ -1,0 +1,24 @@
+# corpus/exec/defer — execution transcripts (CDR-003 §11)
+
+[totals]
+recorded = 3
+runnable = 3
+pending = 0
+
+[[fixture]]
+file = "lifo-order.tpz"
+phase = "exec"
+versions = "5.2"
+result = "ok"
+
+[[fixture]]
+file = "runs-on-return.tpz"
+phase = "exec"
+versions = "5.2"
+result = "ok"
+
+[[fixture]]
+file = "contained-error.tpz"
+phase = "exec"
+versions = "5.2"
+result = "ok"

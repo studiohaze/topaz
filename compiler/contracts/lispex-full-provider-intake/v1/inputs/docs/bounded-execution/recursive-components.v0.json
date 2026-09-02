@@ -1,0 +1,519 @@
+{
+  "schema": "lispex.f11-recursive-components/v0",
+  "status": "bytecode-recursion-closed",
+  "public_contract": false,
+  "exact_base": "582e331918fc2a76ea7f20e34a353af2e0b39236",
+  "scope": "exact-hashed private source-to-record preparation and evaluation kernel",
+  "components": [
+    {
+      "id": "reader-datum-cycle",
+      "phase": "reader",
+      "source": "interp/src/reader.rs",
+      "members": [
+        "read_datum",
+        "read_datum_inner",
+        "read_quote",
+        "read_list",
+        "read_hash",
+        "read_vector"
+      ],
+      "mir_functions": [
+        {
+          "selector": {
+            "signature_includes": ["reader.rs", ">::read_datum("]
+          },
+          "required_calls": ["Reader::read_datum_inner"]
+        },
+        {
+          "selector": {
+            "signature_includes": ["reader.rs", ">::read_datum_inner("]
+          },
+          "required_calls": ["Reader::read_list", "Reader::read_quote"]
+        },
+        {
+          "selector": {
+            "signature_includes": ["reader.rs", ">::read_list("]
+          },
+          "required_calls": ["Reader::read_datum"]
+        }
+      ],
+      "disposition": "bounded-local-guard",
+      "guard": "reader-recursion-depth-at-256"
+    },
+    {
+      "id": "normalizer-module-cycle",
+      "phase": "normalizer",
+      "source": "interp/src/normalize.rs",
+      "members": ["norm_toplevel", "flatten_module"],
+      "mir_functions": [
+        {
+          "selector": {
+            "signature_includes": ["normalize.rs", ">::norm_toplevel("]
+          },
+          "required_calls": [
+            "Normalizer::enter_depth",
+            "Normalizer::flatten_module"
+          ]
+        },
+        {
+          "selector": {
+            "signature_includes": ["normalize.rs", ">::flatten_module("]
+          },
+          "required_calls": ["Normalizer::norm_toplevel"]
+        }
+      ],
+      "disposition": "bounded-local-guard",
+      "guard": "Normalizer-enter-depth"
+    },
+    {
+      "id": "normalizer-expression-cycle",
+      "phase": "normalizer",
+      "source": "interp/src/normalize.rs",
+      "members": [
+        "norm",
+        "norm_inner",
+        "norm_list",
+        "norm_application",
+        "norm_if",
+        "norm_lambda",
+        "norm_begin",
+        "norm_set",
+        "norm_define",
+        "norm_values",
+        "norm_let",
+        "norm_named_let",
+        "norm_letrec",
+        "norm_let_star",
+        "norm_cond",
+        "norm_guard",
+        "norm_case",
+        "norm_and",
+        "norm_or",
+        "norm_when_unless",
+        "norm_do",
+        "norm_quasiquote",
+        "qq",
+        "qq_inner",
+        "qq_seq",
+        "parse_bindings",
+        "norm_body",
+        "norm_body_clause"
+      ],
+      "mir_functions": [
+        {
+          "selector": {
+            "signature_includes": ["normalize.rs", ">::norm("]
+          },
+          "required_calls": ["Normalizer::enter_depth", "Normalizer::norm_inner"]
+        },
+        {
+          "selector": {
+            "signature_includes": ["normalize.rs", ">::norm_inner("]
+          },
+          "required_calls": ["Normalizer::norm_list"]
+        },
+        {
+          "selector": {
+            "signature_includes": ["normalize.rs", ">::norm_list("]
+          },
+          "required_calls": [
+            "Normalizer::norm_application",
+            "Normalizer::norm_quasiquote"
+          ]
+        },
+        {
+          "selector": {
+            "signature_includes": ["normalize.rs", ">::norm_application("]
+          },
+          "required_calls": ["Normalizer::norm"]
+        },
+        {
+          "selector": {
+            "signature_includes": ["normalize.rs", ">::qq("]
+          },
+          "required_calls": ["Normalizer::enter_depth", "Normalizer::qq_inner"]
+        },
+        {
+          "selector": {
+            "signature_includes": ["normalize.rs", ">::qq_inner("]
+          },
+          "required_calls": ["Normalizer::qq_seq", "Normalizer::norm"]
+        }
+      ],
+      "disposition": "bounded-local-guard",
+      "guard": "Normalizer-enter-depth"
+    },
+    {
+      "id": "syntax-value-conversion",
+      "phase": "normalizer",
+      "source": "interp/src/syntax.rs",
+      "members": ["to_value"],
+      "mir_functions": [
+        {
+          "selector": {
+            "signature_includes": ["syntax.rs", ">::to_value("]
+          },
+          "required_calls": [],
+          "forbidden_calls": [" = syntax::Syntax::to_value("]
+        }
+      ],
+      "disposition": "iterative-no-host-recursion",
+      "guard": "explicit-SyntaxValueTask-stack"
+    },
+    {
+      "id": "canonical-core-expression-writer",
+      "phase": "core-ir-lowering",
+      "source": "interp/src/canonical.rs",
+      "members": ["write_core_expr"],
+      "mir_functions": [
+        {
+          "selector": {
+            "signature_starts_with": "write_core_expr("
+          },
+          "required_calls": [],
+          "forbidden_calls": [" = canonical::write_core_expr("]
+        }
+      ],
+      "disposition": "iterative-no-host-recursion",
+      "guard": "explicit-core-write-task-stack"
+    },
+    {
+      "id": "canonical-literal-validation",
+      "phase": "core-ir-lowering",
+      "source": "interp/src/canonical.rs",
+      "members": ["validate_literal"],
+      "mir_functions": [
+        {
+          "selector": {
+            "signature_starts_with": "validate_literal("
+          },
+          "required_calls": [],
+          "forbidden_calls": [" = canonical::validate_literal("]
+        }
+      ],
+      "disposition": "iterative-no-host-recursion",
+      "guard": "explicit-literal-validation-task-stack"
+    },
+    {
+      "id": "canonical-unmetered-value-render",
+      "phase": "core-ir-lowering",
+      "source": "interp/src/value.rs",
+      "members": ["repr_into"],
+      "mir_functions": [
+        {
+          "selector": {
+            "signature_includes": ["value.rs", ">::repr_into("]
+          },
+          "required_calls": [],
+          "forbidden_calls": [" = value::Value::repr_into("]
+        }
+      ],
+      "disposition": "iterative-no-host-recursion",
+      "guard": "explicit-value-render-task-stack"
+    },
+    {
+      "id": "metered-value-render",
+      "phase": "evaluation-result",
+      "source": "interp/src/value.rs",
+      "members": ["repr_metered_into", "repr_metered_body"],
+      "mir_functions": [
+        {
+          "selector": {
+            "signature_includes": ["value.rs", ">::repr_metered_into("]
+          },
+          "required_calls": ["Value::repr_metered_body"]
+        },
+        {
+          "selector": {
+            "signature_includes": ["value.rs", ">::repr_metered_body("]
+          },
+          "required_calls": ["Value::repr_metered_into"]
+        }
+      ],
+      "disposition": "bounded-local-guard",
+      "guard": "DraftValueWriter-enter-depth"
+    },
+    {
+      "id": "core-ir-lowering-expression-cycle",
+      "phase": "core-ir-lowering",
+      "source": "interp/src/core_ir_lower.rs",
+      "members": [
+        "lower_expr",
+        "lower_expr_inner",
+        "lower_lambda",
+        "lower_begin",
+        "lower_let",
+        "lower_guard"
+      ],
+      "mir_functions": [
+        {
+          "selector": {
+            "signature_includes": ["core_ir_lower.rs", ">::lower_expr("]
+          },
+          "required_calls": ["Lowerer::lower_expr_inner"]
+        },
+        {
+          "selector": {
+            "signature_includes": ["core_ir_lower.rs", ">::lower_expr_inner("]
+          },
+          "required_calls": ["Lowerer::lower_lambda", "Lowerer::lower_begin"]
+        },
+        {
+          "selector": {
+            "signature_includes": ["core_ir_lower.rs", ">::lower_lambda("]
+          },
+          "required_calls": ["Lowerer::lower_expr"]
+        }
+      ],
+      "disposition": "bounded-local-guard",
+      "guard": "Lowerer-private-recursion-limit"
+    },
+    {
+      "id": "core-dynamic-definition-collector",
+      "phase": "core-ir-lowering",
+      "source": "interp/src/core_ir_lower.rs",
+      "members": ["collect_dynamic_definitions_same_frame"],
+      "mir_functions": [
+        {
+          "selector": {
+            "signature_starts_with": "collect_dynamic_definitions_same_frame("
+          },
+          "required_calls": [],
+          "forbidden_calls": [" = core_ir_lower::collect_dynamic_definitions_same_frame("]
+        }
+      ],
+      "disposition": "iterative-no-host-recursion",
+      "guard": "explicit-CoreExpr-pending-stack"
+    },
+    {
+      "id": "core-global-candidate-collector",
+      "phase": "core-ir-lowering",
+      "source": "interp/src/core_ir_lower.rs",
+      "members": ["collect_global_candidates"],
+      "mir_functions": [
+        {
+          "selector": {
+            "signature_starts_with": "collect_global_candidates("
+          },
+          "required_calls": [],
+          "forbidden_calls": [" = core_ir_lower::collect_global_candidates("]
+        }
+      ],
+      "disposition": "iterative-no-host-recursion",
+      "guard": "explicit-CoreExpr-pending-stack"
+    },
+    {
+      "id": "ir-global-reference-collector",
+      "phase": "core-ir-lowering",
+      "source": "interp/src/core_ir_lower.rs",
+      "members": ["collect_ir_globals"],
+      "mir_functions": [
+        {
+          "selector": {
+            "signature_starts_with": "collect_ir_globals("
+          },
+          "required_calls": [],
+          "forbidden_calls": [" = core_ir_lower::collect_ir_globals("]
+        }
+      ],
+      "disposition": "iterative-no-host-recursion",
+      "guard": "explicit-IrExpr-pending-stack"
+    },
+    {
+      "id": "ir-global-remapper",
+      "phase": "core-ir-lowering",
+      "source": "interp/src/core_ir_lower.rs",
+      "members": ["remap_globals"],
+      "mir_functions": [
+        {
+          "selector": {
+            "signature_starts_with": "remap_globals("
+          },
+          "required_calls": [],
+          "forbidden_calls": [" = core_ir_lower::remap_globals("]
+        }
+      ],
+      "disposition": "iterative-no-host-recursion",
+      "guard": "explicit-mutable-IrExpr-pending-stack"
+    },
+    {
+      "id": "normalized-core-projection",
+      "phase": "core-ir-lowering",
+      "source": "interp/src/core_ir_lower.rs",
+      "members": ["expression"],
+      "mir_functions": [
+        {
+          "selector": {
+            "signature_includes": ["core_ir_lower.rs", ">::expression("]
+          },
+          "required_calls": ["Projection::expression"]
+        }
+      ],
+      "disposition": "excluded-not-called-by-private-route",
+      "guard": "none"
+    },
+    {
+      "id": "ir-binding-label-collector",
+      "phase": "core-ir-lowering",
+      "source": "interp/src/core_ir_lower.rs",
+      "members": ["collect_binding_labels"],
+      "mir_functions": [
+        {
+          "selector": {
+            "signature_starts_with": "collect_binding_labels("
+          },
+          "required_calls": ["collect_binding_labels"]
+        }
+      ],
+      "disposition": "excluded-not-called-by-private-route",
+      "guard": "none"
+    },
+    {
+      "id": "core-ir-canonical-writer",
+      "phase": "core-ir-lowering",
+      "source": "interp/src/core_ir.rs",
+      "members": ["write_expr"],
+      "mir_functions": [
+        {
+          "selector": {
+            "signature_starts_with": "write_expr("
+          },
+          "required_calls": [],
+          "forbidden_calls": [" = core_ir::write_expr("]
+        }
+      ],
+      "disposition": "iterative-no-host-recursion",
+      "guard": "explicit-CoreIrWriteTask-stack"
+    },
+    {
+      "id": "core-ir-validator",
+      "phase": "core-ir-lowering",
+      "source": "interp/src/core_ir.rs",
+      "members": ["validate_expr"],
+      "mir_functions": [
+        {
+          "selector": {
+            "signature_starts_with": "validate_expr("
+          },
+          "required_calls": [],
+          "forbidden_calls": [" = core_ir::validate_expr("]
+        }
+      ],
+      "disposition": "iterative-no-host-recursion",
+      "guard": "explicit-ValidationTask-stack-with-existing-Core-IR-depth-law"
+    },
+    {
+      "id": "bytecode-binding-counter",
+      "phase": "bytecode-compile-verify",
+      "source": "interp/src/bytecode_compile.rs",
+      "members": ["count_bindings"],
+      "mir_functions": [
+        {
+          "selector": {
+            "signature_starts_with": "count_bindings("
+          },
+          "required_calls": [],
+          "forbidden_calls": [" = bytecode_compile::count_bindings("]
+        }
+      ],
+      "disposition": "iterative-no-host-recursion",
+      "guard": "explicit-binding-expression-stack"
+    },
+    {
+      "id": "bytecode-pool-collector",
+      "phase": "bytecode-compile-verify",
+      "source": "interp/src/bytecode_compile.rs",
+      "members": ["collect_expression"],
+      "mir_functions": [
+        {
+          "selector": {
+            "signature_starts_with": "collect_expression("
+          },
+          "required_calls": [],
+          "forbidden_calls": [" = bytecode_compile::collect_expression("]
+        }
+      ],
+      "disposition": "iterative-no-host-recursion",
+      "guard": "explicit-pool-expression-stack"
+    },
+    {
+      "id": "bytecode-expression-compiler-cycle",
+      "phase": "bytecode-compile-verify",
+      "source": "interp/src/bytecode_compile.rs",
+      "members": [
+        "compile_block",
+        "compile_expression",
+        "compile_expression_inner",
+        "compile_single",
+        "compile_initializers",
+        "compile_function",
+        "compile_guard"
+      ],
+      "mir_functions": [
+        {
+          "selector": {
+            "signature_includes": ["bytecode_compile.rs", ">::compile_expression("]
+          },
+          "required_calls": ["Compiler::<'_>::compile_expression_inner"]
+        },
+        {
+          "selector": {
+            "signature_includes": [
+              "bytecode_compile.rs",
+              ">::compile_expression_inner("
+            ]
+          },
+          "required_calls": [
+            "Compiler::<'_>::compile_single",
+            "Compiler::<'_>::compile_function",
+            "Compiler::<'_>::compile_guard"
+          ]
+        },
+        {
+          "selector": {
+            "signature_includes": ["bytecode_compile.rs", ">::compile_single("]
+          },
+          "required_calls": ["Compiler::<'_>::compile_expression"]
+        }
+      ],
+      "disposition": "bounded-local-guard",
+      "guard": "Compiler-private-recursion-limit"
+    },
+    {
+      "id": "bytecode-function-counter",
+      "phase": "bytecode-compile-verify",
+      "source": "interp/src/bytecode_compile.rs",
+      "members": ["count_functions"],
+      "mir_functions": [
+        {
+          "selector": {
+            "signature_starts_with": "count_functions("
+          },
+          "required_calls": [],
+          "forbidden_calls": [" = bytecode_compile::count_functions("]
+        }
+      ],
+      "disposition": "iterative-no-host-recursion",
+      "guard": "explicit-function-expression-stack"
+    },
+    {
+      "id": "recursive-guest-graph-drop",
+      "phase": "cleanup",
+      "source": "interp/src/value.rs",
+      "members": [],
+      "mir_functions": [],
+      "disposition": "blocker-fresh-instance-disposal",
+      "guard": "implicit-Rc-drop-is-not-a-portable-recursion-guard"
+    }
+  ],
+  "summary": {
+    "component_rows": 22,
+    "bounded_local_guard": 6,
+    "iterative_no_host_recursion": 13,
+    "excluded_not_called_by_private_route": 2,
+    "blocking_rows": 1,
+    "mir_function_probes": 34,
+    "recursive_component_guards_complete": false,
+    "implementation_ready": false
+  }
+}

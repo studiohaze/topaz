@@ -1,0 +1,8 @@
+record Bucket { values: Array<int>, tag: int }
+let before: Bucket = Bucket { values: [1], tag: 0 }
+let after: Bucket = Bucket { ...before, tag: 1 }
+let mut values: Array<int> = before.values
+values.push(2)
+print("{before.values.length}/{after.values.length}")
+print("{before == after}")
+0

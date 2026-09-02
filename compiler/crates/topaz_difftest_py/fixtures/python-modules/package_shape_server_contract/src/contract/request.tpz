@@ -1,0 +1,2 @@
+
+export record Request { method: string, path: string }

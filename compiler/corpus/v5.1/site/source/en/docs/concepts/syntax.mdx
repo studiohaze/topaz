@@ -1,0 +1,538 @@
+---
+title: 'Topaz Syntax Fundamentals'
+description: 'Master Topaz syntax: one canonical form for each construct. Layout, bindings, functions, pattern matching, and pipelines as locked in the Topaz v5.2 specification.'
+covers: '§1, §1a, §2, §3, §4, §5, §6, §7, §8, §9, §10, §11, §12, §13, §14, §15, §16, §19'
+---
+
+> **Library names note**: Helper and member calls used in examples beyond the standard-library minimum — `WeatherAPI.current`, `split`, `capitalize`, `join`, `append`, `format`, `Date.parse`, `CSV.read`, etc. — are illustrative placeholders, not canonical APIs.
+
+**One way to say it** — Topaz keeps its surface small and closed: for each intent there is one canonical form, locked in the v5.2 specification. This guide walks that surface.
+
+##  Core Philosophy
+
+### One Form per Intent
+Even complex logic can be expressed concisely and readably.
+
+### Global Syntax, Local Expression
+- **Keywords**: Unified in English (`function`, `let`, `match`, `case`)
+- **Identifiers**: Free use of any language, English, Unicode, and even emojis
+
+### Everything is an Expression
+Constructs such as `if`, `match`, `for`, and blocks return values.
+
+##  Basic Syntax
+
+### Variable Declaration
+
+```topaz
+// Immutable variables (default)
+let name = "Alice"
+let age = 25
+let isActive = true
+
+// Mutable variables
+let mut score = 85
+score = 90  // Can be changed
+
+// Type annotation (optional)
+let distance: float = 3.14
+let users: Array<string> = ["John", "Jane"]
+```
+
+### Null‑Coalescing Assignment (??=)
+
+Statement‑only operator that initializes when the target is `None`/`null`.
+
+```topaz
+let mut name: Option<string> = None
+name ??= Some("guest")     // now Some("guest")
+```
+
+### Function Definition
+
+```topaz
+// Basic function
+function greet(name: string) -> string {
+    "Hello, {name}!"
+}
+
+// Default parameters
+function calculate(x: int, y: int = 10) -> int {
+    x + y
+}
+
+// Record return value
+function getCoordinates() -> { x: int, y: int } {
+    { x: 100, y: 200 }
+}
+
+// Higher-order functions
+function transform(data: Array<int>, fn: (int) -> int) -> Array<int> {
+    map(data, fn)
+}
+```
+
+In type positions, public Topaz docs use the arrow form `(T) -> U` for function types.
+
+### Conditionals
+
+```topaz
+// if expression (returns a value)
+let message = if age >= 20 {
+    "You are an adult"
+} else if age >= 13 {
+    "You are a teenager"
+} else {
+    "You are a child"
+}
+
+// Ternary-style
+let status = if online { "Connected" } else { "Offline" }
+```
+
+### Pattern Matching
+
+```topaz
+// Basic matching
+let result = match value {
+    case 1 => "One"
+    case 2 => "Two"
+    case 3 => "Three"
+    case _ => "Other"
+}
+
+// Range matching
+let grade = match score {
+    case 90..100 => "A"
+    case 80..<90 => "B"
+    case 70..<80 => "C"
+    case _ => "F"
+}
+
+// Structural matching
+let discount = match customer {
+    case { tier: "VIP", amount } if amount > 1000000 => 0.3
+    case { tier: "VIP" } => 0.2
+    case { loyaltyYears } if loyaltyYears > 1 => 0.1
+    case _ => 0.0
+}
+```
+
+#### List Patterns
+
+The rest marker `..` may appear once, either as the whole pattern
+(`[..rest]`) or as the final element after fixed leading elements.
+
+```topaz
+match xs {
+  case [] => useEmpty()
+  case [head, ..tail] => useHead(head, tail)
+  case [x, y, ..rest] if rest.length > 0 => handle(x, y, rest)
+}
+```
+
+End‑to‑end example (guard + rest pattern):
+
+```topaz
+let desc = match numbers {
+  case [] => "empty"
+  case [single] => "single: {single}"
+  case [first, ..rest] if rest.length > 3 => "long run from {first}"
+  case [first, ..rest] => "first {first}, rest={rest.length}"
+}
+```
+
+##  Pipeline Operations
+
+### Basic Pipeline
+
+```topaz
+// One step per line, top to bottom
+let result = rawData
+    |> normalize()
+    |> filter(x => x > 0)
+    |> map(x => x * 2)
+    |> sort()
+```
+
+A line that begins with `|>` (or `.` / `?.`) continues the previous
+expression, so multi-line pipelines like the one above are a single
+statement.
+
+### Staged Text Pipeline
+
+```topaz
+let processedString = "hello world"
+    |> split(_, " ")
+    |> map(_, word => capitalize(word))
+    |> join(_, " ")
+    |> append("!", _)
+// Result: "Hello World!"
+```
+
+### Pipe Sugar
+
+Use concise sugar on the right side of a pipe:
+
+```topaz
+let names = ["Ann", "Bo", "Cy"]
+
+let summary = names
+  |> .length                  // property sugar: (xs => xs.length)
+  |> format("count=", _)      // placeholder: (n => format("count=", n))
+
+// Every placeholder in the nearest call receives the same piped value
+let line = names |> format("first of ", _, " is ", _)
+```
+
+##  Type System
+
+### Type Inference
+
+```topaz
+// Types are automatically inferred
+let number = 42              // int
+let text = "hello"           // string
+let array = [1, 2, 3, 4]     // Array<int>
+let object = {               // { name: string, age: int }
+    name: "Alice",
+    age: 25
+}
+```
+
+### Literal Types
+
+```topaz
+// Restrict types to exact values
+type TrafficLight = "red" | "yellow" | "green"
+type DiceRoll = 1 | 2 | 3 | 4 | 5 | 6
+type StatusCode = 200 | 404 | 500
+
+function handleSignal(color: TrafficLight) {
+    match color {
+        case "red" => stop()
+        case "yellow" => caution()
+        case "green" => go()
+        // Compiler ensures all cases are handled!
+    }
+}
+```
+
+### Union Types
+
+```topaz
+type UserInput = string | int | null
+
+function process(input: UserInput) -> string {
+    match input {
+        case text: string => "String: {text}"
+        case number: int => "Number: {number}"
+        case null => "No input"
+    }
+}
+```
+
+`null` and `Option<T>` are related but distinct. Use `null` in nullable unions such as `T | null`, and use `Some(...)` / `None` for `Option<T>`. Operators like `??` and `?.` work across both models.
+
+##  Loops
+
+### for Loops (Expressions)
+
+```topaz
+// Range iteration
+for i in 1..10 {
+    print("Number: {i}")
+}
+
+// Array iteration
+for item in ["apple", "banana", "cherry"] {
+    print("Fruit: {item}")
+}
+
+// for returns values too!
+let squares = for x in 1..5 { x * x }  // [1, 4, 9, 16, 25]
+```
+
+### Range step with `by`
+
+```topaz
+// Step forward
+for i in 0..10 by 2 { print("{i}") }       // 0,2,4,6,8,10
+
+// Step backward with negative stride
+for i in 10..0 by -3 { print("{i}") }      // 10,7,4,1
+```
+
+### `while`, `break`, and `continue`
+
+Topaz has general loops as statements. `while` runs its body while a
+`bool` condition holds; `break` exits the innermost loop and `continue`
+skips to its next iteration.
+
+```topaz
+let mut total = 0
+let mut n = 1
+
+while total + n <= 100 {
+    total = total + n
+    n = n + 1
+}
+
+print("sum: {total}")
+
+// break / continue target the innermost enclosing loop
+for item in [3, -1, 7, 120, 5] {
+    if item < 0 { continue }
+    if item > 99 { break }
+    print("{item}")
+}
+```
+
+`while` is a statement and produces no value. A `for` used as a
+value-collecting expression cannot contain a `break` or `continue` that
+targets it — use a statement `for` in that case.
+
+##  Collections
+
+### Arrays
+
+```topaz
+// Basic arrays
+let numbers = [1, 2, 3, 4, 5]
+let fruits = ["apple", "banana", "cherry"]
+
+// Functional helpers
+let large = filter(numbers, x => x > 2)                  // [3, 4, 5]
+let squares = map(numbers, x => x * x)                   // [1, 4, 9, 16, 25]
+let sum = reduce(numbers, (acc, x) => acc + x, 0)        // 15
+```
+
+### Membership (`in`)
+
+```topaz
+// Arrays/Lists/Sets
+let ok1 = 3 in [1, 2, 3]
+let ok2 = "a" in Set.of("a", "b")
+
+// Map keys
+let hasId = "id" in userMap.keys
+
+// Ranges
+let inside = 5 in 1..10
+let outside = 10 in 1..<10
+```
+
+### Records and Type Aliases
+
+```topaz
+// Record literal
+let user = {
+    name: "Alice",
+    age: 25,
+    email: "alice@example.com"
+}
+
+// Record type alias
+type User = {
+    name: string,
+    age: int,
+    email: string,
+}
+
+// Record value with an alias annotation
+let newUser: User = {
+    name: "Bob",
+    age: 30,
+    email: "bob@example.com",
+}
+```
+
+### Record Update Literal
+
+Shallow‑copy a record and update selected fields immutably.
+
+```topaz
+let user = { name: "Alice", age: 20, city: "Seoul" }
+let updated = user{ age: user.age + 1, city: "Busan" }
+// { name: "Alice", age: 21, city: "Busan" }
+```
+
+##  String Templates
+
+### Basic Interpolation
+
+```topaz
+let name = "Alice"
+let age = 25
+let greeting = "Hello, {name}! You are {age} years old."
+```
+
+### Multiline Strings
+
+Triple-quoted strings hold multiple lines; the whitespace prefix of the
+closing delimiter is stripped from each line, and `{expr}`
+interpolation works as usual.
+
+```topaz
+let banner = """
+    Topaz v5.2
+    one way to say it
+    """
+```
+
+### Tagged Templates
+
+> `html"..."`, backtick tagged templates, and user-defined tags remain
+> outside canonical Topaz. Canonical tagged templates use `p"..."`,
+> `r"..."`, `sh"..."`, and `sql"..."` over double-quoted strings —
+> single-line or triple-quoted.
+
+Standardized tags with safety and meta preservation:
+
+```topaz
+let path = p"/home/{user}/docs/{fileName}"         // path normalization
+let pattern = r"^[a-z0-9_]+$"                       // regex with light escapes
+let cmd = sh"grep {pattern} {file}"                 // safe shell template (execution policy‑controlled)
+
+// SQL: parameters are always bound (no raw string insertion)
+let query = sql"SELECT * FROM users WHERE age > {age} AND city = {city}"
+
+// Multiline SQL composes with the triple-quoted form
+let report = sql"""
+    SELECT name, total
+    FROM orders
+    WHERE region = {region}
+    ORDER BY total DESC
+    """
+```
+
+##  Async Processing
+
+### Async Model
+
+> Topaz defines parallel work only through `concurrent`: a plain join form, and a timeout form whose `else` runs on timeout only. Native `async`/`await` and automatic async semantics remain deferred.
+
+### Parallel Execution
+
+```topaz
+// Run multiple tasks in parallel
+let dashboard = concurrent(timeout: 3s) {
+    weather: WeatherAPI.current("NYC")
+    rate: CurrencyAPI.usdRate()
+    news: NewsAPI.headlines(5)
+} else {
+    {
+        weather: None,
+        rate: None,
+        news: []
+    }
+}
+```
+
+##  Error Handling
+
+### Result Type
+
+```topaz
+function safeDivide(a: int, b: int) -> Result<int, string> {
+    if b == 0 {
+        Err("Cannot divide by zero")
+    } else {
+        Ok(a / b)
+    }
+}
+
+// Simple with ? operator
+function complexCalculation(x: int) -> Result<int, string> {
+    let result1 = safeDivide(x, 2)?
+    let result2 = safeDivide(result1, 3)?
+    Ok(result2 * 10)
+}
+```
+
+### `defer`
+
+```topaz
+function writeLog(message: string) -> Result<(), string> {
+    let file = open("app.log")?
+    defer { file.close() }
+    file.write(message)?
+    return Ok(())
+}
+```
+
+> Canonical Topaz error handling pairs `Result` + `?` with `defer`. A `try` keyword form is not part of Topaz v5.2 — postfix `expr?` is the canonical propagation spelling.
+
+##  Advanced Features
+
+### Partial Application with Lambdas
+
+The placeholder `_` belongs to pipeline right-hand sides; outside a
+pipeline, partial application is spelled with a lambda.
+
+```topaz
+let add10 = x => add(10, x)
+let result = map([1, 2, 3], add10)  // [11, 12, 13]
+```
+
+### Option‑Safe Optional Chaining (?.)
+
+Use `?.` only when the left side is `Option<T>` or a nullable union (e.g., `T | null`). It desugars to `Option.map/flatMap` and short‑circuits left‑to‑right.
+
+```topaz
+let user: Option<{ name: string, profile: Option<{ city: string }> }> =
+    Some({ name: "Ann", profile: Some({ city: "Seoul" }) })
+
+// Each hop returns Option<...>
+let nameOpt = user?.name
+let cityOpt = user?.profile?.city
+
+// Combine with ?? for defaults
+let city = user?.profile?.city ?? "Unknown"
+
+// Not generic object chaining; use `.` for non‑Option values
+let plain = { name: "Jo" }
+let ok = plain.name        // use .
+```
+
+### Macros
+
+> Macros are not specified in Topaz v5.2.
+
+##  Practical Examples
+
+### Web API Call
+
+```topaz
+let userData = fetch("https://api.example.com/users/1")
+    |> json()
+    |> (data => {
+        name: data.name,
+        email: data.email,
+        joinDate: Date.parse(data.created_at)
+    })
+```
+
+### Data Processing Pipeline
+
+```topaz
+let analysisResult = CSV.read("sales.csv")
+    |> filter(row => row.revenue > 1000000)
+    |> groupBy(row => row.region)
+    |> aggregate(group => {
+        region: group.key,
+        totalRevenue: group.values.sum(row => row.revenue),
+        avgRevenue: group.values.average(row => row.revenue)
+    })
+    |> sortBy(descending: row => row.totalRevenue)
+```
+
+##  Next Steps
+
+You've now mastered Topaz's basic syntax! What to learn next:
+
+- **[Data Types](/en/docs/concepts/data-types)** - Deep dive into the type system
+- **[Functions & Closures](/en/docs/concepts/functions-closures)** - Master functional programming
+- **[Error Handling](/en/docs/concepts/error-handling)** - Write safe, robust code
+
+**The surface is small — these pages cover all of it.**

@@ -1,0 +1,23 @@
+function 프로필스냅샷() -> { 이름: string } {
+    { 이름: "Topaz" }
+}
+
+function 최근활동() -> Array<string> {
+    Array.of("login", "edit")
+}
+
+function 빈프로필() -> { 이름: string } {
+    { 이름: "offline" }
+}
+
+let 대시보드 = concurrent(timeout: 3s) {
+    프로필: 프로필스냅샷()
+    활동: 최근활동()
+} else {
+    {
+        프로필: 빈프로필(),
+        활동: Array.of("offline")
+    }
+}
+
+print("활동 항목: {대시보드.활동.length}")

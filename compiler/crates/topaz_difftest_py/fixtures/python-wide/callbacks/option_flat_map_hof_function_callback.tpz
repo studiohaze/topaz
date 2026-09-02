@@ -1,0 +1,12 @@
+
+function maybeInc(x: int) -> Option<int> {
+    Some(x + 1)
+}
+function main() -> int {
+    let opt = Some(1).flatMap(maybeInc)
+    match opt {
+        case Some(n) => n
+        case None => 0
+    }
+}
+main()

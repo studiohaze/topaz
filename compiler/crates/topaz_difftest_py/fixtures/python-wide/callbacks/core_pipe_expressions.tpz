@@ -1,0 +1,18 @@
+
+function inc(x: int) -> int {
+    x + 1
+}
+function add(a: int, b: int) -> int {
+    a + b
+}
+function main() {
+    let sub = (a: int, b: int) => a - b
+    let r = { x: 5 }
+    {
+        unary: 5 |> inc,
+        withArg: 5 |> add(3),
+        field: r |> .x,
+        placeholder: 3 |> sub(10, _)
+    }
+}
+main()

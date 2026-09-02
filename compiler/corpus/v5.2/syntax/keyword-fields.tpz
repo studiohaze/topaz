@@ -1,0 +1,10 @@
+type Task = { type: string, id: int }
+const DEFAULT = { type: "none", id: 0 }
+let task = { type: "email", id: 1 }
+let other = task { type: "sms" }
+let kind = task.type
+let opt = task?.type
+let label = match task {
+    case { type: t } => t
+    case _ => "?"
+}

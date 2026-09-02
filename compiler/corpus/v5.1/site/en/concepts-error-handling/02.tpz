@@ -1,0 +1,47 @@
+// Transform success value with match
+let result = match divide(10.0, 2.0) {
+    case Ok(value) => Ok("Result: {value * 2.0}")
+    case Err(error) => Err(error)
+}
+
+match result {
+    case Ok(message) => print(message)     // success message
+    case Err(error) => print("Error: {error}")
+}
+
+// Chain processing with nested match
+function squareRoot(value: float) -> Result<float, string> {
+    if value < 0.0 {
+        return Err("Cannot calculate square root of negative number")
+    }
+    return Ok(Math.sqrt(value))
+}
+
+let finalResult = match divide(100.0, 4.0) {
+    case Ok(value) => match squareRoot(value) {
+        case Ok(root) => Ok("Square root: {root}")
+        case Err(error) => Err(error)
+    }
+    case Err(error) => Err(error)
+}
+
+match finalResult {
+    case Ok(message) => print(message)         // square-root message
+    case Err(error) => print("Error: {error}")
+}
+
+// Error recovery with match
+function useDefault(error: string) -> Result<float, string> {
+    print("Using default value: {error}")
+    return Ok(0.0)
+}
+
+let recoveredResult = match divide(10.0, 0.0) {
+    case Ok(value) => Ok(value)
+    case Err(error) => useDefault(error)
+}
+
+match recoveredResult {
+    case Ok(value) => print("Recovered: {value}")
+    case Err(error) => print("Error: {error}")
+}

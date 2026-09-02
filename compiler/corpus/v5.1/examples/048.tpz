@@ -1,0 +1,3 @@
+type Pair<T> = { first: T, second: T }
+
+let bounds: Pair<int> = { first: 0, second: 100 }

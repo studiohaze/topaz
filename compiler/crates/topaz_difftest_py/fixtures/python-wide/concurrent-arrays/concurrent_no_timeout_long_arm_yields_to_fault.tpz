@@ -1,0 +1,13 @@
+
+concurrent {
+    slow: {
+        let mut i = 0
+        while i < 200 {
+            i = i + 1
+        }
+        print("slow-finished")
+        1
+    }
+    boom: 1 / 0
+}
+0

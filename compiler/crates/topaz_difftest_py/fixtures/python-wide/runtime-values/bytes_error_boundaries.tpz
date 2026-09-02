@@ -1,0 +1,34 @@
+
+function bytesResult(value: Result<Bytes, string>) -> string {
+    match value {
+        case Ok(b) => b.toHex()
+        case Err(e) => e
+    }
+}
+
+function textResult(value: Result<string, string>) -> string {
+    match value {
+        case Ok(s) => s
+        case Err(e) => e
+    }
+}
+
+function f() -> Result<int, string> {
+    let badUtf8 = match Bytes.fromHex("ff") {
+        case Ok(b) => textResult(b.decodeUtf8())
+        case Err(e) => e
+    }
+    let hexOk = bytesResult(Bytes.fromHex("DEADbeef"))
+    let hexOdd = bytesResult(Bytes.fromHex("abc"))
+    let hexBad = bytesResult(Bytes.fromHex("zz"))
+    let arrayLow = bytesResult(Bytes.fromArray([-1]))
+    let arrayHigh = bytesResult(Bytes.fromArray([256]))
+    let b64Len = bytesResult(Bytes.fromBase64("Zg="))
+    let b64Char = bytesResult(Bytes.fromBase64("@@@@"))
+    let b64Space = bytesResult(Bytes.fromBase64("Z g="))
+    let b64Pad = bytesResult(Bytes.fromBase64("Z==="))
+    let b64Bits = bytesResult(Bytes.fromBase64("Zh=="))
+    print("{hexOk}|{hexOdd}|{hexBad}|{arrayLow}|{arrayHigh}|{b64Len}|{b64Char}|{b64Space}|{b64Pad}|{b64Bits}|{badUtf8}")
+    Ok(0)
+}
+f()

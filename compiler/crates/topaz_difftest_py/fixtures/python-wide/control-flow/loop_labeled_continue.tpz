@@ -1,0 +1,21 @@
+
+let mut sum = 0
+let mut o = 0
+loop 'outer {
+    o = o + 1
+    if o > 3 {
+        break
+    }
+    let mut i = 0
+    loop {
+        i = i + 1
+        if i > 5 {
+            break
+        }
+        if i == 2 {
+            continue 'outer
+        }
+        sum = sum + i
+    }
+}
+sum

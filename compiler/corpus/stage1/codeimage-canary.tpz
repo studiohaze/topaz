@@ -1,0 +1,20 @@
+import std.bytes { Bytes }
+import std.hash
+import std.json
+
+function 청크만들기(종류바이트: Bytes, 자료바이트: Bytes) -> Bytes {
+  let 종류 = ByteBuffer.fromBytes(종류바이트)
+  let 자료 = ByteBuffer.fromBytes(자료바이트)
+  let 자료길이 = 자료.length()
+  let mut 결과 = ByteBuffer.allocate(12 + 자료길이)
+  결과.set(0, (자료길이 / 16777216) % 256); 결과.set(1, (자료길이 / 65536) % 256)
+  결과.set(2, (자료길이 / 256) % 256); 결과.set(3, 자료길이 % 256)
+  결과.copy(종류, 0, 4, 종류.length()); 결과.copy(자료, 0, 8, 자료길이)
+  let mut 검사입력 = ByteBuffer.allocate(종류.length() + 자료길이)
+  검사입력.copy(종류, 0, 0, 종류.length()); 검사입력.copy(자료, 0, 종류.length(), 자료길이)
+  let 검사합 = Hash.crc32(검사입력.toBytes())
+  let 위치 = 8 + 자료길이
+  결과.set(위치, (검사합 / 16777216) % 256); 결과.set(위치 + 1, (검사합 / 65536) % 256)
+  결과.set(위치 + 2, (검사합 / 256) % 256); 결과.set(위치 + 3, 검사합 % 256)
+  결과.toBytes()
+}

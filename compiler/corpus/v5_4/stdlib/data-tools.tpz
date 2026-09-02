@@ -1,0 +1,172 @@
+import std.path
+import std.hash
+import std.regex
+import std.csv
+import std.toml
+import std.json
+import std.url
+import std.cli
+import std.encoding
+import std.parser
+import std.date
+import std.bigint
+import std.decimal
+
+function cell(rows: Array<Array<string>>, row: int, col: int) -> string {
+  match rows.get(row).flatMap((values) => values.get(col)) {
+    case Some(value) => value
+    case None => "none"
+  }
+}
+
+function parseJsonText(text: string) -> Result<JSONValue, string> {
+  match json.parse(text) {
+    case Ok(value) => Ok(value)
+    case Err(e) => Err(e.message)
+  }
+}
+
+function demo() -> Result<string, string> {
+  let p = path.from("src//./main.tpz")?
+  let joinedPath = path.join(path.from("src")?, "lib/util.tpz")?
+  let pathParent = match path.parent(p) {
+    case Some(value) => path.toString(value)
+    case None => "none"
+  }
+  let pathFile = match path.fileName(p) {
+    case Some(value) => value
+    case None => "none"
+  }
+  let pathExt = match path.extension(p) {
+    case Some(value) => value
+    case None => "none"
+  }
+  let pathMd = path.withExtension(p, "md")?
+  let pathSummary = "{path.toString(p)}:{path.toString(joinedPath)}:{pathParent}:{pathFile}:{pathExt}:{path.toString(path.normalize(pathMd))}"
+  let digest = hash.sha256(encoding.utf8Encode("abc")).toHex()
+  let digestTextOk = hash.sha256Text("abc") == digest
+  let digest512Text = hash.sha512Text("abc")
+  let re = regex.compile("\\d+")?
+  let found = match re.find("챕12") {
+    case Some(m) => "{m.start}/{m.end}/{m.text}"
+    case None => "none"
+  }
+  let foundViaModule = match regex.find(re, "x7") {
+    case Some(m) => "{regex.start(m)}-{regex.end(m)}-{regex.textOf(m)}-{regex.groups(m).length}-{regex.named(m).keys.length}"
+    case None => "none"
+  }
+  let matches = regex.findAll(re, "a1 b22").map((m) => m.text).join("+")
+  let pieces = regex.split(regex.compile(",\\s*")?, "a, b,c").join("/")
+  let replaced = regex.replaceAll(re, "a1b22", "X")
+  let regexMatched = regex.isMatch(re, "abc123")
+  let regexSummary = "{regexMatched}/{found}/{foundViaModule}/{matches}/{pieces}/{replaced}"
+  let rows = csv.parse("name,age\nAda,36")?
+  let quoted = csv.stringify([["a,b", "c\"d"]])
+  let tomlValue = toml.parse("name = \"Ada\"\n[db]\nport = 5432")?
+  let tomlJson = json.stringify(toml.toJson(tomlValue))?
+  let tomlJsonValue = toml.toJson(tomlValue)
+  let jsonKeys = match json.keys(tomlJsonValue) {
+    case Some(keys) => keys.join("+")
+    case None => "none"
+  }
+  let jsonLen = match json.length(tomlJsonValue) {
+    case Some(value) => "{value}"
+    case None => "none"
+  }
+  let jsonName = match json.get(tomlJsonValue, "name").flatMap((value) => json.asString(value)) {
+    case Some(value) => value
+    case None => "none"
+  }
+  let jsonDb = match json.get(tomlJsonValue, "db") {
+    case Some(value) => value
+    case None => tomlJsonValue
+  }
+  let jsonPort = match json.get(jsonDb, "port").flatMap((value) => json.numberText(value)) {
+    case Some(value) => value
+    case None => "none"
+  }
+  let jsonArr = parseJsonText("[1,true,null]")?
+  let jsonFirst = match json.at(jsonArr, 0).flatMap((value) => json.asInt(value)) {
+    case Some(value) => "{value}"
+    case None => "none"
+  }
+  let jsonSecond = match json.at(jsonArr, 1).flatMap((value) => json.asBool(value)) {
+    case Some(value) => "{value}"
+    case None => "none"
+  }
+  let jsonThirdNull = match json.at(jsonArr, 2) {
+    case Some(value) => json.isNull(value)
+    case None => false
+  }
+  let jsonArrLen = match json.asArray(jsonArr) {
+    case Some(values) => "{values.length}"
+    case None => "none"
+  }
+  let jsonSummary = "{json.kind(tomlJsonValue)}:{jsonKeys}:{jsonLen}:{jsonName}:{jsonPort}:{jsonFirst}:{jsonSecond}:{jsonThirdNull}:{jsonArrLen}"
+  let parsedUrl = url.parse("HTTPS://Example.COM/a?q=topaz&tag=a&tag=b#frag")?
+  let host = match url.host(parsedUrl) {
+    case Some(value) => value
+    case None => "none"
+  }
+  let tags = match url.query(parsedUrl).get("tag") {
+    case Some(values) => values.join("+")
+    case None => "none"
+  }
+  let fragment = match url.fragment(parsedUrl) {
+    case Some(value) => value
+    case None => "none"
+  }
+  let args = ["--out", "file", "input", "--", "--literal"]
+  let out = match cli.option(args, "--out") {
+    case Some(value) => value
+    case None => "none"
+  }
+  let positionals = cli.positionals(args).join(",")
+  let tokenEnd = parser.takeWhileAsciiAlnum("  abc123-한", 2)
+  let d = date.fromYmd(2024, 2, 29)?
+  let next = date.addDays(d, 1)
+  let bigValue = match bigint.parse("ff", 16) {
+    case Some(value) => value
+    case None => bigint.fromInt(0)
+  }
+  let bigInt = match bigint.asInt(bigValue) {
+    case Some(value) => "{value}"
+    case None => "none"
+  }
+  let bigDiv = match bigint.div(bigValue, bigint.fromInt(10)) {
+    case Ok(value) => bigint.toString(value)
+    case Err(e) => e
+  }
+  let bigMod = match bigint.modulo(bigValue, bigint.fromInt(10)) {
+    case Ok(value) => bigint.toString(value)
+    case Err(e) => e
+  }
+  let big = "{bigint.toString(bigValue, 10)}/{bigInt}/{bigDiv}/{bigMod}"
+  let decValue = match decimal.parse("12.3400") {
+    case Some(value) => value
+    case None => decimal.fromInt(0)
+  }
+  let decInt = match decimal.asInt(decValue) {
+    case Some(value) => "{value}"
+    case None => "none"
+  }
+  let decDiv = match decimal.div(decimal.fromInt(5), decimal.fromInt(2), 1) {
+    case Ok(value) => decimal.toString(value)
+    case Err(e) => e
+  }
+  let decHalf = match decimal.parse("2.5") {
+    case Some(value) => decimal.toString(decimal.roundWithMode(value, 0, RoundingMode.HalfUp))
+    case None => "none"
+  }
+  let decDivMode = match decimal.divWithMode(decimal.fromInt(1), decimal.fromInt(8), 2, RoundingMode.HalfUp) {
+    case Ok(value) => decimal.toString(value)
+    case Err(e) => e
+  }
+  let dec = "{decimal.toString(decValue)}/{decimal.scale(decValue)}/{decInt}/{decimal.toString(decimal.round(decValue, 1))}/{decDiv}/{decHalf}/{decDivMode}"
+  Ok("{pathSummary}|{digest}|{digestTextOk}|{digest512Text}|{regexSummary}|{cell(rows, 1, 0)}|{quoted}|{tomlJson}|{jsonSummary}|{url.scheme(parsedUrl)}:{host}:{url.path(parsedUrl)}:{tags}:{fragment}:{url.toString(parsedUrl)}|{out}:{positionals}|{tokenEnd}|{date.toIso(next)}:{date.year(next)}:{date.month(next)}:{date.day(next)}|{big}|{dec}")
+}
+
+match demo() {
+  case Ok(line) => print(line)
+  case Err(error) => print("error: {error}")
+}

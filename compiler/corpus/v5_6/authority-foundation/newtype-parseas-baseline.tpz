@@ -1,0 +1,3 @@
+newtype UserId = int
+let parsed: Result<UserId, string> = JSON.parseAs<UserId>("7")
+parsed

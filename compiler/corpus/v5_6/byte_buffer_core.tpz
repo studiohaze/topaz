@@ -1,0 +1,22 @@
+function writeHeader(value: ByteBuffer) -> () {
+    let mut writable = value
+    writable.set(0, 9)
+    writable.set(1, 8)
+}
+
+let mut buffer = ByteBuffer.allocate(8)
+buffer.fill(0, 8, 1)
+writeHeader(buffer)
+buffer.set(2, 7)
+buffer.set(3, 6)
+
+let mut alias = buffer
+alias.copy(alias, 0, 2, 6)
+let first = alias.get(0)
+
+let immutable = alias.toBytes()
+let mut copied = ByteBuffer.fromBytes(immutable)
+copied.set(0, first + 1)
+
+print(alias.toBytes().toHex())
+print(copied.toBytes().toHex())

@@ -1,0 +1,17 @@
+// Give simple names to complex types
+type UserInfo = {
+    name: string,
+    age: int,
+    email: string,
+    permissions: Array<string>
+}
+
+type CallbackFunction = (string) -> ()
+
+// Usage example
+let admin: UserInfo = {
+    name: "Admin User",
+    age: 35,
+    email: "admin@topaz.ooo",
+    permissions: ["read", "write", "delete"]
+}

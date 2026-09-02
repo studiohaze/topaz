@@ -1,0 +1,12 @@
+
+function tick() -> int {
+    print("later")
+    1
+}
+function main() -> int {
+    let zero = 0
+    print("before")
+    let t = sql"a {10 / zero} b {tick()}"
+    0
+}
+main()

@@ -1,0 +1,16 @@
+function optIntText(value: Option<int>) -> string {
+  match value {
+    case Some(n) => "{n}"
+    case None => "none"
+  }
+}
+
+let suffix = "banana".endsWith("na")
+let miss = "banana".endsWith("ba")
+let last = optIntText("banana".lastIndexOf("na"))
+let scalar = optIntText("가나다".lastIndexOf("다"))
+let empty = optIntText("가나다".lastIndexOf(""))
+let replaced = "banana".replace("na", "NA")
+let nonoverlap = "aaaa".replace("aa", "b")
+
+print("{suffix}/{miss}/{last}/{scalar}/{empty}/{replaced}/{nonoverlap}")

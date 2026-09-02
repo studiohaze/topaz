@@ -1,0 +1,10 @@
+
+function main() -> int {
+    match 5 {
+        case n if n < 5 => print("bad")
+        case n if n == 5 => print("ok")
+        case _ => print("bad")
+    }
+    1
+}
+main()

@@ -1,0 +1,7 @@
+let r = concurrent(timeout: 1m) {
+  a: 1 / 0
+  b: 5
+} else {
+  -1
+}
+r.a

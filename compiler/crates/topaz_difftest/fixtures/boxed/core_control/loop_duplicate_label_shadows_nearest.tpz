@@ -1,0 +1,7 @@
+let value = loop 'same {
+  let inner = loop 'same {
+    break 'same 2
+  }
+  break 'same inner + 3
+}
+value

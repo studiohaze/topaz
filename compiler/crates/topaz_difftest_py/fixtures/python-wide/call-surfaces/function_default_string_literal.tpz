@@ -1,0 +1,6 @@
+
+function greet(name: string = "Ada") -> string {
+    name
+}
+print(greet())
+greet("Topaz")

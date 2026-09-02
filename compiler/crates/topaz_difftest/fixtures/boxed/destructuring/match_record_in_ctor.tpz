@@ -1,0 +1,2 @@
+match Some({ x: 9 }) { case Some({ x }) => x
+case _ => 0 }

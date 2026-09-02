@@ -1,0 +1,25 @@
+
+function mark(label: string, n: int) -> int {
+    print(label)
+    n
+}
+function main() -> string {
+    let text: Option<string> = Some("한,ab")
+    let noneText: Option<string> = None
+    let parts = match text?.split(",") {
+        case Some(xs) => xs.length
+        case None => 0
+    }
+    let cp = match text?.codePointAt(0) {
+        case Some(n) => n
+        case None => 0
+    }
+    let bytes = text?.byteLength() ?? 0
+    let scalars = text?.scalars()?.length ?? 0
+    let skipped = match noneText?.codePointAt(mark("skip", 0)) {
+        case Some(n) => n
+        case None => 7
+    }
+    "{parts}:{cp}:{bytes}:{scalars}:{skipped}"
+}
+main()

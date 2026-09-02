@@ -1,0 +1,19 @@
+record Box<T> { value: T }
+enum Cell<T> { Value(T) }
+newtype Id<T> = T
+record Wrap<T> { inner: Option<Array<Box<T>>> }
+record Envelope<T> { cell: Cell<T> }
+newtype Wrapped<T> = Id<T>
+record Lookup<K, V> { values: Map<K, V> }
+type Scalar<T> = T
+type LookupAlias = Map<string, int>
+record AliasBox<T> { value: Scalar<T>, lookup: LookupAlias }
+let recordValue = JSON.parseAs<Box<Box<int>>>("\{\"value\":\{\"value\":7\}\}")
+let enumValue = JSON.parseAs<Cell<int>>("\{\"tag\":\"Value\",\"values\":[7]\}")
+let newtypeValue = JSON.parseAs<Id<int>>("7")
+let wrappedRecordValue = JSON.parseAs<Wrap<int>>("\{\"inner\":[\{\"value\":7\}]\}")
+let wrappedEnumValue = JSON.parseAs<Envelope<int>>("\{\"cell\":\{\"tag\":\"Value\",\"values\":[7]\}\}")
+let wrappedNewtypeValue = JSON.parseAs<Wrapped<int>>("7")
+let aliasedValue = JSON.parseAs<Scalar<int>>("7")
+let aliasedRecordValue = JSON.parseAs<AliasBox<int>>("\{\"value\":7,\"lookup\":\{\"answer\":8\}\}")
+JSON.parseAs<Lookup<string, int>>("\{\"values\":\{\"answer\":7\}\}")

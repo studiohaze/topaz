@@ -1,0 +1,9 @@
+
+enum Color derives Eq, Order, Show { Red, Blue }
+function main() -> int {
+    match 7 {
+        case Red => 1
+        case _ => 0
+    }
+}
+main()

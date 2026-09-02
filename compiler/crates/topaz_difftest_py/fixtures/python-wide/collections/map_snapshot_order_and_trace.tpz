@@ -1,0 +1,14 @@
+
+function f() -> Map<Array<int>, string> {
+    let mut key = [1, 2]
+    let mut m = Map.new<Array<int>, string>()
+    m.insert(key, "hit")
+    key.push(3)
+    m.insert([9], "nine")
+    m.insert([1, 2], "updated")
+    let oldKey = m.getOr([1, 2], "missing")
+    let mutatedKey = m.getOr(key, "missing")
+    print("{m.length}:{m.keys.length}:{oldKey}:{mutatedKey}:{m.containsKey([9])}")
+    m
+}
+f()

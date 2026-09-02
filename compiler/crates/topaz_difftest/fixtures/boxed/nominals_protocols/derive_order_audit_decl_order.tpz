@@ -1,0 +1,10 @@
+record O derives Eq, Order, Show { a: int, b: int }
+enum Pri derives Eq, Order, Show { Low, High(int, int) }
+let eqsame = O { a: 1, b: 2 } == O { a: 1, b: 2 }
+let eqdiff = O { a: 1, b: 2 } == O { a: 1, b: 9 }
+let eqe = Pri.High(2, 9) == Pri.High(2, 9)
+let eqe2 = Pri.High(2, 9) == Pri.High(9, 2)
+print("{eqsame}/{eqdiff}/{eqe}/{eqe2}")
+print("{O { a: 1, b: 2 }}")
+print("{Pri.Low}/{Pri.High(2, 9)}")
+0

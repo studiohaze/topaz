@@ -1,0 +1,5 @@
+impl int {
+    function value(self) -> int { 0 }
+}
+
+0

@@ -1,0 +1,27 @@
+// Higher-order function definition
+function applyOperation(array: Array<int>, operation: (int) -> int) -> Array<int> {
+    let mut result: Array<int> = []
+    for element in array {
+        result.push(operation(element))
+    }
+    return result
+}
+
+// Pass functions as parameters
+let numbers = [1, 2, 3, 4]
+let squareResult = applyOperation(numbers, x => x * x)
+let doubleResult = applyOperation(numbers, x => x * 2)
+
+print("{squareResult}")  // [1, 4, 9, 16]
+print("{doubleResult}")  // [2, 4, 6, 8]
+
+// Conditional processing function
+function conditionalProcess(value: int, condition: (int) -> bool, processor: (int) -> int) -> int {
+    if condition(value) {
+        return processor(value)
+    }
+    return value
+}
+
+let result = conditionalProcess(15, x => x > 10, x => x * 2)
+print("{result}")  // 30 (since 15 > 10, so 15 * 2)

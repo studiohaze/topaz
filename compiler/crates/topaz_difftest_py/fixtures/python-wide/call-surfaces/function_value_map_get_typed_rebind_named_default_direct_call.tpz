@@ -1,0 +1,15 @@
+
+function add(a: int, b: int = 2, c: int = 4) -> int {
+    a * 100 + b * 10 + c
+}
+function main() -> int {
+    let callbacks = map { "plus": add }
+    match callbacks.get("plus") {
+        case Some(raw) => {
+            let cb: (int, int, int) -> int = raw
+            cb(c: 5, a: 1) + cb(2, 3, 4)
+        }
+        case None => 0
+    }
+}
+main()

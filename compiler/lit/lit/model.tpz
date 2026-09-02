@@ -1,0 +1,628 @@
+// Shared evaluator, frontend, protocol, and machine records.
+// Data lives at the bottom of the lit module graph; decoding, normalization,
+// execution, and rendering own the behavior built over it.
+
+// Signed guest integer representation used when values exceed host int range.
+export record GuestInt {
+  negative: bool,
+  limbs: Array<int>,
+}
+
+export record GuestRational {
+  numerator: GuestInt,
+  denominator: GuestInt,
+}
+
+export record MagnitudeDivision {
+  quotient: Array<int>,
+  remainder: Array<int>,
+}
+
+export record GuestIntDivision {
+  quotient: GuestInt,
+  remainder: GuestInt,
+}
+
+export record GuestIntegerOperand {
+  value: GuestInt,
+  inexact: bool,
+}
+
+export record ScopeVisit {
+  node: int,
+  owners: Array<int>,
+  ancestors: Array<int>,
+}
+
+export record ErrorObjectRow {
+  code: string,
+  message: string,
+}
+
+export record GuardClauseRow {
+  test: int,
+  body: int,
+}
+
+export enum GuestValue {
+  VBool(bool),
+  VInt(GuestInt),
+  VRational(GuestRational),
+  VReal(float),
+  VChar(int),
+  VString(int, string),
+  VSymbol(string),
+  VNil,
+  VPair(int, GuestValue, GuestValue),
+  VVector(int, Array<GuestValue>, bool),
+  VBytevector(int, Array<int>),
+  VClosure(int),
+  VPrimitive(int),
+  VEscape(int),
+  VError(int, ErrorObjectRow, Array<GuestValue>),
+  VUninitialized,
+}
+
+export record EqualityWork {
+  left: GuestValue,
+  right: GuestValue,
+}
+
+export enum RenderTask {
+  RenderValueTask(GuestValue),
+  RenderTextTask(string),
+  LeaveVectorTask(int),
+}
+
+export enum ValuePacket {
+  One(GuestValue),
+  Many(Array<GuestValue>),
+}
+
+export enum MachineSignal {
+  RuntimeSignal(string),
+  ProjectedRuntimeSignal(string, string, string, Array<GuestValue>),
+  ConditionSignal(GuestValue, bool, string),
+  EscapeSignal(int, ValuePacket),
+  ResourceSignal(string),
+}
+
+export enum NodeOp {
+  Literal(int),
+  LocalRef(int, int, int),
+  GlobalRef(int, int),
+  Capability(int),
+  IfNode(int, int, int),
+  Begin(Array<int>),
+  Lambda(Array<int>, int, int),
+  Apply(int, Array<int>),
+  SetLocal(int, int, int, int),
+  SetGlobal(int, int, int),
+  Letrec(Array<int>, Array<int>, int),
+  GuardNode(Array<int>, Array<GuardClauseRow>, int, int),
+}
+
+export record SpanRow {
+  startByte: int,
+  endByte: int,
+}
+
+export record OriginRow {
+  kind: string,
+  span: int,
+  rule: string,
+  parent: int,
+}
+
+export record BinderRow {
+  name: string,
+  owner: int,
+  slot: int,
+  origin: int,
+}
+
+export record GlobalRow {
+  name: string,
+  slot: int,
+  origin: int,
+  capability: int,
+}
+
+export record NodeRow {
+  span: int,
+  origin: int,
+  op: NodeOp,
+}
+
+// Immutable decoded syntax and binding tables consumed by machine transitions.
+export record Kernel {
+  feature: string,
+  sourceId: string,
+  sourceSha: string,
+  spans: Array<SpanRow>,
+  origins: Array<OriginRow>,
+  binders: Array<BinderRow>,
+  globals: Array<GlobalRow>,
+  roots: Array<int>,
+  nodes: Array<NodeRow>,
+  quotes: Array<GuestValue>,
+  capabilities: Array<string>,
+  capabilityDispositions: Array<string>,
+}
+
+export record CapabilityTable {
+  names: Array<string>,
+  dispositions: Array<string>,
+}
+
+export record Request {
+  invocationId: string,
+  mode: string,
+  sourceId: string,
+  sourceSha: string,
+  sourceBytes: Array<int>,
+  workloadSha: string,
+  litSourceSha: string,
+  capabilitySha: string,
+  kernel: Kernel,
+  transitionLimit: int,
+  inputLimit: int,
+  outputLimit: int,
+  tokenLimit: int,
+}
+
+// Source-mode request with explicit frontend and machine resource ceilings.
+export record FrontendRequest {
+  invocationId: string,
+  mode: string,
+  sourceId: string,
+  sourceSha: string,
+  sourceBytes: Array<int>,
+  workloadSha: string,
+  litSourceSha: string,
+  capabilitySha: string,
+  transitionLimit: int,
+  normalizationLimit: int,
+  inputLimit: int,
+  outputLimit: int,
+  tokenLimit: int,
+}
+
+export record SourceRequest {
+  invocationId: string,
+  profileId: string,
+  sourceId: string,
+  sourceSha: string,
+  sourceBytes: Array<int>,
+  tokenizerTransitionLimit: int,
+  tokenLimit: int,
+  normalizationLimit: int,
+  machineTransitionLimit: int,
+  outputLimit: int,
+  litSourceSha: string,
+  capabilityContractSha: string,
+  capabilityRowsSha: string,
+  nestingDepth: int,
+  parentReceiptSha: string,
+}
+
+export record V1ArtifactIdentity {
+  identity_kind: string,
+  path: string,
+  byte_len: int,
+  sha256: string,
+}
+
+export record V1ArtifactExpectation {
+  backend_id: string,
+  profile: string,
+  capability_schema: string,
+  observation_schema: string,
+  artifact: V1ArtifactIdentity,
+}
+
+export record V1Cancellation {
+  deadline_unix_millis: Option<int>,
+  abort_requested: bool,
+}
+
+export record V1ProductRequest {
+  schema: string,
+  invocation_id: string,
+  profile: string,
+  logical_source_id: string,
+  source_bytes_base64: string,
+  source_sha256: string,
+  resource_profile: string,
+  limits: Array<int>,
+  artifact_expectation: V1ArtifactExpectation,
+  cancellation: V1Cancellation,
+}
+
+export record V1HostBinding {
+  schema: string,
+  host_variant: string,
+  artifact: V1ArtifactIdentity,
+  deadline_unix_millis: Option<int>,
+  deadline_state: string,
+  binary_stdio: bool,
+  fresh_process: bool,
+  process_control: bool,
+}
+
+export record V1HostFrame {
+  schema: string,
+  request_jsonl: string,
+  binding: V1HostBinding,
+}
+
+export function decodeV1ProductRequestJson(value: JSONValue) -> Result<V1ProductRequest, string> {
+  match JSON.decode<V1ProductRequest>(value) {
+    case Ok(request) => Ok(request)
+    case Err(error) => Err("protocol request shape is invalid: {error}")
+  }
+}
+
+export function decodeV1HostFrameJson(value: JSONValue) -> Result<V1HostFrame, string> {
+  match JSON.decode<V1HostFrame>(value) {
+    case Ok(frame) => Ok(frame)
+    case Err(error) => Err("host frame shape is invalid: {error}")
+  }
+}
+
+export record V1ResourceProfile {
+  id: string,
+  purpose: string,
+  publicSelectable: bool,
+  limits: Array<int>,
+}
+
+export record V1CatalogRow {
+  code: string,
+  severity: string,
+  phase: string,
+  family: string,
+  exitStatus: int,
+}
+
+export record V1DiagnosticProjection {
+  code: string,
+  severity: string,
+  phase: string,
+  family: string,
+  message: string,
+  irritants: Array<string>,
+  startByte: int,
+}
+
+export record V1ObservationState {
+  executionStarted: bool,
+  kernelProduced: bool,
+  status: string,
+  stdoutText: string,
+  diagnostics: Array<V1DiagnosticProjection>,
+  warnings: Array<V1DiagnosticProjection>,
+  exitStatus: int,
+  values: Array<string>,
+  resourceStatus: string,
+  resourceLimit: Option<string>,
+  scalarCount: int,
+  tokenCount: int,
+  readerDatums: int,
+  readerRoots: int,
+  tokenizerTransitions: int,
+  normalizationSteps: int,
+  kernelNodes: int,
+  machineTransitions: int,
+  rootsCompleted: int,
+  maxContinuationDepth: int,
+  allocations: int,
+  transfers: int,
+  internalDisposition: string,
+}
+
+export enum DecodedRequest {
+  KernelMode(Request),
+  FrontendMode(FrontendRequest),
+  SourceMode(SourceRequest),
+}
+
+export record ScalarRow {
+  value: int,
+  startByte: int,
+  endByte: int,
+}
+
+export record FrontendToken {
+  kind: string,
+  startByte: int,
+  endByte: int,
+  raw: Array<int>,
+  text: string,
+}
+
+export record FrontendFault {
+  code: string,
+  templateId: string,
+  phase: string,
+  startByte: int,
+  endByte: int,
+  message: string,
+  resource: bool,
+  diagnosticCode: string,
+  diagnosticPhase: string,
+  diagnosticMessage: string,
+  diagnosticStartByte: int,
+}
+
+export record DecodedSource {
+  scalars: Array<ScalarRow>,
+  newlineIndex: Array<int>,
+}
+
+export record TokenizedSource {
+  scalars: Array<ScalarRow>,
+  newlineIndex: Array<int>,
+  tokens: Array<FrontendToken>,
+  transitions: int,
+}
+
+export enum ReaderDatumKind {
+  DatumBool(bool),
+  DatumInt(GuestInt),
+  DatumRational(GuestRational),
+  DatumReal(float),
+  DatumChar(int),
+  DatumString(string),
+  DatumSymbol(string),
+  DatumNil,
+  DatumPair(int, int),
+  DatumVector(Array<int>),
+  DatumBytevector(Array<int>),
+}
+
+export record ReaderDatum {
+  startByte: int,
+  endByte: int,
+  kind: ReaderDatumKind,
+}
+
+export record ReaderOutput {
+  datums: Array<ReaderDatum>,
+  roots: Array<int>,
+  transitions: int,
+  maxNesting: int,
+}
+
+export record ReaderParseFrame {
+  kind: string,
+  startByte: int,
+  items: Array<int>,
+  dottedState: int,
+  tail: int,
+  dotStartByte: int,
+}
+
+export record LexicalFrame {
+  owner: int,
+  binders: Array<int>,
+}
+
+export record LexicalAddress {
+  binder: int,
+  depth: int,
+  slot: int,
+}
+
+export record ParsedFormals {
+  names: Array<string>,
+  nameDatums: Array<int>,
+  restName: string,
+  restDatum: int,
+}
+
+export record ParsedBinding {
+  name: string,
+  nameDatum: int,
+  initDatum: int,
+  stepDatum: int,
+}
+
+export record NormalizeArena {
+  datums: Array<ReaderDatum>,
+  spans: Array<SpanRow>,
+  origins: Array<OriginRow>,
+  binders: Array<BinderRow>,
+  globals: Array<GlobalRow>,
+  nodes: Array<NodeRow>,
+  quotes: Array<GuestValue>,
+  transitions: Array<int>,
+  transitionLimit: int,
+  generatedCount: Array<int>,
+  intrinsicCount: Array<int>,
+  capabilities: Array<string>,
+}
+
+export record NormalizeOutput {
+  kernel: Kernel,
+  transitions: int,
+  generatedBinders: int,
+  intrinsicReferences: int,
+}
+
+export record QuasiquotePart {
+  node: int,
+  splice: bool,
+}
+
+export record NodeLocation {
+  span: int,
+  origin: int,
+}
+
+export record SourcePoint {
+  line: int,
+  column: int,
+}
+
+export record DefinitionShape {
+  name: string,
+  nameDatum: int,
+  functionForm: bool,
+  formalsDatum: int,
+  rhsDatum: int,
+  bodyDatums: Array<int>,
+}
+
+export record NodeEncoding {
+  opcode: string,
+  a: string,
+  b: string,
+  c: string,
+  d: string,
+}
+
+// Fully decoded input; machine execution never revisits the JSON envelope.
+export record KernelRequest {
+  invocationId: string,
+  kernel: Kernel,
+  transitionLimit: int,
+  outputLimit: int,
+}
+
+export record EnvironmentRow {
+  parent: int,
+  cells: Array<int>,
+}
+
+export record ClosureRow {
+  fixedArity: int,
+  hasRest: bool,
+  body: int,
+  environment: int,
+}
+
+export enum ContinuationFrame {
+  HaltFrame,
+  ProgramFrame(Array<int>, int, int, Array<ValuePacket>),
+  IfFrame(int, int, int, int),
+  BeginFrame(Array<int>, int, int),
+  OperatorFrame(Array<int>, int, int, int),
+  OperandFrame(GuestValue, Array<int>, int, Array<GuestValue>, int, int),
+  SetLocalFrame(int, int, int, int),
+  SetGlobalFrame(int, int),
+  LetrecFrame(Array<int>, Array<int>, int, int, int),
+  ProducerFrame(GuestValue, int),
+  HigherOrderFrame(string, GuestValue, Array<GuestValue>, int, Array<GuestValue>, GuestValue, int),
+  EscapeScopeFrame(int),
+  HandlerScopeFrame(int),
+  HandlerResultFrame(int, bool, int),
+  WindBeforeFrame(GuestValue, GuestValue, int),
+  WindThunkFrame(int, int),
+  WindNormalAfterFrame(ValuePacket),
+  ResumeTransferFrame(MachineSignal, int, int),
+  GuardScopeFrame(int),
+  GuardTestFrame(int, int, int, MachineSignal, int, int),
+}
+
+export record ContinuationRow {
+  frame: ContinuationFrame,
+  parent: int,
+  depth: int,
+}
+
+export record MachineWarning {
+  code: string,
+  message: string,
+  origin: int,
+}
+
+export enum DynamicFrame {
+  EscapeOwnerDynamic(int, int),
+  HandlerDynamic(GuestValue),
+  WindDynamic(GuestValue, int),
+  GuardDynamic(Array<GuardClauseRow>, int, int, int),
+}
+
+export record DynamicRow {
+  frame: DynamicFrame,
+  parent: int,
+}
+
+export enum MachineMode {
+  EvalMode(int, int, int),
+  DeliverMode(ValuePacket, int),
+  InvokeMode(GuestValue, Array<GuestValue>, int, int),
+  TransferMode(MachineSignal, int),
+  HaltMode,
+}
+
+export record KernelInvokeStep {
+  mode: MachineMode,
+  allocations: int,
+  maxContinuationDepth: int,
+  transfers: int,
+  dynamic: int,
+  emittedOutput: string,
+}
+
+export record KernelEvalStep {
+  mode: MachineMode,
+  allocations: int,
+  maxContinuationDepth: int,
+  transfers: int,
+  dynamic: int,
+  activeOrigin: int,
+}
+
+export record KernelDeliverStep {
+  mode: MachineMode,
+  allocations: int,
+  maxContinuationDepth: int,
+  transfers: int,
+  dynamic: int,
+  activeOrigin: int,
+  emittedOutput: string,
+  finalPacket: Option<ValuePacket>,
+  rootPackets: Array<ValuePacket>,
+  finalStatus: string,
+  finalExit: int,
+}
+
+export record KernelTransferStep {
+  mode: MachineMode,
+  allocations: int,
+  maxContinuationDepth: int,
+  transfers: int,
+  dynamic: int,
+  activeOrigin: int,
+  finalDiagnostic: Option<string>,
+  finalDiagnosticCode: Option<string>,
+  finalDiagnosticMessage: Option<string>,
+  finalDiagnosticOrigin: int,
+  finalDiagnosticIrritants: Array<GuestValue>,
+  finalStatus: string,
+  finalExit: int,
+}
+
+// Final machine outcome with transcript, warnings, metrics, and stop identity.
+export record RunResult {
+  status: string,
+  packet: Option<ValuePacket>,
+  diagnostic: Option<string>,
+  diagnosticCode: Option<string>,
+  diagnosticMessage: Option<string>,
+  diagnosticOrigin: int,
+  diagnosticIrritants: Array<GuestValue>,
+  warnings: Array<MachineWarning>,
+  exitStatus: int,
+  transitionLimit: int,
+  transitions: int,
+  exhausted: bool,
+  maxContinuationDepth: int,
+  allocations: int,
+  transfers: int,
+  rootPackets: Array<ValuePacket>,
+  rootsCompleted: int,
+  stdoutText: string,
+}

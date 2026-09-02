@@ -1,0 +1,2 @@
+let maybeUser: Option<{ name: string }> = Some({ name: "Alice" })
+let displayName = maybeUser?.name ?? "guest"

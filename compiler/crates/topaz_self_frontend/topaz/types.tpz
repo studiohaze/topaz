@@ -1,0 +1,292 @@
+export record PreviewToken derives JSON {
+  kind: string,
+  lo: int,
+  hi: int,
+  stream: string,
+  synthetic: bool,
+}
+
+export record PreviewDiagnostic derives JSON {
+  code: string,
+  message: string,
+  lo: int,
+  hi: int,
+  notes: Array<string>,
+}
+
+export record PreviewAstAttribute derives JSON {
+  name: string,
+  kind: string,
+  value: string,
+}
+
+export record PreviewAstNode derives JSON {
+  kind: string,
+  lo: int,
+  hi: int,
+  parent: int,
+  field: string,
+  index: int,
+  attributeNames: Array<string>,
+  attributeKinds: Array<string>,
+  attributeValues: Array<string>,
+}
+
+export record SyntaxNode {
+  kind: string,
+  lo: int,
+  hi: int,
+  field: string,
+  index: int,
+  attributes: Array<PreviewAstAttribute>,
+  children: Array<SyntaxNode>,
+}
+
+export record RawResult {
+  tokens: Array<PreviewToken>,
+  diagnostics: Array<PreviewDiagnostic>,
+}
+
+export record LayoutResult {
+  tokens: Array<PreviewToken>,
+  diagnostics: Array<PreviewDiagnostic>,
+}
+
+export record ParseResult {
+  root: SyntaxNode,
+  nodes: Array<PreviewAstNode>,
+  diagnostics: Array<PreviewDiagnostic>,
+}
+
+export record PreviewDirectoryEntry derives JSON {
+  name: string,
+  kind: string,
+}
+
+export record PreviewHostFact derives JSON {
+  kind: string,
+  mountId: string,
+  logicalPath: string,
+  status: string,
+  source: string,
+  entries: Array<PreviewDirectoryEntry>,
+  aliasClass: string,
+  reasonCode: string,
+}
+
+export record PreviewHostQuery derives JSON {
+  kind: string,
+  mountId: string,
+  logicalPath: string,
+}
+
+export record PreviewGeneratedStdModule derives JSON {
+  identity: string,
+  path: string,
+  source: string,
+}
+
+export record PreviewModuleResult derives JSON {
+  sourceOrdinal: int,
+  identity: string,
+  path: string,
+  source: string,
+  entry: bool,
+  extern: bool,
+  generatedStd: bool,
+  raw: Array<PreviewToken>,
+  layout: Array<PreviewToken>,
+  ast: Array<PreviewAstNode>,
+}
+
+export record PreviewImportEdge derives JSON {
+  from: string,
+  to: string,
+}
+
+export record PreviewResolvedScope derives JSON {
+  moduleIndex: int,
+  ordinal: int,
+  parentOrdinal: int,
+  kind: string,
+  lo: int,
+  hi: int,
+}
+
+export record PreviewResolvedDeclaration derives JSON {
+  moduleIndex: int,
+  scopeOrdinal: int,
+  name: string,
+  namespace: string,
+  declarationKind: string,
+  lo: int,
+  hi: int,
+  exported: bool,
+  targetModule: string,
+  targetName: string,
+}
+
+export record PreviewResolvedReference derives JSON {
+  moduleIndex: int,
+  scopeOrdinal: int,
+  name: string,
+  namespace: string,
+  role: string,
+  lo: int,
+  hi: int,
+  targetModuleIndex: int,
+  targetLo: int,
+  targetHi: int,
+  targetNamespace: string,
+  targetModule: string,
+  targetName: string,
+}
+
+export record PreviewResolvedExport derives JSON {
+  moduleIndex: int,
+  name: string,
+  namespace: string,
+  declarationLo: int,
+  declarationHi: int,
+}
+
+export record PreviewResolvedDiagnostic derives JSON {
+  moduleIndex: int,
+  code: string,
+  message: string,
+  lo: int,
+  hi: int,
+  notes: Array<string>,
+}
+
+export record ResolveResult {
+  queries: Array<PreviewHostQuery>,
+  modules: Array<PreviewModuleResult>,
+  edges: Array<PreviewImportEdge>,
+  scopes: Array<PreviewResolvedScope>,
+  declarations: Array<PreviewResolvedDeclaration>,
+  references: Array<PreviewResolvedReference>,
+  exports: Array<PreviewResolvedExport>,
+  diagnostics: Array<PreviewResolvedDiagnostic>,
+}
+
+// Private checker exchange. Types are a strict preorder tree so the public
+// record surface itself stays non-recursive and JSON-round-trippable.
+export record PreviewTypeAtom derives JSON {
+  parent: int,
+  field: string,
+  index: int,
+  edgeName: string,
+  kind: string,
+  name: string,
+  value: string,
+  identity: string,
+  origin: string,
+}
+
+export record PreviewTypedNode derives JSON {
+  moduleIndex: int,
+  nodeKind: string,
+  lo: int,
+  hi: int,
+  typeValue: Array<PreviewTypeAtom>,
+  ambient: bool,
+}
+
+export record PreviewCallArgument derives JSON {
+  bindingKind: string,
+  bindingName: string,
+  sourceIndex: Option<int>,
+  lo: int,
+  hi: int,
+}
+
+export record PreviewCallEvaluation derives JSON {
+  kind: string,
+  argumentIndex: int,
+}
+
+export record PreviewTypedCall derives JSON {
+  moduleIndex: int,
+  lo: int,
+  hi: int,
+  calleeLo: int,
+  calleeHi: int,
+  calleeType: Array<PreviewTypeAtom>,
+  resultType: Array<PreviewTypeAtom>,
+  targetIdentity: string,
+  ambient: bool,
+  calleeKind: string,
+  method: string,
+  methodClass: string,
+  optional: bool,
+  shadowFirst: bool,
+  stageMethod: string,
+  arguments: Array<PreviewCallArgument>,
+  evaluations: Array<PreviewCallEvaluation>,
+}
+
+export record PreviewTypedCapture derives JSON {
+  moduleIndex: int,
+  closureLo: int,
+  closureHi: int,
+  referenceLo: int,
+  referenceHi: int,
+  declarationLo: int,
+  declarationHi: int,
+  name: string,
+  typeValue: Array<PreviewTypeAtom>,
+  ambient: bool,
+}
+
+export record PreviewCheckLabel derives JSON {
+  moduleIndex: int,
+  lo: int,
+  hi: int,
+  message: string,
+}
+
+export record PreviewCheckDiagnostic derives JSON {
+  moduleIndex: int,
+  code: string,
+  message: string,
+  primaryMessage: string,
+  lo: int,
+  hi: int,
+  secondary: Array<PreviewCheckLabel>,
+  notes: Array<string>,
+  profileRule: string,
+}
+
+export record CheckResult {
+  nodes: Array<PreviewTypedNode>,
+  calls: Array<PreviewTypedCall>,
+  captures: Array<PreviewTypedCapture>,
+  diagnostics: Array<PreviewCheckDiagnostic>,
+}
+
+export record LowerBridgeRequest derives JSON {
+  producer: string,
+  producerStage: int,
+  frontEnd: string,
+  frontEndStatus: string,
+  modules: Array<PreviewModuleResult>,
+  references: Array<PreviewResolvedReference>,
+  typedNodes: Array<PreviewTypedNode>,
+  typedCalls: Array<PreviewTypedCall>,
+  typedCaptures: Array<PreviewTypedCapture>,
+  sourceSetId: string,
+  maxLoweredNodes: int,
+}
+
+export function encodeLowerBridgeRequest(
+  request: LowerBridgeRequest,
+) -> Result<Bytes, string> {
+  Ok(Bytes.encodeUtf8(JSON.stringify(request)?))
+}
+
+export function decodeLowerBridgeRequest(
+  text: string,
+) -> Result<LowerBridgeRequest, string> {
+  JSON.parseAs<LowerBridgeRequest>(text)
+}

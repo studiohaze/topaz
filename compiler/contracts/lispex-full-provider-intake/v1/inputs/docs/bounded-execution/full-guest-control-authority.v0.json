@@ -1,0 +1,43 @@
+{
+  "schema": "lispex.full-guest-control-authority/v0",
+  "status": "private-control-slice-runtime-authority",
+  "semantic_profile": "lispex-profile-1.5",
+  "public_identity_assigned": false,
+  "restricted_component_changed": false,
+  "source_registry": "docs/bounded-execution/primitive-cost-classification.v0.json",
+  "source_cost_design": "docs/bounded-execution/full-profile-cost-classification.v0.json",
+  "rules": {
+    "charge_before_effect": true,
+    "refunds": false,
+    "callback_execution_independently_metered": true,
+    "host_recursion": false,
+    "physical_collection_closure_checkpoint": "v1.15.5",
+    "physical_collection_closure_complete": true,
+    "callback_argument_permit_complete": true,
+    "output_construction_authority_complete": true,
+    "bounded_diagnostic_settlement_complete": true,
+    "partial_visibility_on_failure": false,
+    "native_cleanup_disposition": "exact-fresh-instance-discard-required",
+    "non_control_runtime_integration": "complete-under-full-cost-authority"
+  },
+  "rows": [
+    { "id": 13, "name": "all?", "kind": "list-predicate", "result": "scalar", "short_circuit": true },
+    { "id": 14, "name": "any?", "kind": "list-predicate", "result": "scalar", "short_circuit": true },
+    { "id": 16, "name": "apply", "kind": "apply-projection", "result": "forwarded", "short_circuit": false },
+    { "id": 40, "name": "call-with-current-continuation", "kind": "machine-transfer", "result": "forwarded", "short_circuit": false },
+    { "id": 41, "name": "call-with-values", "kind": "producer-consumer", "result": "forwarded", "short_circuit": false },
+    { "id": 42, "name": "call/cc", "kind": "machine-transfer", "result": "forwarded", "short_circuit": false },
+    { "id": 83, "name": "dynamic-wind", "kind": "machine-transfer", "result": "forwarded", "short_circuit": false },
+    { "id": 99, "name": "filter", "kind": "list-map", "result": "list", "short_circuit": false },
+    { "id": 105, "name": "fold-left", "kind": "list-fold", "result": "scalar", "short_circuit": false },
+    { "id": 106, "name": "fold-right", "kind": "list-fold", "result": "scalar", "short_circuit": false },
+    { "id": 107, "name": "for-each", "kind": "list-effect", "result": "zero-values", "short_circuit": false },
+    { "id": 129, "name": "map", "kind": "list-map", "result": "list", "short_circuit": false },
+    { "id": 153, "name": "reduce", "kind": "list-fold", "result": "scalar", "short_circuit": false },
+    { "id": 172, "name": "string-for-each", "kind": "string-effect", "result": "zero-values", "short_circuit": false },
+    { "id": 174, "name": "string-map", "kind": "string-map", "result": "string", "short_circuit": false },
+    { "id": 196, "name": "vector-for-each", "kind": "vector-effect", "result": "zero-values", "short_circuit": false },
+    { "id": 198, "name": "vector-map", "kind": "vector-map", "result": "vector", "short_circuit": false },
+    { "id": 202, "name": "with-exception-handler", "kind": "machine-transfer", "result": "forwarded", "short_circuit": false }
+  ]
+}

@@ -1,0 +1,16 @@
+
+function next(x: int) -> Option<int> {
+    let mut i = 0
+    while i < 200 {
+        i = i + 1
+    }
+    Some(1 / 0)
+}
+
+concurrent {
+    slow: {
+        let value = Some(1)
+        value.flatMap(next)
+    }
+}
+0

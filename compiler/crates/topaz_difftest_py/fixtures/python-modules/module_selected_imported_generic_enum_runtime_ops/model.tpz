@@ -1,0 +1,2 @@
+
+export enum Box<T> derives Eq, Order, Show { Empty, One(T), Two(T, T) }

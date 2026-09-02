@@ -1,0 +1,2 @@
+match true { case x: int | string => 1
+case _ => 0 }

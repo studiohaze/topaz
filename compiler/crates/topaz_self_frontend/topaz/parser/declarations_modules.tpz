@@ -1,0 +1,1367 @@
+// Declaration, statement, block, import, export, and program grammar.
+// Expression and type-pattern parsers are called through their forward service
+// records; the public parse result is assembled by parser.tpz.
+
+import types { PreviewToken, SyntaxNode }
+import parser.core {
+  Parser,
+  ParserService,
+  addDiagnostic,
+  at,
+  attach,
+  boolAttribute,
+  boxValue,
+  bump,
+  current,
+  eat,
+  expect,
+  expectLeftBrace,
+  expectRightBrace,
+  fail,
+  identNode,
+  identifier,
+  itemBoundary,
+  lambdaAllowed,
+  node,
+  recordUpdateAllowed,
+  rejectReservedBinding,
+  setLambdaAllowed,
+  setRecordUpdateAllowed,
+  skipSeparators,
+  stringAttribute,
+  synchronize,
+  text,
+  tokenAt,
+}
+import parser.types_patterns {
+  bindingPattern,
+  expectCloseAngle,
+  namedType,
+  parsePattern,
+  parseType,
+}
+import parser.expressions {
+  blockExpression,
+  labelNode,
+  parseExpression,
+  parseExpressionBeforeBlock,
+}
+
+// The high component is the type-parameter index and the low component is its bound ordinal.
+const TYPE_BOUND_INDEX_STRIDE = 4294967296
+
+function rejectedStatement(message: string) -> Result<SyntaxNode, string> {
+  Err(message)
+}
+
+function skipBalancedBraces(parser: Parser) -> () {
+  if !at(parser, "left-brace") {
+    return ()
+  }
+  let mut depth = 0
+  while !at(parser, "eof") {
+    let kind = current(parser).kind
+    if kind == "left-brace" {
+      depth += 1
+    } else if kind == "right-brace" {
+      depth -= 1
+    }
+    bump(parser)
+    if depth == 0 {
+      break
+    }
+  }
+  ()
+}
+
+function parseTypeParameters(
+  parser: Parser,
+  field: string,
+) -> Result<Array<SyntaxNode>, string> {
+  let mut parameters: Array<SyntaxNode> = []
+  if !eat(parser, "lt") {
+    return Ok(parameters)
+  }
+  let mut index = 0
+  while true {
+    let name = identifier(parser, "a type parameter")?
+    parameters.push(identNode(name, field, index))
+    index += 1
+    if !eat(parser, "comma") {
+      break
+    }
+  }
+  expectCloseAngle(parser)?
+  Ok(parameters)
+}
+
+function parseFunctionTypeParameters(parser: Parser) -> Result<Array<SyntaxNode>, string> {
+  let mut parameters: Array<SyntaxNode> = []
+  let mut bounds: Array<SyntaxNode> = []
+  if !eat(parser, "lt") {
+    return Ok(parameters)
+  }
+  let mut parameterIndex = 0
+  while true {
+    let name = identifier(parser, "a type parameter")?
+    parameters.push(identNode(name, "typeParameters", parameterIndex))
+    if eat(parser, "colon") {
+      let mut boundIndex = 0
+      while true {
+        let bound = identifier(parser, "a protocol bound")?
+        bounds.push(identNode(
+          bound,
+          "typeParameterBounds",
+          parameterIndex * TYPE_BOUND_INDEX_STRIDE + boundIndex,
+        ))
+        boundIndex += 1
+        if !eat(parser, "plus") {
+          break
+        }
+      }
+    }
+    parameterIndex += 1
+    if !eat(parser, "comma") {
+      break
+    }
+  }
+  expectCloseAngle(parser)?
+  for bound in bounds {
+    parameters.push(bound)
+  }
+  Ok(parameters)
+}
+
+function parseFunction(service: ParserService,
+parser: Parser, field: string, index: int) -> Result<SyntaxNode, string> {
+  let keyword = expect(parser, "keyword/function", "`function`")?
+  let name = identifier(parser, "a function name")?
+  let mut children: Array<SyntaxNode> = [identNode(name, "name", 0)]
+  for parameter in parseFunctionTypeParameters(parser)? {
+    children.push(parameter)
+  }
+  expect(parser, "left-paren", "`(`")?
+  let mut parameterIndex = 0
+  while !at(parser, "right-paren") && !at(parser, "eof") {
+    let parameterLo = current(parser).lo
+    let variadic = eat(parser, "ellipsis")
+    let parameterName = identifier(parser, "a parameter name")?
+    rejectReservedBinding(parser, parameterName)
+    let parameterType = if parameterIndex == 0 && !variadic &&
+      text(parser, parameterName.lo, parameterName.hi) == "self" &&
+      !at(parser, "colon") {
+      namedType(parameterName, "type", 0)
+    } else {
+      expect(parser, "colon", "`:`")?
+      parseType(service, parser, "type", 0)?
+    }
+    let mut parameterChildren: Array<SyntaxNode> = [
+      identNode(parameterName, "name", 0),
+      parameterType,
+    ]
+    if eat(parser, "eq") {
+      parameterChildren.push(parseExpression(service, parser, "default", 0)?)
+    }
+    children.push(node(
+      "parameter",
+      parameterLo,
+      boxValue(parser.lastHi),
+      "parameters",
+      parameterIndex,
+      [boolAttribute("variadic", variadic)],
+      parameterChildren,
+    ))
+    parameterIndex += 1
+    if !eat(parser, "comma") {
+      break
+    }
+  }
+  expect(parser, "right-paren", "`)`")?
+  if eat(parser, "thin-arrow") {
+    children.push(parseType(service, parser, "returnType", 0)?)
+  }
+  let body = parseBlock(service, parser, "body", 0)?
+  let hi = body.hi
+  children.push(body)
+  let declaration = node(
+    "function-declaration",
+    name.lo,
+    hi,
+    "declaration",
+    0,
+    [],
+    children,
+  )
+  Ok(node(
+    "statement/function",
+    keyword.lo,
+    hi,
+    field,
+    index,
+    [],
+    [declaration],
+  ))
+}
+
+function parseTypeAlias(service: ParserService,
+parser: Parser, field: string, index: int) -> Result<SyntaxNode, string> {
+  let keyword = expect(parser, "keyword/type", "`type`")?
+  let name = identifier(parser, "a type name")?
+  let mut children: Array<SyntaxNode> = [identNode(name, "name", 0)]
+  for parameter in parseTypeParameters(parser, "typeParameters")? {
+    children.push(parameter)
+  }
+  expect(parser, "eq", "`=`")?
+  let typeNode = parseType(service, parser, "type", 0)?
+  let hi = typeNode.hi
+  children.push(typeNode)
+  Ok(node(
+    "statement/type-alias",
+    keyword.lo,
+    hi,
+    field,
+    index,
+    [],
+    children,
+  ))
+}
+
+function parseDerives(parser: Parser) -> Result<Array<SyntaxNode>, string> {
+  let mut derives: Array<SyntaxNode> = []
+  if !at(parser, "identifier") || text(parser, current(parser).lo, current(parser).hi) != "derives" {
+    return Ok(derives)
+  }
+  bump(parser)
+  let mut index = 0
+  while true {
+    derives.push(identNode(identifier(parser, "a protocol name to derive")?, "derives", index))
+    index += 1
+    if !eat(parser, "comma") {
+      break
+    }
+  }
+  Ok(derives)
+}
+
+function contextualHeadAt(parser: Parser, offset: int, word: string) -> bool {
+  let head = tokenAt(parser, offset)
+  head.kind == "identifier" && text(parser, head.lo, head.hi) == word &&
+    tokenAt(parser, offset + 1).kind == "identifier"
+}
+
+function contextualHead(parser: Parser, word: string) -> bool {
+  contextualHeadAt(parser, 0, word)
+}
+
+function contextualHeadWithFollowAt(
+  parser: Parser,
+  offset: int,
+  word: string,
+  firstFollow: string,
+  secondFollow: string,
+) -> bool {
+  contextualHeadAt(parser, offset, word) &&
+    (tokenAt(parser, offset + 2).kind == firstFollow ||
+      tokenAt(parser, offset + 2).kind == secondFollow)
+}
+
+function contextualHeadWithFollow(
+  parser: Parser,
+  word: string,
+  firstFollow: string,
+  secondFollow: string,
+) -> bool {
+  contextualHeadWithFollowAt(parser, 0, word, firstFollow, secondFollow)
+}
+
+function derivableDeclarationHeadAt(parser: Parser, offset: int, word: string) -> bool {
+  if !contextualHeadAt(parser, offset, word) {
+    return false
+  }
+  let follow = tokenAt(parser, offset + 2)
+  follow.kind == "left-brace" || follow.kind == "lt" ||
+    (follow.kind == "identifier" && text(parser, follow.lo, follow.hi) == "derives")
+}
+
+function derivableDeclarationHead(parser: Parser, word: string) -> bool {
+  derivableDeclarationHeadAt(parser, 0, word)
+}
+
+function parseEnum(service: ParserService,
+parser: Parser, field: string, index: int) -> Result<SyntaxNode, string> {
+  let head = identifier(parser, "`enum`")?
+  let name = identifier(parser, "an enum name")?
+  let mut children: Array<SyntaxNode> = [identNode(name, "name", 0)]
+  for parameter in parseTypeParameters(parser, "typeParameters")? {
+    children.push(parameter)
+  }
+  let derives = parseDerives(parser)?
+  expectLeftBrace(parser)?
+  let mut variantIndex = 0
+  while !at(parser, "right-brace") && !at(parser, "eof") {
+    let variant = identifier(parser, "a variant name")?
+    let mut variantChildren: Array<SyntaxNode> = [identNode(variant, "name", 0)]
+    if eat(parser, "left-paren") {
+      let mut payloadIndex = 0
+      while true {
+        variantChildren.push(parseType(
+          service,
+
+          parser,
+          "payload",
+          payloadIndex,
+        )?)
+        payloadIndex += 1
+        if !eat(parser, "comma") {
+          break
+        }
+      }
+      expect(parser, "right-paren", "`)`")?
+    }
+    children.push(node(
+      "enum-variant",
+      variant.lo,
+      variant.hi,
+      "variants",
+      variantIndex,
+      [],
+      variantChildren,
+    ))
+    variantIndex += 1
+    if !eat(parser, "comma") {
+      break
+    }
+  }
+  let close = expectRightBrace(parser)?
+  for derived in derives {
+    children.push(derived)
+  }
+  Ok(node(
+    "statement/enum",
+    head.lo,
+    close.hi,
+    field,
+    index,
+    [],
+    children,
+  ))
+}
+
+function parseRecord(service: ParserService,
+parser: Parser, field: string, index: int) -> Result<SyntaxNode, string> {
+  let head = identifier(parser, "`record`")?
+  let name = identifier(parser, "a record name")?
+  let recordName = text(parser, name.lo, name.hi)
+  if recordName == "map" || recordName == "set" {
+    addDiagnostic(
+      parser,
+      "TPZ2012",
+      "`{recordName}` is reserved for the `{recordName} \{ … \}` collection literal (§6) and cannot be a record name",
+      name.lo,
+      name.hi,
+    )
+  }
+  let mut children: Array<SyntaxNode> = [identNode(name, "name", 0)]
+  for parameter in parseTypeParameters(parser, "typeParameters")? {
+    children.push(parameter)
+  }
+  let derives = parseDerives(parser)?
+  expectLeftBrace(parser)?
+  let mut fieldIndex = 0
+  while !at(parser, "right-brace") && !at(parser, "eof") {
+    let fieldLo = current(parser).lo
+    let fieldNameToken = identifier(parser, "a field name")?
+    expect(parser, "colon", "`:`")?
+    let typeNode = parseType(service, parser, "type", 0)?
+    let mut fieldChildren: Array<SyntaxNode> = [
+      identNode(fieldNameToken, "name", 0),
+      typeNode,
+    ]
+    if eat(parser, "eq") {
+      fieldChildren.push(parseExpression(service, parser, "default", 0)?)
+    }
+    children.push(node(
+      "record-field-declaration",
+      fieldLo,
+      boxValue(parser.lastHi),
+      "fields",
+      fieldIndex,
+      [],
+      fieldChildren,
+    ))
+    fieldIndex += 1
+    if !eat(parser, "comma") {
+      break
+    }
+  }
+  let close = expectRightBrace(parser)?
+  for derived in derives {
+    children.push(derived)
+  }
+  Ok(node(
+    "statement/record",
+    head.lo,
+    close.hi,
+    field,
+    index,
+    [],
+    children,
+  ))
+}
+
+function parseNewtype(service: ParserService,
+parser: Parser, field: string, index: int) -> Result<SyntaxNode, string> {
+  let head = identifier(parser, "`newtype`")?
+  let name = identifier(parser, "a newtype name")?
+  let mut children: Array<SyntaxNode> = [identNode(name, "name", 0)]
+  for parameter in parseTypeParameters(parser, "typeParameters")? {
+    children.push(parameter)
+  }
+  expect(parser, "eq", "`=`")?
+  let base = parseType(service, parser, "base", 0)?
+  let hi = base.hi
+  children.push(base)
+  Ok(node(
+    "statement/newtype",
+    head.lo,
+    hi,
+    field,
+    index,
+    [],
+    children,
+  ))
+}
+
+function parseImpl(service: ParserService,
+parser: Parser, field: string, index: int) -> Result<SyntaxNode, string> {
+  let head = identifier(parser, "`impl`")?
+  let name = identifier(parser, "a type name")?
+  let mut children: Array<SyntaxNode> = [identNode(name, "name", 0)]
+  if eat(parser, "lt") {
+    children.push(identNode(identifier(parser, "a conforming type name")?, "target", 0))
+    expectCloseAngle(parser)?
+  }
+  expectLeftBrace(parser)?
+  skipSeparators(parser)
+  let mut methodIndex = 0
+  while !at(parser, "right-brace") && !at(parser, "eof") {
+    let methodLo = current(parser).lo
+    let exported = at(parser, "identifier") &&
+      text(parser, current(parser).lo, current(parser).hi) == "export"
+    if exported {
+      bump(parser)
+    }
+    if !at(parser, "keyword/function") {
+      fail(parser, "an impl body contains only `function` methods")?
+    }
+    let statement = parseFunction(service, parser, "unused", 0)?
+    let declaration = match statement.children.get(0) {
+      case Some(value) => attach(value, "declaration", 0)
+      case None => return Err("function declaration projection is missing")
+    }
+    children.push(node(
+      "impl-method",
+      methodLo,
+      statement.hi,
+      "methods",
+      methodIndex,
+      [boolAttribute("exported", exported)],
+      [declaration],
+    ))
+    methodIndex += 1
+    skipSeparators(parser)
+  }
+  let close = expectRightBrace(parser)?
+  Ok(node(
+    "statement/impl",
+    head.lo,
+    close.hi,
+    field,
+    index,
+    [],
+    children,
+  ))
+}
+
+function parseProtocolMethod(service: ParserService,
+parser: Parser, index: int) -> Result<SyntaxNode, string> {
+  expect(parser, "keyword/function", "`function`")?
+  let name = identifier(parser, "a function name")?
+  let mut children: Array<SyntaxNode> = [identNode(name, "name", 0)]
+  for parameter in parseFunctionTypeParameters(parser)? {
+    children.push(parameter)
+  }
+  expect(parser, "left-paren", "`(`")?
+  let mut parameterIndex = 0
+  while !at(parser, "right-paren") && !at(parser, "eof") {
+    let parameterLo = current(parser).lo
+    let variadic = eat(parser, "ellipsis")
+    let parameterName = identifier(parser, "a parameter name")?
+    rejectReservedBinding(parser, parameterName)
+    expect(parser, "colon", "`:`")?
+    let parameterType = parseType(service, parser, "type", 0)?
+    let mut parameterChildren: Array<SyntaxNode> = [
+      identNode(parameterName, "name", 0),
+      parameterType,
+    ]
+    if eat(parser, "eq") {
+      parameterChildren.push(parseExpression(service, parser, "default", 0)?)
+    }
+    children.push(node(
+      "parameter",
+      parameterLo,
+      boxValue(parser.lastHi),
+      "parameters",
+      parameterIndex,
+      [boolAttribute("variadic", variadic)],
+      parameterChildren,
+    ))
+    parameterIndex += 1
+    if !eat(parser, "comma") {
+      break
+    }
+  }
+  expect(parser, "right-paren", "`)`")?
+  if eat(parser, "thin-arrow") {
+    children.push(parseType(service, parser, "returnType", 0)?)
+  }
+  let bodyToken = current(parser)
+  children.push(node(
+    "block",
+    bodyToken.lo,
+    bodyToken.hi,
+    "body",
+    0,
+    [],
+    [],
+  ))
+  Ok(node(
+    "function-declaration",
+    name.lo,
+    bodyToken.hi,
+    "methods",
+    index,
+    [],
+    children,
+  ))
+}
+
+function parseProtocol(service: ParserService,
+parser: Parser, field: string, index: int) -> Result<SyntaxNode, string> {
+  let head = identifier(parser, "`protocol`")?
+  let name = identifier(parser, "a protocol name")?
+  let mut children: Array<SyntaxNode> = [identNode(name, "name", 0)]
+  for parameter in parseTypeParameters(parser, "typeParameters")? {
+    children.push(parameter)
+  }
+  expectLeftBrace(parser)?
+  skipSeparators(parser)
+  let mut methodIndex = 0
+  while !at(parser, "right-brace") && !at(parser, "eof") {
+    if !at(parser, "keyword/function") {
+      fail(parser, "a protocol body contains only `function` signatures")?
+    }
+    children.push(parseProtocolMethod(service, parser, methodIndex)?)
+    methodIndex += 1
+    skipSeparators(parser)
+  }
+  let close = expectRightBrace(parser)?
+  Ok(node(
+    "statement/protocol",
+    head.lo,
+    close.hi,
+    field,
+    index,
+    [],
+    children,
+  ))
+}
+
+function parseUsing(service: ParserService,
+parser: Parser, field: string, index: int) -> Result<SyntaxNode, string> {
+  let head = identifier(parser, "`using`")?
+  let name = identifier(parser, "a resource binding name")?
+  rejectReservedBinding(parser, name)
+  expect(parser, "eq", "`=`")?
+  let value = parseExpressionBeforeBlock(service, parser, "value", 0)?
+  let body = parseBlock(service, parser, "body", 0)?
+  Ok(node(
+    "statement/using",
+    head.lo,
+    body.hi,
+    field,
+    index,
+    [],
+    [identNode(name, "name", 0), value, body],
+  ))
+}
+
+function parseLet(service: ParserService,
+parser: Parser, field: string, index: int) -> Result<SyntaxNode, string> {
+  let keyword = expect(parser, "keyword/let", "`let`")?
+  let mutable = eat(parser, "keyword/mut")
+  let pattern = if mutable {
+    let name = identifier(parser, "a binding name")?
+    rejectReservedBinding(parser, name)
+    bindingPattern(name, "pattern", 0)
+  } else {
+    parsePattern(service, parser, "pattern", 0)?
+  }
+  let mut children: Array<SyntaxNode> = [pattern]
+  if eat(parser, "colon") {
+    children.push(parseType(service, parser, "type", 0)?)
+  }
+  if !mutable && at(parser, "keyword/mut") {
+    fail(parser, "`mut` comes right after `let` — write `let mut <name> = …`")?
+  }
+  expect(parser, "eq", "`=`")?
+  children.push(parseExpression(service, parser, "value", 0)?)
+  Ok(node(
+    "statement/let",
+    keyword.lo,
+    boxValue(parser.lastHi),
+    field,
+    index,
+    [boolAttribute("mutable", mutable)],
+    children,
+  ))
+}
+
+function parseConst(service: ParserService,
+parser: Parser, field: string, index: int) -> Result<SyntaxNode, string> {
+  let keyword = expect(parser, "keyword/const", "`const`")?
+  let name = identifier(parser, "a constant name")?
+  rejectReservedBinding(parser, name)
+  let mut children: Array<SyntaxNode> = [identNode(name, "name", 0)]
+  if eat(parser, "colon") {
+    children.push(parseType(service, parser, "type", 0)?)
+  }
+  expect(parser, "eq", "`=`")?
+  children.push(parseExpression(service, parser, "value", 0)?)
+  Ok(node(
+    "statement/const",
+    keyword.lo,
+    boxValue(parser.lastHi),
+    field,
+    index,
+    [],
+    children,
+  ))
+}
+
+function parseReturnStatement(
+  service: ParserService,
+  parser: Parser,
+  field: string,
+  index: int,
+) -> Result<SyntaxNode, string> {
+  let keyword = bump(parser)
+  let mut children: Array<SyntaxNode> = []
+  if !at(parser, "separator") && !at(parser, "right-brace") &&
+    !at(parser, "eof") {
+    children.push(parseExpression(service, parser, "value", 0)?)
+  }
+  Ok(node(
+    "statement/return",
+    keyword.lo,
+    boxValue(parser.lastHi),
+    field,
+    index,
+    [],
+    children,
+  ))
+}
+
+function parseLoopExitStatement(
+  service: ParserService,
+  parser: Parser,
+  field: string,
+  index: int,
+) -> Result<SyntaxNode, string> {
+  let kind = current(parser).kind
+  let keyword = bump(parser)
+  let mut children: Array<SyntaxNode> = []
+  if at(parser, "label") {
+    children.push(labelNode(bump(parser), "label", 0))
+  }
+  if kind == "keyword/break" && !at(parser, "separator") &&
+    !at(parser, "right-brace") && !at(parser, "eof") {
+    children.push(parseExpression(service, parser, "value", 0)?)
+  }
+  Ok(node(
+    if kind == "keyword/break" {
+      "statement/break"
+    } else {
+      "statement/continue"
+    },
+    keyword.lo,
+    boxValue(parser.lastHi),
+    field,
+    index,
+    [],
+    children,
+  ))
+}
+
+function whileLetNode(
+  keyword: PreviewToken,
+  pattern: SyntaxNode,
+  scrutinee: SyntaxNode,
+  sourceBody: SyntaxNode,
+  field: string,
+  index: int,
+) -> SyntaxNode {
+  let hi = sourceBody.hi
+  let lo = keyword.lo
+  let bodyExpression = blockExpression(sourceBody, "body", 0)
+  let firstCase = node(
+    "match-case",
+    lo,
+    hi,
+    "cases",
+    0,
+    [],
+    [pattern, bodyExpression],
+  )
+  let wildcard = node("pattern/wildcard", lo, hi, "pattern", 0, [], [])
+  let syntheticBreak = node(
+    "statement/break",
+    lo,
+    hi,
+    "statements",
+    0,
+    [],
+    [],
+  )
+  let syntheticBlock = node(
+    "block",
+    lo,
+    hi,
+    "block",
+    0,
+    [],
+    [syntheticBreak],
+  )
+  let breakExpression = node(
+    "expression/block",
+    lo,
+    hi,
+    "body",
+    0,
+    [],
+    [syntheticBlock],
+  )
+  let secondCase = node(
+    "match-case",
+    lo,
+    hi,
+    "cases",
+    1,
+    [],
+    [wildcard, breakExpression],
+  )
+  let matchExpression = node(
+    "expression/match",
+    lo,
+    hi,
+    "tail",
+    0,
+    [],
+    [scrutinee, firstCase, secondCase],
+  )
+  let body = node("block", lo, hi, "body", 0, [], [matchExpression])
+  let condition = node(
+    "expression/boolean",
+    lo,
+    hi,
+    "condition",
+    0,
+    [boolAttribute("value", true)],
+    [],
+  )
+  node("statement/while", lo, hi, field, index, [], [condition, body])
+}
+
+function parseWhileStatement(
+  service: ParserService,
+  parser: Parser,
+  field: string,
+  index: int,
+) -> Result<SyntaxNode, string> {
+  let keyword = bump(parser)
+  if eat(parser, "keyword/let") {
+    let pattern = parsePattern(service, parser, "pattern", 0)?
+    expect(parser, "eq", "`=`")?
+    let scrutinee = parseExpressionBeforeBlock(service, parser, "scrutinee", 0)?
+    let body = parseBlock(service, parser, "block", 0)?
+    return Ok(whileLetNode(keyword, pattern, scrutinee, body, field, index))
+  }
+  let condition = parseExpressionBeforeBlock(service, parser, "condition", 0)?
+  let body = parseBlock(service, parser, "body", 0)?
+  Ok(node(
+    "statement/while",
+    keyword.lo,
+    body.hi,
+    field,
+    index,
+    [],
+    [condition, body],
+  ))
+}
+
+function parseDeferStatement(
+  service: ParserService,
+  parser: Parser,
+  field: string,
+  index: int,
+) -> Result<SyntaxNode, string> {
+  let keyword = bump(parser)
+  let value = parseExpression(service, parser, "value", 0)?
+  if value.kind != "expression/block" && value.kind != "expression/call" {
+    addDiagnostic(
+      parser,
+      "TPZ2004",
+      "`defer` takes a block or a call",
+      value.lo,
+      value.hi,
+    )
+  }
+  Ok(node(
+    "statement/defer",
+    keyword.lo,
+    value.hi,
+    field,
+    index,
+    [],
+    [value],
+  ))
+}
+
+function assignmentOperator(kind: string) -> string {
+  match kind {
+    case "eq" => "assign"
+    case "plus-eq" => "add"
+    case "minus-eq" => "subtract"
+    case "star-eq" => "multiply"
+    case "slash-eq" => "divide"
+    case "percent-eq" => "remainder"
+    case _ => "coalesce"
+  }
+}
+
+function parseExpressionStatement(
+  service: ParserService,
+  parser: Parser,
+  field: string,
+  index: int,
+) -> Result<SyntaxNode, string> {
+  let expression = parseExpression(service, parser, "value", 0)?
+  let assignmentKind = current(parser).kind
+  if assignmentKind != "eq" && assignmentKind != "plus-eq" &&
+    assignmentKind != "minus-eq" && assignmentKind != "star-eq" &&
+    assignmentKind != "slash-eq" && assignmentKind != "percent-eq" &&
+    assignmentKind != "question-question-eq" {
+    return Ok(node(
+      "statement/expression",
+      expression.lo,
+      expression.hi,
+      field,
+      index,
+      [],
+      [expression],
+    ))
+  }
+  if expression.kind != "expression/identifier" &&
+    expression.kind != "expression/member" &&
+    expression.kind != "expression/index" {
+    addDiagnostic(
+      parser,
+      "TPZ2003",
+      "assignment target must be an identifier, member access, or index access",
+      expression.lo,
+      expression.hi,
+    )
+  }
+  bump(parser)
+  let value = parseExpression(service, parser, "value", 0)?
+  Ok(node(
+    "statement/assign",
+    expression.lo,
+    value.hi,
+    field,
+    index,
+    [stringAttribute("operator", assignmentOperator(assignmentKind))],
+    [attach(expression, "target", 0), value],
+  ))
+}
+
+function parseStatement(service: ParserService,
+parser: Parser, field: string, index: int) -> Result<SyntaxNode, string> {
+  let kind = current(parser).kind
+  if kind == "keyword/function" { return parseFunction(service, parser, field, index) }
+  if kind == "keyword/let" { return parseLet(service, parser, field, index) }
+  if kind == "keyword/mut" {
+    fail(parser, "`mut` comes right after `let` — write `let mut <name> = …`")?
+  }
+  if kind == "keyword/type" { return parseTypeAlias(service, parser, field, index) }
+  if derivableDeclarationHead(parser, "enum") { return parseEnum(service, parser, field, index) }
+  if derivableDeclarationHead(parser, "record") { return parseRecord(service, parser, field, index) }
+  if contextualHeadWithFollow(parser, "newtype", "eq", "lt") {
+    return parseNewtype(service, parser, field, index)
+  }
+  if contextualHeadWithFollow(parser, "impl", "left-brace", "lt") {
+    return parseImpl(service, parser, field, index)
+  }
+  if contextualHeadWithFollow(parser, "protocol", "left-brace", "lt") {
+    return parseProtocol(service, parser, field, index)
+  }
+  if contextualHead(parser, "using") && tokenAt(parser, 2).kind == "eq" {
+    return parseUsing(service, parser, field, index)
+  }
+  if kind == "keyword/const" { return parseConst(service, parser, field, index) }
+  if kind == "keyword/return" {
+    return parseReturnStatement(service, parser, field, index)
+  }
+  if kind == "keyword/break" || kind == "keyword/continue" {
+    return parseLoopExitStatement(service, parser, field, index)
+  }
+  if kind == "keyword/while" {
+    return parseWhileStatement(service, parser, field, index)
+  }
+  if kind == "keyword/defer" {
+    return parseDeferStatement(service, parser, field, index)
+  }
+  parseExpressionStatement(service, parser, field, index)
+}
+
+function parseBlockBody(
+  service: ParserService,
+  parser: Parser,
+  open: PreviewToken,
+  field: string,
+  index: int,
+) -> Result<SyntaxNode, string> {
+  let mut statements: Array<SyntaxNode> = []
+  let mut tail: Option<SyntaxNode> = None
+  let mut statementIndex = 0
+  skipSeparators(parser)
+  while !at(parser, "right-brace") && !at(parser, "eof") {
+    let before = boxValue(parser.position)
+    match parseStatement(service, parser, "statements", statementIndex) {
+      case Ok(statement) => {
+        if at(parser, "right-brace") && statement.kind == "statement/expression" {
+          tail = statement.children.get(0)
+          break
+        }
+        statements.push(statement)
+        statementIndex += 1
+        itemBoundary(parser)
+      }
+      case Err(_) => synchronize(parser)
+    }
+    if boxValue(parser.position) == before &&
+      !at(parser, "right-brace") && !at(parser, "eof") {
+      addDiagnostic(
+        parser,
+        "TPZ2001",
+        "expected a statement",
+        current(parser).lo,
+        current(parser).hi,
+      )
+      bump(parser)
+    }
+    skipSeparators(parser)
+  }
+  let close = expectRightBrace(parser)?
+  let mut children = statements
+  match tail {
+    case Some(value) => children.push(attach(value, "tail", 0))
+    case None => ()
+  }
+  Ok(node("block", open.lo, close.hi, field, index, [], children))
+}
+
+export function parseBlock(
+  service: ParserService,
+  parser: Parser,
+  field: string,
+  index: int,
+) -> Result<SyntaxNode, string> {
+  let open = expectLeftBrace(parser)?
+  let previousLambda = lambdaAllowed(parser)
+  let previousRecordUpdate = recordUpdateAllowed(parser)
+  setLambdaAllowed(parser, true)
+  setRecordUpdateAllowed(parser, true)
+  let result = parseBlockBody(service, parser, open, field, index)
+  setLambdaAllowed(parser, previousLambda)
+  setRecordUpdateAllowed(parser, previousRecordUpdate)
+  result
+}
+
+function isContextualWord(parser: Parser, word: string) -> bool {
+  at(parser, "identifier") && text(parser, current(parser).lo, current(parser).hi) == word
+}
+
+record ParsedImportSpec {
+  node: SyntaxNode,
+  sourceName: string,
+  sourceToken: PreviewToken,
+  boundName: string,
+  boundToken: PreviewToken,
+}
+
+function parseModulePath(parser: Parser) -> Result<SyntaxNode, string> {
+  let first = identifier(parser, "a module path segment")?
+  let mut pathChildren: Array<SyntaxNode> = [identNode(first, "segments", 0)]
+  let mut pathIndex = 1
+  let mut pathHi = first.hi
+  while eat(parser, "dot") {
+    let segment = identifier(parser, "a module path segment")?
+    pathChildren.push(identNode(segment, "segments", pathIndex))
+    pathIndex += 1
+    pathHi = segment.hi
+  }
+  Ok(node(
+    "module-path",
+    first.lo,
+    pathHi,
+    "path",
+    0,
+    [],
+    pathChildren,
+  ))
+}
+
+function parseImportSpec(
+  parser: Parser,
+  index: int,
+) -> Result<ParsedImportSpec, string> {
+  if current(parser).kind.startsWith("keyword/") {
+    let token = current(parser)
+    addDiagnostic(
+      parser,
+      "TPZ2011",
+      "an import name is an identifier; keywords cannot be selected",
+      token.lo,
+      token.hi,
+    )
+    return Err("an import name is an identifier")
+  }
+  let name = identifier(parser, "an import name")?
+  let mut children: Array<SyntaxNode> = [identNode(name, "name", 0)]
+  let mut hi = name.hi
+  let sourceName = text(parser, name.lo, name.hi)
+  let mut boundName = sourceName
+  let mut boundToken = name
+  if isContextualWord(parser, "as") {
+    bump(parser)
+    let alias = identifier(parser, "an import alias")?
+    hi = alias.hi
+    boundName = text(parser, alias.lo, alias.hi)
+    boundToken = alias
+    children.push(identNode(alias, "alias", 0))
+  }
+  Ok(ParsedImportSpec {
+    node: node("import-spec", name.lo, hi, "specs", index, [], children),
+    sourceName: sourceName,
+    sourceToken: name,
+    boundName: boundName,
+    boundToken: boundToken,
+  })
+}
+
+function diagnoseDuplicateImportSpecs(
+  parser: Parser,
+  specs: Array<ParsedImportSpec>,
+) -> () {
+  // Diagnose each later offending spec once in source order, with
+  // source-name precedence when both duplicate axes apply.
+  let mut sourceNames: Set<string> = set {}
+  let mut boundNames: Set<string> = set {}
+  for spec in specs {
+    let sourceDuplicate = sourceNames.contains(spec.sourceName)
+    let boundDuplicate = boundNames.contains(spec.boundName)
+    sourceNames.add(spec.sourceName)
+    boundNames.add(spec.boundName)
+    if sourceDuplicate {
+      addDiagnostic(
+        parser,
+        "TPZ2011",
+        "this exported name is already selected in this list",
+        spec.sourceToken.lo,
+        spec.sourceToken.hi,
+      )
+    } else if boundDuplicate {
+      addDiagnostic(
+        parser,
+        "TPZ2011",
+        "this local name is already bound by this list",
+        spec.boundToken.lo,
+        spec.boundToken.hi,
+      )
+    }
+  }
+  ()
+}
+
+function parseImportSelection(parser: Parser) -> Result<Array<SyntaxNode>, string> {
+  let open = expectLeftBrace(parser)?
+  let mut parsedSpecs: Array<ParsedImportSpec> = []
+  while !at(parser, "right-brace") && !at(parser, "eof") {
+    parsedSpecs.push(parseImportSpec(parser, parsedSpecs.length)?)
+    if !eat(parser, "comma") {
+      break
+    }
+  }
+  let close = expectRightBrace(parser)?
+  if parsedSpecs.length == 0 {
+    addDiagnostic(
+      parser,
+      "TPZ2011",
+      "a selection list selects at least one exported name",
+      open.lo,
+      close.hi,
+    )
+  }
+  diagnoseDuplicateImportSpecs(parser, parsedSpecs)
+  let mut specs: Array<SyntaxNode> = []
+  for spec in parsedSpecs {
+    specs.push(spec.node)
+  }
+  Ok(specs)
+}
+
+function parseImportAlias(parser: Parser) -> Result<SyntaxNode, string> {
+  bump(parser)
+  let alias = identNode(identifier(parser, "an import alias")?, "alias", 0)
+  if at(parser, "left-brace") {
+    let brace = current(parser)
+    addDiagnostic(
+      parser,
+      "TPZ2009",
+      "a namespace alias and a selection list do not compose (`import m as ns \{ x \}` is invalid syntax)",
+      brace.lo,
+      brace.hi,
+    )
+    skipBalancedBraces(parser)
+  }
+  Ok(alias)
+}
+
+function parseImport(parser: Parser, field: string, index: int) -> Result<SyntaxNode, string> {
+  let head = identifier(parser, "`import`")?
+  let path = parseModulePath(parser)?
+  let mut importChildren: Array<SyntaxNode> = [path]
+  if at(parser, "left-brace") {
+    for spec in parseImportSelection(parser)? {
+      importChildren.push(spec)
+    }
+  } else if isContextualWord(parser, "as") {
+    importChildren.push(parseImportAlias(parser)?)
+  }
+  let hi = boxValue(parser.lastHi)
+  let importItem = node(
+    "import-item",
+    head.lo,
+    hi,
+    "import",
+    0,
+    [],
+    importChildren,
+  )
+  Ok(node(
+    "statement/import",
+    head.lo,
+    hi,
+    field,
+    index,
+    [],
+    [importItem],
+  ))
+}
+
+function parseImportAtProgram(
+  parser: Parser,
+  field: string,
+  index: int,
+  prologueDone: bool,
+) -> Result<SyntaxNode, string> {
+  let statement = parseImport(parser, field, index)?
+  if prologueDone {
+    addDiagnostic(
+      parser,
+      "TPZ2010",
+      "imports form a prologue: every `import` precedes all other top-level items",
+      statement.lo,
+      statement.hi,
+    )
+  }
+  Ok(statement)
+}
+
+function parseExport(service: ParserService,
+parser: Parser, field: string, index: int) -> Result<SyntaxNode, string> {
+  let head = identifier(parser, "`export`")?
+  let inner = parseStatement(service, parser, "item", 0)?
+  if inner.kind == "statement/let" {
+    match inner.children.get(0) {
+      case Some(pattern) => {
+        if pattern.kind != "pattern/binding" && pattern.kind != "pattern/typed" {
+          addDiagnostic(
+            parser,
+            "TPZ2007",
+            "an exported `let` binds exactly one identifier; destructure privately, then export the identifier",
+            pattern.lo,
+            pattern.hi,
+          )
+        }
+      }
+      case None => ()
+    }
+  }
+  Ok(node(
+    "statement/export",
+    head.lo,
+    inner.hi,
+    field,
+    index,
+    [],
+    [inner],
+  ))
+}
+
+function exportDeclarationHead(parser: Parser) -> bool {
+  if !isContextualWord(parser, "export") {
+    return false
+  }
+  let follow = tokenAt(parser, 1)
+  if follow.kind == "keyword/function" ||
+    follow.kind == "keyword/type" ||
+    follow.kind == "keyword/let" ||
+    follow.kind == "keyword/const" {
+    return true
+  }
+  if follow.kind != "identifier" {
+    return false
+  }
+  let word = text(parser, follow.lo, follow.hi)
+  if word == "enum" || word == "record" {
+    return derivableDeclarationHeadAt(parser, 1, word)
+  }
+  word == "newtype" && contextualHeadWithFollowAt(parser, 1, word, "eq", "lt")
+}
+
+function rejectStringModulePath(parser: Parser) -> Result<SyntaxNode, string> {
+  let token = current(parser)
+  addDiagnostic(
+    parser,
+    "TPZ2008",
+    "string and template module paths are reserved and unused; module paths are dotted identifiers",
+    token.lo,
+    token.hi,
+  )
+  rejectedStatement("reserved module path")
+}
+
+function rejectUseItem(parser: Parser) -> Result<SyntaxNode, string> {
+  let token = current(parser)
+  addDiagnostic(
+    parser,
+    "TPZ2008",
+    "`use` is reserved and unused; did you mean `import`?",
+    token.lo,
+    token.hi,
+  )
+  rejectedStatement("reserved use item")
+}
+
+function rejectExportList(parser: Parser) -> Result<SyntaxNode, string> {
+  let token = current(parser)
+  addDiagnostic(
+    parser,
+    "TPZ2009",
+    "export lists are invalid syntax; put `export` on each public declaration",
+    token.lo,
+    token.hi,
+  )
+  bump(parser)
+  skipBalancedBraces(parser)
+  rejectedStatement("rejected export list")
+}
+
+function rejectReexport(parser: Parser) -> Result<SyntaxNode, string> {
+  let token = current(parser)
+  addDiagnostic(
+    parser,
+    "TPZ2009",
+    "re-export syntax does not exist (`export import ...` is rejected)",
+    token.lo,
+    token.hi,
+  )
+  rejectedStatement("re-export is rejected")
+}
+
+function parseProgramItem(
+  service: ParserService,
+  parser: Parser,
+  index: int,
+  prologueDone: bool,
+) -> Result<SyntaxNode, string> {
+  if isContextualWord(parser, "import") && tokenAt(parser, 1).kind == "identifier" {
+    return parseImportAtProgram(parser, "items", index, prologueDone)
+  }
+  if isContextualWord(parser, "import") &&
+    tokenAt(parser, 1).kind.startsWith("string-start/") {
+    return rejectStringModulePath(parser)
+  }
+  if isContextualWord(parser, "use") && tokenAt(parser, 1).kind == "identifier" {
+    return rejectUseItem(parser)
+  }
+  if isContextualWord(parser, "export") && tokenAt(parser, 1).kind == "left-brace" {
+    return rejectExportList(parser)
+  }
+  if isContextualWord(parser, "export") &&
+    tokenAt(parser, 1).kind == "identifier" &&
+    text(parser, tokenAt(parser, 1).lo, tokenAt(parser, 1).hi) == "import" {
+    return rejectReexport(parser)
+  }
+  if exportDeclarationHead(parser) {
+    parseExport(service, parser, "items", index)
+  } else {
+    parseStatement(service, parser, "items", index)
+  }
+}
+
+export function parseProgram(service: ParserService,
+parser: Parser, sourceLength: int) -> SyntaxNode {
+  let mut items: Array<SyntaxNode> = []
+  let mut index = 0
+  let mut prologueDone = false
+  skipSeparators(parser)
+  while !at(parser, "eof") {
+    let before = boxValue(parser.position)
+    match parseProgramItem(service, parser, index, prologueDone) {
+      case Ok(statement) => {
+        if statement.kind != "statement/import" {
+          prologueDone = true
+        }
+        items.push(statement)
+        index += 1
+        itemBoundary(parser)
+      }
+      case Err(_) => synchronize(parser)
+    }
+    if boxValue(parser.position) == before && !at(parser, "eof") {
+      addDiagnostic(
+        parser,
+        "TPZ2001",
+        "expected a statement",
+        current(parser).lo,
+        current(parser).hi,
+      )
+      bump(parser)
+    }
+    skipSeparators(parser)
+  }
+  node("program", 0, sourceLength, "root", 0, [], items)
+}

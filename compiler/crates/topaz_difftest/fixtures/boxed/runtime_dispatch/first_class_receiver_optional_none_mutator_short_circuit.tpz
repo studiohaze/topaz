@@ -1,0 +1,2 @@
+let optional: Option<Array<int>> = None
+optional?.push

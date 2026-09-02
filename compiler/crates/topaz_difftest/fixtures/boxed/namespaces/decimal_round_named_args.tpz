@@ -1,0 +1,2 @@
+match Decimal.parse("1.25") { case Some(d) => "{d.round(scale: 1).toString()}/{d.round(scale: 1, mode: RoundingMode.HalfUp).toString()}"
+case None => "none" }

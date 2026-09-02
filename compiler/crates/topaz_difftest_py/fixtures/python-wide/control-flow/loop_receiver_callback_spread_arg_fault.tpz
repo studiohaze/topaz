@@ -1,0 +1,8 @@
+
+function main() -> Array<int> {
+    [1].map(...loop {
+        print("callback-spread")
+        break [0]
+    })
+}
+main()

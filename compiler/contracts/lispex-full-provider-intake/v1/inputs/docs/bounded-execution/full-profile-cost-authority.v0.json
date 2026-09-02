@@ -1,0 +1,86 @@
+{
+  "schema": "lispex.full-profile-cost-authority/v0",
+  "status": "private-tariff-design-and-runtime-integration-complete",
+  "semantic_profile": "lispex-profile-1.5",
+  "restricted_classification_source": "docs/bounded-execution/primitive-cost-classification.v0.json",
+  "restricted_artifact_sha256": "fa6e52559e1f5a43e50a3b7ac0cc5add6930cff0aed8aaff462cff4609362870",
+  "required_rows": 205,
+  "public_identity_assigned": false,
+  "runtime_integration_complete": true,
+  "final_provider_qualified": false,
+  "charge_law": {
+    "unit": "private-work-unit-v0",
+    "logical_limb_bits": 32,
+    "charge_before_effect": true,
+    "refunds": false,
+    "overflow": "deterministic-request-refusal-before-effect",
+    "host_independent": true
+  },
+  "former_deferred_overrides": [
+    {
+      "id": 95,
+      "name": "exact-integer-sqrt",
+      "cost_class": "Precharged",
+      "dynamic_measure": "exact-integer-sqrt-32-bit-limbs-v0",
+      "work_formula": "8 + 4*n + n*n",
+      "allocation_formula": "4 + n + ceil(n/2)",
+      "source_operation": "BigInt::sqrt plus exact remainder",
+      "effect_order": "arity,type,nonnegative,charge,compute,two-values"
+    },
+    {
+      "id": 98,
+      "name": "expt",
+      "cost_class": "Precharged",
+      "dynamic_measure": "exact-or-finite-expt-32-bit-limbs-v0",
+      "work_formula": "trivial:8+base_limbs+exp_limbs; finite:72+exp_limbs; exact:16+exp_limbs+(magnitude+1)*(base_limbs+1)^2",
+      "allocation_formula": "trivial:2; finite:2; exact:4+(magnitude+1)*(base_limbs+1)",
+      "source_operation": "pinned integer exponentiation with exact rational contagion",
+      "effect_order": "arity,base-type,exponent-type,trivial-or-range,charge,compute"
+    },
+    {
+      "id": 141,
+      "name": "number->string",
+      "cost_class": "Precharged",
+      "dynamic_measure": "canonical-number-format-bytes-v0",
+      "work_formula": "8 + input_limbs + output_bound + input_limbs*output_bound",
+      "allocation_formula": "4 + output_bound",
+      "source_operation": "canonical exact radix formatting or pinned finite-real positional formatting",
+      "effect_order": "arity,radix,type,charge,format,string"
+    },
+    {
+      "id": 160,
+      "name": "string->number",
+      "cost_class": "Precharged",
+      "dynamic_measure": "canonical-number-parse-utf8-bytes-v0",
+      "work_formula": "8 + 3*n + n*n",
+      "allocation_formula": "4 + 2*n",
+      "source_operation": "pinned decimal grammar or validated signed radix integer",
+      "effect_order": "arity,string-type,radix,charge,parse,result-or-false"
+    }
+  ],
+  "portable_value_encoding": {
+    "codec_id": "lispex.embed-value/v1",
+    "reuse_disposition": "private-candidate-not-frozen",
+    "full_encoder_symbol": "encode_full_profile_outcomes",
+    "restricted_encoder_unchanged": true,
+    "implemented_tags": {
+      "nil": "0x00",
+      "false": "0x01",
+      "true": "0x02",
+      "integer": "0x03",
+      "rational": "0x04",
+      "finite_real": "0x05",
+      "character": "0x06",
+      "symbol": "0x07",
+      "string": "0x08",
+      "proper_sequence": "0x09",
+      "improper_list": "0x0a",
+      "vector": "0x0b",
+      "bytevector": "0x0c"
+    },
+    "record_tag": "input-host-record-only-0x0d",
+    "cycle_rule": "cyclic-vector-refused-before-result-visibility",
+    "repeated_acyclic_vector_rule": "structural-repetition-no-object-identity",
+    "execution_only_rule": "refused"
+  }
+}

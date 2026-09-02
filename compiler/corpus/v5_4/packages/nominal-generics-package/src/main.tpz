@@ -1,0 +1,7 @@
+import model
+
+let b = model.makeBox(7)
+let maybe = model.makeMaybe(5)
+let id = model.makeId("u-42")
+
+print(model.render(b, maybe, id))

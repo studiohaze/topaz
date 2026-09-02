@@ -1,0 +1,2 @@
+match Regex.compile("\\d+") { case Ok(re) => re.findAll("a1 b22")
+case Err(e) => [] }

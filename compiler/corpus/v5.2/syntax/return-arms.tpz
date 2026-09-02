@@ -1,0 +1,13 @@
+function pick(x: int) -> int {
+    match x {
+        case 0 => return 1
+        case _ => x
+    }
+}
+
+function bail(x: int) -> () {
+    match x {
+        case 0 => return
+        case _ => ()
+    }
+}

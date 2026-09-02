@@ -1,0 +1,4 @@
+record P { x: int, name: string }
+let xs = [P { x: 1, name: "b" }, P { x: 1, name: "a" }, P { x: 0, name: "z" }]
+print("{xs.sortedBy((p) => p.x)}")
+0

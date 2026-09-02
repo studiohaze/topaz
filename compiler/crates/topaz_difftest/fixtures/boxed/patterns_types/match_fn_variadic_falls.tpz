@@ -1,0 +1,7 @@
+function need(a: int) -> int {
+  a
+}
+match need {
+case f: (...int) -> int => 1
+case _ => 0
+}

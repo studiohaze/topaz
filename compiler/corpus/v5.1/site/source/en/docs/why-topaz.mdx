@@ -1,0 +1,153 @@
+---
+title: 'Why Topaz?'
+description: 'Who should use Topaz, and why — the official answer to "why not just Rust or Python?"'
+covers: '§1, §2, §3, §4, §5, §6, §7, §11, §12, §13, §13a, §14, §15, §16, §17, §20'
+---
+
+> Note: This documentation reflects **Topaz v5.2** canonical syntax — a strict superset of frozen v5.1. Modules are new in v5.2: see [Modules & Visibility](/en/docs/concepts/modules).
+
+**The one-sentence answer:** if you want to write Rust, write Rust.
+Topaz is for people — and agents — who want to write *application
+intent* in one small, readable, canonical form.
+
+## The question is usually on the wrong layer
+
+"Why Topaz instead of Rust?" assumes the two languages live on the
+same layer. They don't.
+
+- **Rust's layer**: allocators, async runtimes, network stacks,
+  unsafe boundaries, high-performance data structures — negotiating
+  with the machine.
+- **Topaz's layer**: CLI workflows, data transformation, backend
+  glue, configuration-driven logic, SQL/shell/path orchestration —
+  describing intent.
+
+On that layer, Topaz's real competitors are **Python and
+TypeScript**, and the comparison is direct: it reads like them, but
+it is statically typed by specification, has a single canonical form,
+and is designed for native deployment without a runtime installation
+*(deployment tooling is roadmap — see the honest-boundaries section
+below)*. Today, v0.3 parses, resolves, and runs Topaz v5.2 end to
+end — [what runs today](/en/docs/status) tracks the exact boundary.
+
+Performance is a defense line, not a sales pitch: the design goal is
+that you never pay for choosing Topaz, not that benchmarks are the
+reason to choose it.
+
+## The four pillars
+
+### 1. A small, closed surface
+
+Where Rust hands experts every lever, Topaz decides policy at the
+language level: recoverable failure is `Result`, absence is
+`Option`, programmer error is a fault (not a value, never caught),
+cleanup is `defer`, parallel waiting is `concurrent(timeout:) ...
+else`. One pipeline idiom (`|>`), no implicit numeric
+conversions, exhaustive `match`. Half of the v5.1 design cycle was
+spent *removing second ways to say things* — what remains is one
+canonical form per intent.
+
+### 2. Unicode-first, not Unicode-tolerated
+
+Most languages *allow* non-English identifiers. Topaz treats them as
+first-class input — official examples and the compiler's parse
+corpus contain Korean and emoji identifiers; keywords stay English,
+names follow your domain:
+
+```topaz
+function 인사하기(이름: string) -> string {
+    return "안녕하세요, {이름}님!"
+}
+```
+
+This is not sentimental. Translating domain concepts into English
+loses information and turns code review into translation review.
+
+### 3. A surface agents can be trusted with
+
+Topaz is designed for the generation era, and the claim is
+verifiable, not aspirational:
+
+- the spec is small and closed — every form is reachable from
+  `Program`, forbidden forms are enumerated;
+- canonical profiles are machine-checkable normative documents, not
+  style suggestions;
+- **every canonical `topaz` fence on this site is parse-checked
+  against the toolchain, runnable examples execute with their output
+  pinned byte-for-byte, and displayed transcripts must match captured
+  runs** — documentation that drifts from the grammar or the runtime
+  fails verification ([how this site is verified](/en/docs/status));
+- failure modes are narrow: no implicit conversions, match
+  exhaustiveness required by the spec (a runtime guard until the
+  checker ships), a fixed fault/`Result` boundary.
+
+A language for agents competes on the consistency and verifiability
+of generated code, not on expressiveness.
+
+### 4. Templates that carry intent
+
+What needs macros and library discipline elsewhere is grammar here:
+
+```topaz
+let report = sql"""
+    SELECT name, total
+    FROM orders
+    WHERE region = {region}
+    ORDER BY total DESC
+    """
+```
+
+By grammar, a `sql` template keeps its parts and its interpolations
+separate — it never collapses into a string, so
+injection-by-concatenation has no place to happen. The per-domain
+rendering policies (parameter binding, shell quoting, path
+normalization) are deferred to a future v5 decision; v0.3 carries the
+structured value through the runtime. The tag registry is closed —
+generated code cannot invent pseudo-DSLs.
+
+## Who should *not* use Topaz
+
+This section is a trust asset, not a weakness. Use Rust (or C, or
+Zig) instead if you:
+
+- need direct control of lifetimes and ownership;
+- work with unsafe boundaries, FFI, or embedded targets;
+- hand-optimize performance bottlenecks;
+- want the full power of the crate ecosystem;
+- experience reduced degrees of freedom as a cost — Topaz's narrow
+  road is a real disadvantage for you.
+
+Topaz targets the opposite profile: people who want deployable
+results without a systems-level surface, teams who want domain
+language in the code, and agent operators who need a small surface
+that generates consistently.
+
+## The escape-hatch question
+
+Every language that compiles to another is eventually judged by its
+escape hatch. Topaz's position is fixed:
+
+1. **There is no inline escape hatch.** Topaz source never embeds
+   foreign code; mixing breaks both the small surface and generation
+   control.
+2. **Boundaries are module-shaped.** Connecting to foreign code
+   happens at explicitly labeled module boundaries *(the module system
+   is v5.2; the interop mechanism arrives in a later version —
+   nothing inline, ever)*.
+3. **Generated output is an artifact, not an authoring format**
+   *(vision — this binds the future compilation pipeline; Topaz today
+   ships no code generation)*. If you ever need to read generated code to
+   get unstuck, that is classified as a compiler bug — as is any
+   foreign diagnostic leaking through. Topaz diagnostics point at
+   Topaz source.
+
+So no — adopting Topaz is not meant to ever require learning Rust.
+That is a recorded design commitment, not shipped tooling; if a
+future toolchain breaks it, file it as a design bug.
+
+## Where to go next
+
+- See the language surface: [Introduction](/en/docs/introduction)
+- Run your first program — real transcripts, captured from the
+  binary: [Getting Started](/en/docs/getting-started)
+- What exists today, and what proves it: [Toolchain status](/en/docs/status)

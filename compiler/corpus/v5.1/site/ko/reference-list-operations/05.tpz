@@ -1,0 +1,12 @@
+let mut 점수들: Map<string, int> = Map.new()
+점수들.insert("alice", 92)
+점수들.insert("bob", 78)
+
+let 앨리스점수 = 점수들.get("alice")    // Some(92) — 키가 없으면 None
+let 제거됨 = 점수들.remove("bob")       // Some(78) — 있으면 Some(이전값), 없으면 None
+let 없음 = 점수들.remove("carol")       // None
+
+match 점수들.get("alice") {
+    case Some(점수) => print("alice 점수: {점수}")
+    case None => print("alice 점수 없음")
+}

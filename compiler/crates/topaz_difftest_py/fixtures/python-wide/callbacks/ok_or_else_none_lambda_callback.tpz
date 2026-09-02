@@ -1,0 +1,10 @@
+
+function main() -> int {
+    let opt: Option<int> = None
+    let res = opt.okOrElse(() => "late")
+    match res {
+        case Ok(_) => 0
+        case Err(e) => if e == "late" { 1 } else { 0 }
+    }
+}
+main()

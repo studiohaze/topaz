@@ -1,0 +1,14 @@
+newtype Tag<T> = int
+
+function left() -> Tag<int> | Tag<string> {
+    let value: Tag<int> = Tag(1)
+    value
+}
+
+function right() -> Tag<int> | Tag<string> {
+    let value: Tag<string> = Tag(1)
+    value
+}
+
+let same = left() == right()
+print("{same}")

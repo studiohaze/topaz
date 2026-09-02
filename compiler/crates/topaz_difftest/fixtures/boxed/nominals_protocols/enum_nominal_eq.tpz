@@ -1,0 +1,5 @@
+enum Color { Red, Blue }
+let a = Color.Red == Color.Red
+let b = Color.Red == Color.Blue
+print("{a}/{b}")
+0

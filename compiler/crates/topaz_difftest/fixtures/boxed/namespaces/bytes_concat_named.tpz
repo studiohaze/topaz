@@ -1,0 +1,1 @@
+Bytes.concat(a: Bytes.encodeUtf8("foo"), b: Bytes.encodeUtf8("bar")).toHex()

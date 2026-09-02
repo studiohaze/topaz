@@ -1,0 +1,4 @@
+import tbase { BASE }
+export function useSel() -> int {
+  return BASE + 1
+}

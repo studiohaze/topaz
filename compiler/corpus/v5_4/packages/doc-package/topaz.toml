@@ -1,0 +1,12 @@
+[package]
+name = "docpkg"
+version = "0.1.0"
+language = "5.4"
+entry = "src/lib.tpz"
+
+[build]
+target = "native"
+deterministic = true
+
+[dependencies]
+std = "5.4"

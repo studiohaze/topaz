@@ -1,0 +1,12 @@
+
+function cp(s: string, i: int) -> int {
+    match s.codePointAt(i) {
+        case Some(n) => n
+        case None => -1
+    }
+}
+function f() -> Array<int> {
+    let s = "é,z"
+    [cp(s, 0), cp(s, 1), cp(s, 2), cp(s, 3), cp(s, 4)]
+}
+f()

@@ -1,0 +1,10 @@
+
+function mark(label: string, xs: Array<string>) -> Array<string> {
+    print(label)
+    xs
+}
+function main() -> Option<string> {
+    let json: Option<JSONValue> = Some(JSON.parse("\{\"x\":1\}")?)
+    json?.kind(...mark("json", []))
+}
+main()

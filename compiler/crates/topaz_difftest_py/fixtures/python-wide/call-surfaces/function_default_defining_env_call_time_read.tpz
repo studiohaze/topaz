@@ -1,0 +1,11 @@
+
+let mut k = 1
+function current(x: int = k) -> int {
+    x
+}
+k = 4
+let stable = 10
+function shadow(stable: int, x: int = stable) -> int {
+    x
+}
+current() * 100 + shadow(99)

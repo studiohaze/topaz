@@ -1,0 +1,9 @@
+function 두번적용<T>(값: T, 변환: (T) -> T) -> T {
+    변환(변환(값))
+}
+
+let 다섯 = 두번적용(3, x => x + 1)             // T는 int로 추론
+let 외침 = 두번적용("topaz", x => "{x}!")      // T는 string으로 추론
+
+print("{다섯}")   // 5
+print(외침)       // "topaz!!"

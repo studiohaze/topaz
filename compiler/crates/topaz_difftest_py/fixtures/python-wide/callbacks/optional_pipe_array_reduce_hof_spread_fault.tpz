@@ -1,0 +1,12 @@
+
+function mark(label: string, xs: Array<int>) -> Array<int> {
+    print(label)
+    xs
+}
+function add(a: int, b: int) -> int { a + b }
+function main() -> string {
+    let xs: Option<Array<int>> = Some([1])
+    0 |> xs?.reduce(add, ...mark("pipe-reduce", [0]))
+    "unreachable"
+}
+main()

@@ -1,0 +1,8 @@
+import enum_types { Maybe, present }
+
+let value: Maybe<int> = present(7)
+let number = match value {
+    case Present(found) => found
+    case Missing => 0
+}
+print("{number}")

@@ -1,0 +1,6 @@
+let mut value: Option<int> = Some(1)
+while let Some(n) = value {
+    value = None
+    n + 40
+}
+print("done")

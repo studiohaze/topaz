@@ -1,0 +1,10 @@
+enum Color {
+    Red,
+    Blue,
+}
+
+let color: Color = Color.Red
+match color {
+    case Color.Red => print("red")
+    case Blue => print("blue")
+}

@@ -1,0 +1,11 @@
+record Point { x: int, y: int }
+enum Shape { Dot, At(Point) }
+function px(s: Shape) -> int {
+  match s {
+    case Dot => 0
+    case At(Point { x, y }) => x + y
+  }
+}
+print("{px(Shape.At(Point { x: 3, y: 4 }))}")
+print("{px(Shape.Dot)}")
+0

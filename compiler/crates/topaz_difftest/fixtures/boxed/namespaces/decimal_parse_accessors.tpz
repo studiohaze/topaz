@@ -1,0 +1,2 @@
+match Decimal.parse("12.3400") { case Some(d) => "{d.toString()}/{d.scale()}/{d.toInt()}"
+case None => "none" }

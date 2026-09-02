@@ -1,0 +1,5 @@
+match xs {
+  case [] => 빈처리()
+  case [head, ..tail] => 사용(head, tail)
+  case [x, y, ..rest] if rest.length > 0 => 처리(x, y, rest)
+}

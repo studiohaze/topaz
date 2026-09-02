@@ -1,0 +1,5 @@
+record User { name: string }
+
+let base: User = User { name: "Ada" }
+let next = base { name: "Grace" }
+print("{next}")

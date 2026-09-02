@@ -1,0 +1,3 @@
+let user = "x; DROP"
+let q = sql"SELECT * FROM t WHERE name = {user}"
+print("{q}")

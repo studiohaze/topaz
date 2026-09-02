@@ -1,0 +1,4 @@
+import newtype_model as model
+let id: model.UserId = model.make()
+let value: int = id.value()
+print("{value}")

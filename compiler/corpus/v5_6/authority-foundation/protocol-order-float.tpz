@@ -1,0 +1,2 @@
+record Measurement derives Order { value: float }
+0

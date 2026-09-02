@@ -1,0 +1,2 @@
+import utils.strings
+export type User = strings.User

@@ -1,0 +1,10 @@
+
+function mark(label: string, xs: Array<int>) -> Array<int> {
+    print(label)
+    xs
+}
+function main() -> Option<Array<int>> {
+    let xs: Option<Array<int>> = None
+    xs?.map(...mark("none-map", [0]))
+}
+main()

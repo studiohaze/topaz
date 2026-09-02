@@ -1,0 +1,10 @@
+let 숫자들 = Array.of(1, 2, 3, 4, 5)
+
+let mut 점수들: Map<string, int> = Map.new()
+점수들.insert("alice", 92)
+점수들.insert("bob", 78)
+
+let mut 태그들 = Set.of("docs")
+태그들.add("v5")
+
+print("숫자들: {숫자들}")

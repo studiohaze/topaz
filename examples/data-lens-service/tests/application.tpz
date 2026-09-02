@@ -1,0 +1,12 @@
+import data_lens_core { DataFormat, DataRow, LensResult, SortMode, Summary, applyLens, parseData }
+
+let csv = "name,category,value,active\n서울_alpha,city,12,true\nКазань_beta,city,8,false\nTopaz_core,language,21,true"
+match parseData(csv, DataFormat.Csv) {
+  case Ok(rows) => {
+    let result = applyLens(rows, "", true, SortMode.ByValue)
+    assert(result.summary.totalRows == 2, "active rows")
+    assert(result.summary.totalValue == 33, "active total")
+    assert(result.rows[0].name == "서울 alpha", "shared canonical labels and sort")
+  }
+  case Err(error) => assert(false, error)
+}

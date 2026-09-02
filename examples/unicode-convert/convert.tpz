@@ -1,0 +1,50 @@
+// 유니코드 변환기. 공백으로 구분된 10진수 코드포인트를 텍스트로 바꾼다. Topaz로 작성됨.
+// 예 "44032 110 111" -> "가no". 각 토큰을 파싱하고(toInt) 문자로 만든다
+// (fromCodePoint). 숫자가 아니거나 유효한 유니코드 스칼라가 아닌 토큰은
+// 무효로 표시된다(조용히 버리지 않음). 이 기능은 `fromCodePoint`가 반드시 필요하다. 임의의 문자를
+// 코드로 만드는 것은 룩업 테이블로는 불가능하다. 순수하고 결정적이다. run≡build.
+
+function 글자정리(글: string) -> string {
+  if 글 == "&" { "&amp;" }
+  else if 글 == "<" { "&lt;" }
+  else if 글 == ">" { "&gt;" }
+  else { 글 }
+}
+
+function 줄정리(줄: string) -> string {
+  let mut 출력 = ""
+  for 글 in 줄.scalars() {
+    출력 = 출력 + 글자정리(글)
+  }
+  출력
+}
+
+function 변환(텍스트: string) -> string {
+  let mut 결과문자 = ""
+  let mut 무효 = ""
+  let mut 무효개수 = 0
+  for 줄 in 텍스트.split("\n") {
+    for 토큰 in 줄.split(" ") {
+      if 토큰.byteLength() > 0 {
+        // toInt(토큰) ?? -1. 숫자가 아니면 -1이 되고 fromCodePoint가 거부한다 -> 무효.
+        let 값 = toInt(토큰) ?? -1
+        let 문자 = fromCodePoint(값) ?? ""
+        if 문자.byteLength() > 0 {
+          결과문자 = 결과문자 + 문자
+        } else {
+          무효 = 무효 + 토큰 + " "
+          무효개수 = 무효개수 + 1
+        }
+      }
+    }
+  }
+
+  let mut 결과 = "<div class=\"uni\">"
+  결과 = 결과 + "<div class=\"out\">" + 줄정리(결과문자) + "</div>"
+  if 무효개수 > 0 {
+    결과 = 결과 + "<div class=\"bad\">무효 {무효개수}개: " + 줄정리(무효) + "</div>"
+  }
+  결과 + "</div>"
+}
+
+print(변환(input()))

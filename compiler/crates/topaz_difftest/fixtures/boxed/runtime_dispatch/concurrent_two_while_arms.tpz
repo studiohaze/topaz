@@ -1,0 +1,20 @@
+let r = concurrent {
+  a: {
+    let mut i = 0
+    while i < 2 {
+      print("a")
+      i += 1
+    }
+    1
+  }
+  b: {
+    let mut j = 0
+    while j < 2 {
+      print("b")
+      j += 1
+    }
+    2
+  }
+}
+print("{r.a + r.b}")
+0

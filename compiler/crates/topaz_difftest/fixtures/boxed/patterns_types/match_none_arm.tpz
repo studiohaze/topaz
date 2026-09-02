@@ -1,0 +1,2 @@
+match Array.of(1).get(9) { case Some(x) => x
+case None => 99 }

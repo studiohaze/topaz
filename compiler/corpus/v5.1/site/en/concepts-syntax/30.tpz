@@ -1,0 +1,9 @@
+let analysisResult = CSV.read("sales.csv")
+    |> filter(row => row.revenue > 1000000)
+    |> groupBy(row => row.region)
+    |> aggregate(group => {
+        region: group.key,
+        totalRevenue: group.values.sum(row => row.revenue),
+        avgRevenue: group.values.average(row => row.revenue)
+    })
+    |> sortBy(descending: row => row.totalRevenue)

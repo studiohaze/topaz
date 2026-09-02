@@ -1,0 +1,17 @@
+
+type Handler = (int, int, int) -> int
+function add(a: int, b: int = 2, c: int = 4) -> int {
+    a * 100 + b * 10 + c
+}
+function main() -> int {
+    let callbacks = map { "plus": add }
+    let total = match callbacks.get("plus") {
+        case Some(raw) => {
+            let cb: Handler = raw
+            cb(c: 5, a: 1)
+        }
+        case None => 0
+    }
+    total
+}
+main()

@@ -1,0 +1,2 @@
+let xs = [ for x in [] => x ]
+print("{xs.length}")

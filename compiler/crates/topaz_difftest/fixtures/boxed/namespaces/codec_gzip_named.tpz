@@ -1,0 +1,1 @@
+Codec.gzipCompress(bytes: Bytes.encodeUtf8("hi")).flatMap((gz) => Codec.gzipDecompress(bytes: gz)).map((b) => b.toHex())

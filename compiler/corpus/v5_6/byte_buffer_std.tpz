@@ -1,0 +1,5 @@
+import std.bytes as bytes
+
+let mut buffer = bytes.allocateBuffer(4, 3)
+buffer.set(0, 9)
+print(bytes.bufferToBytes(buffer).toHex())

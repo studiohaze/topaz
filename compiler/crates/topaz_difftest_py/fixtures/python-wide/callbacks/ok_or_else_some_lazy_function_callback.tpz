@@ -1,0 +1,13 @@
+
+function fail() -> string {
+    let n = 1 / 0
+    "bad"
+}
+function main() -> int {
+    let res = Some(5).okOrElse(fail)
+    match res {
+        case Ok(n) => n
+        case Err(_) => 0
+    }
+}
+main()

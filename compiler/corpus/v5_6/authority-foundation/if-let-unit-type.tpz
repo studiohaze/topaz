@@ -1,0 +1,5 @@
+let value: Option<int> = None
+let found: int = if let Some(n) = value {
+    n
+}
+print("{found}")

@@ -1,0 +1,14 @@
+
+function tick(label: string) -> int {
+    print(label)
+    3
+}
+function main() -> int {
+    let t = sh"a {tick("one")} b {loop { print("two"); break 5 }} c"
+    let mut first: Array<string> = t.parts
+    first.push("extra")
+    let second = t.parts
+    print("{first.length}:{second.length}")
+    if second.length == 3 && first.length == 4 { 1 } else { 0 }
+}
+main()

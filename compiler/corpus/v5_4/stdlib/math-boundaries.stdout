@@ -1,0 +1,1 @@
+1.5|Math.sqrt: domain error (argument -1 is negative)|0.0|4.0|3.0|0.9999999999999999|-2.0|4.0|true|false|-2.5|Math.parseFloat: could not parse `1e309` as a float

@@ -1,0 +1,2 @@
+function make(n: int) { return () => n }
+make(5)()

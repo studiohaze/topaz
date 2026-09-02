@@ -1,0 +1,987 @@
+---
+title: 'Using Map'
+description: 'Historical Map guidance with legacy and runtime-oriented examples.'
+---
+
+<Tip tone="warning" triggerLabel="Legacy guide" title="Legacy guide">
+**Why legacy?** This guide preserves Rust-style Map examples (generics with ::, borrow-like patterns, std-library APIs) from earlier Topaz iterations.
+
+**What replaces it?** Canonical collection operations live in [List Operations](/en/docs/reference/list-operations) and [Functional Library](/en/docs/reference/functional-library).
+
+**Status:** Legacy — pre-v5.1, non-canonical; use the reference pages for current syntax. The examples below are preserved unmodified for historical reference and are not canonical Topaz.
+</Tip>
+
+This page keeps older Map workflows available for migration, comparison, and interop-oriented reading.
+
+##  Basic Map Concepts
+
+### What is a Map?
+
+A Map is an **associative array that stores data as key-value pairs**. Each key is unique, and values can be quickly retrieved through keys.
+
+```rust
+// Basic Map creation and usage
+function basicMapExample() {
+    // Create empty map
+    let mut scoreMap: Map<string, int> = Map::new()
+    
+    // Insert values
+    scoreMap.insert("Alice", 95)
+    scoreMap.insert("Bob", 87)
+    scoreMap.insert("Charlie", 92)
+    
+    // Retrieve values
+    match scoreMap.get("Alice") {
+        case Some(aliceScore) => print!("Alice's score: {}", aliceScore)
+        case None => {}
+    }
+    
+    // Update values
+    scoreMap.insert("Alice", 98)  // Overwrite existing value
+    
+    // Iterate through all key-value pairs
+    for (name, score) in &scoreMap {
+        print!("{}: {}", name, score)
+    }
+}
+
+// Map literal creation
+function mapLiteralExample() -> Map<string, int> {
+    map! {
+        "Math" => 90,
+        "Science" => 85,
+        "English" => 93,
+        "History" => 88
+    }
+}
+
+// Use composite data types as values
+struct StudentInfo {
+    age: int,
+    grade: int,
+    major: string
+}
+
+function compositeDataMap() -> Map<string, StudentInfo> {
+    let mut studentMap = Map::new()
+    
+    studentMap.insert("John Doe", StudentInfo {
+        age: 20,
+        grade: 2,
+        major: "Computer Science".to_string()
+    })
+    
+    studentMap.insert("Jane Smith", StudentInfo {
+        age: 19,
+        grade: 1,
+        major: "Mathematics".to_string()
+    })
+    
+    return studentMap
+} test {
+    // Basic Map test
+    let mut testMap: Map<string, int> = Map::new()
+    testMap.insert("key1", 100)
+    testMap.insert("key2", 200)
+    
+    assert testMap.get("key1") == Some(&100)
+    assert testMap.get("key3") == None
+    assert testMap.len() == 2
+    
+    // Map literal test
+    let subjectScores = mapLiteralExample()
+    assert subjectScores.get("Math") == Some(&90)
+    assert subjectScores.len() == 4
+    
+    // Composite data test
+    let students = compositeDataMap()
+    match students.get("John Doe") {
+        case Some(john) => {
+            assert john.age == 20
+            assert john.major == "Computer Science"
+        }
+        case None => {}
+    }
+}
+
+basicMapExample()
+let subjectMap = mapLiteralExample()
+print!("Number of subjects: {}", subjectMap.len())
+
+let studentMap = compositeDataMap()
+for (name, info) in &studentMap {
+    print!("{}: {} years old, grade {}, {} major", name, info.age, info.grade, info.major)
+}
+```
+
+### Core Map Features
+
+1. **Unique Keys**: Each key must be unique in the map
+2. **Fast Lookup**: O(1) average time complexity for value retrieval
+3. **Dynamic Size**: Size can be changed at runtime
+4. **Type Safety**: Key and value types are determined at compile time
+
+##  Basic Map Operations
+
+### Creation, Insertion, and Retrieval
+
+```rust
+// Various Map creation methods
+function mapCreationMethods() {
+    // 1. Create empty map
+    let mut emptyMap: Map<int, string> = Map::new()
+    
+    // 2. Create with capacity
+    let mut capacityMap: Map<string, int> = Map::with_capacity(100)
+    
+    // 3. Initialize with default values
+    let mut defaultMap = Map::new()
+    defaultMap.insert("defaultKey", "defaultValue")
+    
+    // 4. Clone from another map
+    let clonedMap = defaultMap.clone()
+    
+    print!("Empty map size: {}", emptyMap.len())
+    print!("Cloned map size: {}", clonedMap.len())
+}
+
+// Value insertion and updates
+function valueInsertionOperations() {
+    let mut counterMap: Map<string, int> = Map::new()
+    
+    // Insert new values
+    counterMap.insert("apple", 5)
+    counterMap.insert("banana", 3)
+    
+    // Update existing values
+    counterMap.insert("apple", 8)  // Change 5 -> 8
+    
+    // Use entry API (more efficient)
+    counterMap.entry("orange").or_insert(0)  // Insert 0 if key doesn't exist
+    counterMap.entry("apple").and_modify(|value| *value += 2)  // Add 2 to existing value
+    
+    // Utilize insert return value
+    match counterMap.insert("grape", 7) {
+        case Some(previousValue) => print!("Previous value of grape: {}", previousValue)
+        case None => print!("grape is a new key.")
+    }
+    
+    for (fruit, count) in &counterMap {
+        print!("{}: {} pieces", fruit, count)
+    }
+}
+
+// Value retrieval and existence checking
+function valueRetrievalOperations() {
+    let inventoryMap = map! {
+        "Apple" => 50,
+        "Banana" => 30,
+        "Orange" => 25,
+        "Grape" => 40
+    }
+    
+    // Retrieve value with get
+    match inventoryMap.get("Apple") {
+        case Some(count) => print!("Apple inventory: {} pieces", count),
+        case None => print!("No apple inventory")
+    }
+    
+    // Check key existence with contains_key
+    if inventoryMap.contains_key("Strawberry") {
+        print!("Strawberry available")
+    } else {
+        print!("No strawberry inventory")
+    }
+    
+    // Get mutable reference with get_mut
+    let mut mutableInventoryMap = inventoryMap.clone()
+    match mutableInventoryMap.get_mut("Banana") {
+        case Some(bananaInventory) => {
+            *bananaInventory -= 10  // Sell 10 bananas
+            print!("Banana inventory after sale: {} pieces", *bananaInventory)
+        }
+        case None => {}
+    }
+    
+    // Retrieve with default value
+    let kiwiInventory = mutableInventoryMap.get("Kiwi").unwrap_or(&0)
+    print!("Kiwi inventory: {} pieces", kiwiInventory)
+}
+
+// Value removal
+function valueRemovalOperations() {
+    let mut tempMap = map! {
+        "temp1" => "value1",
+        "temp2" => "value2",
+        "temp3" => "value3",
+        "preserve" => "importantValue"
+    }
+    
+    print!("Size before removal: {}", tempMap.len())
+    
+    // Remove specific key
+    match tempMap.remove("temp1") {
+        case Some(removedValue) => print!("Removed value: {}", removedValue)
+        case None => {}
+    }
+    
+    // Conditional removal
+    tempMap.retain(|key, _| !key.starts_with("temp"))
+    
+    print!("Size after removal: {}", tempMap.len())
+    print!("Remaining keys: {:?}", tempMap.keys().collect::<Vec<_>>())
+    
+    // Remove all entries
+    tempMap.clear()
+    print!("Size after clearing all: {}", tempMap.len())
+} test {
+    // Map creation test
+    let mut testMap: Map<string, int> = Map::new()
+    assert testMap.is_empty()
+    
+    // Insertion test
+    testMap.insert("key1", 100)
+    testMap.insert("key2", 200)
+    assert testMap.len() == 2
+    
+    // Retrieval test
+    assert testMap.get("key1") == Some(&100)
+    assert testMap.contains_key("key2")
+    assert !testMap.contains_key("key3")
+    
+    // Update test
+    let previousValue = testMap.insert("key1", 150)
+    assert previousValue == Some(100)
+    assert testMap.get("key1") == Some(&150)
+    
+    // Removal test
+    let removedValue = testMap.remove("key2")
+    assert removedValue == Some(200)
+    assert testMap.len() == 1
+}
+
+mapCreationMethods()
+valueInsertionOperations()
+valueRetrievalOperations()
+valueRemovalOperations()
+```
+
+### Iteration and Transformation
+
+```rust
+// Map iteration methods
+function mapIterationMethods() {
+    let scoreMap = map! {
+        "Math" => 95,
+        "Science" => 88,
+        "English" => 92,
+        "History" => 85
+    }
+    
+    // 1. Iterate through key-value pairs
+    print!("=== Key-Value Pair Iteration ===")
+    for (subject, score) in &scoreMap {
+        print!("{}: {} points", subject, score)
+    }
+    
+    // 2. Iterate through keys only
+    print!("=== Keys Only Iteration ===")
+    for subject in scoreMap.keys() {
+        print!("Subject: {}", subject)
+    }
+    
+    // 3. Iterate through values only
+    print!("=== Values Only Iteration ===")
+    for score in scoreMap.values() {
+        print!("Score: {} points", score)
+    }
+    
+    // 4. Mutable value iteration (score adjustment)
+    let mut mutableScoreMap = scoreMap.clone()
+    for (_, score) in &mut mutableScoreMap {
+        *score += 5  // Add 5 points to all scores
+    }
+    
+    print!("=== Adjusted Scores ===")
+    for (subject, score) in &mutableScoreMap {
+        print!("{}: {} points", subject, score)
+    }
+}
+
+// Map transformation and filtering
+function mapTransformationFiltering() {
+    let originalMap = map! {
+        "apple" => 10,
+        "banana" => 5,
+        "orange" => 15,
+        "grape" => 8,
+        "kiwi" => 12
+    }
+    
+    // Convert map to vector
+    let keyValueVector: Vec<(string, int)> = originalMap.iter()
+        .map(|(key, value)| (key.clone(), *value))
+        .collect()
+    
+    print!("Key-value vector: {:?}", keyValueVector)
+    
+    // Filter items matching condition
+    let expensiveFruits: Map<string, int> = originalMap.iter()
+        .filter(|(_, &price)| price >= 10)
+        .map(|(key, value)| (key.clone(), *value))
+        .collect()
+    
+    print!("Fruits >= 10: {:?}", expensiveFruits)
+    
+    // Value transformation
+    let discountedPrices: Map<string, int> = originalMap.iter()
+        .map(|(key, value)| (key.clone(), value * 90 / 100))  // 10% discount
+        .collect()
+    
+    print!("Discounted prices: {:?}", discountedPrices)
+    
+    // Key transformation
+    let uppercaseKeyMap: Map<string, int> = originalMap.iter()
+        .map(|(key, value)| (key.to_uppercase(), *value))
+        .collect()
+    
+    print!("Uppercase keys: {:?}", uppercaseKeyMap)
+}
+
+// Map aggregation and statistics
+function mapAggregationStatistics() {
+    let salesData = map! {
+        "January" => 120,
+        "February" => 135,
+        "March" => 98,
+        "April" => 156,
+        "May" => 189,
+        "June" => 143
+    }
+    
+    // Total sales
+    let totalSales: int = salesData.values().sum()
+    print!("Total sales: {}", totalSales)
+    
+    // Average sales
+    let averageSales = totalSales as f64 / salesData.len() as f64
+    print!("Average sales: {:.2}", averageSales)
+    
+    // Maximum/minimum sales
+    match salesData.values().max() { case Some(maxSales) => print!("Maximum sales: {}", maxSales); case None => {} }
+    match salesData.values().min() { case Some(minSales) => print!("Minimum sales: {}", minSales); case None => {} }
+    
+    // Count meeting specific condition
+    let targetAchievementMonths = salesData.values()
+        .filter(|&&sales| sales >= 140)
+        .count()
+    print!("Months achieving target (140): {}", targetAchievementMonths)
+    
+    // Find best performing month
+    match salesData.iter().max_by_key(|(_, &sales)| sales) { case Some((bestMonth, bestPerformance)) => print!("Best performance: {} month with {} units", bestMonth, bestPerformance), case None => {} }
+} test {
+    // Iteration test
+    let testMap = map! {
+        "A" => 1,
+        "B" => 2,
+        "C" => 3
+    }
+    
+    let mut keys = Vec::new()
+    for key in testMap.keys() {
+        keys.push(key.clone())
+    }
+    keys.sort()
+    assert keys == vec!["A", "B", "C"]
+    
+    // Transformation test
+    let doubledMap: Map<string, int> = testMap.iter()
+        .map(|(key, value)| (key.clone(), value * 2))
+        .collect()
+    
+    assert doubledMap.get("A") == Some(&2)
+    assert doubledMap.get("B") == Some(&4)
+    
+    // Filtering test
+    let largeValueMap: Map<string, int> = testMap.iter()
+        .filter(|(_, &value)| value > 1)
+        .map(|(key, value)| (key.clone(), *value))
+        .collect()
+    
+    assert largeValueMap.len() == 2
+    assert !largeValueMap.contains_key("A")
+}
+
+mapIterationMethods()
+mapTransformationFiltering()
+mapAggregationStatistics()
+```
+
+##  Advanced Map Usage
+
+### Entry API and Efficient Patterns
+
+```rust
+// Entry API utilization
+function entryAPIUtilization() {
+    let mut wordCountMap: Map<string, int> = Map::new()
+    let text = "hello world hello rust world rust programming"
+    
+    // Count words (using Entry API)
+    for word in text.split_whitespace() {
+        *wordCountMap.entry(word.to_string()).or_insert(0) += 1
+    }
+    
+    print!("=== Word Count ===")
+    for (word, count) in &wordCountMap {
+        print!("{}: {} times", word, count)
+    }
+    
+    // Complex Entry patterns
+    let mut groupMap: Map<string, Vec<int>> = Map::new()
+    let data = vec![
+        ("GroupA", 10), ("GroupB", 20), ("GroupA", 15), 
+        ("GroupC", 5), ("GroupB", 25), ("GroupA", 30)
+    ]
+    
+    for (group, value) in data {
+        groupMap.entry(group.to_string())
+            .or_insert(Vec::new())
+            .push(value)
+    }
+    
+    print!("=== Group Data ===")
+    for (group, values) in &groupMap {
+        print!("{}: {:?}", group, values)
+    }
+}
+
+// Nested map structure
+function nestedMapStructure() {
+    // Student -> Subject -> Score
+    let mut gradebook: Map<string, Map<string, int>> = Map::new()
+    
+    // Grade input function
+    let mut inputGrade = |student: &str, subject: &str, score: int| {
+        gradebook.entry(student.to_string())
+            .or_insert(Map::new())
+            .insert(subject.to_string(), score)
+    }
+    
+    // Input data
+    inputGrade("John Smith", "Math", 95)
+    inputGrade("John Smith", "Science", 88)
+    inputGrade("John Smith", "English", 92)
+    inputGrade("Jane Doe", "Math", 98)
+    inputGrade("Jane Doe", "Science", 94)
+    inputGrade("Jane Doe", "English", 89)
+    
+    // Grade inquiry
+    for (student, subjectMap) in &gradebook {
+        print!("=== {} Grades ===", student)
+        let mut totalScore = 0
+        let mut subjectCount = 0
+        
+        for (subject, score) in subjectMap {
+            print!("  {}: {} points", subject, score)
+            totalScore += score
+            subjectCount += 1
+        }
+        
+        let average = if subjectCount > 0 { totalScore as f64 / subjectCount as f64 } else { 0.0 }
+        print!("  Average: {:.1} points", average)
+    }
+}
+
+// Map merge and combination
+function mapMergeCombination() {
+    let inventoryA = map! {
+        "Apple" => 50,
+        "Banana" => 30,
+        "Orange" => 20
+    }
+    
+    let inventoryB = map! {
+        "Banana" => 25,  // Duplicate key
+        "Grape" => 40,
+        "Kiwi" => 15
+    }
+    
+    // 1. Simple merge (B takes precedence)
+    let mut mergedInventory = inventoryA.clone()
+    for (fruit, count) in inventoryB.iter() {
+        mergedInventory.insert(fruit.clone(), *count)
+    }
+    
+    print!("=== Simple Merge (B Priority) ===")
+    for (fruit, count) in &mergedInventory {
+        print!("{}: {} pieces", fruit, count)
+    }
+    
+    // 2. Value sum merge
+    let mut summedInventory = inventoryA.clone()
+    for (fruit, count) in inventoryB.iter() {
+        *summedInventory.entry(fruit.clone()).or_insert(0) += count
+    }
+    
+    print!("=== Value Sum Merge ===")
+    for (fruit, count) in &summedInventory {
+        print!("{}: {} pieces", fruit, count)
+    }
+    
+    // 3. Maximum value merge
+    let mut maxInventory = inventoryA.clone()
+    for (fruit, count) in inventoryB.iter() {
+        maxInventory.entry(fruit.clone())
+            .and_modify(|existingCount| *existingCount = (*existingCount).max(*count))
+            .or_insert(*count)
+    }
+    
+    print!("=== Maximum Value Merge ===")
+    for (fruit, count) in &maxInventory {
+        print!("{}: {} pieces", fruit, count)
+    }
+} test {
+    // Entry API test
+    let mut counter: Map<string, int> = Map::new()
+    
+    // Insert new key
+    counter.entry("newKey".to_string()).or_insert(1)
+    assert counter.get("newKey") == Some(&1)
+    
+    // Modify existing key
+    *counter.entry("newKey".to_string()).or_insert(0) += 5
+    assert counter.get("newKey") == Some(&6)
+    
+    // Nested map test
+    let mut nestedMap: Map<string, Map<string, int>> = Map::new()
+    nestedMap.entry("outerKey".to_string())
+        .or_insert(Map::new())
+        .insert("innerKey".to_string(), 100)
+    
+    assert nestedMap.get("outerKey").unwrap().get("innerKey") == Some(&100)
+}
+
+entryAPIUtilization()
+nestedMapStructure()
+mapMergeCombination()
+```
+
+### Performance Optimization and Memory Management
+
+```rust
+// Capacity management and performance optimization
+function performanceOptimization() {
+    // 1. Set appropriate initial capacity
+    let mut largeMap: Map<int, string> = Map::with_capacity(10000)
+    
+    print!("Initial capacity: {}", largeMap.capacity())
+    
+    // Insert large amount of data
+    for i in 0..5000 {
+        largeMap.insert(i, format!("value{}", i))
+    }
+    
+    print!("After insertion - length: {}, capacity: {}", largeMap.len(), largeMap.capacity())
+    
+    // 2. Shrink unnecessary capacity
+    largeMap.shrink_to_fit()
+    print!("After shrinking capacity: {}", largeMap.capacity())
+    
+    // 3. Reserve space
+    largeMap.reserve(2000)
+    print!("After reserving capacity: {}", largeMap.capacity())
+}
+
+// Memory-efficient key types
+function efficientKeyTypes() {
+    // Performance comparison example for string keys vs integer keys
+    
+    // Integer keys (more efficient)
+    let mut integerKeyMap: Map<u32, string> = Map::new()
+    for i in 0..1000 {
+        integerKeyMap.insert(i, format!("data{}", i))
+    }
+    
+    // String keys (higher hash cost)
+    let mut stringKeyMap: Map<string, string> = Map::new()
+    for i in 0..1000 {
+        stringKeyMap.insert(format!("key{}", i), format!("data{}", i))
+    }
+    
+    print!("Integer key map size: {}", integerKeyMap.len())
+    print!("String key map size: {}", stringKeyMap.len())
+    
+    // Small strings stored on stack (efficient)
+    let mut fixedStringMap: Map<&'static str, int> = map! {
+        "Red" => 1,
+        "Blue" => 2,
+        "Green" => 3,
+        "Yellow" => 4
+    }
+    
+    print!("Fixed string map: {:?}", fixedStringMap)
+}
+
+// Custom hash function usage
+use std::collections::hash_map::DefaultHasher
+use std::hash::{Hash, Hasher}
+
+struct CustomKey {
+    id: u32,
+    name: string
+}
+
+impl Hash for CustomKey {
+    function hash<H: Hasher>(&self, state: &mut H) {
+        // Use only ID for hash (ignore name)
+        self.id.hash(state)
+    }
+}
+
+impl PartialEq for CustomKey {
+    function eq(&self, other: &Self) -> bool {
+        self.id == other.id  // Equality based on ID only
+    }
+}
+
+impl Eq for CustomKey {}
+
+function customHashExample() {
+    let mut customMap: Map<CustomKey, string> = Map::new()
+    
+    let key1 = CustomKey { id: 1, name: "first".to_string() }
+    let key2 = CustomKey { id: 1, name: "different".to_string() }  // Same ID
+    
+    customMap.insert(key1, "value1".to_string())
+    
+    // key2 is treated as the same key as key1 because they have the same ID
+    match customMap.get(&key2) { case Some(value) => print!("Value retrieved with custom key: {}", value), case None => {} }
+} test {
+    // Capacity management test
+    let mut testMap: Map<int, string> = Map::with_capacity(5)
+    
+    assert testMap.capacity() >= 5
+    assert testMap.is_empty()
+    
+    // Auto-expansion test when capacity exceeded
+    for i in 0..<10 {
+        testMap.insert(i, format!("value{}", i))
+    }
+    
+    assert testMap.len() == 10
+    assert testMap.capacity() >= 10
+}
+
+performanceOptimization()
+efficientKeyTypes()
+customHashExample()
+```
+
+##  Practical Map Patterns
+
+### Cache and Memoization
+
+```rust
+// Simple cache implementation
+struct Cache<K, V>
+where
+    K: Hash + Eq + Clone,
+    V: Clone
+{
+    data: Map<K, V>,
+    maxSize: usize
+}
+
+impl<K, V> Cache<K, V>
+where
+    K: Hash + Eq + Clone,
+    V: Clone
+{
+    function new(maxSize: usize) -> Self {
+        Cache {
+            data: Map::with_capacity(maxSize),
+            maxSize
+        }
+    }
+    
+    function get(&self, key: &K) -> Option<&V> {
+        self.data.get(key)
+    }
+    
+    function put(&mut self, key: K, value: V) {
+        if self.data.len() >= self.maxSize {
+            // Simple LRU: remove first key
+            match self.data.keys().next().cloned() {
+                case Some(firstKey) => { self.data.remove(&firstKey) }
+                case None => {}
+            }
+        }
+        self.data.insert(key, value)
+    }
+    
+    function contains_key(&self, key: &K) -> bool {
+        self.data.contains_key(key)
+    }
+    
+    function clear(&mut self) {
+        self.data.clear()
+    }
+}
+
+// Memoization implementation
+function memoizationExample() {
+    let mut fibonacciCache: Map<u32, u64> = Map::new()
+    
+    function fibonacci(n: u32, cache: &mut Map<u32, u64>) -> u64 {
+        match cache.get(&n) { case Some(&result) => return result; case None => {} }
+        
+        let result = match n {
+            case 0 => 0,
+            case 1 => 1,
+            case _ => fibonacci(n - 1, cache) + fibonacci(n - 2, cache)
+        }
+        
+        cache.insert(n, result)
+        result
+    }
+    
+    // Calculate Fibonacci sequence
+    for i in 0..15 {
+        let value = fibonacci(i, &mut fibonacciCache)
+        print!("F({}) = {}", i, value)
+    }
+    
+    print!("Cache size: {}", fibonacciCache.len())
+}
+
+// Web request cache simulation
+function webCacheSimulation() {
+    let mut responseCache: Cache<string, string> = Cache::new(5)
+    
+    function simulateWebRequest(url: &str, cache: &mut Cache<string, string>) -> string {
+        match cache.get(&url.to_string()) {
+            case Some(cachedResponse) => {
+                print!("Cache hit: {}", url)
+                return cachedResponse.clone()
+            }
+            case None => {}
+        }
+        
+        // Simulate actual request (with delay)
+        print!("Actual request: {}", url)
+        let response = format!("Response data from {}", url)
+        
+        cache.put(url.to_string(), response.clone())
+        response
+    }
+    
+    // Request simulation
+    let urls = vec![
+        "https://api.example.com/users",
+        "https://api.example.com/posts", 
+        "https://api.example.com/users",  // Cache hit
+        "https://api.example.com/comments",
+        "https://api.example.com/posts",  // Cache hit
+    ]
+    
+    for url in urls {
+        let response = simulateWebRequest(url, &mut responseCache)
+        print!("Response: {}", response)
+    }
+} test {
+    // Cache test
+    let mut testCache: Cache<string, int> = Cache::new(3)
+    
+    testCache.put("key1".to_string(), 100)
+    testCache.put("key2".to_string(), 200)
+    testCache.put("key3".to_string(), 300)
+    
+    assert testCache.get(&"key1".to_string()) == Some(&100)
+    assert testCache.contains_key(&"key2".to_string())
+    
+    // LRU behavior test when capacity exceeded
+    testCache.put("key4".to_string(), 400)
+    
+    // First key should be removed
+    assert testCache.get(&"key4".to_string()) == Some(&400)
+}
+
+memoizationExample()
+webCacheSimulation()
+```
+
+### Indexing and Grouping
+
+```rust
+// Data indexing
+struct User {
+    id: u32,
+    name: string,
+    age: u32,
+    department: string
+}
+
+function dataIndexing() {
+    let users = vec![
+        User { id: 1, name: "John Doe".to_string(), age: 28, department: "Development".to_string() },
+        User { id: 2, name: "Jane Smith".to_string(), age: 32, department: "Design".to_string() },
+        User { id: 3, name: "Mike Johnson".to_string(), age: 25, department: "Development".to_string() },
+        User { id: 4, name: "Sarah Wilson".to_string(), age: 29, department: "Marketing".to_string() },
+    ]
+    
+    // Index by ID
+    let idIndex: Map<u32, &User> = users.iter()
+        .map(|user| (user.id, user))
+        .collect()
+    
+    // Index by name
+    let nameIndex: Map<string, &User> = users.iter()
+        .map(|user| (user.name.clone(), user))
+        .collect()
+    
+    // Group by department
+    let mut departmentGroups: Map<string, Vec<&User>> = Map::new()
+    for user in &users {
+        departmentGroups.entry(user.department.clone())
+            .or_insert(Vec::new())
+            .push(user)
+    }
+    
+    // Index usage examples
+    match idIndex.get(&2) { case Some(user) => print!("User with ID 2: {}", user.name), case None => {} }
+    match nameIndex.get("Mike Johnson") { case Some(user) => print!("Mike Johnson's department: {}", user.department), case None => {} }
+    
+    // Grouping results output
+    for (department, members) in &departmentGroups {
+        print!("=== {} ===", department)
+        for user in members {
+            print!("  {} ({} years old)", user.name, user.age)
+        }
+    }
+}
+
+// Multi-index system
+struct MultiIndex<T> {
+    data: Vec<T>
+}
+
+impl MultiIndex<User> {
+    function new(data: Vec<User>) -> Self {
+        MultiIndex { data }
+    }
+    
+    function findById(&self, id: u32) -> Option<&User> {
+        self.data.iter().find(|user| user.id == id)
+    }
+    
+    function findByDepartment(&self, department: &str) -> Vec<&User> {
+        self.data.iter()
+            .filter(|user| user.department == department)
+            .collect()
+    }
+    
+    function findByAgeRange(&self, minAge: u32, maxAge: u32) -> Vec<&User> {
+        self.data.iter()
+            .filter(|user| user.age >= minAge && user.age <= maxAge)
+            .collect()
+    }
+    
+    function statistics(&self) -> Map<string, u32> {
+        let mut statsMap = Map::new()
+        
+        // Department member count
+        let mut departmentCount: Map<string, u32> = Map::new()
+        for user in &self.data {
+            *departmentCount.entry(user.department.clone()).or_insert(0) += 1
+        }
+        
+        // Average age
+        let totalAge: u32 = self.data.iter().map(|user| user.age).sum()
+        let averageAge = if !self.data.is_empty() { 
+            totalAge / self.data.len() as u32 
+        } else { 0 }
+        
+        statsMap.insert("totalMembers".to_string(), self.data.len() as u32)
+        statsMap.insert("averageAge".to_string(), averageAge)
+        
+        for (department, count) in departmentCount {
+            statsMap.insert(format!("{}_members", department), count)
+        }
+        
+        statsMap
+    }
+}
+
+function multiIndexExample() {
+    let userData = vec![
+        User { id: 1, name: "John Doe".to_string(), age: 28, department: "Development".to_string() },
+        User { id: 2, name: "Jane Smith".to_string(), age: 32, department: "Design".to_string() },
+        User { id: 3, name: "Mike Johnson".to_string(), age: 25, department: "Development".to_string() },
+        User { id: 4, name: "Sarah Wilson".to_string(), age: 29, department: "Marketing".to_string() },
+    ]
+    
+    let index = MultiIndex::new(userData)
+    
+    // Various searches
+    match index.findById(3) { case Some(user) => print!("ID 3: {}", user.name), case None => {} }
+    
+    let devMembers = index.findByDepartment("Development")
+    print!("Development members: {:?}", devMembers.iter().map(|u| &u.name).collect::<Vec<_>>())
+    
+    let youngEmployees = index.findByAgeRange(25, 30)
+    print!("25-30 years old: {:?}", youngEmployees.iter().map(|u| &u.name).collect::<Vec<_>>())
+    
+    // Statistics output
+    let stats = index.statistics()
+    for (item, value) in &stats {
+        print!("{}: {}", item, value)
+    }
+} test {
+    // Indexing test
+    let testUsers = vec![
+        User { id: 1, name: "Test1".to_string(), age: 25, department: "TeamA".to_string() },
+        User { id: 2, name: "Test2".to_string(), age: 30, department: "TeamB".to_string() },
+    ]
+    
+    let idMap: Map<u32, &User> = testUsers.iter()
+        .map(|u| (u.id, u))
+        .collect()
+    
+    assert idMap.get(&1).unwrap().name == "Test1"
+    assert idMap.get(&2).unwrap().department == "TeamB"
+    
+    // Multi-index test
+    let index = MultiIndex::new(testUsers)
+    assert index.findById(1).is_some()
+    assert index.findByDepartment("TeamA").len() == 1
+    assert index.findByAgeRange(25, 35).len() == 2
+}
+
+dataIndexing()
+multiIndexExample()
+```
+
+##  Mastering Map
+
+Map is one of the most useful data structures in Topaz:
+
+###  When to Use Map:
+- **Key-value pair** data storage
+- When **fast lookup** is needed
+- **Data indexing** and **grouping**
+- **Cache** and **memoization** implementation
+
+###  Considerations:
+- Choose **appropriate key types** (consider hash performance)
+- Manage **memory usage** (for large datasets)
+- Consider **concurrency** (in multi-threaded environments)
+- Ensure **key immutability**
+
+###  Topaz Map Advantages:
+- **Type safety** guarantee
+- **Efficient hashing** algorithms
+- **Flexible Entry API**
+- **Memory-safe** management
+
+Experience efficient data management with Map! 

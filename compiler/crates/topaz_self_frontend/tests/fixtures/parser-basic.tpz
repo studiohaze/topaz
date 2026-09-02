@@ -1,0 +1,4 @@
+function add(value: int) -> int {
+  let next = value + 1
+  next
+}

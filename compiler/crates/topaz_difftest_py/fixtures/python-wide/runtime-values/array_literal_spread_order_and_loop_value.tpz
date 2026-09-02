@@ -1,0 +1,11 @@
+
+function main() -> string {
+    let xs = [1, 2]
+    let ys = [0, ...xs, 3]
+    let zs = [...loop {
+        print("spread")
+        break ys
+    }, 4]
+    "{ys}:{zs}"
+}
+main()

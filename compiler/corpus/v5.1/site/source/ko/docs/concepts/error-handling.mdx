@@ -1,0 +1,657 @@
+---
+title: '에러 처리'
+description: '토파즈의 강력한 에러 처리 시스템을 마스터하세요. Result 타입, Option 타입, 패턴 매칭을 활용한 안전한 에러 처리 방식과 예외 처리 최적화 전략을 학습합니다.'
+covers: '§12, §13, §13a, §14'
+---
+
+> **라이브러리 이름 참고**: 표준 라이브러리 최소 표면을 벗어나는 도우미·멤버 호출 — `Math.sqrt`, `.endsWith`, `.contains`, `파일존재확인`, `읽기권한확인`, `파일내용읽기`, `기본설정생성`, `데이터검증`, `데이터변환`, `데이터저장`, `파일처리`, `배치처리`, `네트워크요청`, `Thread.sleep`, `사용자생성`, `데이터베이스저장`, `데이터베이스쿼리`, `에러메트릭증가`, `에러로그수집`, `알림발송`, `긴급알림발송`, `input`, `open`, `.read`, `.close` 등 — 은 설명용 placeholder이며 canonical API가 아닙니다. `JSON.parse`는 전체 타이핑이 deferred 상태인 예약된 표준 라이브러리 이름입니다.
+
+에러 처리는 **견고한 소프트웨어**의 핵심입니다. 토파즈는 타입 안전한 에러 처리를 위해 **Result**와 **Option** 타입을 제공합니다. 
+
+**Result 우선 철학**  
+Topaz canonical 에러 처리는 `Result`, `?` 전파 연산자, `match`를 사용합니다. 예외 스타일 형식은 Topaz v5.2의 일부가 아닙니다. 복구 불가능한 런타임 오류는 별도의 채널인 **폴트(fault)**로 다뤄지며, 이 페이지 후반에서 설명합니다.
+
+##  Result 타입
+
+### 기본 Result 사용법
+
+```topaz
+// Result<성공타입, 에러타입>
+function 나누기(분자: float, 분모: float) -> Result<float, string> {
+    if 분모 == 0.0 {
+        return Err("0으로 나눌 수 없습니다")
+    }
+    return Ok(분자 / 분모)
+}
+
+// Result 처리하기
+let 결과 = 나누기(10.0, 2.0)
+match 결과 {
+    case Ok(값) => print("결과: {값}")
+    case Err(오류메시지) => print("오류: {오류메시지}")
+}
+
+// 다양한 에러 케이스
+function 파일읽기(경로: string) -> Result<string, string> {
+    if 경로 == "" {
+        return Err("파일 경로가 비어있습니다")
+    }
+    
+    if !경로.endsWith(".txt") {
+        return Err("텍스트 파일만 지원됩니다")
+    }
+    
+    if !파일존재확인(경로) {
+        return Err("파일을 찾을 수 없습니다: {경로}")
+    }
+    
+    // 실제 파일 읽기 로직
+    return Ok("파일 내용")
+}
+```
+
+### match로 Result 처리
+
+```topaz
+// match로 성공값 변환
+let 결과 = match 나누기(10.0, 2.0) {
+    case Ok(값) => Ok("결과: {값 * 2.0}")
+    case Err(오류) => Err(오류)
+}
+
+match 결과 {
+    case Ok(메시지) => print(메시지)     // 성공 메시지
+    case Err(오류) => print("오류: {오류}")
+}
+
+// 중첩 match로 연쇄 처리
+function 제곱근(값: float) -> Result<float, string> {
+    if 값 < 0.0 {
+        return Err("음수의 제곱근은 구할 수 없습니다")
+    }
+    return Ok(Math.sqrt(값))
+}
+
+let 최종결과 = match 나누기(100.0, 4.0) {
+    case Ok(값) => match 제곱근(값) {
+        case Ok(근) => Ok("제곱근: {근}")
+        case Err(오류) => Err(오류)
+    }
+    case Err(오류) => Err(오류)
+}
+
+match 최종결과 {
+    case Ok(메시지) => print(메시지)         // 제곱근 메시지
+    case Err(오류) => print("오류: {오류}")
+}
+
+// match로 에러 복구
+function 기본값사용(오류: string) -> Result<float, string> {
+    print("기본값 사용: {오류}")
+    return Ok(0.0)
+}
+
+let 복구된결과 = match 나누기(10.0, 0.0) {
+    case Ok(값) => Ok(값)
+    case Err(오류) => 기본값사용(오류)
+}
+
+match 복구된결과 {
+    case Ok(값) => print("복구됨: {값}")
+    case Err(오류) => print("오류: {오류}")
+}
+```
+
+### 복합 에러 타입
+
+```topaz
+// 구조화된 에러 타입
+type 파일에러종류 = "not_found" | "permission_denied" | "read_failed" | "format_error"
+type 파일에러 = { 종류: 파일에러종류, 메시지: string }
+
+function 설정파일읽기(경로: string) -> Result<{ theme: string }, 파일에러> {
+    if !파일존재확인(경로) {
+        return Err({ 종류: "not_found", 메시지: "설정 파일이 없습니다: {경로}" })
+    }
+    
+    if !읽기권한확인(경로) {
+        return Err({ 종류: "permission_denied", 메시지: "읽기 권한이 없습니다: {경로}" })
+    }
+    
+    return match 파일내용읽기(경로) {
+        case Ok(내용) => match JSON.parse(내용) {
+            case Ok(설정) => Ok({ theme: 설정.theme })
+            case Err(_) => Err({ 종류: "format_error", 메시지: "잘못된 JSON 형식" })
+        }
+        case Err(이유) => Err({ 종류: "read_failed", 메시지: 이유 })
+    }
+}
+
+// 구체적인 에러 처리: 닫힌 에러 종류 union을 직접 match해서
+// exhaustive함이 정적으로 검사되도록 합니다
+match 설정파일읽기("config.json") {
+    case Ok(설정) => {
+        print("설정 로드 성공")
+        print("테마: {설정.theme}")
+    }
+    case Err(에러) => match 에러.종류 {
+        case "not_found" => {
+            print("설정 파일이 없습니다: {에러.메시지}")
+            기본설정생성()
+        }
+        case "permission_denied" => print("권한 없음: {에러.메시지}")
+        case "format_error" => print("형식 오류: {에러.메시지}")
+        case "read_failed" => print("읽기 실패: {에러.메시지}")
+    }
+}
+```
+
+##  Option 타입
+
+### 기본 Option 사용법
+
+```topaz
+// Option<T> - 값이 있을 수도, 없을 수도 있음
+function 사용자찾기(아이디: int) -> Option<{ 이름: string, 나이: int }> {
+    let 사용자들 = [
+        { 아이디: 1, 이름: "김토파즈", 나이: 25 },
+        { 아이디: 2, 이름: "이개발", 나이: 30 }
+    ]
+    
+    for 사용자 in 사용자들 {
+        if 사용자.아이디 == 아이디 {
+            return Some({ 이름: 사용자.이름, 나이: 사용자.나이 })
+        }
+    }
+    
+    return None
+}
+
+// Option 처리하기
+match 사용자찾기(1) {
+    case Some(사용자) => print("사용자 발견: {사용자.이름}, {사용자.나이}세")
+    case None => print("사용자를 찾을 수 없습니다")
+}
+
+// 배열에서 요소 찾기 — .get이 폴트 없는 읽기입니다
+function 첫번째정수요소(배열: Array<int>) -> Option<int> {
+    배열.get(0)
+}
+
+let 숫자들 = [1, 2, 3, 4, 5]
+match 첫번째정수요소(숫자들) {
+    case Some(첫번째) => print("첫 번째 요소: {첫번째}")
+    case None => print("배열이 비어있습니다")
+}
+```
+
+### match로 Option 처리
+
+```topaz
+// match로 값 변환
+let 결과 = match 사용자찾기(1) {
+    case Some(사용자) => Some("안녕하세요, {사용자.이름}님!")
+    case None => None
+}
+
+match 결과 {
+    case Some(인사) => print(인사)
+    case None => print("사용자를 찾을 수 없습니다")
+}
+
+// 중첩 match로 Option 연쇄 처리
+function 성인확인(사용자: { 이름: string, 나이: int }) -> Option<string> {
+    if 사용자.나이 >= 18 {
+        return Some(사용자.이름)
+    }
+    return None
+}
+
+let 성인사용자 = match 사용자찾기(1) {
+    case Some(사용자) => match 성인확인(사용자) {
+        case Some(이름) => Some("{이름}님은 성인입니다")
+        case None => None
+    }
+    case None => None
+}
+
+// match로 기본값 제공
+let 사용자이름 = match 사용자찾기(999) {
+    case Some(사용자) => 사용자.이름
+    case None => "알 수 없는 사용자"
+}
+
+print("사용자 이름: {사용자이름}")  // "사용자 이름: 알 수 없는 사용자"
+
+// match로 조건 필터링
+let 젊은사용자 = match 사용자찾기(1) {
+    case Some(사용자) => if 사용자.나이 < 30 { Some("{사용자.이름}님은 젊습니다") } else { None }
+    case None => None
+}
+```
+
+### Option과 Result 조합
+
+```topaz
+// Option을 Result로 변환
+function 필수사용자찾기(아이디: int) -> Result<{ 이름: string, 나이: int }, string> {
+    return match 사용자찾기(아이디) {
+        case Some(사용자) => Ok(사용자)
+        case None => Err("사용자를 찾을 수 없습니다: ID {아이디}")
+    }
+}
+
+// Result를 Option으로 변환
+let 선택적결과 = match 나누기(10.0, 0.0) {
+    case Ok(값) => Some(값)
+    case Err(_) => None
+}
+
+match 선택적결과 {
+    case Some(값) => print("나누기 성공: {값}")
+    case None => print("나누기 실패 (에러 메시지 무시)")
+}
+
+// 복합 처리
+function 사용자나이두배(아이디: int) -> Result<int, string> {
+    return match 필수사용자찾기(아이디) {
+        case Ok(사용자) => Ok(사용자.나이 * 2)
+        case Err(오류) => Err(오류)
+    }
+}
+
+match 사용자나이두배(1) {
+    case Ok(두배나이) => print("나이의 두 배: {두배나이}")
+    case Err(오류) => print("오류: {오류}")
+}
+```
+
+##  에러 전파와 조기 반환
+
+### ? 연산자 (에러 전파)
+
+```topaz
+// ? 연산자로 에러 자동 전파
+function 복잡한계산(a: float, b: float, c: float) -> Result<float, string> {
+    let 첫번째 = 나누기(a, b)?          // 에러시 자동 반환
+    let 두번째 = 제곱근(첫번째)?         // 에러시 자동 반환
+    let 최종 = 나누기(두번째, c)?        // 에러시 자동 반환
+    
+    return Ok(최종)
+}
+
+// 위 코드는 아래와 동일
+function 복잡한계산_수동(a: float, b: float, c: float) -> Result<float, string> {
+    return match 나누기(a, b) {
+        case Ok(첫번째) => match 제곱근(첫번째) {
+            case Ok(두번째) => match 나누기(두번째, c) {
+                case Ok(최종) => Ok(최종)
+                case Err(오류) => Err(오류)
+            }
+            case Err(오류) => Err(오류)
+        }
+        case Err(오류) => Err(오류)
+    }
+}
+
+// Option 값은 명시적 match를 사용 (`?`는 Result 전용)
+function 첫번째와두번째합(배열: Array<int>) -> Option<int> {
+    match 첫번째정수요소(배열) {
+        case Some(첫번째) => match 배열.get(1) {
+            case Some(두번째) => Some(첫번째 + 두번째)
+            case None => None
+        }
+        case None => None
+    }
+}
+```
+
+> Topaz canonical 에러 처리는 `?` 전파와 `match`를 사용합니다. `?`는 `Result` 값을 요구하며, `Option` 값은 명시적 `match`로 처리합니다. `try` 블록(`try { ... }`)과 `try` 표현식은 Topaz v5.2에 명시되어 있지 않습니다 — postfix `expr?`가 canonical 전파 표기입니다.
+
+### `defer` (스코프 가드)
+
+현재 스코프가 종료될 때 실행할 정리 작업을 등록합니다. 실행 순서는 LIFO이며, 스코프 종료 경로 — 정상 종료, `return`, `?`에 의한 조기 반환 — 에서 실행됩니다.
+
+정책: `defer` 작업 내부 오류는 런타임 정책에 따라 로깅·수집됩니다 — 이미 반환 중인 `Err`를 대체하지 않으며, 남은 `defer` 작업은 계속 실행됩니다.
+
+```topaz
+function 파일처리(경로: string) -> Result<string, string> {
+    let 파일 = open(경로)?
+    defer { 파일.close() }                  // 항상 닫힘 (LIFO)
+
+    let 내용 = 파일.read()?                 // 자원 사용
+    Ok(내용)
+}
+```
+
+##  폴트: 복구 불가능한 채널
+
+일부 런타임 오류는 값이 아니라 **폴트(fault)**입니다. 폴트는 현재 프로그램 평가를 중단시킵니다: `Result`도 `Option`도 아니며, `?`, `??`, `concurrent`로 잡을 수 없습니다. Topaz v5.2에는 panic 키워드도, 폴트를 잡는 형식도 없습니다.
+
+폴트 발생원은 다음과 같습니다:
+
+- 범위 밖 또는 음수 인덱스로의 직접 배열 인덱싱(`arr[i]`)
+- 정수 `/` 또는 `%`의 0 나눗셈
+- 런타임 정수 산술의 오버플로
+- 동적 범위 step이 0인 경우
+- exhaustive함이 정적으로 증명되지 않았고 catch-all case도 없는 상태에서의 런타임 `match` miss
+
+```topaz
+let 숫자들 = [1, 2, 3]
+
+let 안전값 = 숫자들.get(10)        // None — 폴트 없는 읽기
+// 숫자들[10]은 폴트: 직접 인덱싱은 범위를 벗어나면 중단됩니다
+
+// 폴트 가능성이 있는 형식 대신 복구 가능한 실패는 Result에 담으세요
+function 안전한인덱스(xs: Array<int>, i: int) -> Result<int, string> {
+    match xs.get(i) {
+        case Some(값) => Ok(값)
+        case None => Err("인덱스 {i}가 범위를 벗어났습니다")
+    }
+}
+```
+
+경계 규칙: 호출자가 처리해야 할 실패(파일 없음, 잘못된 입력, 네트워크 오류)에는 `Result`를 사용하고, 폴트는 올바른 코드에서는 절대 일어나지 않아야 할 프로그래밍 오류에 예약됩니다. canonical Topaz는 복구 가능한 실패를 `Result`로 모델링하고 공개 예시에서 폴트 가능성이 있는 형식을 피합니다.
+
+##  에러 처리 패턴
+
+### 에러 컨텍스트 추가
+
+```topaz
+// 에러에 컨텍스트 정보 추가
+function 사용자데이터로드(아이디: int) -> Result<{ 이름: string, 설정: { theme: string } }, string> {
+    return match 필수사용자찾기(아이디) {
+        case Ok(사용자) => match 설정파일읽기("user_{아이디}.json") {
+            case Ok(설정) => Ok({ 이름: 사용자.이름, 설정: 설정 })
+            case Err(오류) => Err("사용자 설정 로드 실패 (ID: {아이디}): {오류.메시지}")
+        }
+        case Err(오류) => Err("사용자 조회 실패 (ID: {아이디}): {오류}")
+    }
+}
+
+// 단계별 에러 처리
+function 단계별처리() -> Result<string, string> {
+    print("1단계: 데이터 검증 중...")
+    return match 데이터검증() {
+        case Err(오류) => Err("1단계 실패: {오류}")
+        case Ok(검증결과) => {
+            print("2단계: 데이터 변환 중...")
+            match 데이터변환(검증결과) {
+                case Err(오류) => Err("2단계 실패: {오류}")
+                case Ok(변환결과) => {
+                    print("3단계: 데이터 저장 중...")
+                    match 데이터저장(변환결과) {
+                        case Err(오류) => Err("3단계 실패: {오류}")
+                        case Ok(저장결과) => Ok("모든 단계 완료: {저장결과}")
+                    }
+                }
+            }
+        }
+    }
+}
+```
+
+### 부분 실패 처리
+
+```topaz
+// 여러 작업 중 일부 실패 허용
+function 배치처리(파일목록: Array<string>) -> { 성공: Array<string>, 실패: Array<{ 파일: string, 오류: string }> } {
+    let mut 성공목록: Array<string> = []
+    let mut 실패목록: Array<{ 파일: string, 오류: string }> = []
+    
+    for 파일 in 파일목록 {
+        match 파일처리(파일) {
+            case Ok(결과) => {
+                성공목록.push(결과)
+                print("성공: {파일}")
+            }
+            case Err(오류) => {
+                실패목록.push({ 파일: 파일, 오류: 오류 })
+                print("실패: {파일} - {오류}")
+            }
+        }
+    }
+    
+    return { 성공: 성공목록, 실패: 실패목록 }
+}
+
+// Result 배열 처리
+function 실수결과수집(결과들: Array<Result<float, string>>) -> Result<Array<float>, Array<string>> {
+    let mut 성공값들: Array<float> = []
+    let mut 오류들: Array<string> = []
+    
+    for 결과 in 결과들 {
+        match 결과 {
+            case Ok(값) => 성공값들.push(값)
+            case Err(오류) => 오류들.push(오류)
+        }
+    }
+    
+    if 오류들.length > 0 {
+        Err(오류들)
+    } else {
+        Ok(성공값들)
+    }
+}
+
+let 계산결과들 = [
+    나누기(10.0, 2.0),   // Ok(5.0)
+    나누기(8.0, 4.0),    // Ok(2.0)
+    나누기(6.0, 0.0)     // Err("0으로 나눌 수 없습니다")
+]
+
+match 실수결과수집(계산결과들) {
+    case Ok(값들) => print("모든 계산 성공: {값들}")
+    case Err(오류들) => print("일부 계산 실패: {오류들}")
+}
+```
+
+### 재시도 패턴
+
+```topaz
+// 재시도 로직
+function 문자열결과재시도(
+    작업: () -> Result<string, string>,
+    최대시도: int,
+    시도횟수: int = 1,
+    지연시간: int = 1000
+) -> Result<string, string> {
+    return match 작업() {
+        case Ok(결과) => {
+            if 시도횟수 > 1 {
+                print("재시도 {시도횟수}번째에 성공")
+            }
+            Ok(결과)
+        }
+        case Err(오류) => {
+            print("시도 {시도횟수} 실패: {오류}")
+            if 시도횟수 >= 최대시도 {
+                Err(오류)
+            } else {
+                print("{지연시간}ms 후 재시도...")
+                Thread.sleep(지연시간)
+                문자열결과재시도(작업, 최대시도, 시도횟수 + 1, 지연시간)
+            }
+        }
+    }
+}
+
+// 네트워크 요청 재시도
+let 응답 = 문자열결과재시도(
+    작업: () => 네트워크요청("https://api.example.com/data"),
+    최대시도: 3,
+    지연시간: 2000
+)
+
+match 응답 {
+    case Ok(데이터) => print("데이터 수신: {데이터}")
+    case Err(오류) => print("최종 실패: {오류}")
+}
+```
+
+##  타입 안전성과 컴파일 시간 검사
+
+### 모든 에러 케이스 처리 강제
+
+```topaz
+// 컴파일러가 모든 케이스 처리를 강제함
+type 네트워크에러종류 = "connection_failed" | "timeout" | "authentication_failed" | "server_error"
+type 네트워크에러 = { 종류: 네트워크에러종류, 메시지: string, 코드: int | null }
+
+function 네트워크요청처리(결과: Result<string, 네트워크에러>) -> string {
+    match 결과 {
+        case Ok(데이터) => "성공: {데이터}"
+        case Err(에러) => match 에러.종류 {
+            case "connection_failed" => "네트워크에 연결할 수 없습니다"
+            case "timeout" => "요청이 시간 초과되었습니다"
+            case "authentication_failed" => "인증이 필요합니다"
+            case "server_error" => "서버 오류 (코드: {에러.코드})"
+        }
+    }
+}
+```
+
+### 커스텀 에러 메타데이터
+
+```topaz
+// canonical 문서에서는 명시적 helper 함수로 에러 정보를 다룹니다
+type 애플리케이션에러종류 = "database_connection_failed" | "file_access_denied" | "invalid_input" | "external_service_unavailable"
+type 애플리케이션에러 = { 종류: 애플리케이션에러종류, 메시지: string, 필드: string | null, 값: string | null }
+
+function 에러메시지(에러: 애플리케이션에러) -> string {
+    match 에러.종류 {
+        case "database_connection_failed" => "데이터베이스에 연결할 수 없습니다"
+        case "file_access_denied" => "파일에 접근할 권한이 없습니다"
+        case "invalid_input" => "잘못된 입력 - {에러.필드}: {에러.값}"
+        case "external_service_unavailable" => "외부 서비스를 사용할 수 없습니다"
+    }
+}
+
+function 에러코드(에러: 애플리케이션에러) -> int {
+    match 에러.종류 {
+        case "database_connection_failed" => 1001
+        case "file_access_denied" => 1002
+        case "invalid_input" => 1003
+        case "external_service_unavailable" => 1004
+    }
+}
+
+function 에러복구가능(에러: 애플리케이션에러) -> bool {
+    match 에러.종류 {
+        case "database_connection_failed" => true
+        case "external_service_unavailable" => true
+        case _ => false
+    }
+}
+
+// 에러 처리 통합
+function 에러로깅(에러: 애플리케이션에러) {
+    print("[에러 {에러코드(에러)}] {에러메시지(에러)}")
+    
+    if 에러복구가능(에러) {
+        print("복구를 시도할 수 있습니다")
+    } else {
+        print("복구 불가능한 에러입니다")
+    }
+}
+```
+
+##  최적화와 베스트 프랙티스
+
+### 1. 에러를 값으로 처리
+
+```topaz
+// 좋은 예: 에러를 명시적으로 처리
+function 안전한사용자입력() -> Result<int, string> {
+    let 사용자입력 = input("숫자를 입력하세요: ")
+
+    // toInt는 Option<int>를 반환합니다 — None 경우를 명시적으로 처리하세요
+    let 숫자 = match toInt(사용자입력) {
+        case Some(값) => 값
+        case None => { return Err("유효한 숫자가 아닙니다: {사용자입력}") }
+    }
+
+    if 숫자 < 0 {
+        return Err("음수는 허용되지 않습니다")
+    }
+    return Ok(숫자)
+}
+```
+
+패닉 스타일 추출은 피하고, 에러를 `Result`에 유지한 뒤 `match` 또는 `?`로 처리하세요.
+
+### 2. 에러 전파 최적화
+
+```topaz
+// 조기 반환으로 깊은 중첩 방지
+function 사용자등록(데이터: { 이름: string, 이메일: string, 나이: int }) -> Result<string, string> {
+    // 조기 검증
+    if 데이터.이름 == "" {
+        return Err("이름이 필요합니다")
+    }
+    
+    if !데이터.이메일.contains("@") {
+        return Err("유효한 이메일이 필요합니다")
+    }
+    
+    if 데이터.나이 < 0 {
+        return Err("유효한 나이가 필요합니다")
+    }
+    
+    // 모든 검증 통과 후 처리
+    let 사용자 = 사용자생성(데이터)?
+    let 아이디 = 데이터베이스저장(사용자)?
+    
+    return Ok("사용자 등록 완료: {아이디}")
+}
+```
+
+canonical Result 처리에서는 단계 사이에 `?` 전파를 사용하세요. 위 `사용자등록` 예시가 그 패턴을 보여줍니다.
+
+### 3. 에러 로깅과 모니터링
+
+```topaz
+// 구조화된 에러 로깅
+function 문자열로깅처리(
+    결과: Result<string, string>,
+    컨텍스트: string,
+    로그레벨: string = "error"
+) -> Result<string, string> {
+    match 결과 {
+        case Ok(값) => {
+            if 로그레벨 == "debug" {
+                print("[DEBUG] {컨텍스트}: 성공")
+            }
+            Ok(값)
+        }
+        case Err(오류) => {
+            print("[{로그레벨}] {컨텍스트}: {오류}")
+            
+            // 메트릭 수집
+            에러메트릭증가(컨텍스트, 로그레벨)
+            
+            Err(오류)
+        }
+    }
+}
+
+// 사용 예시
+let 결과 = 데이터베이스쿼리("SELECT * FROM users")
+    |> 문자열로깅처리(_, 컨텍스트: "사용자 목록 조회", 로그레벨: "error")
+
+// 에러 집계 및 알림
+function 에러알림시스템() {
+    let 최근에러들 = 에러로그수집(지난시간: 3600)  // 1시간
+    
+    if 최근에러들.length > 100 {
+        알림발송("높은 에러율 감지: {최근에러들.length}건/시간")
+    }
+    
+    let 치명적에러들 = filter(최근에러들, 에러 => 에러.레벨 == "critical")
+    if 치명적에러들.length > 0 {
+        긴급알림발송("치명적 에러 발생", 치명적에러들)
+    }
+}
+```
+
+토파즈의 에러 처리는 **타입 안전하고 명시적**입니다. Result와 Option을 활용하여 **예측 가능하고 견고한** 애플리케이션을 구축하세요! 

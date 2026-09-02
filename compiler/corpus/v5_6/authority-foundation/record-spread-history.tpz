@@ -1,0 +1,3 @@
+let base = { value: 1 }
+let next = Box { ...base }
+print("{next}")

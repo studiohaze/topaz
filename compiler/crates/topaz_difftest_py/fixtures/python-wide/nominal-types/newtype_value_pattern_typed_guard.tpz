@@ -1,0 +1,15 @@
+
+newtype UserId = int
+function main() -> int {
+    let id: UserId = UserId(41)
+    let direct = id.value()
+    let matched = match id {
+        case UserId(x) => x + 1
+    }
+    let typed = match id {
+        case found: UserId => found.value() + 2
+        case _ => 0
+    }
+    direct + matched + typed
+}
+main()

@@ -1,0 +1,13 @@
+
+function main() -> Array<int> {
+    let mut m: Map<string, int> = map { "a": 1, "b": 2 }
+    let mut calls = 0
+    let mutate = (value: int) => {
+        calls += 1
+        m.insert("c", 3)
+        value * 10
+    }
+    let out = m.mapValues(mutate)
+    [m.length, out.length, out.getOr("a", -1), out.getOr("b", -1), calls]
+}
+main()

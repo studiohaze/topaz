@@ -1,0 +1,47 @@
+{
+  "schema": "topaz.execution-sandbox-policy/v1",
+  "outcome": "PSH-X3S",
+  "publicProduct": false,
+  "admittedTargets": [
+    "aarch64-apple-darwin"
+  ],
+  "backend": {
+    "id": "topaz.execution-sandbox/darwin-sandbox-exec/v1",
+    "program": "/usr/bin/sandbox-exec",
+    "systemProfile": "/System/Library/Sandbox/Profiles/system.sb",
+    "recursiveSystemProfileInputs": [
+      "/System/Library/Sandbox/Profiles/dyld-support.sb"
+    ],
+    "deprecatedFacilityAcceptedOnlyForTargetScopedFoundation": true,
+    "missingOrRejectedFailsClosed": true,
+    "unsandboxedRetry": false
+  },
+  "privateBinaries": [
+    "topaz-private-worker",
+    "topaz-sandbox-probe"
+  ],
+  "requestChannels": [
+    "stdin-framed-source",
+    "stdin-framed-explicit-input"
+  ],
+  "deniedCapabilities": [
+    "environment-inheritance",
+    "user-and-repository-filesystem-read",
+    "filesystem-write",
+    "network",
+    "child-process",
+    "native-host-fallback"
+  ],
+  "identityLayers": [
+    "semantic",
+    "execution-environment",
+    "admission"
+  ],
+  "excludedClaims": [
+    "resource-completeness",
+    "nonretention-completeness",
+    "packaged-product",
+    "public-execution",
+    "cross-platform"
+  ]
+}

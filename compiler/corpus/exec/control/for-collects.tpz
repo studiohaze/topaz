@@ -1,0 +1,5 @@
+let squares = for x in 1..4 { x * x }
+print("{squares}")
+for s in ["a", "b"] {
+    print(s)
+}

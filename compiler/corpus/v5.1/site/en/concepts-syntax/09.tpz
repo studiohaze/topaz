@@ -1,0 +1,6 @@
+let processedString = "hello world"
+    |> split(_, " ")
+    |> map(_, word => capitalize(word))
+    |> join(_, " ")
+    |> append("!", _)
+// Result: "Hello World!"

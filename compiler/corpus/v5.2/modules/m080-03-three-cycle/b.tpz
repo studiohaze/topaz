@@ -1,0 +1,2 @@
+import c
+export function ok() -> int { 1 }

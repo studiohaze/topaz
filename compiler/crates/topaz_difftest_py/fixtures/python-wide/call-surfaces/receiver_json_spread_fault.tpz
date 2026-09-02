@@ -1,0 +1,12 @@
+
+function mark(label: string, xs: Array<string>) -> Array<string> {
+    print(label)
+    xs
+}
+function makeJson() -> JSONValue {
+    JSON.parse("\{\"x\":1\}")?
+}
+function main() -> string {
+    makeJson().kind(...mark("json", []))
+}
+main()

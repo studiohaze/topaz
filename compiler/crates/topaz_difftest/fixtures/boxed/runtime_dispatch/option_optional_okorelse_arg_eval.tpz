@@ -1,0 +1,8 @@
+function mk() { print("M")
+() => { print("C")
+"e" } }
+let pp: Option<Option<int>> = Some(Some(5))
+let qq: Option<Option<int>> = Some(None)
+let a = pp?.okOrElse(mk())
+let b = qq?.okOrElse(mk())
+"{a}/{b}"

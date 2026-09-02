@@ -1,0 +1,14 @@
+record User {
+    name: string,
+}
+
+record Admin {
+    name: string,
+}
+
+let admin: Admin = Admin { name: "root" }
+let label = match admin {
+    case User { name } => name
+    case _ => "none"
+}
+print(label)

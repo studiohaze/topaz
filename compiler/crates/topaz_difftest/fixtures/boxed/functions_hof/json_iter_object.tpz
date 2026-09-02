@@ -1,0 +1,4 @@
+match JSON.parse("\{ \"b\": 2, \"a\": 1 \}") {
+  case Ok(j) => print("keys={j.keys()} vals={j.values()} arr={j.asArray()}")
+  case Err(e) => print("e")
+}

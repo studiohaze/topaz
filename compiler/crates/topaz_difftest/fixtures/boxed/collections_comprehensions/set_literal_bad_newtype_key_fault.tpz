@@ -1,0 +1,2 @@
+newtype Bad = Map<string, int>
+set { Bad(Map.new()) }

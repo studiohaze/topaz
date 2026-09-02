@@ -1,0 +1,19 @@
+
+import data { makeOptionArray, makeResult }
+function inc(x: int) -> int {
+    x + 1
+}
+function main() -> int {
+    let mapped = makeOptionArray()?.map(inc)
+    let result = makeResult().map(inc)
+    let a = match mapped {
+        case Some(xs) => xs[0] + xs[1]
+        case None => 0
+    }
+    let b = match result {
+        case Ok(n) => n
+        case Err(_) => 0
+    }
+    a + b
+}
+main()

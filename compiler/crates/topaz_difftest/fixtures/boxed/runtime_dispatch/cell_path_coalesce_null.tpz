@@ -1,0 +1,3 @@
+let mut xs = [{ a: null }]
+xs[0].a ??= 7
+xs[0]

@@ -1,0 +1,10 @@
+record User { name: string, age: int }
+record Other { name: string, age: int }
+function replacement() -> int {
+  print("field")
+  5
+}
+let o = Other { name: "X", age: 2 }
+let v = User { ...o, age: replacement() }
+print("{v}")
+0

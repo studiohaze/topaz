@@ -1,0 +1,3 @@
+import modsel_mid
+print("modsel {modsel_mid.useSel()}")
+0

@@ -1,0 +1,27 @@
+record User {
+  id: int,
+  name: string,
+}
+
+record Other {
+  id: int,
+  name: string,
+}
+
+let mut users = Map.new<User, string>()
+users.insert(User { id: 1, name: "Ada" }, "hit")
+
+let same = users.getOr(User { id: 1, name: "Ada" }, "miss")
+let miss = users.getOr(User { id: 2, name: "Ada" }, "miss")
+
+let dedup = set {
+  User { id: 1, name: "Ada" },
+  User { id: 1, name: "Ada" },
+  User { id: 2, name: "Ada" },
+}
+let mixed = set {
+  User { id: 1, name: "Ada" },
+  Other { id: 1, name: "Ada" },
+}
+
+print("{same}/{miss}/{dedup.length}/{mixed.length}")

@@ -1,0 +1,5 @@
+record Box<T> { value: T }
+record Good derives Eq, Order, JSON { value: Box<int> }
+let a: Good = Good { value: Box { value: 1 } }
+let b: Good = Good { value: Box { value: 2 } }
+print("{Eq.equals(a, a)}:{Order.compare(a, b)}")

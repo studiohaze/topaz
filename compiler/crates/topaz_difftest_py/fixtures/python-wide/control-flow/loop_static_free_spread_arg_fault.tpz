@@ -1,0 +1,6 @@
+
+print(...loop {
+    print("static-spread")
+    break ["x"]
+})
+0

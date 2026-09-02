@@ -1,0 +1,12 @@
+
+function mark(label: string, xs: Array<int>) -> Array<int> {
+    print(label)
+    xs
+}
+function inc(x: int) -> int { x + 1 }
+function main() -> string {
+    let xs: Option<Array<int>> = None
+    inc |> xs?.map(...mark("pipe-none-map", [0]))
+    "done"
+}
+main()

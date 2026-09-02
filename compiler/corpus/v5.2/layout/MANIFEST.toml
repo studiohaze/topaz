@@ -1,0 +1,33 @@
+# corpus/v5.2/layout manifest (CDR-002 §3). Phase A: every
+# fixture is parse-phase and runnable; resolve-phase fixtures
+# (corpus/v5.2/modules/) land separately and are counted as
+# pending until the resolver ships.
+
+[totals]
+recorded = 4
+runnable = 4
+pending = 0
+
+[[fixture]]
+file = "expr-pipe-unchanged.tpz"
+phase = "parse"
+versions = "5.2"
+result = "ok"
+
+[[fixture]]
+file = "importlist-multiline.tpz"
+phase = "parse"
+versions = "5.2"
+result = "ok"
+
+[[fixture]]
+file = "pattern-pipe-leading.tpz"
+phase = "parse"
+versions = "5.2"
+result = "ok"
+
+[[fixture]]
+file = "pattern-pipe-trailing.tpz"
+phase = "parse"
+versions = "5.2"
+result = "ok"

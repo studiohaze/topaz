@@ -1,0 +1,3 @@
+import local_schema
+
+print(local_schema.schema)

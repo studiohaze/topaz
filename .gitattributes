@@ -1,0 +1,16 @@
+* text=auto eol=lf
+
+*.exe -text -eol
+*.gz -text -eol
+*.ico -text -eol
+*.jpg -text -eol
+*.jpeg -text -eol
+*.pdf -text -eol
+*.png -text -eol
+*.tar -text -eol
+*.tgz -text -eol
+*.wasm -text -eol
+*.zip -text -eol
+
+compiler/generated/topaz_compiler_program_image.bin -text -eol
+compiler/vendor/stage0-recovery/** -text -eol

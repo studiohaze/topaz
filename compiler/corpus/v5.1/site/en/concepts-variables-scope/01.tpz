@@ -1,0 +1,7 @@
+// All variables are immutable by default
+let name = "John Topaz"
+let age = 25
+let isActive = true
+
+// Cannot be changed once defined
+// name = "Different Name"  // Compile error!

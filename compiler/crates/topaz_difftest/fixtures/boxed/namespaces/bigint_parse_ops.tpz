@@ -1,0 +1,3 @@
+match BigInt.parse("9223372036854775808", 10) { case Some(a) => { let b = BigInt.fromInt(2)
+"{(a + b).toString(10)}/{(a * b).toString(10)}/{(a - b).toString(16)}" }
+case None => "none" }

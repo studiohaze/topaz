@@ -1,0 +1,2 @@
+let mut buffer = ByteBuffer.allocate(4, 1)
+buffer.fill(1, 4, 9)

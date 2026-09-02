@@ -1,0 +1,4 @@
+import utils.strings
+export let trim = strings.trim
+export let user = strings.user
+export type User = strings.User

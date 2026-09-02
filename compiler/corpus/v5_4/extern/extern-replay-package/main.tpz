@@ -1,0 +1,7 @@
+import host.math { twice }
+
+export function main(args: Array<string>, stdin: string) -> Result<int, string> {
+    let answer = twice(21)
+    print("twice={answer}")
+    if answer == 42 { Ok(0) } else { Err("bad replay") }
+}

@@ -1,0 +1,3 @@
+let r = { a: Some(1), b: 2 }
+match r { case { a: Some(x), b: y } => x + y
+case _ => 0 }

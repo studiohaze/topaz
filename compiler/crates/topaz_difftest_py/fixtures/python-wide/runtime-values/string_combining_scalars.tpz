@@ -1,0 +1,5 @@
+
+function f() -> Array<string> {
+    "é,z".scalars()
+}
+f()

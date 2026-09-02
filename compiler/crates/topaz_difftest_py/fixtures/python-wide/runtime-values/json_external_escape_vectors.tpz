@@ -1,0 +1,11 @@
+
+function f() -> Result<string, string> {
+    let root = match JSON.parse("[\"\\b\",\"\\f\",\"\\n\",\"\\r\",\"\\t\",\"\\/\",\"\\\\\",\"\\uD834\\uDD1E\"]") {
+        case Ok(value) => value
+        case Err(e) => return Err(e.message)
+    }
+    let text = JSON.stringify(root)?
+    print(text)
+    Ok(text)
+}
+f()

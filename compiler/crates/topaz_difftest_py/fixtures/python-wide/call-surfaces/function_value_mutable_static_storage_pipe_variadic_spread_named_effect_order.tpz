@@ -1,0 +1,37 @@
+
+function sum(seed: int = 0, bonus: int = 0, ...xs: int) -> int {
+    let mut total = seed * 100 + bonus * 10
+    for x in xs {
+        total = total + x
+    }
+    total
+}
+
+function scale(seed: int = 0, bonus: int = 0, ...ys: int) -> int {
+    let mut total = seed * 1000 + bonus * 100
+    for y in ys {
+        total = total + y * 10
+    }
+    total
+}
+
+function main() -> int {
+    let mut order = 0
+    function tick(tag: int) -> int {
+        order = order * 10 + tag
+        tag
+    }
+
+    let mut callbacks = [sum]
+    let arrayBefore = tick(1) |> callbacks[0](...[tick(2), tick(3)], seed: _, bonus: tick(9))
+    callbacks[0] = scale
+    let arrayAfter = tick(4) |> callbacks[0](...[tick(5), tick(6)], seed: _, bonus: tick(8))
+
+    let mut handlers = { total: sum }
+    let recordBefore = tick(7) |> handlers.total(...[tick(1), tick(2)], seed: _, bonus: tick(3))
+    handlers.total = scale
+    let recordAfter = tick(4) |> handlers.total(...[tick(5), tick(6)], seed: _, bonus: tick(7))
+
+    order + arrayBefore + arrayAfter + recordBefore + recordAfter
+}
+main()

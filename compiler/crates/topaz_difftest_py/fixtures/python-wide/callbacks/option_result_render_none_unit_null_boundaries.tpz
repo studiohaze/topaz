@@ -1,0 +1,10 @@
+
+function unitValue() {
+    ()
+}
+function main() -> string {
+    let none: Option<int> = None
+    let nested: Option<Option<int>> = Some(None)
+    "{none}|{nested}|{unitValue()}|{null}"
+}
+main()

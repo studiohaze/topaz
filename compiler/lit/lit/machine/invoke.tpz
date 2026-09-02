@@ -1,0 +1,217 @@
+// Procedure and primitive invocation transitions for the Lispex machine.
+// Argument packets arrive from evaluation; results return through delivery so
+// callable dispatch does not own continuation state.
+
+import lit.model {
+  GuestInt,
+  GuestRational,
+  ErrorObjectRow,
+  GuardClauseRow,
+  GuestValue,
+  ValuePacket,
+  MachineSignal,
+  NodeOp,
+  SpanRow,
+  OriginRow,
+  BinderRow,
+  GlobalRow,
+  NodeRow,
+  Kernel,
+  EnvironmentRow,
+  ClosureRow,
+  ContinuationFrame,
+  ContinuationRow,
+  MachineWarning,
+  DynamicFrame,
+  DynamicRow,
+  MachineMode,
+  KernelInvokeStep,
+}
+import lit.value_runtime {
+  packetFrom,
+  allocateCell,
+  allocateEnvironment,
+  guestList,
+}
+import lit.render {
+  renderGuest,
+  machineOriginStartByte,
+}
+import lit.primitives.dispatch {
+  dispatchPrimitive,
+}
+
+export function runKernelInvoke(
+  procedure: GuestValue,
+  arguments: Array<GuestValue>,
+  continuation: int,
+  origin: int,
+  kernel: Kernel,
+  cells: Array<GuestValue>,
+  environments: Array<EnvironmentRow>,
+  closures: Array<ClosureRow>,
+  continuations: Array<ContinuationRow>,
+  dynamics: Array<DynamicRow>,
+  dynamicSuppressed: Array<bool>,
+  initialEscapeActive: Array<bool>,
+  guestIdentities: Array<int>,
+  initialWarnings: Array<MachineWarning>,
+  initialAllocations: int,
+  initialMaxContinuationDepth: int,
+  initialTransfers: int,
+  initialDynamic: int,
+  initialEmittedOutput: string,
+) -> KernelInvokeStep {
+  let mut allocations = initialAllocations
+  let mut maxContinuationDepth = initialMaxContinuationDepth
+  let mut transfers = initialTransfers
+  let mut dynamic = initialDynamic
+  let mut emittedOutput = initialEmittedOutput
+  let mut escapeActive = initialEscapeActive
+  let mut warnings = initialWarnings
+  let activeOrigin = origin
+  let mut mode = MachineMode.HaltMode
+  match procedure {
+    case VClosure(closureId) => {
+      if closureId < 0 || closureId >= closures.length {
+        transfers += 1
+        mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal("LIT200 invalid closure id"), continuation)
+      } else {
+        let closure = closures[closureId]
+        if arguments.length < closure.fixedArity || (!closure.hasRest && arguments.length != closure.fixedArity) {
+          transfers += 1
+          let expectation = if closure.hasRest { "at least {closure.fixedArity}" } else { "{closure.fixedArity}" }
+          mode = MachineMode.TransferMode(
+            MachineSignal.RuntimeSignal("E302 closure: expected {expectation} arguments, got {arguments.length}"),
+            continuation,
+          )
+        } else {
+          let mut frameCells: Array<int> = []
+          let mut argumentIndex = 0
+          while argumentIndex < closure.fixedArity {
+            frameCells.push(allocateCell(cells, arguments[argumentIndex]))
+            allocations += 1
+            argumentIndex += 1
+          }
+          if closure.hasRest {
+            let mut restValues: Array<GuestValue> = []
+            while argumentIndex < arguments.length {
+              restValues.push(arguments[argumentIndex])
+              argumentIndex += 1
+            }
+            frameCells.push(allocateCell(cells, guestList(restValues, guestIdentities)))
+            allocations += restValues.length + 1
+          }
+          let environment = allocateEnvironment(environments, closure.environment, frameCells)
+          allocations += 1
+          mode = MachineMode.EvalMode(closure.body, environment, continuation)
+        }
+      }
+    }
+    case VEscape(escapeId) => {
+      if escapeId < 0 || escapeId >= escapeActive.length || !escapeActive[escapeId] {
+        transfers += 1
+        mode = MachineMode.TransferMode(
+          MachineSignal.RuntimeSignal("E340 escape continuation is no longer active"),
+          continuation,
+        )
+      } else {
+        escapeActive[escapeId] = false
+        transfers += 1
+        mode = MachineMode.TransferMode(
+          MachineSignal.EscapeSignal(escapeId, packetFrom(arguments)),
+          continuation,
+        )
+      }
+    }
+    case VPrimitive(capability) => {
+      let name = kernel.capabilities[capability]
+      let mut warningCode = ""
+      let mut warningMessage = ""
+      if name == "%" {
+        warningCode = "W330"
+        warningMessage = "`%` is a deprecated alias of `modulo` — prefer `modulo`"
+      } else if name == "list-first" {
+        warningCode = "W331"
+        warningMessage = "`list-first` is a deprecated alias of `first` (car) — prefer `first`"
+      } else if name == "list-rest" {
+        warningCode = "W331"
+        warningMessage = "`list-rest` is a deprecated alias of `rest` (cdr) — prefer `rest`"
+      }
+      if warningCode != "" {
+        let warningStart = machineOriginStartByte(kernel, activeOrigin)
+        let mut alreadyWarned = false
+        for warning in warnings {
+          if warning.code == warningCode
+            && machineOriginStartByte(kernel, warning.origin) == warningStart {
+            alreadyWarned = true
+          }
+        }
+        if !alreadyWarned {
+          warnings.push(MachineWarning {
+            code: warningCode,
+            message: warningMessage,
+            origin: activeOrigin,
+          })
+        }
+      }
+      if kernel.capabilityDispositions[capability] == "unsupported-loud" {
+        transfers += 1
+        mode = MachineMode.TransferMode(
+          MachineSignal.ProjectedRuntimeSignal(
+            "HK260 {name}: unsupported-loud in {kernel.feature}",
+            "backend-unsupported",
+            "capability is not yet implemented by the selected backend",
+            [],
+          ),
+          continuation,
+        )
+      } else {
+        let step = dispatchPrimitive(
+          name,
+          arguments,
+          continuation,
+          activeOrigin,
+          kernel,
+          continuations,
+          dynamics,
+          dynamicSuppressed,
+          escapeActive,
+          guestIdentities,
+          allocations,
+          maxContinuationDepth,
+          transfers,
+          dynamic,
+          emittedOutput,
+        )
+        mode = step.mode
+        allocations = step.allocations
+        maxContinuationDepth = step.maxContinuationDepth
+        transfers = step.transfers
+        dynamic = step.dynamic
+        emittedOutput = step.emittedOutput
+      }
+    }
+    case _ => {
+      transfers += 1
+      mode = MachineMode.TransferMode(
+        MachineSignal.ProjectedRuntimeSignal(
+          "E301 attempted to call a non-procedure",
+          "E301",
+          "attempt to call a non-procedure: {renderGuest(procedure)}",
+          [],
+        ),
+        continuation,
+      )
+    }
+  }
+
+  KernelInvokeStep {
+    mode: mode,
+    allocations: allocations,
+    maxContinuationDepth: maxContinuationDepth,
+    transfers: transfers,
+    dynamic: dynamic,
+    emittedOutput: emittedOutput,
+  }
+}

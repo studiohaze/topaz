@@ -1,0 +1,3 @@
+match Decimal.parse("1.25") { case Some(a) => match Decimal.parse("2.5") { case Some(b) => "{(a + b).toString()}/{(b - a).toString()}/{(a * b).toString()}"
+case None => "none" }
+case None => "none" }

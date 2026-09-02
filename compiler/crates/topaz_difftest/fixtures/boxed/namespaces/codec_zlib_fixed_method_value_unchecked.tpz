@@ -1,0 +1,2 @@
+let f = Codec.zlibFixedCompress
+f(Bytes.encodeUtf8("hello")).map((b) => b.toHex())

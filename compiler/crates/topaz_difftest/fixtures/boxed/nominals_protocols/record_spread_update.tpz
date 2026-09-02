@@ -1,0 +1,5 @@
+record User { name: string, age: int }
+let u = User { name: "Ada", age: 1 }
+let v = User { ...u, age: 40 }
+print("{v}")
+0

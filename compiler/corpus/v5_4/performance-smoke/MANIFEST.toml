@@ -1,0 +1,12 @@
+# corpus/v5_4/performance-smoke -- check-pipeline smoke rows
+
+[totals]
+recorded = 1
+runnable = 1
+pending = 0
+
+[[fixture]]
+file = "generic-transform.tpz"
+phase = "performance-smoke"
+versions = "5.4"
+result = "ok"

@@ -1,0 +1,12 @@
+
+function sub(a: int, b: int) -> int {
+    a - b
+}
+function main() -> int {
+    let localSub = (a: int, b: int) => a - b
+    let a = 10 |> sub(b: 3)
+    let b = 10 |> sub(b: 3, a: _)
+    let c = 10 |> localSub(b: 4, a: _)
+    a + b + c
+}
+main()

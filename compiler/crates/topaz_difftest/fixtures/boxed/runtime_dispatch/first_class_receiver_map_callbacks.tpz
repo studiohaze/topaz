@@ -1,0 +1,8 @@
+let mut values = map { "a": 1, "b": 2 }
+let mapValues = values.mapValues
+let filterValues = values.filter
+let updateValue = values.update
+let mapped = mapValues(f: (v) => v * 10)
+let filtered = filterValues(f: (k, v) => v > 1)
+updateValue(k: "a", initial: 0, f: (v) => v + 5)
+{ mappedA: mapped.get("a"), filteredA: filtered.containsKey("a"), filteredB: filtered.containsKey("b"), updatedA: values.get("a") }

@@ -1,0 +1,4 @@
+let mut inner = 0
+function outer() { function inner() { 1 }
+inner() }
+outer()

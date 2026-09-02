@@ -1,0 +1,138 @@
+---
+title: "토파즈 소개"
+description: "토파즈는 애플리케이션 의도를 위한 작고 닫힌 언어입니다 — 모든 것을 말하는 하나의 정형, 사람과 에이전트가 쓰고 툴체인이 검사합니다."
+covers: "§1, §3, §4, §6, §7, §12, §13, §13a, §14, §15, §16, §17, §20, §22"
+---
+
+> **버전 안내**: 이 문서는 **Topaz v5.2** 정식 문법을 따릅니다 — 동결된 v5.1의 엄격 상위집합입니다. 모듈은 v5.2의 새 기능입니다: [모듈과 가시성](/ko/docs/concepts/modules) 참고.
+
+토파즈는 애플리케이션 의도를 위한 작고 닫힌 언어입니다 — 모든 것을 말하는 방법은 하나이고, 사람과 에이전트가 쓰며, 툴체인이 검사합니다. Python이나 TypeScript처럼 읽히지만 표면은 의도적으로 닫혀 있습니다: 의도마다 정확히 하나의 정형이 있고, v5.2 명세에 잠겨 있습니다. 누구를 위한 언어인지 — 그리고 누구를 위한 언어가 아닌지 — 는 [왜 토파즈인가?](/ko/docs/why-topaz)에서 다룹니다.
+
+이 페이지에서 출력을 보여주는 모든 프로그램은 사이트 검증기가 v0.3 툴체인에서 실행하고 — 각 출력 블록은 캡처된 실행 결과와 바이트 단위로 일치해야 하며 — 나머지 펜스는 파스 검증됩니다.
+
+**Lena Code 연동.** 토파즈는 Lena Code와 함께 STUDIO HAZE 제품군을 이루는 자매 제품입니다. Lena Code 변환 워크플로에서 토파즈를 입력 언어로도 출력 언어로도 쓸 수 있습니다. 토파즈로 작성한 코드는 Lena Code 파이프라인을 자연스럽게 오갑니다. 토파즈 자체는 작고 닫힌 유니코드 우선 언어이고, 사람과 AI 에이전트가 같은 방식으로 쓰며, 지원되는 표면은 run과 build 경로의 차분 검증으로 확인합니다.
+
+## 첫 번째 증명: Unicode-first
+
+식별자는 렉서부터 Unicode입니다 — 한글은 1등 시민이고, 도메인 단어가 로마자 근사어가 되지 않고 그대로 코드가 됩니다:
+
+```topaz
+function greet(name: string, language: string) -> string {
+    return match language {
+        case "한국어" => "안녕하세요, {name}님!"
+        case "Русский" => "Привет, {name}!"
+        case _ => "Hello, {name}!"
+    }
+}
+
+let 사용자 = "김토파즈"
+print(greet(사용자, "한국어"))
+print(greet("Topaz", "Русский"))
+```
+
+```text output
+안녕하세요, 김토파즈님!
+Привет, Topaz!
+```
+
+`사용자`는 평범한 변수입니다. Unicode 정체성은 용인되는 엣지 케이스가 아닙니다: 식별자는 작성한 스칼라 시퀀스 그대로이고 — 조용한 정규화는 없습니다(§1) — 모듈 리졸버는 exact·NFC/NFD·case-fold 충돌 키로 파일 간 닮은꼴 모듈 이름을 거부합니다(§17).
+
+## 네 개의 기둥
+
+### 작고 닫힌 표면
+
+의도마다 쓰는 방법은 하나입니다. 정책은 언어가 결정합니다 — 복구 가능한 실패는 `Result`, 부재는 옵셔널, 정리는 `defer` — 그래서 사람도 에이전트도 파일마다 다시 결정하지 않습니다:
+
+```topaz
+function parsePort(raw: string) -> Result<int, string> {
+    let n = toInt(raw) ?? -1
+    if n < 1 {
+        return Err("not a port: {raw}")
+    }
+    return Ok(n)
+}
+
+function startup(raw: string) -> Result<string, string> {
+    defer print("config closed")
+    let port = parsePort(raw)?
+    return Ok("listening on {port}")
+}
+
+print("{startup("8080")}")
+print("{startup("http")}")
+```
+
+```text output
+config closed
+Ok(listening on 8080)
+config closed
+Err(not a port: http)
+```
+
+`?` 연산자는 `Err`를 전파하고, `defer`는 모든 종료 경로에서 실행됩니다 — 위 트랜스크립트에 `config closed`가 두 번 나타나는 이유입니다.
+
+### Unicode-first 정체성
+
+위에서 증명했습니다. 문자열은 암묵 정규화가 없는 Unicode 스칼라 시퀀스입니다 — 작성한 그대로가 동등 비교의 기준입니다(§1). grapheme 클러스터 API는 미래 v5 결정으로 유예되어 있습니다(§20, §22).
+
+### 에이전트 시대의 설계
+
+에이전트가 통째로 들고 있을 수 있을 만큼 작은 명세, 기계 검사 가능한 프로파일, 그리고 스스로 검증되는 문서: 이 사이트의 모든 정식 펜스는 툴체인으로 파스 검증되고, 실행 가능한 예제는 출력이 고정된 채 실행됩니다. [이 사이트의 검증 방법](/ko/docs/status)을 참고하세요.
+
+### 의도를 담는 템플릿
+
+`sql`, `sh`, `path` 문자열은 템플릿입니다 — 문자열로 붕괴하지 않고 파트와 보간을 분리한 채 유지하는 구조화된 값입니다:
+
+```topaz
+let table = "users"
+let q = sql"select * from {table} where active = {true}"
+print("{q}")
+```
+
+```text output
+<sql template, 3 part(s), 2 interpolation(s)>
+```
+
+저 플레이스홀더 렌더링이 v0.3의 정직한 현재입니다: 템플릿 값은 존재하고 아무것도 이어붙여지지 않았으며, 도메인별 렌더링 정책(인용, 이스케이프)은 미래 v5 결정으로 유예되어 있습니다. 안전은 규율이 아니라 문법으로 남습니다.
+
+## 타입 규율, 정직하게
+
+토파즈는 명세상 정적 타입 언어입니다 — 어노테이션, 추론, 리터럴 타입 모두 잠긴 v5.2 표면의 일부입니다:
+
+```topaz
+type TrafficLight = "red" | "yellow" | "green"
+
+function next(light: TrafficLight) -> TrafficLight {
+    return match light {
+        case "red" => "green"
+        case "green" => "yellow"
+        case _ => "red"
+    }
+}
+```
+
+다만 정적 체커는 다음 컴파일러 트랙입니다 — **계획됨**이지, 배포된 것이 아닙니다. 오늘 이 형태는 파스 검증과 모듈 해석을 거치고, v0.3 인터프리터가 계약을 런타임 동적 가드(TPZ5xxx)로 강제합니다. 체커의 일은 그 가드를 정적 진단으로 바꾸는 것입니다. [상태 페이지](/ko/docs/status)가 정확히 이 경계를 추적합니다.
+
+## 오늘 동작하는 것
+
+v0.3(2026-06-12 릴리스)은 Topaz v5.2를 끝까지 실행합니다: Unicode-first 렉서, 전체 파서, 멀티 파일 모듈 리졸버, 그리고 `topaz run` 뒤의 기준 인터프리터 — 패턴 매칭, defer, concurrent, 소스 캐럿과 함께 렌더링되는 폴트까지. 툴체인은 오픈소스 공개 전까지 비공개 CI에 있으며, 이 사이트는 [툴체인 상태](/ko/docs/status)에 개수와 게이트를 공개합니다.
+
+첫 프로그램은 [시작하기](/ko/docs/getting-started)에서 — 그곳의 모든 트랜스크립트는 실제 바이너리에서 캡처한 것입니다.
+
+## 앞으로의 길 — 라벨된 비전
+
+- **타입 체커** — 계획됨; 다음 컴파일러 트랙.
+- **Rust 방출** — 비전 마일스톤; 인터프리터와의 차등 테스트 전에는 어떤 공개 주장도 하지 않습니다.
+- **배포** — 오픈소스 공개와 함께 옵니다.
+
+이 페이지는 라벨 너머의 어떤 것도 약속하지 않습니다 — 진실의 원천은 [상태 페이지](/ko/docs/status)입니다.
+
+## 여기서 시작하세요
+
+- **[왜 토파즈인가?](/ko/docs/why-topaz)** — 5분 포지셔닝, 누가 쓰면 안 되는지 포함
+- **[시작하기](/ko/docs/getting-started)** — 첫 프로그램, 실제 트랜스크립트
+- **[문법](/ko/docs/concepts/syntax)** — 표면 전체를 페이지별로
+- **[모듈과 가시성](/ko/docs/concepts/modules)** — v5.2의 새 기능, 멀티 파일 유닛
+- **[툴체인 상태](/ko/docs/status)** — 오늘 무엇이 돌고, 무엇이 그것을 증명하는가
+
+**말하는 방법은 하나.**

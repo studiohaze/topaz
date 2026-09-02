@@ -1,0 +1,10 @@
+
+function main() -> string {
+    let xs = [1, 2, 3, 4]
+    let evens = [ for x in xs if x % 2 == 0 => x * 10 ]
+    let unique = set { for x in [2, 1, 2, 3] => x }
+    let table = map { for [k, v] in [[1, 10], [2, 20], [3, 30]] if k > 1 => k: v }
+    let nested = [ for x in [1, 2] for y in [10, 20] if y > 10 => x + y ]
+    "{evens}:{unique.toArray()}:{table.getOr(2, 0)}:{table.length}:{nested}"
+}
+main()

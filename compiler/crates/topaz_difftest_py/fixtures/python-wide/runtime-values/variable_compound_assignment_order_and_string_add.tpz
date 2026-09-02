@@ -1,0 +1,13 @@
+
+function main() -> string {
+    let mut x = 1
+    x += loop {
+        x = 10
+        break 2
+    }
+    let mut s = "a"
+    s += "b"
+    let direct = "c" + "d"
+    "{x}:{s}:{direct}"
+}
+main()

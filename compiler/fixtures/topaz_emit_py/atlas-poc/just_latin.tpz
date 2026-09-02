@@ -1,0 +1,55 @@
+// B3a — fixed-point LatinWordSpace justification penalty in Topaz. Must equal just_latin_fp.rs.
+let B = 1000000
+let CAP = 25000
+function roundDiv(n: int, d: int) -> int { let q = n / d; let r = n % d; if r >= (d + 1) / 2 { q + 1 } else { q } }
+function firstCp(t: string) -> int { t.codePointAt(0) ?? -1 }
+function singleScalar(t: string) -> bool { t.scalars().length == 1 }
+function isWordSpace(t: string) -> bool { singleScalar(t) && (firstCp(t) == 32 || firstCp(t) == 160) }
+function isU0020(t: string) -> bool { singleScalar(t) && firstCp(t) == 32 }
+
+function justLatin(adv: Array<int>, texts: Array<string>, target: int, minGap: int,
+                   minLwRatioM: int, maxAdj: int, maxGap: int, isLast: bool) -> int {
+  if isLast { return 0 }
+  let n = texts.length
+  let mut eff = n
+  while eff > 0 && isWordSpace(texts[eff - 1]) { eff = eff - 1 }
+  if eff == 0 { return CAP * B }
+  if target <= 0 { return CAP * B }
+  let mut original = 0
+  let mut i = 0
+  while i < eff { original = original + adv[i]; i = i + 1 }
+  if original * 1000 < target * minLwRatioM { return CAP * B }
+  let adjustment = target - original
+  if adjustment <= 1 { return 0 }
+  if adjustment > maxAdj { return CAP * B + roundDiv((adjustment - maxAdj) * B, 1000) }
+  let mut gapCount = 0
+  let mut j = 0
+  while j < eff { if isU0020(texts[j]) { gapCount = gapCount + 1 }; j = j + 1 }
+  if gapCount < minGap { return CAP * B }
+  let widthOverNum = adjustment - gapCount * maxGap
+  if widthOverNum > gapCount { return CAP * B + roundDiv(widthOverNum * B, gapCount) }
+  0
+}
+
+function 처리(input: string) -> string {
+  let lines = input.split("\n")
+  let hdr = lines[0].split(" ")
+  let target = toInt(hdr[0]) ?? 0
+  let minGap = toInt(hdr[1]) ?? 0
+  let ratioM = toInt(hdr[2]) ?? 0
+  let maxAdj = toInt(hdr[3]) ?? 0
+  let maxGap = toInt(hdr[4]) ?? 0
+  let isLast = (toInt(hdr[5]) ?? 0) != 0
+  let mut adv: Array<int> = []
+  let mut texts: Array<string> = []
+  let mut li = 1
+  while li < lines.length {
+    let parts = lines[li].split("\t")
+    adv.push(toInt(parts[0]) ?? 0)
+    texts.push(if parts.length >= 2 { parts[1] } else { "" })
+    li = li + 1
+  }
+  "{justLatin(adv, texts, target, minGap, ratioM, maxAdj, maxGap, isLast)}"
+}
+
+print(처리(input()))

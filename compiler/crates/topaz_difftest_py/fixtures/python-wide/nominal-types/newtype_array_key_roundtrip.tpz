@@ -1,0 +1,17 @@
+
+newtype Ints = Array<int>
+function main() -> string {
+    let first = Ints([1, 2])
+    let second = Ints([3])
+    let mut m: Map<Ints, string> = Map.new()
+    m.insert(first, "left")
+    m.insert(second, "right")
+    let keys = m.keys
+    let entries = m.entries
+    let recovered = keys[0]
+    let entryKey = entries[1].key
+    let recoveredInner = recovered.value()
+    let entryInner = entryKey.value()
+    "{m.length}:{recovered}:{recoveredInner[0]}:{recoveredInner.length}:{entryKey}:{entryInner[0]}:{m.getOr(Ints([1, 2]), "miss")}:{m.getOr(Ints([9]), "miss")}"
+}
+main()

@@ -1,0 +1,21 @@
+import std.gen
+import std.test { assertEq, forAllBool, forAllInt }
+
+let values = gen.intRange(-2, 2)
+let mut total = 0
+let mut seen = ""
+forAllInt("sum", values, (x) => {
+  total += x
+  seen = "{seen},{x}"
+  assertEq(x * x >= 0, true)
+})
+
+let mut truthy = 0
+let mut boolSeen = ""
+forAllBool("bools", gen.bools(), (flag) => {
+  boolSeen = "{boolSeen},{flag}"
+  if flag { truthy += 1 }
+  assertEq(flag == true || flag == false, true)
+})
+
+print("{values.length}/{total}/{gen.intRange(3, 1).length}/{truthy}/{seen}/{boolSeen}")

@@ -1,0 +1,2 @@
+match CSV.parseWithHeader("name,age\nAda,36") { case Ok(rows) => JSON.stringify(rows)
+case Err(e) => Err(e) }

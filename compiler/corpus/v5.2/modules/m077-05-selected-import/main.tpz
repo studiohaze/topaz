@@ -1,0 +1,2 @@
+import utils.strings { trim, pad }
+let x = 1

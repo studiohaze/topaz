@@ -1,0 +1,8 @@
+
+function main() -> int {
+    match [1, 2, 3, 4] {
+        case [1, head, ..tail] => head + tail[0]
+        case _ => 0
+    }
+}
+main()

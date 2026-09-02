@@ -1,0 +1,1 @@
+Codec.deflateFixedCompress(Bytes.encodeUtf8("")).map((b) => b.toHex())

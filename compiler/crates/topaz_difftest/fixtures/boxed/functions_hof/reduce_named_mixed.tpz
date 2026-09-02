@@ -1,0 +1,2 @@
+let add = (a: int, x: int) => a + x
+[1, 2, 3, 4].reduce(10, f: add)

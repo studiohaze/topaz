@@ -1,0 +1,11 @@
+[package]
+name = "corpus-extract"
+description = "Deterministic fence extractor: regenerates corpus/ and manifests from vendored sources"
+version.workspace = true
+license.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+
+[lints]
+workspace = true

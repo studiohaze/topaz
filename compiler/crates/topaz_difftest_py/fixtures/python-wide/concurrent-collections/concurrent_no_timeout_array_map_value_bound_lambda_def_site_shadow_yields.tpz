@@ -1,0 +1,23 @@
+
+function spin(x: int) -> int {
+    let mut i = 0
+    while i < 200 {
+        i = i + 1
+    }
+    1 / 0
+}
+
+let cb = (x) => spin(x)
+
+function main() -> int {
+    concurrent {
+        slow: {
+            let spin = (x) => x + 10
+            let xs = [1]
+            xs.map(cb)[0]
+        }
+        fast: 0
+    }
+    0
+}
+main()

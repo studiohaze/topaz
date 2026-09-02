@@ -1,0 +1,5 @@
+let mut m = Map.new()
+m.insert("a", 1)
+let mut om: Option<Map<string, int>> = Some(m)
+om?.update("a", 0, (v) => v + 5)
+m.get("a")

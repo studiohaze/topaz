@@ -1,0 +1,9 @@
+let mut tags = Set.of("docs")
+tags.add("v5")
+
+let hasDocs = "docs" in tags
+let hasLegacy = "legacy" in tags
+let dropped = tags.remove("docs")       // true iff an element was removed
+
+print("Has docs: {hasDocs}")
+print("Has legacy: {hasLegacy}")

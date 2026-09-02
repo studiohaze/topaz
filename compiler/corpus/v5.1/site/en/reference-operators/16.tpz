@@ -1,0 +1,7 @@
+// |> binds loosest, so the arithmetic happens first
+let double = (x: int) => x * 2
+let piped = 3 + 2 |> double()        // 10 — equals (3 + 2) |> double()
+
+// Range precedence: additive binds tighter than ..
+let range = (1 + 0)..(5 - 0)
+let within = 3 in range              // true

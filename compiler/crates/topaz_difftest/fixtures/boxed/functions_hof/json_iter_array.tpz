@@ -1,0 +1,4 @@
+match JSON.parse("[10, 20]") {
+  case Ok(j) => print("arr={j.asArray()} keys={j.keys()}")
+  case Err(e) => print("e")
+}

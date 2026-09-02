@@ -1,0 +1,11 @@
+newtype UserId = int
+record Payload { value: int }
+newtype Wrapped = Payload
+let first: UserId = UserId(1)
+let second: UserId = UserId(2)
+let ordered = first < second
+let equal = first == UserId(1)
+let ids: Set<UserId> = Set.of(first, second)
+let wrapped: Wrapped = Wrapped(Payload { value: 7 })
+let get: () -> int = first.value
+print("{ordered}:{equal}:{ids.length}:{wrapped.value().value}:{get()}")

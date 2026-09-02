@@ -1,0 +1,3 @@
+let xs: Array<int> = [1, 2, 3]
+let mapped = ((x: int) => "{x}") |> xs.map<string>()
+mapped.join(",")

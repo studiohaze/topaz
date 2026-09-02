@@ -1,0 +1,3 @@
+enum Status { Active, Banned(string) }
+record Account { id: int, status: Status }
+JSON.stringify(Account { id: 7, status: Status.Banned("spam") })

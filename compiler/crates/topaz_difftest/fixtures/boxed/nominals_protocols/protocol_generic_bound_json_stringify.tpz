@@ -1,0 +1,6 @@
+record User derives JSON { name: string }
+function encode<T: JSON>(value: T) -> Result<string, string> {
+  JSON.stringify(value)
+}
+print("{encode(User { name: \"Ada\" })}")
+0

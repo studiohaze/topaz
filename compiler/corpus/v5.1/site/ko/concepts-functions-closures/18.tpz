@@ -1,0 +1,29 @@
+// 명확한 함수 이름
+function 사용자이메일유효성검사(이메일: string) -> bool {
+    return 이메일.contains("@") && 이메일.contains(".")
+}
+
+function 주문총액계산(주문항목들: Array<{ 가격센트: int, 수량: int }>) -> int {
+    return 주문항목들
+        |> map(_, 항목 => 항목.가격센트 * 항목.수량)
+        |> reduce(_, 0, (합계, 금액) => 합계 + 금액)
+}
+
+// 단일 책임 원칙
+function 사용자데이터파싱(원시데이터: string) -> { 이름: string, 나이: int } {
+    // 파싱만 담당 — toInt는 Option<int>를 반환합니다
+    let 부분들 = 원시데이터.split(",")
+    let 나이 = match toInt(부분들[1].trim()) {
+        case Some(값) => 값
+        case None => 0
+    }
+    return {
+        이름: 부분들[0].trim(),
+        나이: 나이
+    }
+}
+
+function 사용자데이터검증(사용자: { 이름: string, 나이: int }) -> bool {
+    // 검증만 담당
+    return 사용자.이름 != "" && 사용자.나이 > 0
+}

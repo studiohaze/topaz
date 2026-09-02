@@ -1,0 +1,23 @@
+print(value: string) -> ()
+toInt(text: string) -> Option<int>
+
+s.scalars() -> Array<string>            // s: string; single-scalar strings
+
+Array.of<T>(...items: T) -> Array<T>
+arr.push(x: T) -> ()
+arr.get(i: int) -> Option<T>            // None for i < 0 or i >= arr.length
+arr.length: int
+
+Map.new<K, V>() -> Map<K, V>
+m.insert(k: K, v: V) -> ()
+m.get(k: K) -> Option<V>                // None when the key is absent
+m.remove(k: K) -> Option<V>             // Some(old) if present, else None
+m.keys: Array<K>
+
+Set.of<T>(...items: T) -> Set<T>
+s.add(x: T) -> ()
+s.remove(x: T) -> bool                  // true iff an element was removed
+
+map<T, U>(xs: Iterable<T>, f: (T) -> U) -> Array<U>
+filter<T>(xs: Iterable<T>, f: (T) -> bool) -> Array<T>
+reduce<T, U>(xs: Iterable<T>, initial: U, f: (U, T) -> U) -> U

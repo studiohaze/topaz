@@ -1,0 +1,3 @@
+newtype UserId = int
+let id: UserId = UserId(1)
+id.other()

@@ -1,0 +1,10 @@
+
+function makeBytes() {
+    Bytes.encodeUtf8("AZ")
+}
+function main() -> int {
+    let bytes = makeBytes()
+    let hex = bytes.toHex()
+    hex.byteLength()
+}
+main()

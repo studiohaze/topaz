@@ -1,0 +1,2 @@
+let o = Some(5)
+o?.get(print("d"))

@@ -1,0 +1,23 @@
+function profileSnapshot() -> { name: string } {
+    { name: "Topaz" }
+}
+
+function recentActivity() -> Array<string> {
+    Array.of("login", "edit")
+}
+
+function emptyProfile() -> { name: string } {
+    { name: "offline" }
+}
+
+let dashboard = concurrent(timeout: 3s) {
+    profile: profileSnapshot()
+    activity: recentActivity()
+} else {
+    {
+        profile: emptyProfile(),
+        activity: Array.of("offline")
+    }
+}
+
+print("Activity items: {dashboard.activity.length}")

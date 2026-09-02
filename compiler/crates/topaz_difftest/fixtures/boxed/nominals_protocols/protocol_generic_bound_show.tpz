@@ -1,0 +1,6 @@
+record User derives Show { name: string }
+function render<T: Show>(value: T) -> string {
+  Show.show(value)
+}
+print(render(User { name: "Ada" }))
+0

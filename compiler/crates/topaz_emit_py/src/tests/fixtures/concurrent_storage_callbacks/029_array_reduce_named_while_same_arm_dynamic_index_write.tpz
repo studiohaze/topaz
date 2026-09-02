@@ -1,0 +1,33 @@
+
+function mul(acc: int, x: int) -> int {
+    acc * x
+}
+
+function sub(acc: int, x: int) -> int {
+    acc - x
+}
+
+function add(acc: int, x: int) -> int {
+    acc + x
+}
+
+function choose(i: int) -> int {
+    concurrent {
+        slow: {
+            let mut cbs = [add, sub]
+            let mut out = -9
+            let mut n = 0
+            while n < 1 {
+                cbs[i] = mul
+                let xs = [1, 2, 3]
+                out = xs.reduce(initial: 10, f: cbs[i])
+                n = n + 1
+            }
+            out
+        }
+        fast: 0
+    }
+    0
+}
+
+choose(1)

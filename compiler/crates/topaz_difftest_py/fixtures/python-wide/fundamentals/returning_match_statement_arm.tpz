@@ -1,0 +1,12 @@
+
+function f(n: int) -> int {
+    match n {
+        case 0 => return 5
+        case _ => print("go")
+    }
+    6
+}
+function main() -> int {
+    f(0) + f(1)
+}
+main()

@@ -1,0 +1,25 @@
+
+let x = 2
+let mut result = 0
+match x {
+    case n if loop {
+        print("stmt-guard-one")
+        break n == 1
+    } => {
+        result = 10
+    }
+    case n if loop {
+        print("stmt-guard-two")
+        break n == 2
+    } => {
+        result = loop {
+            print("stmt-body-two")
+            break 20
+        }
+    }
+    case _ => {
+        result = 0
+    }
+}
+print("{result}")
+result

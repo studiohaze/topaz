@@ -1,0 +1,145 @@
+---
+title: '토파즈 시작하기'
+description: 'v0.3 툴체인으로 첫 토파즈 프로그램 실행하기: hello, 10줄 투어, 실제 폴트, 두 파일짜리 모듈 유닛.'
+covers: '§4, §5, §6, §7, §9, §10, §12, §13a, §16, §17, §22'
+---
+
+> **Pre-release 안내**: 토파즈 툴체인(v0.3)은 실재하고 동작하지만 아직 배포되지 않습니다 — 오픈소스 공개 전까지 비공개 CI에서 돌고, 배포 채널은 공개와 함께 옵니다. 이 페이지의 모든 프로그램은 보이는 그대로 v0.3에서 실행되었고, 출력은 사이트 검증기가 바이트 단위로 고정합니다. 오늘 무엇이 존재하고 무엇이 그것을 증명하는지는 [툴체인 상태](/ko/docs/status)에서 확인할 수 있습니다.
+
+## 첫 프로그램
+
+`hello.tpz` 파일을 만듭니다:
+
+```topaz
+let greeting = "Hello, Topaz!"
+print(greeting)
+```
+
+실행합니다:
+
+```text
+topaz run hello.tpz
+```
+
+```text output
+Hello, Topaz!
+```
+
+이것이 전부입니다: 파일 하나, `topaz run`, 출력. 프로젝트 스캐폴딩도, 매니페스트도, 빌드 단계도 없습니다.
+
+## 10줄 투어
+
+`tour.tpz`는 언어의 핵심을 훑습니다 — 가드와 범위를 쓰는 `match`, 가변 `Map`, 고차 함수, 옵셔널 폴백:
+
+```topaz
+function classify(n: int) -> string {
+    return match n {
+        case 0 => "zero"
+        case x if x < 0 => "negative"
+        case 1..99 => "small"
+        case _ => "large"
+    }
+}
+
+let mut report: Map<string, string> = Map.new()
+for n in [-5, 0, 42, 1000] {
+    report.insert("{n}", classify(n))
+}
+
+print("{report.keys}")
+print("{map([1, 2, 3], (x: int) => x * x)}")
+print("{toInt("42") ?? 0}")
+```
+
+```text
+topaz run tour.tpz
+```
+
+```text output
+[-5, 0, 42, 1000]
+[1, 4, 9]
+42
+```
+
+눈여겨볼 세 가지:
+
+- `match`는 표현식입니다 — `classify`는 그 결과를 그대로 반환합니다. arm에는 리터럴, 범위, 바인딩, `if` 가드가 옵니다.
+- `"{…}"` 보간이 문자열 포매팅의 유일한 방법이고, `report.keys`를 포함해 모든 값에 동작합니다.
+- `toInt("42")`는 옵셔널을 반환하고 `??`가 폴백을 제공합니다. 아무것도 조용히 변환되지 않습니다.
+
+## 프로그램이 멈출 때
+
+배열 범위를 벗어난 인덱스는 토파즈에서 복구 가능한 에러가 아닙니다 — **폴트**(fault)입니다: 프로그램이 멈추고 툴체인이 진단을 렌더링합니다. `fault.tpz`:
+
+```topaz
+let xs = [10, 20, 30]
+let i = 7
+print("{xs[i]}")
+```
+
+```text
+topaz run fault.tpz
+```
+
+```text output
+error[TPZ4001]: index 7 is out of bounds for an array of length 3
+ --> fault.tpz:3:9
+  |
+3 | print("{xs[i]}")
+  |         ^^^^^
+
+```
+
+프로세스는 0이 아닌 코드로 종료합니다. 폴트는 계약 위반의 표지이고, 처리할 것을 예상하는 부재는 옵셔널로 모델링합니다 — [에러 처리](/ko/docs/concepts/error-handling)를 참고하세요.
+
+## 두 파일로 보는 모듈
+
+`.tpz` 파일들이 모인 디렉터리가 **유닛**(unit)입니다. 파일은 이름으로 서로를 임포트하고, 가시성 제어는 `export` 하나뿐입니다. `util.tpz`:
+
+```topaz
+export function shout(s: string) -> string {
+    return s + "!"
+}
+
+export let greeting: string = "hello"
+```
+
+같은 디렉터리의 `main.tpz`:
+
+```topaz
+import util
+
+print(util.shout(util.greeting))
+```
+
+```text
+topaz run main.tpz
+```
+
+```text output
+hello!
+```
+
+리졸버는 엔트리 파일 옆에서 `util.tpz`를 찾습니다 — 매니페스트도, 경로 설정도 없습니다. 전체 규칙(경로, 충돌, 순환, 초기화 순서)은 [모듈](/ko/docs/concepts/modules)에 있습니다.
+
+## 툴체인 확인
+
+툴체인 빌드가 있다면 먼저 무엇인지 확인합니다:
+
+```text
+topaz version
+```
+
+```text output
+topaz 0.3.0 (Topaz v5.2, locked)
+```
+
+공개 인스톨러는 아직 없습니다 — 배포 진행은 [상태 페이지](/ko/docs/status)가 추적합니다.
+
+## 다음 단계
+
+- **[문법](/ko/docs/concepts/syntax)** — 언어의 표면 형태
+- **[데이터 타입](/ko/docs/concepts/data-types)** — 문자열, 숫자, 컬렉션, 레코드
+- **[함수와 클로저](/ko/docs/concepts/functions-closures)** — 함수형 코어
+- **[모듈](/ko/docs/concepts/modules)** — 멀티 파일 유닛 심화
+- **[툴체인 상태](/ko/docs/status)** — 오늘 무엇이 돌고, 무엇이 그것을 증명하는가

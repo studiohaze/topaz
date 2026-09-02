@@ -1,0 +1,8 @@
+
+function fallback() -> int {
+    6
+}
+
+let values: Array<Option<int>> = [Some(1)]
+let out = values[0]?.okOrElse(f: fallback)
+0

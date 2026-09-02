@@ -1,0 +1,1 @@
+Hash.hmacSha256(Bytes.encodeUtf8("Jefe"), Bytes.encodeUtf8("what do ya want for nothing?")).toHex()

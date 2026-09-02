@@ -1,0 +1,2 @@
+function f(tag: string = "x", ...xs: int) -> int { xs.length }
+f(...[1, 2], tag: "t", tag: "u")

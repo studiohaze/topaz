@@ -1,0 +1,5 @@
+function sum_until(n: int) { let mut s = 0
+for i in [1, 2, 3, 4] { if i > n { return s }
+s = s + i }
+s }
+sum_until(2)

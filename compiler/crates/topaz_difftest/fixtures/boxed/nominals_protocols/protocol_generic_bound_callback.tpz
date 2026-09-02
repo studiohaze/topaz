@@ -1,0 +1,5 @@
+record User derives Show { name: string }
+function render<T: Show>(value: T) -> string { Show.show(value) }
+let xs: Array<User> = [User { name: "Ada" }]
+print(xs.map<string>(render).join(","))
+0

@@ -1,0 +1,14 @@
+
+import model { Box as ForeignBox, makeBox }
+function copyBox(b: ForeignBox<int>) -> ForeignBox<int> {
+    b
+}
+function render(b: ForeignBox<int>, c: ForeignBox<string>) -> string {
+    "{b.value}:{c.value}"
+}
+function main() -> string {
+    let b = copyBox(makeBox(7))
+    let c = ForeignBox { value: "ok" }
+    render(b, c)
+}
+main()

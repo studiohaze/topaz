@@ -1,0 +1,42 @@
+{
+  "schema": "lispex.f15-provider-evidence/v1",
+  "subjects": {
+    "evaluator_source_revision": "e3909e56491b53c61a63efaff51b6093019d8b27",
+    "provider_wire_revision": "451027beb8daff90c09364a1fd38a2a9f3790e55",
+    "qualification_revision": "8e7d4bf2a1bc550b5e1315449002cf2938952ec4",
+    "artifact_sha256": "dd4cde2976d825ae99b542d308d87489ac96848e0710329dbb9173664d8c5ad8",
+    "executable_profile_id": "lispex/r7rs-rule-current-profile-bounded/1",
+    "feature_set_sha256": "6ff16159ab9c6758c1485b67c928a9b3b4a896e4f2ecf96e4cf3cbaf5ac22fae"
+  },
+  "execution_input": {
+    "path": "docs/bounded-execution/f15-final-provider-execution-inputs.v1.json",
+    "sha256": "6222dc50e99ca51ac85e6f214b2c03a692493c1aac9b6c9ec6b17c30bc10df28"
+  },
+  "kind": "post-closure-mutation",
+  "primaryEvidence": [
+    {
+      "path": "scripts/check-f15-full-provider-mutations.mjs",
+      "sha256": "f565769c2e56c2b13eb115877878e1c4978e3710cb5992cb60aab5ec89569646"
+    },
+    {
+      "path": "scripts/check-f15-full-provider-vectors.mjs",
+      "sha256": "2f26b12f41e949a5a54f959131b0f8f0f1052f7aecf9c59d56257356d87017c7"
+    },
+    {
+      "path": "products/full-embed-evaluator/v1.15.8/vectors/vectors.v1.json",
+      "sha256": "7455460787a0ce53d92d96834e055462b0d4407795c61033b0bdf274e5627337"
+    },
+    {
+      "path": "docs/bounded-execution/f15-final-provider-execution-inputs.v1.json",
+      "sha256": "6222dc50e99ca51ac85e6f214b2c03a692493c1aac9b6c9ec6b17c30bc10df28"
+    }
+  ],
+  "result": {
+    "status": "passed",
+    "generatedMutations": 253,
+    "detectedMutations": 253,
+    "malformedVectorCases": 14,
+    "survivors": 0,
+    "executionRevision": "8e7d4bf2a1bc550b5e1315449002cf2938952ec4"
+  }
+}

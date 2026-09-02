@@ -1,0 +1,7 @@
+newtype Box<T> = T
+let value: Box<int> = Box(7)
+let unwrapped: int = match value {
+    case found: Box<int> => found.value()
+    case _ => 0
+}
+print("{unwrapped}")

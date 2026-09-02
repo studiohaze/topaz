@@ -1,0 +1,5 @@
+[[package]]
+name = "dual_toolchain_fixture"
+version = "0.1.0"
+source = "root"
+manifest_hash = "sha256:0d16335d79b637dd434ae0f492694e2463f148d66b2d8d79192c6d6963d302fa"

@@ -1,0 +1,24 @@
+
+function add(a: int, b: int) -> int {
+    a + b
+}
+let xs: Option<Array<int>> = Some([1, 2, 3])
+let noneXs: Option<Array<int>> = None
+let reduced = loop {
+    print("initial")
+    break 0
+} |> xs?.reduce(add)
+let skipped = loop {
+    print("none-initial")
+    break 99
+} |> noneXs?.reduce(add)
+let reducedValue = match reduced {
+    case Some(n) => n
+    case None => 0
+}
+let skippedValue = match skipped {
+    case Some(_) => 100
+    case None => 1
+}
+print("{reducedValue}:{skippedValue}")
+reducedValue + skippedValue

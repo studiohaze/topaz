@@ -1,0 +1,4 @@
+match print {
+case f: (string) -> () => 1
+case _ => 0
+}

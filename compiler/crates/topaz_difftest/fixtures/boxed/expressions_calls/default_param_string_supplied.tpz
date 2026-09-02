@@ -1,0 +1,2 @@
+function f(x: string = "hi") { x }
+f("yo")

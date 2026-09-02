@@ -1,0 +1,12 @@
+
+function mark(label: string, fs: Array<(int) -> int>) -> Array<(int) -> int> {
+    print(label)
+    fs
+}
+function key(x: int) -> int { x }
+function main() -> string {
+    let mut xs: Option<Array<int>> = None
+    xs?.sortBy(...mark("none-sort", [key]))
+    "done"
+}
+main()

@@ -1,0 +1,12 @@
+// Ensure safety with explicit conversion — toInt returns Option<int>
+let stringNumber = "123"
+let actualNumber = match toInt(stringNumber) {
+    case Some(value) => value
+    case None => {
+        print("Number conversion failed")
+        0
+    }
+}
+
+let result = actualNumber + 100
+print("Safe calculation result: {result}")

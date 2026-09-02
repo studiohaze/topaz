@@ -1,0 +1,4 @@
+import utils.strings as str
+import net.url { encode as encodeUrl }
+
+let s = str.shout(encodeUrl("a b"))

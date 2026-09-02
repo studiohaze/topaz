@@ -1,0 +1,10 @@
+enum Color { Red, Blue }
+function d(c: Color, f: bool) -> string {
+  match c {
+    case Red if f => "rf"
+    case Red => "r"
+    case Blue => "b"
+  }
+}
+print("{d(Color.Red, true)}/{d(Color.Red, false)}/{d(Color.Blue, true)}")
+0

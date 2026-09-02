@@ -1,0 +1,37 @@
+import report_slug { slug }
+import src.policy { Policy, parsePolicy }
+
+function cell(row: Map<string, string>, name: string) -> Result<string, string> {
+  match row.get(name) {
+    case Some(value) => Ok(value)
+    case None => Err("missing CSV column {name}")
+  }
+}
+
+function acceptedLine(row: Map<string, string>, policy: Policy) -> Result<Option<string>, string> {
+  let name = cell(row, "name")?
+  let status = cell(row, "status")?
+  let scoreText = cell(row, "score")?
+  let score = match toInt(scoreText) {
+    case Some(value) => value
+    case None => return Err("invalid score `{scoreText}` for `{name}`")
+  }
+  if status != policy.requiredStatus || score < policy.minimumScore {
+    return Ok(None)
+  }
+  Ok(Some("{slug(name)?}:{score}"))
+}
+
+export function buildReport(csvText: string, policyText: string) -> Result<string, string> {
+  let policy = parsePolicy(policyText)?
+  let rows = CSV.parseWithHeader(csvText)?
+  let mut accepted: Array<string> = []
+  for row in rows {
+    match acceptedLine(row, policy)? {
+      case Some(line) => accepted.push(line)
+      case None => ()
+    }
+  }
+  let lines = accepted.sorted()
+  Ok("accepted={lines.length}\n{lines.join("\n")}")
+}

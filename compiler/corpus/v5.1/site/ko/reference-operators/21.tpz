@@ -1,0 +1,7 @@
+// 비싼 함수 호출을 뒤로
+let 결과 = 간단한조건() && 복잡한함수()
+
+// null 체크 최적화
+let 기본값 = "fallback"
+let 객체: Option<{ 속성: Option<{ 하위속성: string }> }> = None
+let 값 = 객체?.속성?.하위속성 ?? 기본값

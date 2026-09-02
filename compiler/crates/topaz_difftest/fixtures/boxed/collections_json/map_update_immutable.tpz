@@ -1,0 +1,2 @@
+let m = Map.new<string, int>()
+m.update("a", 1, (v) => v)

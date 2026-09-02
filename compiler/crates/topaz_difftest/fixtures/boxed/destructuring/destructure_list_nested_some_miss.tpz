@@ -1,0 +1,3 @@
+let v = [None, 7]
+let [Some(x), y] = v
+y

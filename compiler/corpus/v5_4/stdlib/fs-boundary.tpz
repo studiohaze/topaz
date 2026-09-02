@@ -1,0 +1,63 @@
+import std.bytes
+import std.fs
+import std.path
+
+function textResult(value: Result<string, string>) -> string {
+  match value {
+    case Ok(text) => text
+    case Err(error) => error
+  }
+}
+
+function unitResult(value: Result<(), string>) -> string {
+  match value {
+    case Ok(_) => "ok"
+    case Err(error) => error
+  }
+}
+
+function bytesResult(value: Result<Bytes, string>) -> string {
+  match value {
+    case Ok(raw) => raw.toHex()
+    case Err(error) => error
+  }
+}
+
+function listResult(value: Result<Array<{ name: string, kind: string, sizeBytes: Option<int> }>, string>) -> string {
+  match value {
+    case Ok(entries) => entries.map((entry) => {
+      let size = match entry.sizeBytes {
+        case Some(n) => "{n}"
+        case None => "none"
+      }
+      "{entry.name}:{entry.kind}:{size}"
+    }).join(",")
+    case Err(error) => error
+  }
+}
+
+function demo() -> Result<string, string> {
+  let inputPath = path.from("data//./input.txt")?
+  let outTextPath = path.from("out/result.txt")?
+  let outRawPath = path.from("out/raw.txt")?
+  let dataPath = path.from("data")?
+  let outPath = path.from("out")?
+
+  let before = textResult(fs.readText(inputPath))
+  let beforeBytes = bytesResult(fs.readBytes(inputPath))
+  let wroteText = unitResult(fs.writeText(outTextPath, "{before}/text"))
+  let wroteBytes = unitResult(fs.writeBytes(outRawPath, bytes.encodeUtf8("raw")))
+  let after = textResult(fs.readText(outTextPath))
+  let rawHex = bytesResult(fs.readBytes(outRawPath))
+  let missing = textResult(fs.readText("missing.txt"))
+  let rootList = listResult(fs.list("."))
+  let dataList = listResult(fs.list(dataPath))
+  let outList = listResult(fs.list(outPath))
+
+  Ok("{before}|{beforeBytes}|{wroteText}/{wroteBytes}|{after}|{rawHex}|{missing}|{rootList}|{dataList}|{outList}")
+}
+
+match demo() {
+  case Ok(line) => print(line)
+  case Err(error) => print(error)
+}

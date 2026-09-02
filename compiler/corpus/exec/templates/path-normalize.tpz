@@ -1,0 +1,3 @@
+let dir = "src\\app"
+let path = p"{dir}/main.tpz"
+print("{path}")

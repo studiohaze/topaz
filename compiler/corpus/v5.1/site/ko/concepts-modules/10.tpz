@@ -1,0 +1,5 @@
+// config.tpz — 거부됨
+export let cache = compute()         // 오류: `cache`보다 뒤에 선언된
+export let limit = 100               // `limit`에 닿음
+
+function compute() -> int { return limit * 2 }

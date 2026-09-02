@@ -1,0 +1,13 @@
+function 데이터처리(원본데이터: Array<int>) -> Array<int> {
+    let mut 결과: Array<int> = []
+    
+    for 항목 in 원본데이터 {
+        // 루프 내에서만 필요한 변수는 루프 내에서 선언
+        let 변환된값 = 항목 * 2 + 1
+        let 검증된값 = if 변환된값 > 0 { 변환된값 } else { 0 }
+        
+        결과.push(검증된값)
+    }
+    
+    return 결과
+}

@@ -1,0 +1,8 @@
+function f() -> Result<int, string> {
+  {
+    defer print("a")
+    let x = Err("e")?
+    Ok(x)
+  }
+}
+f()

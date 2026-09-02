@@ -1,0 +1,1617 @@
+// Collection and validation of protocols, conformances, and receiver methods.
+// Nominal formation precedes this leaf, and member capability lookup consumes
+// the resulting catalogs afterward.
+
+import types { SyntaxNode }
+import checker_types { TypeValue }
+import checker.model {
+  CallSignature,
+  CheckerService,
+  CheckerState,
+  EnumDefinition,
+  FunctionDefinition,
+  ModuleSyntax,
+  NewtypeDefinition,
+  ProtocolConformance,
+  ProtocolDefinition,
+  ProtocolMethodDefinition,
+  ReceiverMethodDefinition,
+  RecordDefinition,
+  emptyType,
+  functionType,
+  nominal,
+  nominalInModule,
+  primitive,
+  rigid,
+}
+import checker.type_algebra {
+  typeEqual,
+  typeListText,
+  typeText,
+}
+import checker.syntax_index {
+  addDiagnostic,
+  bindSymbol,
+  boolAttribute,
+  child,
+  children,
+  declarationFor,
+  definitionNameKey,
+  enumDefinitionIndex,
+  functionBounds,
+  moduleIdentityAt,
+  moduleIndexByIdentity,
+  newtypeDefinitionIndex,
+  protocolDefinition,
+  protocolMethodDefinition,
+  recordDefinitionIndex,
+  referenceFor,
+  registerTypeParameters,
+  resolvedTypeOfReference,
+  spanKey,
+  symbolTypeByName,
+  text,
+  typeParameterNames,
+  unwrapExport,
+}
+import checker.nominals {
+  formType,
+  substitute,
+}
+
+export function protocolConformanceIndex(
+  state: CheckerState,
+  moduleIndex: int,
+  typeName: string,
+  protocol: string,
+) -> int {
+  match state.conformanceIndexes.get(conformanceKey(
+    moduleIndex,
+    typeName,
+    protocol,
+  )) {
+    case Some(index) => index
+    case None => -1
+  }
+}
+
+export function appendConformance(
+  state: CheckerState,
+  moduleIndex: int,
+  typeName: string,
+  protocol: string,
+  derived: bool,
+) -> () {
+  let mut conformances = state.conformances
+  let index = conformances.length
+  let mut indexes = state.conformanceIndexes
+  indexes.insert(conformanceKey(moduleIndex, typeName, protocol), index)
+  let mut typeIndexes = state.conformanceTypeIndexes
+  typeIndexes.insert(conformanceTypeKey(typeName, protocol), index)
+  conformances.push(ProtocolConformance {
+    moduleIndex: moduleIndex,
+    typeName: typeName,
+    protocol: protocol,
+    derived: derived,
+  })
+  ()
+}
+
+function builtinProtocolDefinition(name: string) -> Option<ProtocolDefinition> {
+  let conforming = rigid("Self", "builtin::{name}::protocol")
+  if name == "Show" {
+    return Some(ProtocolDefinition {
+      name: name,
+      methods: [ProtocolMethodDefinition {
+        name: "show",
+        parameterNames: ["value"],
+        typeValue: functionType([conforming], [], primitive("string")),
+      }],
+    })
+  }
+  if name == "Eq" {
+    return Some(ProtocolDefinition {
+      name: name,
+      methods: [ProtocolMethodDefinition {
+        name: "equals",
+        parameterNames: ["a", "b"],
+        typeValue: functionType(
+          [conforming, conforming],
+          [],
+          primitive("bool"),
+        ),
+      }],
+    })
+  }
+  if name == "Order" {
+    return Some(ProtocolDefinition {
+      name: name,
+      methods: [ProtocolMethodDefinition {
+        name: "compare",
+        parameterNames: ["a", "b"],
+        typeValue: functionType(
+          [conforming, conforming],
+          [],
+          primitive("int"),
+        ),
+      }],
+    })
+  }
+  if name == "JSON" {
+    return Some(ProtocolDefinition { name: name, methods: [] })
+  }
+  None
+}
+
+function protocolDefinitionForImpl(
+  state: CheckerState,
+  moduleIndex: int,
+  name: string,
+) -> Option<ProtocolDefinition> {
+  match builtinProtocolDefinition(name) {
+    case Some(found) => Some(found)
+    case None => protocolDefinition(state, moduleIndex, name)
+  }
+}
+
+record OwnNominalImplTarget {
+  typeValue: TypeValue,
+  typeParameterCount: int,
+}
+
+function ownNominalImplTarget(
+  state: CheckerState,
+  moduleIndex: int,
+  name: string,
+) -> Option<OwnNominalImplTarget> {
+  let recordIndex = recordDefinitionIndex(state, moduleIndex, name)
+  if recordIndex >= 0 {
+    return match state.records.get(recordIndex) {
+      case Some(definition) => Some(OwnNominalImplTarget {
+        typeValue: nominalInModule(
+          "nominal-record",
+          name,
+          [],
+          moduleIdentityAt(state, moduleIndex),
+        ),
+        typeParameterCount: definition.typeParameters.length,
+      })
+      case None => None
+    }
+  }
+  let enumIndex = enumDefinitionIndex(state, moduleIndex, name)
+  if enumIndex >= 0 {
+    return match state.enums.get(enumIndex) {
+      case Some(definition) => Some(OwnNominalImplTarget {
+        typeValue: nominalInModule(
+          "enum",
+          name,
+          [],
+          moduleIdentityAt(state, moduleIndex),
+        ),
+        typeParameterCount: definition.typeParameters.length,
+      })
+      case None => None
+    }
+  }
+  let newtypeIndex = newtypeDefinitionIndex(state, moduleIndex, name)
+  if newtypeIndex >= 0 {
+    return match state.newtypes.get(newtypeIndex) {
+      case Some(definition) => Some(OwnNominalImplTarget {
+        typeValue: nominalInModule(
+          "newtype",
+          name,
+          [],
+          moduleIdentityAt(state, moduleIndex),
+        ),
+        typeParameterCount: definition.typeParameters.length,
+      })
+      case None => None
+    }
+  }
+  None
+}
+
+function predeclareProtocolImplMethod(
+  service: CheckerService,
+  state: CheckerState,
+  module: ModuleSyntax,
+  declaration: SyntaxNode,
+) -> () {
+  let prepared = prepareFunctionDeclaration(
+    service,
+    state,
+    module,
+    declaration,
+    None,
+  )
+  let mut functions = state.functions
+  let index = functions.length
+  functions.push(prepared.definition)
+  let mut pending = state.pendingFunctions
+  pending.push(prepared.definition.result.kind == "unknown")
+  let mut indexes = state.functionIndexes
+  indexes.insert(
+    spanKey(
+      module.moduleIndex,
+      prepared.nameNode.lo,
+      prepared.nameNode.hi,
+    ),
+    index,
+  )
+  ()
+}
+
+function protocolImplMethodDefinition(
+  state: CheckerState,
+  moduleIndex: int,
+  declaration: SyntaxNode,
+) -> Option<FunctionDefinition> {
+  let nameNode = match child(declaration, "name") {
+    case Some(found) => found
+    case None => return None
+  }
+  match state.functionIndexes.get(spanKey(
+    moduleIndex,
+    nameNode.lo,
+    nameNode.hi,
+  )) {
+    case Some(index) => state.functions.get(index)
+    case None => None
+  }
+}
+
+function protocolImplExpectedType(
+  method: ProtocolMethodDefinition,
+  receiver: TypeValue,
+) -> TypeValue {
+  substitute(method.typeValue, ["Self"], [receiver])
+}
+
+function protocolImplSignatureText(value: TypeValue) -> string {
+  "(" + typeListText(value.parameters) + ") -> `" +
+    typeText(match value.result.get(0) {
+      case Some(found) => found
+      case None => emptyType("unknown")
+    }) + "`"
+}
+
+function registerManualConformance(
+  state: CheckerState,
+  moduleIndex: int,
+  typeName: string,
+  protocol: string,
+) -> () {
+  appendConformance(state, moduleIndex, typeName, protocol, false)
+}
+
+record ProtocolImplCheckContext {
+  state: CheckerState,
+  module: ModuleSyntax,
+  protocol: string,
+  typeName: string,
+  definition: ProtocolDefinition,
+  receiver: TypeValue,
+}
+
+function checkProtocolImplMethod(
+  context: ProtocolImplCheckContext,
+  method: SyntaxNode,
+  seen: Set<string>,
+) -> bool {
+  let declaration = match child(method, "declaration") {
+    case Some(found) => found
+    case None => return false
+  }
+  let methodNameNode = match child(declaration, "name") {
+    case Some(found) => found
+    case None => return false
+  }
+  let methodName = text(context.module.source, methodNameNode)
+  match protocolMethodDefinition(
+    context.definition,
+    methodName,
+  ) {
+    case Some(expectedMethod) => checkProtocolImplMethodAgainstDefinition(
+      context,
+      method,
+      seen,
+      declaration,
+      methodNameNode,
+      methodName,
+      expectedMethod,
+    )
+    case None => {
+      addDiagnostic(
+        context.state,
+        context.module.moduleIndex,
+        "TPZ5022",
+        "protocol `{context.protocol}` has no method `{methodName}`",
+        "",
+        methodNameNode,
+      )
+      false
+    }
+  }
+}
+
+function checkProtocolImplMethodAgainstDefinition(
+  context: ProtocolImplCheckContext,
+  method: SyntaxNode,
+  seen: Set<string>,
+  declaration: SyntaxNode,
+  methodNameNode: SyntaxNode,
+  methodName: string,
+  expectedMethod: ProtocolMethodDefinition,
+) -> bool {
+  if seen.contains(methodName) {
+    addDiagnostic(
+      context.state,
+      context.module.moduleIndex,
+      "TPZ5008",
+      "method `{methodName}` is implemented twice in `impl {context.protocol}<{context.typeName}>`",
+      "",
+      methodNameNode,
+    )
+    return false
+  }
+  let mut acceptedNames = seen
+  acceptedNames.add(methodName)
+  if boolAttribute(method, "exported") {
+    addDiagnostic(
+      context.state,
+      context.module.moduleIndex,
+      "TPZ5022",
+      "protocol implementation method `{context.protocol}.{methodName}` is module-local and cannot be exported",
+      "",
+      method,
+    )
+    return false
+  }
+  if children(declaration, "typeParameters").length > 0 {
+    addDiagnostic(
+      context.state,
+      context.module.moduleIndex,
+      "TPZ5022",
+      "protocol implementation method `{context.protocol}.{methodName}` cannot be generic",
+      "",
+      methodNameNode,
+    )
+    return false
+  }
+  match child(declaration, "returnType") {
+    case Some(_) => ()
+    case None => {
+      addDiagnostic(
+        context.state,
+        context.module.moduleIndex,
+        "TPZ5022",
+        "protocol implementation method `{context.protocol}.{methodName}` requires an explicit return type (use `-> ()` for unit)",
+        "",
+        methodNameNode,
+      )
+      return false
+    }
+  }
+  for parameter in children(declaration, "parameters") {
+    if boolAttribute(parameter, "variadic") {
+      addDiagnostic(
+        context.state,
+        context.module.moduleIndex,
+        "TPZ5022",
+        "protocol implementation method `{context.protocol}.{methodName}` cannot be variadic",
+        "",
+        parameter,
+      )
+      return false
+    }
+  }
+  for parameter in children(declaration, "parameters") {
+    match child(parameter, "default") {
+      case Some(_) => {
+        addDiagnostic(
+          context.state,
+          context.module.moduleIndex,
+          "TPZ5022",
+          "protocol implementation method `{context.protocol}.{methodName}` cannot declare parameter defaults",
+          "",
+          parameter,
+        )
+        return false
+      }
+      case None => ()
+    }
+  }
+  let actualDefinition = match protocolImplMethodDefinition(
+    context.state,
+    context.module.moduleIndex,
+    declaration,
+  ) {
+    case Some(found) => found
+    case None => return false
+  }
+  let actualType = functionType(
+    actualDefinition.parameterTypes,
+    actualDefinition.variadic,
+    actualDefinition.result,
+  )
+  let expectedType = protocolImplExpectedType(
+    expectedMethod,
+    context.receiver,
+  )
+  if typeEqual(actualType, expectedType) {
+    return true
+  }
+  addDiagnostic(
+    context.state,
+    context.module.moduleIndex,
+    "TPZ5022",
+    "protocol implementation method `{context.protocol}.{methodName}` must match the declared signature exactly; expected {protocolImplSignatureText(expectedType)}, found {protocolImplSignatureText(actualType)}",
+    "",
+    methodNameNode,
+  )
+  false
+}
+
+function collectProtocolImpl(
+  service: CheckerService,
+  state: CheckerState,
+  module: ModuleSyntax,
+  statement: SyntaxNode,
+) -> () {
+  let item = unwrapExport(statement)
+  if item.kind != "statement/impl" {
+    return ()
+  }
+  if statement.kind == "statement/export" {
+    return ()
+  }
+  let targetNode = match child(item, "target") {
+    case Some(found) => found
+    case None => return ()
+  }
+  let protocolNode = match child(item, "name") {
+    case Some(found) => found
+    case None => return ()
+  }
+  for method in children(item, "methods") {
+    match child(method, "declaration") {
+      case Some(declaration) => predeclareProtocolImplMethod(
+        service,
+        state,
+        module,
+        declaration,
+      )
+      case None => ()
+    }
+  }
+  let protocol = text(module.source, protocolNode)
+  let typeName = text(module.source, targetNode)
+  match protocolDefinitionForImpl(
+    state,
+    module.moduleIndex,
+    protocol,
+  ) {
+    case Some(protocolDefinitionValue) => collectProtocolImplForDefinition(
+      state,
+      module,
+      item,
+      targetNode,
+      protocolNode,
+      protocol,
+      typeName,
+      protocolDefinitionValue,
+    )
+    case None => {
+      addDiagnostic(
+        state,
+        module.moduleIndex,
+        "TPZ5022",
+        "unknown protocol `{protocol}` in `impl {protocol}<{typeName}>`",
+        "",
+        protocolNode,
+      )
+      ()
+    }
+  }
+}
+
+function collectProtocolImplForDefinition(
+  state: CheckerState,
+  module: ModuleSyntax,
+  item: SyntaxNode,
+  targetNode: SyntaxNode,
+  protocolNode: SyntaxNode,
+  protocol: string,
+  typeName: string,
+  protocolDefinitionValue: ProtocolDefinition,
+) -> () {
+  if protocol == "JSON" {
+    addDiagnostic(
+      state,
+      module.moduleIndex,
+      "TPZ5022",
+      "`JSON` conformance is derive-only; use `derives JSON`",
+      "",
+      protocolNode,
+    )
+    return ()
+  }
+  match ownNominalImplTarget(
+    state,
+    module.moduleIndex,
+    typeName,
+  ) {
+    case Some(target) => collectProtocolImplForTarget(
+      state,
+      module,
+      item,
+      targetNode,
+      protocolNode,
+      protocol,
+      typeName,
+      protocolDefinitionValue,
+      target,
+    )
+    case None => {
+      let ownProtocol = match builtinProtocolDefinition(protocol) {
+        case Some(_) => false
+        case None => true
+      }
+      addDiagnostic(
+        state,
+        module.moduleIndex,
+        "TPZ5520",
+        if ownProtocol {
+          "cannot implement `{protocol}` for `{typeName}`: a protocol impl's conforming type must be an own-module record/enum/newtype"
+        } else {
+          "cannot implement foreign protocol `{protocol}` for foreign type `{typeName}` (orphan rule §4.2): the protocol or the type must be defined in this module"
+        },
+        "",
+        targetNode,
+      )
+      ()
+    }
+  }
+}
+
+function collectProtocolImplForTarget(
+  state: CheckerState,
+  module: ModuleSyntax,
+  item: SyntaxNode,
+  targetNode: SyntaxNode,
+  protocolNode: SyntaxNode,
+  protocol: string,
+  typeName: string,
+  protocolDefinitionValue: ProtocolDefinition,
+  target: OwnNominalImplTarget,
+) -> () {
+  if target.typeParameterCount > 0 {
+    addDiagnostic(
+      state,
+      module.moduleIndex,
+      "TPZ5022",
+      "cannot implement protocol `{protocol}` for generic nominal `{typeName}` yet; generic conformance binders are not defined",
+      "",
+      targetNode,
+    )
+    return ()
+  }
+  let existingIndex = protocolConformanceIndex(
+    state,
+    module.moduleIndex,
+    typeName,
+    protocol,
+  )
+  if existingIndex >= 0 {
+    let how = match state.conformances.get(existingIndex) {
+      case Some(existing) => if existing.derived {
+        "via `derives`"
+      } else {
+        "by a previous `impl`"
+      }
+      case None => "by a previous `impl`"
+    }
+    addDiagnostic(
+      state,
+      module.moduleIndex,
+      "TPZ5521",
+      "`{typeName}` already conforms to `{protocol}` {how}; a conformance must be unique",
+      "",
+      targetNode,
+    )
+    return ()
+  }
+  let mut seen: Set<string> = set {}
+  let mut valid = true
+  let context = ProtocolImplCheckContext {
+    state: state,
+    module: module,
+    protocol: protocol,
+    typeName: typeName,
+    definition: protocolDefinitionValue,
+    receiver: target.typeValue,
+  }
+  for method in children(item, "methods") {
+    if !checkProtocolImplMethod(context, method, seen) {
+      valid = false
+    }
+  }
+  for required in protocolDefinitionValue.methods {
+    if !seen.contains(required.name) {
+      addDiagnostic(
+        state,
+        module.moduleIndex,
+        "TPZ5022",
+        "`impl {protocol}<{typeName}>` is missing method `{required.name}`",
+        "",
+        protocolNode,
+      )
+      valid = false
+    }
+  }
+  if valid {
+    registerManualConformance(
+      state,
+      module.moduleIndex,
+      typeName,
+      protocol,
+    )
+  }
+  ()
+}
+
+export function collectProtocolImpls(service: CheckerService, state: CheckerState) -> () {
+  for module in state.modules {
+    for statement in module.root.children {
+      collectProtocolImpl(service, state, module, statement)
+    }
+  }
+  ()
+}
+
+function receiverMethodKey(
+  moduleIndex: int,
+  typeName: string,
+  methodName: string,
+) -> string {
+  definitionNameKey(moduleIndex, "{typeName}.{methodName}")
+}
+
+export function conformanceTypeKey(typeName: string, protocol: string) -> string {
+  "{protocol.byteLength()}:{protocol}{typeName}"
+}
+
+function conformanceKey(
+  moduleIndex: int,
+  typeName: string,
+  protocol: string,
+) -> string {
+  definitionNameKey(moduleIndex, conformanceTypeKey(typeName, protocol))
+}
+
+function builtinReceiverTypeName(name: string) -> bool {
+  match name {
+    case "int" | "float" | "string" | "bool" | "template" | "Array" | "Map" |
+      "Set" | "Option" | "Result" | "JSONValue" | "File" | "Bytes" |
+      "ByteBuffer" | "Path" | "Regex" | "Match" | "TOMLValue" | "URL" |
+      "Date" | "BigInt" | "Decimal" | "RoundingMode" => true
+    case _ => false
+  }
+}
+
+function reservedReceiverMethodName(name: string) -> bool {
+  match name {
+    case "atLeast" | "atMost" | "scalars" | "startsWith" | "endsWith" |
+      "contains" | "indexOf" | "lastIndexOf" | "trim" | "trimStart" |
+      "trimEnd" | "byteLength" | "codePointAt" | "split" | "slice" |
+      "replace" | "okOr" | "okOrElse" | "map" | "flatMap" | "filter" |
+      "reduce" | "push" | "get" | "length" | "join" | "sorted" |
+      "sortedBy" | "pop" | "clear" | "reverse" | "insert" | "removeAt" |
+      "sort" | "sortBy" | "retain" | "getOr" | "remove" | "keys" |
+      "values" | "entries" | "isEmpty" | "containsKey" | "update" |
+      "mapValues" | "add" | "toArray" | "union" | "intersection" |
+      "difference" | "read" | "write" | "close" | "tag" | "parts" |
+      "kind" | "isNull" | "asString" | "asBool" | "asInt" |
+      "numberText" | "at" | "asArray" | "decodeUtf8" | "toHex" |
+      "toBase64" | "set" | "fill" | "copy" | "toBytes" | "parent" |
+      "fileName" | "extension" | "withExtension" | "normalize" |
+      "toString" | "isMatch" | "find" | "findAll" | "replaceAll" |
+      "start" | "end" | "text" | "groups" | "named" | "scheme" |
+      "host" | "path" | "query" | "fragment" | "toIso" | "addDays" |
+      "year" | "month" | "day" | "toInt" | "div" | "mod" | "scale" |
+      "round" | "value" => true
+    case _ => false
+  }
+}
+
+function bareSelfParameter(source: Bytes, parameter: SyntaxNode) -> bool {
+  let nameNode = match child(parameter, "name") {
+    case Some(found) => found
+    case None => return false
+  }
+  let implicitType = match child(parameter, "type") {
+    case Some(found) => found.kind == "type/named" &&
+      found.lo == nameNode.lo && found.hi == nameNode.hi
+    case None => false
+  }
+  let noDefault = match child(parameter, "default") {
+    case Some(_) => false
+    case None => true
+  }
+  text(source, nameNode) == "self" && !boolAttribute(parameter, "variadic") && implicitType &&
+    noDefault
+}
+
+function predeclareReceiverImplMethod(
+  service: CheckerService,
+  state: CheckerState,
+  module: ModuleSyntax,
+  declaration: SyntaxNode,
+  typeName: string,
+  receiver: TypeValue,
+  exported: bool,
+) -> () {
+  let prepared = prepareFunctionDeclaration(
+    service,
+    state,
+    module,
+    declaration,
+    Some(receiver),
+  )
+  let definition = prepared.definition
+  let mut functions = state.functions
+  let functionIndex = functions.length
+  functions.push(definition)
+  let mut pending = state.pendingFunctions
+  pending.push(definition.result.kind == "unknown")
+  let mut functionIndexes = state.functionIndexes
+  functionIndexes.insert(
+    spanKey(module.moduleIndex, prepared.nameNode.lo, prepared.nameNode.hi),
+    functionIndex,
+  )
+  let mut receiverMethods = state.receiverMethods
+  let methodIndex = receiverMethods.length
+  receiverMethods.push(ReceiverMethodDefinition {
+    moduleIndex: module.moduleIndex,
+    typeName: typeName,
+    name: definition.name,
+    functionIndex: functionIndex,
+    exported: exported,
+  })
+  let mut indexes = state.receiverMethodIndexes
+  indexes.insert(
+    receiverMethodKey(module.moduleIndex, typeName, definition.name),
+    methodIndex,
+  )
+  ()
+}
+
+function collectReceiverImplMethod(
+  service: CheckerService,
+  state: CheckerState,
+  module: ModuleSyntax,
+  method: SyntaxNode,
+  declaration: SyntaxNode,
+  typeName: string,
+  receiver: TypeValue,
+) -> () {
+  let methodNameNode = match child(declaration, "name") {
+    case Some(found) => found
+    case None => declaration
+  }
+  let methodName = text(module.source, methodNameNode)
+  let parameters = children(declaration, "parameters")
+  if parameters.length == 0 {
+    addDiagnostic(
+      state,
+      module.moduleIndex,
+      "TPZ5022",
+      "method `{methodName}` on `{typeName}` must take `self` as its first parameter",
+      "",
+      methodNameNode,
+    )
+    return ()
+  }
+  let first = parameters[0]
+  if !bareSelfParameter(module.source, first) {
+    addDiagnostic(
+      state,
+      module.moduleIndex,
+      "TPZ5022",
+      "method `{methodName}` on `{typeName}` must take bare `self` as its first parameter (no type annotation, default, or variadic marker)",
+      "",
+      first,
+    )
+    return ()
+  }
+  if children(declaration, "typeParameters").length > 0 {
+    addDiagnostic(
+      state,
+      module.moduleIndex,
+      "TPZ5022",
+      "generic methods are not supported yet (method `{methodName}`)",
+      "",
+      methodNameNode,
+    )
+    return ()
+  }
+  if reservedReceiverMethodName(methodName) {
+    addDiagnostic(
+      state,
+      module.moduleIndex,
+      "TPZ5022",
+      "method name `{methodName}` on `{typeName}` collides with a builtin member; choose another name",
+      "",
+      methodNameNode,
+    )
+    return ()
+  }
+  let key = receiverMethodKey(module.moduleIndex, typeName, methodName)
+  match state.receiverMethodIndexes.get(key) {
+    case Some(_) => {
+      addDiagnostic(
+        state,
+        module.moduleIndex,
+        "TPZ5008",
+        "method `{methodName}` is already defined for `{typeName}`",
+        "",
+        methodNameNode,
+      )
+      return ()
+    }
+    case None => ()
+  }
+  let recordIndex = recordDefinitionIndex(
+    state,
+    module.moduleIndex,
+    typeName,
+  )
+  let mut fieldCollision = false
+  match state.records.get(recordIndex) {
+    case Some(definition) => for field in definition.fields {
+      if field.name == methodName {
+        fieldCollision = true
+      }
+    }
+    case None => ()
+  }
+  if fieldCollision {
+    addDiagnostic(
+      state,
+      module.moduleIndex,
+      "TPZ5022",
+      "method `{methodName}` on `{typeName}` collides with a field of the same name; rename the method (a field shadows a method)",
+      "",
+      methodNameNode,
+    )
+    return ()
+  }
+  predeclareReceiverImplMethod(
+    service,
+    state,
+    module,
+    declaration,
+    typeName,
+    receiver,
+    boolAttribute(method, "exported"),
+  )
+  ()
+}
+
+function collectReceiverImpl(
+  service: CheckerService,
+  state: CheckerState,
+  module: ModuleSyntax,
+  statement: SyntaxNode,
+) -> () {
+  let item = unwrapExport(statement)
+  if item.kind != "statement/impl" {
+    return ()
+  }
+  if statement.kind == "statement/export" {
+    let nameNode = match child(item, "name") {
+      case Some(found) => found
+      case None => item
+    }
+    addDiagnostic(
+      state,
+      module.moduleIndex,
+      "TPZ5022",
+      "an `impl` block cannot be exported; mark individual methods with `export`",
+      "",
+      nameNode,
+    )
+    return ()
+  }
+  match child(item, "target") {
+    case Some(_) => return ()
+    case None => ()
+  }
+  let nameNode = match child(item, "name") {
+    case Some(found) => found
+    case None => return ()
+  }
+  let typeName = text(module.source, nameNode)
+  match ownNominalImplTarget(
+    state,
+    module.moduleIndex,
+    typeName,
+  ) {
+    case Some(target) => collectReceiverImplForTarget(
+      service,
+      state,
+      module,
+      item,
+      nameNode,
+      typeName,
+      target,
+    )
+    case None => {
+      let what = if builtinReceiverTypeName(typeName) {
+        "a builtin type"
+      } else {
+        "not a declared record/enum/newtype in this module"
+      }
+      addDiagnostic(
+        state,
+        module.moduleIndex,
+        "TPZ5022",
+        "cannot define methods on `{typeName}` ({what}); `impl` is only allowed on an own-module record, enum, or newtype",
+        "",
+        nameNode,
+      )
+      ()
+    }
+  }
+}
+
+function collectReceiverImplForTarget(
+  service: CheckerService,
+  state: CheckerState,
+  module: ModuleSyntax,
+  item: SyntaxNode,
+  nameNode: SyntaxNode,
+  typeName: string,
+  target: OwnNominalImplTarget,
+) -> () {
+  if target.typeParameterCount > 0 {
+    addDiagnostic(
+      state,
+      module.moduleIndex,
+      "TPZ5022",
+      "cannot define receiver methods on generic nominal `{typeName}` yet; generic `impl` binders are not defined",
+      "",
+      nameNode,
+    )
+    return ()
+  }
+  for method in children(item, "methods") {
+    match child(method, "declaration") {
+      case Some(declaration) => collectReceiverImplMethod(
+        service,
+        state,
+        module,
+        method,
+        declaration,
+        typeName,
+        target.typeValue,
+      )
+      case None => ()
+    }
+  }
+  ()
+}
+
+export function collectReceiverImpls(service: CheckerService, state: CheckerState) -> () {
+  for module in state.modules {
+    for statement in module.root.children {
+      collectReceiverImpl(service, state, module, statement)
+    }
+  }
+  ()
+}
+
+function receiverMethodDefinitionForType(
+  state: CheckerState,
+  moduleIndex: int,
+  receiver: TypeValue,
+  methodName: string,
+) -> Option<ReceiverMethodDefinition> {
+  let mut targetModule = -1
+  let mut targetName = receiver.identity
+  match recordDefinitionForType(state, moduleIndex, receiver) {
+    case Some(definition) => {
+      targetModule = definition.moduleIndex
+      targetName = definition.name
+    }
+    case None => match enumDefinitionForType(state, moduleIndex, receiver) {
+      case Some(definition) => {
+        targetModule = definition.moduleIndex
+        targetName = definition.name
+      }
+      case None => match newtypeDefinitionForType(state, moduleIndex, receiver) {
+        case Some(definition) => {
+          targetModule = definition.moduleIndex
+          targetName = definition.name
+        }
+        case None => ()
+      }
+    }
+  }
+  if targetModule < 0 {
+    if receiver.kind == "foreign" {
+      for definition in state.receiverMethods {
+        if definition.name == methodName &&
+          "{moduleIdentityAt(state, definition.moduleIndex)}::{definition.typeName}" == receiver.identity &&
+          definition.exported {
+          return Some(definition)
+        }
+      }
+    }
+    return None
+  }
+  let index = match state.receiverMethodIndexes.get(receiverMethodKey(
+    targetModule,
+    targetName,
+    methodName,
+  )) {
+    case Some(found) => found
+    case None => return None
+  }
+  match state.receiverMethods.get(index) {
+    case Some(definition) => if definition.moduleIndex == moduleIndex ||
+      definition.exported {
+      Some(definition)
+    } else {
+      None
+    }
+    case None => None
+  }
+}
+
+function receiverMethodFunction(
+  state: CheckerState,
+  moduleIndex: int,
+  receiver: TypeValue,
+  methodName: string,
+) -> Option<FunctionDefinition> {
+  match receiverMethodDefinitionForType(
+    state,
+    moduleIndex,
+    receiver,
+    methodName,
+  ) {
+    case Some(method) => state.functions.get(method.functionIndex)
+    case None => None
+  }
+}
+
+export function receiverMethodType(
+  state: CheckerState,
+  moduleIndex: int,
+  receiver: TypeValue,
+  methodName: string,
+) -> Option<TypeValue> {
+  match receiverMethodFunction(
+    state,
+    moduleIndex,
+    receiver,
+    methodName,
+  ) {
+    case Some(definition) => {
+      let mut parameters: Array<TypeValue> = []
+      let mut index = 1
+      while index < definition.parameterTypes.length {
+        match definition.parameterTypes.get(index) {
+          case Some(found) => parameters.push(found)
+          case None => ()
+        }
+        index += 1
+      }
+      Some(functionType(parameters, definition.variadic, definition.result))
+    }
+    case None => None
+  }
+}
+
+export function receiverMethodCallSignature(
+  state: CheckerState,
+  moduleIndex: int,
+  receiver: TypeValue,
+  methodName: string,
+) -> Option<CallSignature> {
+  match receiverMethodFunction(
+    state,
+    moduleIndex,
+    receiver,
+    methodName,
+  ) {
+    case Some(definition) => {
+      let mut names: Array<string> = []
+      let mut defaults: Array<bool> = []
+      let mut index = 1
+      while index < definition.parameterNames.length {
+        match definition.parameterNames.get(index) {
+          case Some(found) => names.push(found)
+          case None => ()
+        }
+        index += 1
+      }
+      index = 1
+      while index < definition.parameterDefaults.length {
+        match definition.parameterDefaults.get(index) {
+          case Some(found) => defaults.push(found)
+          case None => ()
+        }
+        index += 1
+      }
+      Some(CallSignature {
+        parameterNames: names,
+        parameterDefaults: defaults,
+        parameterCount: definition.parameterTypes.length - 1,
+        variadic: definition.variadic.length > 0,
+        positionalOnlyIdentity: "",
+      })
+    }
+    case None => None
+  }
+}
+
+export function receiverMethodTargetIdentity(
+  state: CheckerState,
+  moduleIndex: int,
+  receiver: TypeValue,
+  methodName: string,
+) -> string {
+  match receiverMethodDefinitionForType(
+    state,
+    moduleIndex,
+    receiver,
+    methodName,
+  ) {
+    case Some(method) => "{moduleIdentityAt(state, method.moduleIndex)}::{method.typeName}"
+    case None => ""
+  }
+}
+
+export function functionDeclaration(item: SyntaxNode) -> Option<SyntaxNode> {
+  if item.kind != "statement/function" {
+    return None
+  }
+  child(item, "declaration")
+}
+
+record FunctionParameterShape {
+  names: Array<string>,
+  types: Array<TypeValue>,
+  defaults: Array<bool>,
+  variadic: Array<TypeValue>,
+}
+
+record PreparedFunctionDeclaration {
+  nameNode: SyntaxNode,
+  definition: FunctionDefinition,
+  typeValue: TypeValue,
+}
+
+function formFunctionParameterType(
+  service: CheckerService,
+  state: CheckerState,
+  module: ModuleSyntax,
+  parameter: SyntaxNode,
+  parameters: Array<string>,
+  origin: string,
+) -> TypeValue {
+  match child(parameter, "type") {
+    case Some(found) => formType(
+      service,
+      state,
+      module.moduleIndex,
+      module.source,
+      found,
+      parameters,
+      origin,
+    )
+    case None => emptyType("unknown")
+  }
+}
+
+function formFunctionParameterShape(
+  service: CheckerService,
+  state: CheckerState,
+  module: ModuleSyntax,
+  declaration: SyntaxNode,
+  parameters: Array<string>,
+  origin: string,
+  firstType: Option<TypeValue>,
+) -> FunctionParameterShape {
+  let mut names: Array<string> = []
+  let mut types: Array<TypeValue> = []
+  let mut defaults: Array<bool> = []
+  let mut variadic: Array<TypeValue> = []
+  let mut parameterIndex = 0
+  for parameter in children(declaration, "parameters") {
+    names.push(match child(parameter, "name") {
+      case Some(found) => text(module.source, found)
+      case None => ""
+    })
+    let formed = if parameterIndex == 0 {
+      match firstType {
+        case Some(found) => found
+        case None => formFunctionParameterType(
+          service,
+          state,
+          module,
+          parameter,
+          parameters,
+          origin,
+        )
+      }
+    } else {
+      formFunctionParameterType(
+        service,
+        state,
+        module,
+        parameter,
+        parameters,
+        origin,
+      )
+    }
+    if boolAttribute(parameter, "variadic") {
+      variadic.push(formed)
+    } else {
+      types.push(formed)
+      defaults.push(match child(parameter, "default") {
+        case Some(_) => true
+        case None => false
+      })
+    }
+    parameterIndex += 1
+  }
+  FunctionParameterShape {
+    names: names,
+    types: types,
+    defaults: defaults,
+    variadic: variadic,
+  }
+}
+
+function prepareFunctionDeclaration(
+  service: CheckerService,
+  state: CheckerState,
+  module: ModuleSyntax,
+  declaration: SyntaxNode,
+  firstType: Option<TypeValue>,
+) -> PreparedFunctionDeclaration {
+  let nameNode = match child(declaration, "name") {
+    case Some(found) => found
+    case None => declaration
+  }
+  let name = text(module.source, nameNode)
+  let parameters = typeParameterNames(module.source, declaration)
+  registerTypeParameters(state, module.moduleIndex, module.source, declaration)
+  let origin = "source:{module.sourceOrdinal}:{declaration.lo}:{declaration.hi}"
+  let mut typeParameterOrigins: Array<string> = []
+  for parameter in children(declaration, "typeParameters") {
+    typeParameterOrigins.push(
+      "source:{module.sourceOrdinal}:{parameter.lo}:{parameter.hi}",
+    )
+  }
+  let shape = formFunctionParameterShape(
+    service,
+    state,
+    module,
+    declaration,
+    parameters,
+    origin,
+    firstType,
+  )
+  let result = match child(declaration, "returnType") {
+    case Some(found) => formType(
+      service,
+      state,
+      module.moduleIndex,
+      module.source,
+      found,
+      parameters,
+      origin,
+    )
+    case None => emptyType("unknown")
+  }
+  PreparedFunctionDeclaration {
+    nameNode: nameNode,
+    definition: FunctionDefinition {
+      moduleIndex: module.moduleIndex,
+      name: name,
+      lo: nameNode.lo,
+      hi: nameNode.hi,
+      typeParameters: parameters,
+      typeParameterOrigins: typeParameterOrigins,
+      parameterNames: shape.names,
+      parameterTypes: shape.types,
+      parameterDefaults: shape.defaults,
+      variadic: shape.variadic,
+      result: result,
+      bounds: functionBounds(module.source, declaration),
+    },
+    typeValue: functionType(shape.types, shape.variadic, result),
+  }
+}
+
+function predeclareFunction(
+  service: CheckerService,
+  state: CheckerState,
+  module: ModuleSyntax,
+  declaration: SyntaxNode,
+) -> () {
+  let prepared = prepareFunctionDeclaration(
+    service,
+    state,
+    module,
+    declaration,
+    None,
+  )
+  let mut functions = state.functions
+  let index = functions.length
+  functions.push(prepared.definition)
+  let mut pending = state.pendingFunctions
+  pending.push(prepared.definition.result.kind == "unknown")
+  let mut indexes = state.functionIndexes
+  indexes.insert(
+    spanKey(module.moduleIndex, prepared.nameNode.lo, prepared.nameNode.hi),
+    index,
+  )
+  let mut nameIndexes = state.functionNameIndexes
+  nameIndexes.insert(
+    definitionNameKey(module.moduleIndex, prepared.definition.name),
+    index,
+  )
+  bindSymbol(
+    state,
+    module.moduleIndex,
+    prepared.nameNode.lo,
+    prepared.nameNode.hi,
+    prepared.definition.name,
+    prepared.typeValue,
+    false,
+  )
+}
+
+export function predeclareFunctions(service: CheckerService, state: CheckerState) -> () {
+  for module in state.modules {
+    for statement in module.root.children {
+      match functionDeclaration(unwrapExport(statement)) {
+        case Some(declaration) => predeclareFunction(service, state, module, declaration)
+        case None => ()
+      }
+    }
+  }
+  ()
+}
+
+function recordTypeForName(
+  state: CheckerState,
+  moduleIndex: int,
+  name: string,
+) -> Option<TypeValue> {
+  let index = recordDefinitionIndex(state, moduleIndex, name)
+  if index < 0 {
+    return None
+  }
+  match state.records.get(index) {
+    case Some(definition) => {
+      let mut arguments: Array<TypeValue> = []
+      for parameter in definition.typeParameters {
+        arguments.push(rigid(parameter, "{moduleIndex}::{name}"))
+      }
+      Some(nominalInModule(
+        "nominal-record",
+        name,
+        arguments,
+        moduleIdentityAt(state, definition.moduleIndex),
+      ))
+    }
+    case None => None
+  }
+}
+
+function enumTypeForName(
+  state: CheckerState,
+  moduleIndex: int,
+  name: string,
+) -> Option<TypeValue> {
+  let index = enumDefinitionIndex(state, moduleIndex, name)
+  if index < 0 {
+    return None
+  }
+  match state.enums.get(index) {
+    case Some(definition) => {
+      let mut arguments: Array<TypeValue> = []
+      for parameter in definition.typeParameters {
+        arguments.push(rigid(parameter, "{moduleIndex}::{name}"))
+      }
+      Some(nominalInModule(
+        "enum",
+        name,
+        arguments,
+        moduleIdentityAt(state, definition.moduleIndex),
+      ))
+    }
+    case None => None
+  }
+}
+
+function newtypeTypeForName(
+  state: CheckerState,
+  moduleIndex: int,
+  name: string,
+) -> Option<TypeValue> {
+  let index = newtypeDefinitionIndex(state, moduleIndex, name)
+  if index < 0 {
+    return None
+  }
+  match state.newtypes.get(index) {
+    case Some(definition) => {
+      let mut arguments: Array<TypeValue> = []
+      for parameter in definition.typeParameters {
+        arguments.push(rigid(parameter, "{moduleIndex}::{name}"))
+      }
+      Some(nominalInModule(
+        "newtype",
+        name,
+        arguments,
+        moduleIdentityAt(state, definition.moduleIndex),
+      ))
+    }
+    case None => None
+  }
+}
+
+export function referenceTargetType(
+  state: CheckerState,
+  moduleIndex: int,
+  node: SyntaxNode,
+) -> Option<TypeValue> {
+  match resolvedTypeOfReference(state, moduleIndex, node) {
+    case Some(found) => Some(found)
+    case None => match referenceFor(state, moduleIndex, node.lo, node.hi) {
+      case Some(reference) => {
+        match symbolTypeByName(
+          state,
+          reference.targetModuleIndex,
+          reference.targetName,
+          "value",
+        ) {
+          case Some(found) => return Some(found)
+          case None => ()
+        }
+        let mut targetModule = reference.targetModuleIndex
+        let mut targetName = reference.targetName
+        match declarationFor(
+          state,
+          reference.targetModuleIndex,
+          reference.targetLo,
+          reference.targetHi,
+        ) {
+          case Some(declaration) => if declaration.targetModule != "" {
+            targetModule = moduleIndexByIdentity(state, declaration.targetModule)
+            targetName = declaration.targetName
+          } else {
+            ()
+          }
+          case None => ()
+        }
+        match recordTypeForName(
+          state,
+          targetModule,
+          targetName,
+        ) {
+          case Some(found) => Some(found)
+          case None => match enumTypeForName(
+            state,
+            targetModule,
+            targetName,
+          ) {
+            case Some(found) => Some(found)
+            case None => newtypeTypeForName(
+              state,
+              targetModule,
+              targetName,
+            )
+          }
+        }
+      }
+      case None => None
+    }
+  }
+}
+
+export function recordDefinitionForType(
+  state: CheckerState,
+  moduleIndex: int,
+  value: TypeValue,
+) -> Option<RecordDefinition> {
+  if value.kind != "nominal-record" {
+    return None
+  }
+  if value.origin != "" {
+    for definition in state.records {
+      if definition.name == value.identity &&
+        moduleIdentityAt(state, definition.moduleIndex) == value.origin {
+        return Some(definition)
+      }
+    }
+    return None
+  }
+  let mut preferred = recordDefinitionIndex(state, moduleIndex, value.identity)
+  if preferred >= 0 {
+    return state.records.get(preferred)
+  }
+  preferred = 0
+  for definition in state.records {
+    if definition.name == value.identity {
+      return Some(definition)
+    }
+    preferred += 1
+  }
+  None
+}
+
+export function enumDefinitionForType(
+  state: CheckerState,
+  moduleIndex: int,
+  value: TypeValue,
+) -> Option<EnumDefinition> {
+  if value.kind != "enum" {
+    return None
+  }
+  if value.origin != "" {
+    for definition in state.enums {
+      if definition.name == value.identity &&
+        moduleIdentityAt(state, definition.moduleIndex) == value.origin {
+        return Some(definition)
+      }
+    }
+    return None
+  }
+  let index = enumDefinitionIndex(state, moduleIndex, value.identity)
+  if index >= 0 {
+    return state.enums.get(index)
+  }
+  for definition in state.enums {
+    if definition.name == value.identity {
+      return Some(definition)
+    }
+  }
+  None
+}
+
+export function newtypeDefinitionForType(
+  state: CheckerState,
+  moduleIndex: int,
+  value: TypeValue,
+) -> Option<NewtypeDefinition> {
+  if value.kind != "newtype" {
+    return None
+  }
+  if value.origin != "" {
+    for definition in state.newtypes {
+      if definition.name == value.identity &&
+        moduleIdentityAt(state, definition.moduleIndex) == value.origin {
+        return Some(definition)
+      }
+    }
+    return None
+  }
+  let index = newtypeDefinitionIndex(state, moduleIndex, value.identity)
+  if index >= 0 {
+    return state.newtypes.get(index)
+  }
+  for definition in state.newtypes {
+    if definition.name == value.identity {
+      return Some(definition)
+    }
+  }
+  None
+}

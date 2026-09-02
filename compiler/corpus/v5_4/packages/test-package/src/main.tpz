@@ -1,0 +1,6 @@
+import std.test { assertEq, assertOk, assertSome }
+
+let value = assertOk(Ok(41))
+let extra = assertSome(Some(1))
+assertEq(value + extra, 42)
+print("package test ok:{value + extra}")

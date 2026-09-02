@@ -1,0 +1,2 @@
+let ok: Result<int, string> = Ok(3)
+ok.map((x) => "k")

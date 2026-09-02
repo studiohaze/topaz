@@ -1,0 +1,7 @@
+match Date.parseIso("2024-01-02") { case Ok(d) => { let x: Date = d
+let mut m = Map.new()
+m.insert(x, 7)
+let first = [x.addDays(1), x].sorted().get(0)
+match first { case Some(d0) => "{m.getOr(x.addDays(0), 0)}/{d0.toIso()}"
+case None => "none" } }
+case Err(e) => e }

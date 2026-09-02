@@ -1,0 +1,2 @@
+let r = { reduce: (p: int, q: int) => p }
+r.reduce(f: 5, initial: 100)

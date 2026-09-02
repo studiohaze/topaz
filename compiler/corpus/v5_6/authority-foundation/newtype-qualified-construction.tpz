@@ -1,0 +1,2 @@
+import newtype_model as model
+let value = model.UserId(7)

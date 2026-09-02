@@ -1,0 +1,8 @@
+
+type Scalar = int
+export function decodeLocal() -> int {
+    match JSON.parseAs<Scalar>("7") {
+        case Ok(value) => value
+        case Err(_) => 0
+    }
+}

@@ -1,0 +1,16 @@
+match open("config.txt") {
+    case Ok(f) => {
+        let text = match f.read() {
+            case Ok(tx) => tx
+            case Err(e) => e
+        }
+        print(text)
+        f.write("v=2")
+        f.close()
+    }
+    case Err(e) => print(e)
+}
+match open("missing.txt") {
+    case Ok(f) => print("?")
+    case Err(e) => print(e)
+}

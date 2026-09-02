@@ -1,0 +1,15 @@
+
+let choose = true
+let fromIf = if choose {
+    loop {
+        print("if-then")
+        break 3
+    }
+} else {
+    loop {
+        print("if-else")
+        break 4
+    }
+}
+print("{fromIf}")
+fromIf

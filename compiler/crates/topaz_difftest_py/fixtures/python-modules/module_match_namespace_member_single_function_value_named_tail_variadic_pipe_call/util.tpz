@@ -1,0 +1,17 @@
+
+function sumImpl(seed: int = 0, base: int = 2, ...xs: int) -> int {
+    let mut total = seed + base
+    for x in xs {
+        total = total + x
+    }
+    total
+}
+function packImpl(seed: int = 0, base: int = 100, ...xs: int) -> int {
+    let mut total = base - seed
+    for x in xs {
+        total = total - x
+    }
+    total
+}
+export let sum = sumImpl
+export let pack = packImpl

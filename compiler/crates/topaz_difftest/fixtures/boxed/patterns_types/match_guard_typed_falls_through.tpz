@@ -1,0 +1,2 @@
+match 3 { case n: int if n > 5 => n
+case _ => 0 }

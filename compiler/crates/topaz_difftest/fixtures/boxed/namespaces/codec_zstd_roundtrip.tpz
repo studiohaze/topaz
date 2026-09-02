@@ -1,0 +1,1 @@
+Codec.zstdCompress(Bytes.encodeUtf8("topaz")).flatMap((zs) => Codec.zstdDecompress(zs)).flatMap((b) => b.decodeUtf8())

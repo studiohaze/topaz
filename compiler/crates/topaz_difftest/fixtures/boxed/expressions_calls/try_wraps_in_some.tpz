@@ -1,0 +1,2 @@
+let f = (r) => { Some(r?) }
+f(Ok(5))

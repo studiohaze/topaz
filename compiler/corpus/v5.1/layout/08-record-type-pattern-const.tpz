@@ -1,0 +1,15 @@
+type Point = {
+    x: int,
+    y: int
+}
+
+const ORIGIN = {
+    x: 0,
+    y: 0
+}
+
+let { x, y } = ORIGIN
+
+function dist(p: { x: int, y: int }) -> int {
+    return p.x + p.y
+}

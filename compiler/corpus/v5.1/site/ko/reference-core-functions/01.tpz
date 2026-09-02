@@ -1,0 +1,8 @@
+print("Hello, Topaz!")
+
+// toInt는 Option<int>를 반환합니다
+let 답 = match toInt("42") {
+    case Some(값) => 값
+    case None => 0
+}
+print("파싱된 답: {답}")

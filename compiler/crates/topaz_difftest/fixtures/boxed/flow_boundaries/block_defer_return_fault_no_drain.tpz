@@ -1,0 +1,7 @@
+function f() -> int {
+  {
+    defer print("d")
+    return 1 / 0
+  }
+}
+f()

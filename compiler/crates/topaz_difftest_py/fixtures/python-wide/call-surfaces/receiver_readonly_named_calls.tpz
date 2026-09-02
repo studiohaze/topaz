@@ -1,0 +1,116 @@
+
+function mark(label: string, n: int) -> int {
+    print(label)
+    n
+}
+function makeArray() -> Array<int> {
+    [8, 9]
+}
+function makeMap() -> Map<string, int> {
+    map { "late": 4 }
+}
+function makeBytes() -> Bytes {
+    Bytes.encodeUtf8(s: "AZ")
+}
+function idJson(value: JSONValue) -> JSONValue {
+    value
+}
+function makeArrayResult() -> Result<Array<int>, string> {
+    Ok(value: [10, 11])
+}
+function makeMapResult() -> Result<Map<string, int>, string> {
+    Ok(value: map { "try": 6 })
+}
+function makeBytesResult() -> Result<Bytes, string> {
+    Ok(value: Bytes.encodeUtf8(s: "BY"))
+}
+function idJsonResult(value: JSONValue) -> Result<JSONValue, string> {
+    Ok(value: value)
+}
+function main() -> Result<string, string> {
+    let parts = "a,b,c".split(sep: ",")
+    let cp = match "Topaz".codePointAt(i: 1) {
+        case Some(n) => n
+        case None => 0
+    }
+    let arrGot = match [4, 5].get(i: 1) {
+        case Some(n) => n
+        case None => 0
+    }
+    let madeArray = makeArray()
+    let arrFnGot = match madeArray.get(i: 1) {
+        case Some(n) => n
+        case None => 0
+    }
+    let madeArrayResult = makeArrayResult()?
+    let arrTryGot = match madeArrayResult.get(i: 1) {
+        case Some(n) => n
+        case None => 0
+    }
+    let bytes = Bytes.fromArray(values: [65, 66, 67])?
+    let byteGot = match bytes.get(index: 1) {
+        case Some(n) => n
+        case None => 0
+    }
+    let madeBytes = makeBytes()
+    let byteFnGot = match madeBytes.get(index: 1) {
+        case Some(n) => n
+        case None => 0
+    }
+    let madeBytesResult = makeBytesResult()?
+    let byteTryGot = match madeBytesResult.get(index: 1) {
+        case Some(n) => n
+        case None => 0
+    }
+    let sliced = bytes.slice(end: mark("end", 2), start: mark("start", 0))
+    let decoded = sliced.decodeUtf8()?
+    let m = map { "x": 1 }
+    let mapGot = match m.get(k: "x") {
+        case Some(n) => n
+        case None => 0
+    }
+    let madeMap = makeMap()
+    let mapFnGot = match madeMap.get(k: "late") {
+        case Some(n) => n
+        case None => 0
+    }
+    let madeMapResult = makeMapResult()?
+    let mapTryGot = match madeMapResult.get(k: "try") {
+        case Some(n) => n
+        case None => 0
+    }
+    let got = m.getOr(default: mark("default", 9), k: "x")
+    let has = m.containsKey(k: "x")
+    let both = Set.of(1, 2).union(other: Set.of(2, 3))
+    let parsed = JSON.parse(text: "[10,20]")?
+    let item = match parsed.at(index: 1) {
+        case Some(value) => JSON.stringify(value: value)?
+        case None => "none"
+    }
+    let parsedObj = JSON.parse(text: "\{\"x\":3\}")?
+    let jsonGot = match parsedObj.get(key: "x") {
+        case Some(value) => match value.asInt() {
+            case Some(n) => n
+            case None => 0
+        }
+        case None => 0
+    }
+    let madeJson = idJson(parsedObj)
+    let jsonFnGot = match madeJson.get(key: "x") {
+        case Some(value) => match value.asInt() {
+            case Some(n) => n
+            case None => 0
+        }
+        case None => 0
+    }
+    let madeJsonResult = idJsonResult(value: parsedObj)?
+    let jsonTryGot = match madeJsonResult.get(key: "x") {
+        case Some(value) => match value.asInt() {
+            case Some(n) => n
+            case None => 0
+        }
+        case None => 0
+    }
+    Ok(value: "{parts[1]}:{cp}:{arrGot}:{arrFnGot}:{arrTryGot}:{byteGot}:{byteFnGot}:{byteTryGot}:{decoded}:{mapGot}:{mapFnGot}:{mapTryGot}:{got}:{has}:{both.length}:{item}:{jsonGot}:{jsonFnGot}:{jsonTryGot}")
+}
+main()

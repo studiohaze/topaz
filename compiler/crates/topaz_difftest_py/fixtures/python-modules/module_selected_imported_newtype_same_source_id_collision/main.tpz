@@ -1,0 +1,11 @@
+
+import ids_a { UserId as AId }
+import ids_b { UserId as BId }
+function main() -> string {
+    let a = AId(7)
+    let b = BId(7)
+    let mut m = Map.new()
+    m.insert(a, "left")
+    "{a == b}:{m.getOr(b, "miss")}"
+}
+main()

@@ -1,0 +1,2 @@
+match Some("x") { case n: Option<int> => 1
+case _ => 0 }

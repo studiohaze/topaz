@@ -1,0 +1,8 @@
+newtype UserId = int
+
+function next(id: UserId) -> UserId {
+    UserId(id.value() + 1)
+}
+
+let id: UserId = next(UserId(41))
+print("{id}:{id.value()}")

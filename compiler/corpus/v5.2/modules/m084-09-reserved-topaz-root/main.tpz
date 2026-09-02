@@ -1,0 +1,2 @@
+import topaz.runtime
+let x = 1

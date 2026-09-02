@@ -1,0 +1,2 @@
+let f = Codec.reedSolomon255223Protect
+f(Bytes.encodeUtf8("topaz"))

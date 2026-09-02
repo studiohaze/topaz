@@ -1,0 +1,3 @@
+let mut m = Map.new()
+m.insert("k", 1)
+m.containsKey("z")

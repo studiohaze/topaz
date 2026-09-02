@@ -1,0 +1,3 @@
+let n = 100
+let addn = (x) => x + n
+5 |> addn

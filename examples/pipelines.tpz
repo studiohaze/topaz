@@ -1,0 +1,17 @@
+// pipelines.tpz — closures, function composition (>>), the pipe operator
+// (|>), and a default argument.
+// Run: topaz run examples/pipelines.tpz
+
+let inc = (x: int) => x + 1
+let dbl = (x: int) => x * 2
+
+// |> threads a value left-to-right; >> builds a new function.
+print("{5 |> inc |> dbl}")        // (5+1)*2 = 12
+let incThenDouble = inc >> dbl
+print("{incThenDouble(20)}")      // (20+1)*2 = 42
+
+function greet(name: string, salutation: string = "Hello") -> string {
+    return "{salutation}, {name}!"
+}
+print(greet("Topaz"))
+print(greet("Topaz", "안녕"))

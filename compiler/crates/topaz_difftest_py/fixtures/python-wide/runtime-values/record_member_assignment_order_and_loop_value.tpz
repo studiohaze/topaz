@@ -1,0 +1,17 @@
+
+function main() -> string {
+    let mut r = { n: 1, text: "a" }
+    r.n = 2
+    r.n += loop {
+        print("rhs")
+        break 3
+    }
+    r.text ??= mark("skip", "skip")
+    r.text = "{r.text}:b"
+    "{r.n}:{r.text}"
+}
+function mark(label: string, value: string) -> string {
+    print(label)
+    value
+}
+main()

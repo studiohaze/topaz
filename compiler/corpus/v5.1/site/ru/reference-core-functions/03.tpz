@@ -1,0 +1,4 @@
+let слово = "topaz"
+let скаляры = слово.scalars()           // ["t", "o", "p", "a", "z"]
+let длина = слово.scalars().length      // 5
+print("Число скаляров: {длина}")

@@ -1,0 +1,32 @@
+// Option<T> - 값이 있을 수도, 없을 수도 있음
+function 사용자찾기(아이디: int) -> Option<{ 이름: string, 나이: int }> {
+    let 사용자들 = [
+        { 아이디: 1, 이름: "김토파즈", 나이: 25 },
+        { 아이디: 2, 이름: "이개발", 나이: 30 }
+    ]
+    
+    for 사용자 in 사용자들 {
+        if 사용자.아이디 == 아이디 {
+            return Some({ 이름: 사용자.이름, 나이: 사용자.나이 })
+        }
+    }
+    
+    return None
+}
+
+// Option 처리하기
+match 사용자찾기(1) {
+    case Some(사용자) => print("사용자 발견: {사용자.이름}, {사용자.나이}세")
+    case None => print("사용자를 찾을 수 없습니다")
+}
+
+// 배열에서 요소 찾기 — .get이 폴트 없는 읽기입니다
+function 첫번째정수요소(배열: Array<int>) -> Option<int> {
+    배열.get(0)
+}
+
+let 숫자들 = [1, 2, 3, 4, 5]
+match 첫번째정수요소(숫자들) {
+    case Some(첫번째) => print("첫 번째 요소: {첫번째}")
+    case None => print("배열이 비어있습니다")
+}

@@ -1,0 +1,9 @@
+
+function f() -> Result<int, string> {
+    match JSON.parse("\{\"a\":1,\"a\":2\}") {
+        case Err(e) => print(e.message)
+        case Ok(value) => print("?")
+    }
+    Ok(0)
+}
+f()

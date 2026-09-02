@@ -1,0 +1,1252 @@
+---
+title: 'Understanding Closures'
+description: 'Historical closure guidance with legacy and runtime-oriented examples.'
+---
+
+<Tip tone="warning" triggerLabel="Legacy guide" title="Legacy guide">
+**Why legacy?** This guide preserves Rust-style closure examples (impl Fn, FnMut, move, borrow-oriented capture) from earlier Topaz iterations.
+
+**What replaces it?** Canonical closures live in [Functions & Closures](/en/docs/concepts/functions-closures).
+
+**Status:** Legacy — pre-v5.1, non-canonical; use the reference pages for current syntax. The examples below are preserved unmodified for historical reference and are not canonical Topaz.
+</Tip>
+
+This page keeps older closure patterns available for migration and comparison.
+
+##  Basic Concepts of Closures
+
+### What are Closures?
+
+A closure is a **function that can remember and access variables from the environment where it was defined**. It's called a closure because the function "closes over" and carries the environment (scope) from when it was created.
+
+```rust
+// Basic closure example
+function outerFunction(outerVariable: int) -> impl Fn(int) -> int {
+    // Create closure - captures outerVariable
+    let innerFunction = |innerVariable: int| -> int {
+        outerVariable + innerVariable  // Accessing variable from outer scope
+    }
+    
+    return innerFunction
+}
+
+// Closure counter example
+function createCounter(initialValue: int) -> impl Fn() -> int {
+    let mut currentValue = initialValue
+    
+    // Closure that captures currentValue
+    return move || -> int {
+        currentValue += 1
+        currentValue
+    }
+}
+
+// Multiplier function generator
+function createMultiplier(multiplier: int) -> impl Fn(int) -> int {
+    |value: int| value * multiplier
+} test {
+    // Test outer function
+    let add5 = outerFunction(5)
+    assert add5(3) == 8
+    assert add5(10) == 15
+    
+    // Test counter
+    let mut counter1 = createCounter(0)
+    let mut counter2 = createCounter(100)
+    
+    assert counter1() == 1
+    assert counter1() == 2
+    assert counter2() == 101
+    assert counter1() == 3  // Independent state maintained
+    
+    // Test multiplier generator
+    let doubler = createMultiplier(2)
+    let tripler = createMultiplier(3)
+    
+    assert doubler(5) == 10
+    assert tripler(4) == 12
+}
+
+print("add5(7) = {outerFunction(5)(7)}")
+
+let mut myCounter = createCounter(10)
+print("Counter: {myCounter()}, {myCounter()}, {myCounter()}")
+
+let tenMultiplier = createMultiplier(10)
+print("10 * 7 = {tenMultiplier(7)}")
+```
+
+### Core Characteristics of Closures
+
+1. **Environment Capture**: Remembers variables from outer scopes
+2. **State Preservation**: Maintains state between function calls
+3. **Lazy Execution**: Defers computation until needed
+4. **Code Reuse**: Same logic applicable in various contexts
+
+##  Various Closure Patterns
+
+### Value Capture vs Reference Capture
+
+```rust
+// Value capture (Copy)
+function valueCaptureExample() -> impl Fn() -> int {
+    let value = 42
+    
+    // Value is copied into closure
+    || value  // Value is copied inside closure
+}
+
+// Reference capture (Borrow)
+function referenceCaptureExample() -> impl Fn() -> int {
+    let value = 42
+    
+    // Capture by reference (when lifetime allows)
+    move || value  // Transfer ownership with move keyword
+}
+
+// Mutable reference capture
+function mutableCaptureExample() -> impl FnMut() -> int {
+    let mut count = 0
+    
+    // Capture mutable reference
+    move || -> int {
+        count += 1
+        count
+    }
+}
+
+// Complex environment capture
+function complexEnvironment() -> (impl Fn(int) -> int, impl Fn(int) -> int) {
+    let baseValue = 10
+    let multiplier = 3
+    let mut accumulatedValue = 0
+    
+    let addFunction = move |additionalValue: int| -> int {
+        accumulatedValue += additionalValue
+        baseValue + accumulatedValue
+    }
+    
+    let multiplyFunction = |inputValue: int| -> int {
+        inputValue * multiplier
+    }
+    
+    return (addFunction, multiplyFunction)
+}
+
+// Closure chaining
+function createFunctionChain(initialFunction: impl Fn(int) -> int) -> impl Fn(impl Fn(int) -> int) -> impl Fn(int) -> int {
+    move |nextFunction: impl Fn(int) -> int| -> impl Fn(int) -> int {
+        move |input: int| -> int {
+            nextFunction(initialFunction(input))
+        }
+    }
+} test {
+    // Value capture test
+    let valueClosure = valueCaptureExample()
+    assert valueClosure() == 42
+    
+    // Mutable capture test  
+    let mut mutableClosure = mutableCaptureExample()
+    assert mutableClosure() == 1
+    assert mutableClosure() == 2
+    assert mutableClosure() == 3
+    
+    // Complex environment test
+    let (mut addFunction, multiplyFunction) = complexEnvironment()
+    assert addFunction(5) == 15  // 10 + 5
+    assert addFunction(3) == 18  // 10 + 5 + 3
+    assert multiplyFunction(4) == 12   // 4 * 3
+    
+    // Function chaining test
+    let double = |x: int| x * 2
+    let add10 = |x: int| x + 10
+    
+    let chainedFunction = createFunctionChain(double)(add10)
+    assert chainedFunction(5) == 20  // (5 * 2) + 10
+}
+
+let mut myMutableClosure = mutableCaptureExample()
+print("Mutable closure: {myMutableClosure()}, {myMutableClosure()}")
+
+let (mut addFunction, multiplyFunction) = complexEnvironment()
+print("Add: {addFunction(7)}, Multiply: {multiplyFunction(6)}")
+```
+
+### Higher-Order Functions and Closures
+
+```rust
+// Function that returns a function
+function conditionalFunctionCreator(condition: bool) -> impl Fn(int) -> int {
+    if condition {
+        |x: int| x * 2  // Double
+    } else {
+        |x: int| x + 10  // Add 10
+    }
+}
+
+// Function that takes a function as parameter
+function functionApplier<F, T>(value: T, function: F) -> T 
+where
+    F: Fn(T) -> T
+{
+    function(value)
+}
+
+// Composer that combines multiple functions
+function functionComposer<F, G, T>(function1: F, function2: G) -> impl Fn(T) -> T
+where
+    F: Fn(T) -> T,
+    G: Fn(T) -> T,
+    T: 'static
+{
+    move |input: T| -> T {
+        function2(function1(input))
+    }
+}
+
+// Currying implementation
+function curryingExample(a: int) -> impl Fn(int) -> impl Fn(int) -> int {
+    move |b: int| -> impl Fn(int) -> int {
+        move |c: int| -> int {
+            a + b + c
+        }
+    }
+}
+
+// Memoization closure
+function memoization<F, T, U>(function: F) -> impl FnMut(T) -> U
+where
+    F: Fn(T) -> U,
+    T: Clone + std::hash::Hash + Eq,
+    U: Clone,
+{
+    use std::collections::HashMap
+    
+    let mut cache: HashMap<T, U> = HashMap::new()
+    
+    move |input: T| -> U {
+        match cache.get(&input) { case Some(result) => return result.clone(), case None => {} }
+        
+        let result = function(input.clone())
+        cache.insert(input, result.clone())
+        result
+    }
+} test {
+    // Conditional function creator test
+    let doubleFunction = conditionalFunctionCreator(true)
+    let addFunction = conditionalFunctionCreator(false)
+    
+    assert doubleFunction(5) == 10
+    assert addFunction(5) == 15
+    
+    // Function applier test
+    let result = functionApplier(10, |x| x * 3)
+    assert result == 30
+    
+    // Function composer test
+    let add5 = |x: int| x + 5
+    let multiply2 = |x: int| x * 2
+    let composedFunction = functionComposer(add5, multiply2)
+    
+    assert composedFunction(3) == 16  // (3 + 5) * 2
+    
+    // Currying test
+    let curriedFunction = curryingExample(1)(2)(3)
+    assert curriedFunction == 6  // 1 + 2 + 3
+    
+    // Memoization test
+    let mut memoFactorial = memoization(|n: int| -> int {
+        if n <= 1 { 1 } else { n * memoFactorial(n - 1) }
+    })
+    
+    assert memoFactorial(5) == 120
+}
+
+print("Conditional(true): {conditionalFunctionCreator(true)(7)}")
+print("Composed function result: {functionComposer(|x| x + 1, |x| x * 10)(4)}")
+print("Currying result: {curryingExample(10)(20)(30)}")
+```
+
+### Event Handling and Callbacks
+
+```rust
+// Event handler type definition
+type EventHandler<T> = Box<dyn FnMut(T)>
+
+// Simple event system
+struct EventSystem<T> {
+    handlers: Vec<EventHandler<T>>
+}
+
+impl<T> EventSystem<T>
+where
+    T: Clone
+{
+    function new() -> Self {
+        EventSystem {
+            handlers: Vec::new()
+        }
+    }
+    
+    // Register event handler
+    function registerHandler<F>(&mut self, handler: F)
+    where
+        F: FnMut(T) + 'static
+    {
+        self.handlers.push(Box::new(handler))
+    }
+    
+    // Trigger event
+    function triggerEvent(&mut self, data: T) {
+        for handler in &mut self.handlers {
+            handler(data.clone())
+        }
+    }
+}
+
+// Async operation simulation
+function asyncOperation<F>(delayMs: int, completionCallback: F)
+where
+    F: FnOnce(string) + 'static
+{
+    // In reality this would be async, but here we execute immediately
+    let result = format!("Task completed (after {}ms)", delayMs)
+    completionCallback(result)
+}
+
+// State change detector
+struct StateWatcher<T> {
+    currentState: T,
+    changeCallbacks: Vec<Box<dyn Fn(&T, &T)>>
+}
+
+impl<T> StateWatcher<T>
+where
+    T: Clone + PartialEq
+{
+    function new(initialState: T) -> Self {
+        StateWatcher {
+            currentState: initialState,
+            changeCallbacks: Vec::new()
+        }
+    }
+    
+    function registerChangeCallback<F>(&mut self, callback: F)
+    where
+        F: Fn(&T, &T) + 'static
+    {
+        self.changeCallbacks.push(Box::new(callback))
+    }
+    
+    function changeState(&mut self, newState: T) {
+        if self.currentState != newState {
+            let previousState = self.currentState.clone()
+            self.currentState = newState.clone()
+            
+            for callback in &self.changeCallbacks {
+                callback(&previousState, &newState)
+            }
+        }
+    }
+    
+    function currentValue(&self) -> &T {
+        &self.currentState
+    }
+} test {
+    // Event system test
+    let mut eventSystem = EventSystem::<string>::new()
+    
+    let mut receivedMessages: Vec<string> = Vec::new()
+    
+    eventSystem.registerHandler(move |message: string| {
+        receivedMessages.push(format!("Handler1: {}", message))
+    })
+    
+    eventSystem.registerHandler(|message: string| {
+        println!("Handler2 received: {}", message)
+    })
+    
+    eventSystem.triggerEvent("Test message".to_string())
+    
+    // State watcher test
+    let mut temperatureWatcher = StateWatcher::new(20.0)
+    
+    let mut changeLog: Vec<string> = Vec::new()
+    
+    temperatureWatcher.registerChangeCallback(move |previous: &f64, newValue: &f64| {
+        changeLog.push(format!("Temperature change: {}°C → {}°C", previous, newValue))
+    })
+    
+    temperatureWatcher.changeState(25.0)
+    temperatureWatcher.changeState(30.0)
+    
+    assert *temperatureWatcher.currentValue() == 30.0
+}
+
+// Usage example
+let mut clickEvent = EventSystem::<string>::new()
+
+clickEvent.registerHandler(|buttonName: string| {
+    print!("Button '{}' was clicked!", buttonName)
+})
+
+clickEvent.triggerEvent("OK".to_string())
+
+// Async operation example
+asyncOperation(1000, |result: string| {
+    print!("Async operation result: {}", result)
+})
+```
+
+##  Practical Closure Applications
+
+### Functional Programming Patterns
+
+```rust
+// Functional pipeline
+function pipeline<T>(initialValue: T) -> PipelineBuilder<T> {
+    PipelineBuilder::new(initialValue)
+}
+
+struct PipelineBuilder<T> {
+    value: T
+}
+
+impl<T> PipelineBuilder<T> {
+    function new(value: T) -> Self {
+        PipelineBuilder { value }
+    }
+    
+    function map<U, F>(self, function: F) -> PipelineBuilder<U>
+    where
+        F: FnOnce(T) -> U
+    {
+        PipelineBuilder::new(function(self.value))
+    }
+    
+    function filter<F>(self, condition: F) -> Option<PipelineBuilder<T>>
+    where
+        F: FnOnce(&T) -> bool
+    {
+        if condition(&self.value) {
+            Some(self)
+        } else {
+            None
+        }
+    }
+    
+    function fold<U, F>(self, initialValue: U, function: F) -> U
+    where
+        F: FnOnce(U, T) -> U
+    {
+        function(initialValue, self.value)
+    }
+    
+    function finish(self) -> T {
+        self.value
+    }
+}
+
+// Array processing utility
+function arrayProcessor<T>() -> ArrayProcessor<T> {
+    ArrayProcessor::new()
+}
+
+struct ArrayProcessor<T> {
+    _phantom: std::marker::PhantomData<T>
+}
+
+impl<T> ArrayProcessor<T> {
+    function new() -> Self {
+        ArrayProcessor { _phantom: std::marker::PhantomData }
+    }
+    
+    function map<U, F>(&self, array: Vec<T>, function: F) -> Vec<U>
+    where
+        F: Fn(T) -> U
+    {
+        array.into_iter().map(function).collect()
+    }
+    
+    function filter<F>(&self, array: Vec<T>, condition: F) -> Vec<T>
+    where
+        F: Fn(&T) -> bool
+    {
+        array.into_iter().filter(condition).collect()
+    }
+    
+    function reduce<F>(&self, array: Vec<T>, function: F) -> Option<T>
+    where
+        F: Fn(T, T) -> T
+    {
+        array.into_iter().reduce(function)
+    }
+    
+    function fold<U, F>(&self, array: Vec<T>, initialValue: U, function: F) -> U
+    where
+        F: Fn(U, T) -> U
+    {
+        array.into_iter().fold(initialValue, function)
+    }
+}
+
+// Conditional execution chain
+function ifCondition<F>(condition: bool, executeFunction: F) -> ConditionalExecution<F>
+where
+    F: FnOnce()
+{
+    ConditionalExecution { condition, executeFunction: Some(executeFunction) }
+}
+
+struct ConditionalExecution<F>
+where
+    F: FnOnce()
+{
+    condition: bool,
+    executeFunction: Option<F>
+}
+
+impl<F> ConditionalExecution<F>
+where
+    F: FnOnce()
+{
+    function otherwise<G>(mut self, elseFunction: G)
+    where
+        G: FnOnce()
+    {
+        if self.condition {
+            match self.executeFunction.take() { case Some(function) => function(), case None => {} }
+        } else {
+            elseFunction()
+        }
+    }
+    
+    function execute(mut self) {
+        if self.condition {
+            match self.executeFunction.take() { case Some(function) => function(), case None => {} }
+        }
+    }
+} test {
+    // Pipeline test
+    let result = pipeline(10)
+        .map(|x| x * 2)
+        .map(|x| x + 5)
+        .filter(|&x| x > 20)
+        .map(|x| x.to_string())
+        .finish()
+    
+    assert result == Some("25".to_string())
+    
+    // Array processor test
+    let arrayProcessor = arrayProcessor::<i32>()
+    let numbers = vec![1, 2, 3, 4, 5]
+    
+    let squares = arrayProcessor.map(numbers.clone(), |x| x * x)
+    assert squares == vec![1, 4, 9, 16, 25]
+    
+    let evens = arrayProcessor.filter(numbers.clone(), |&x| x % 2 == 0)
+    assert evens == vec![2, 4]
+    
+    let sum = arrayProcessor.fold(numbers, 0, |acc, x| acc + x)
+    assert sum == 15
+    
+    // Conditional execution test
+    let mut executed = false
+    
+    ifCondition(true, || {
+        executed = true
+    }).execute()
+    
+    assert executed == true
+}
+
+// Usage example
+let processResult = pipeline(vec![1, 2, 3, 4, 5])
+    .map(|array| arrayProcessor::<i32>().map(array, |x| x * 2))
+    .map(|array| arrayProcessor::<i32>().filter(array, |&x| x > 5))
+    .finish()
+
+print!("Processed array: {:?}", processResult)
+
+ifCondition(processResult.len() > 2, || {
+    print!("Array is sufficiently large!")
+}).otherwise(|| {
+    print!("Array is too small.")
+})
+```
+
+### Lazy Evaluation and Streams
+
+```rust
+// Lazy evaluation sequence
+struct LazySequence<T, F>
+where
+    F: Fn() -> Option<T>
+{
+    generatorFunction: F
+}
+
+impl<T, F> LazySequence<T, F>
+where
+    F: Fn() -> Option<T>
+{
+    function new(generatorFunction: F) -> Self {
+        LazySequence { generatorFunction }
+    }
+    
+    function take(self, count: usize) -> Vec<T> {
+        let mut result = Vec::new()
+        
+        for _ in 0..count {
+            match (self.generatorFunction)() { case Some(value) => result.push(value), case None => break }
+        }
+        
+        result
+    }
+}
+
+// Infinite sequence generator
+function infiniteSequence(start: int, step: int) -> impl Fn() -> Option<int> {
+    let mut current = start
+    
+    move || -> Option<int> {
+        let value = current
+        current += step
+        Some(value)
+    }
+}
+
+// Fibonacci sequence generator
+function fibonacciGenerator() -> impl Fn() -> Option<int> {
+    let mut a = 0
+    let mut b = 1
+    
+    move || -> Option<int> {
+        let current = a
+        let next = a + b
+        a = b
+        b = next
+        Some(current)
+    }
+}
+
+// Conditional infinite sequence
+function conditionalSequence<F, P>(generatorFunction: F, condition: P) -> impl Fn() -> Option<int>
+where
+    F: Fn() -> int,
+    P: Fn(int) -> bool
+{
+    move || -> Option<int> {
+        loop {
+            let value = generatorFunction()
+            if condition(value) {
+                return Some(value)
+            }
+        }
+    }
+}
+
+// Stream processor
+struct Stream<T> {
+    data: Vec<T>
+}
+
+impl<T> Stream<T>
+where
+    T: Clone
+{
+    function from(data: Vec<T>) -> Self {
+        Stream { data }
+    }
+    
+    function map<U, F>(self, function: F) -> Stream<U>
+    where
+        F: Fn(T) -> U
+    {
+        Stream {
+            data: self.data.into_iter().map(function).collect()
+        }
+    }
+    
+    function filter<F>(self, condition: F) -> Stream<T>
+    where
+        F: Fn(&T) -> bool
+    {
+        Stream {
+            data: self.data.into_iter().filter(condition).collect()
+        }
+    }
+    
+    function take(self, count: usize) -> Stream<T> {
+        Stream {
+            data: self.data.into_iter().take(count).collect()
+        }
+    }
+    
+    function collect(self) -> Vec<T> {
+        self.data
+    }
+} test {
+    // Infinite sequence test
+    let arithmeticSequence = infiniteSequence(1, 2)  // 1, 3, 5, 7, ...
+    let firstFive = (0..5).map(|_| arithmeticSequence()).collect::<Vec<_>>()
+    
+    assert firstFive == vec![Some(1), Some(3), Some(5), Some(7), Some(9)]
+    
+    // Fibonacci test
+    let fibonacci = fibonacciGenerator()
+    let firstSixFibonacci: Vec<_> = (0..6).map(|_| fibonacci()).collect()
+    
+    assert firstSixFibonacci == vec![Some(0), Some(1), Some(1), Some(2), Some(3), Some(5)]
+    
+    // Stream processing test
+    let result = Stream::from(vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+        .filter(|&x| x % 2 == 0)  // Even numbers only
+        .map(|x| x * x)           // Square
+        .take(3)                  // First 3
+        .collect()
+    
+    assert result == vec![4, 16, 36]  // 2², 4², 6²
+}
+
+// Usage example
+let oddGenerator = infiniteSequence(1, 2)
+print!("First 10 odd numbers: {:?}", (0..<10).map(|_| oddGenerator()).collect::<Vec<_>>())
+
+let fibonacci = fibonacciGenerator()
+print!("Fibonacci sequence: {:?}", (0..8).map(|_| fibonacci()).collect::<Vec<_>>())
+
+let streamResult = Stream::from((1..=20).collect())
+    .filter(|&x| x % 3 == 0)    // Multiples of 3
+    .map(|x| format!("{}th", x))  // String conversion
+    .take(4)
+    .collect()
+
+print!("Multiples of 3: {:?}", streamResult)
+```
+
+##  Advanced Closure Techniques
+
+### Dynamic Function Generation
+
+```rust
+// Runtime function generator
+enum OperationType {
+    Add,
+    Subtract,
+    Multiply,
+    Divide
+}
+
+function createOperationFunction(operation: OperationType, operand: f64) -> Box<dyn Fn(f64) -> f64> {
+    match operation {
+        case OperationType::Add => Box::new(move |x| x + operand),
+        case OperationType::Subtract => Box::new(move |x| x - operand),
+        case OperationType::Multiply => Box::new(move |x| x * operand),
+        case OperationType::Divide => Box::new(move |x| {
+            if operand != 0.0 { x / operand } else { f64::NAN }
+        })
+    }
+}
+
+// Conditional function chain
+struct FunctionChain<T> {
+    functions: Vec<Box<dyn Fn(T) -> T>>
+}
+
+impl<T> FunctionChain<T>
+where
+    T: 'static
+{
+    function new() -> Self {
+        FunctionChain { functions: Vec::new() }
+    }
+    
+    function add<F>(mut self, function: F) -> Self
+    where
+        F: Fn(T) -> T + 'static
+    {
+        self.functions.push(Box::new(function))
+        self
+    }
+    
+    function conditionalAdd<F>(mut self, condition: bool, function: F) -> Self
+    where
+        F: Fn(T) -> T + 'static
+    {
+        if condition {
+            self.functions.push(Box::new(function))
+        }
+        self
+    }
+    
+    function execute(self, initialValue: T) -> T {
+        self.functions.into_iter().fold(initialValue, |value, function| function(value))
+    }
+}
+
+// Configurable validator generator
+struct ValidationRule<T> {
+    name: string,
+    validationFunction: Box<dyn Fn(&T) -> bool>
+}
+
+struct Validator<T> {
+    rules: Vec<ValidationRule<T>>
+}
+
+impl<T> Validator<T> {
+    function new() -> Self {
+        Validator { rules: Vec::new() }
+    }
+    
+    function addRule<F>(mut self, name: string, validationFunction: F) -> Self
+    where
+        F: Fn(&T) -> bool + 'static
+    {
+        self.rules.push(ValidationRule { 
+            name, 
+            validationFunction: Box::new(validationFunction) 
+        })
+        self
+    }
+    
+    function validate(&self, value: &T) -> Result<(), Vec<string>> {
+        let mut errors = Vec::new()
+        
+        for rule in &self.rules {
+            if !(rule.validationFunction)(value) {
+                errors.push(rule.name.clone())
+            }
+        }
+        
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            Err(errors)
+        }
+    }
+} test {
+    // Dynamic function generation test
+    let add10 = createOperationFunction(OperationType::Add, 10.0)
+    let multiply2 = createOperationFunction(OperationType::Multiply, 2.0)
+    
+    assert add10(5.0) == 15.0
+    assert multiply2(7.0) == 14.0
+    
+    // Function chain test
+    let chain = FunctionChain::new()
+        .add(|x: i32| x + 1)
+        .conditionalAdd(true, |x: i32| x * 2)
+        .add(|x: i32| x - 3)
+    
+    let result = chain.execute(5)  // ((5 + 1) * 2) - 3 = 9
+    assert result == 9
+    
+    // Validator test
+    let numberValidator = Validator::new()
+        .addRule("must be positive".to_string(), |&x: &i32| x > 0)
+        .addRule("must be less than 100".to_string(), |&x: &i32| x < 100)
+        .addRule("must be even".to_string(), |&x: &i32| x % 2 == 0)
+    
+    assert numberValidator.validate(&50).is_ok()
+    assert numberValidator.validate(&-5).is_err()
+    assert numberValidator.validate(&51).is_err()  // Fails because it's odd
+}
+
+// Usage example
+let calculationChain = FunctionChain::new()
+    .add(|x: f64| x * 1.5)        // 50% increase
+    .conditionalAdd(true, |x| x + 10.0) // Add 10
+    .add(|x| x.round())            // Round
+
+let finalResult = calculationChain.execute(7.3)
+print!("Calculation result: {}", finalResult)
+
+let stringValidator = Validator::new()
+    .addRule("not empty".to_string(), |s: &string| !s.is_empty())
+    .addRule("minimum length".to_string(), |s: &string| s.len() >= 3)
+    .addRule("contains special char".to_string(), |s: &string| s.contains('@'))
+
+match stringValidator.validate(&"test@example.com".to_string()) {
+    case Ok(()) => print!("Validation successful!"),
+    case Err(errors) => print!("Validation failed: {:?}", errors)
+}
+```
+
+### Plugin System
+
+```rust
+// Plugin interface
+trait Plugin {
+    function name(&self) -> &str
+    function execute(&self, input: &str) -> string
+}
+
+// Closure-based plugin
+struct ClosurePlugin<F>
+where
+    F: Fn(&str) -> string
+{
+    name: string,
+    executeFunction: F
+}
+
+impl<F> ClosurePlugin<F>
+where
+    F: Fn(&str) -> string
+{
+    function new(name: string, executeFunction: F) -> Self {
+        ClosurePlugin { name, executeFunction }
+    }
+}
+
+impl<F> Plugin for ClosurePlugin<F>
+where
+    F: Fn(&str) -> string
+{
+    function name(&self) -> &str {
+        &self.name
+    }
+    
+    function execute(&self, input: &str) -> string {
+        (self.executeFunction)(input)
+    }
+}
+
+// Plugin manager
+struct PluginManager {
+    plugins: Vec<Box<dyn Plugin>>
+}
+
+impl PluginManager {
+    function new() -> Self {
+        PluginManager { plugins: Vec::new() }
+    }
+    
+    function registerPlugin<P>(mut self, plugin: P) -> Self
+    where
+        P: Plugin + 'static
+    {
+        self.plugins.push(Box::new(plugin))
+        self
+    }
+    
+    function executeAllPlugins(&self, input: &str) -> Vec<(string, string)> {
+        self.plugins
+            .iter()
+            .map(|plugin| (plugin.name().to_string(), plugin.execute(input)))
+            .collect()
+    }
+    
+    function findPlugin(&self, name: &str) -> Option<&dyn Plugin> {
+        self.plugins
+            .iter()
+            .find(|plugin| plugin.name() == name)
+            .map(|plugin| plugin.as_ref())
+    }
+}
+
+// Middleware system
+type Middleware<T> = Box<dyn Fn(T, Box<dyn Fn(T) -> T>) -> T>
+
+struct MiddlewareChain<T> {
+    middlewares: Vec<Middleware<T>>
+}
+
+impl<T> MiddlewareChain<T>
+where
+    T: 'static
+{
+    function new() -> Self {
+        MiddlewareChain { middlewares: Vec::new() }
+    }
+    
+    function addMiddleware<F>(mut self, middleware: F) -> Self
+    where
+        F: Fn(T, Box<dyn Fn(T) -> T>) -> T + 'static
+    {
+        self.middlewares.push(Box::new(middleware))
+        self
+    }
+    
+    function execute<F>(self, input: T, finalHandler: F) -> T
+    where
+        F: Fn(T) -> T + 'static
+    {
+        let mut chain = Box::new(finalHandler) as Box<dyn Fn(T) -> T>
+        
+        for middleware in self.middlewares.into_iter().rev() {
+            let previousChain = chain
+            chain = Box::new(move |input| middleware(input, previousChain))
+        }
+        
+        chain(input)
+    }
+} test {
+    // Plugin system test
+    let manager = PluginManager::new()
+        .registerPlugin(ClosurePlugin::new(
+            "uppercase".to_string(),
+            |text| text.to_uppercase()
+        ))
+        .registerPlugin(ClosurePlugin::new(
+            "length counter".to_string(),
+            |text| format!("Length: {}", text.len())
+        ))
+        .registerPlugin(ClosurePlugin::new(
+            "reverse".to_string(),
+            |text| text.chars().rev().collect()
+        ))
+    
+    let results = manager.executeAllPlugins("hello world")
+    assert results.len() == 3
+    
+    match manager.findPlugin("uppercase") { case Some(uppercasePlugin) => assert uppercasePlugin.execute("test") == "TEST", case None => {} }
+    
+    // Middleware test
+    let chain = MiddlewareChain::new()
+        .addMiddleware(|value: i32, next| {
+            print!("Middleware 1: input {}", value)
+            let result = next(value + 1)
+            print!("Middleware 1: output {}", result)
+            result
+        })
+        .addMiddleware(|value, next| {
+            print!("Middleware 2: input {}", value)
+            let result = next(value * 2)
+            print!("Middleware 2: output {}", result)
+            result
+        })
+    
+    let finalResult = chain.execute(5, |value| {
+        print!("Final handler: {}", value)
+        value + 10
+    })
+    
+    assert finalResult == 22  // ((5 + 1) * 2) + 10
+}
+
+// Usage example
+let textProcessingManager = PluginManager::new()
+    .registerPlugin(ClosurePlugin::new(
+        "HTML escape".to_string(),
+        |text| text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    ))
+    .registerPlugin(ClosurePlugin::new(
+        "markdown emphasis".to_string(),
+        |text| format!("**{}**", text)
+    ))
+
+let processingResults = textProcessingManager.executeAllPlugins("Hello <world> & friends!")
+
+for (pluginName, result) in processingResults {
+    print!("{}: {}", pluginName, result)
+}
+```
+
+##  Closure Performance Optimization
+
+### Memory-Efficient Closures
+
+```rust
+// Reference-based closure (memory efficient)
+function referenceBasedClosure(data: &[i32]) -> impl Fn(usize) -> Option<i32> + '_ {
+    move |index| data.get(index).copied()
+}
+
+// Smart pointer utilization
+use std::rc::Rc
+use std::sync::Arc
+
+function createSharedClosure(sharedData: Rc<Vec<i32>>) -> impl Fn(usize) -> Option<i32> {
+    move |index| sharedData.get(index).copied()
+}
+
+function createThreadSafeClosure(sharedData: Arc<Vec<i32>>) -> impl Fn(usize) -> Option<i32> + Send + Sync {
+    move |index| sharedData.get(index).copied()
+}
+
+// Lazy initialization closure
+struct LazyInitialization<T, F>
+where
+    F: FnOnce() -> T
+{
+    initFunction: Option<F>,
+    value: Option<T>
+}
+
+impl<T, F> LazyInitialization<T, F>
+where
+    F: FnOnce() -> T
+{
+    function new(initFunction: F) -> Self {
+        LazyInitialization {
+            initFunction: Some(initFunction),
+            value: None
+        }
+    }
+    
+    function get(&mut self) -> &T {
+        if self.value.is_none() {
+            let initFunction = self.initFunction.take().unwrap()
+            self.value = Some(initFunction())
+        }
+        self.value.as_ref().unwrap()
+    }
+}
+
+// Closure pooling
+struct ClosurePool<F, T, U>
+where
+    F: Fn(T) -> U
+{
+    functions: Vec<F>,
+    currentIndex: usize
+}
+
+impl<F, T, U> ClosurePool<F, T, U>
+where
+    F: Fn(T) -> U + Clone
+{
+    function new(function: F, size: usize) -> Self {
+        ClosurePool {
+            functions: vec![function; size],
+            currentIndex: 0
+        }
+    }
+    
+    function execute(&mut self, input: T) -> U {
+        let function = &self.functions[self.currentIndex]
+        self.currentIndex = (self.currentIndex + 1) % self.functions.len()
+        function(input)
+    }
+} test {
+    // Shared closure test
+    let data = Rc::new(vec![1, 2, 3, 4, 5])
+    let closure1 = createSharedClosure(data.clone())
+    let closure2 = createSharedClosure(data.clone())
+    
+    assert closure1(0) == Some(1)
+    assert closure2(4) == Some(5)
+    
+    // Lazy initialization test
+    let mut lazyValue = LazyInitialization::new(|| {
+        print!("Expensive computation executed")
+        42
+    })
+    
+    assert *lazyValue.get() == 42
+    assert *lazyValue.get() == 42  // No computation on second call
+    
+    // Closure pool test
+    let mut pool = ClosurePool::new(|x: i32| x * 2, 3)
+    
+    assert pool.execute(5) == 10
+    assert pool.execute(3) == 6
+}
+
+// Performance benchmarking closure
+function benchmark<F, T>(name: &str, function: F, input: T) -> T
+where
+    F: FnOnce(T) -> T
+{
+    use std::time::Instant
+    
+    let startTime = Instant::now()
+    let result = function(input)
+    let elapsedTime = startTime.elapsed()
+    
+    print!("{} execution time: {:?}", name, elapsedTime)
+    result
+}
+
+// Cached closure
+use std::collections::HashMap
+
+struct CachedClosure<F, K, V>
+where
+    F: Fn(K) -> V,
+    K: Clone + std::hash::Hash + Eq,
+    V: Clone
+{
+    function: F,
+    cache: HashMap<K, V>
+}
+
+impl<F, K, V> CachedClosure<F, K, V>
+where
+    F: Fn(K) -> V,
+    K: Clone + std::hash::Hash + Eq,
+    V: Clone
+{
+    function new(function: F) -> Self {
+        CachedClosure {
+            function,
+            cache: HashMap::new()
+        }
+    }
+    
+    function execute(&mut self, key: K) -> V {
+        match self.cache.get(&key) { case Some(value) => return value.clone(), case None => {} }
+        
+        let result = (self.function)(key.clone())
+        self.cache.insert(key, result.clone())
+        result
+    }
+    
+    function cacheSize(&self) -> usize {
+        self.cache.len()
+    }
+    
+    function clearCache(&mut self) {
+        self.cache.clear()
+    }
+}
+
+// Usage example
+let sharedVector = Arc::new(vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+let accessClosure = createThreadSafeClosure(sharedVector)
+
+print!("Value access: {:?}", accessClosure(3))
+
+let mut fibonacciCache = CachedClosure::new(|n: i32| -> i64 {
+    if n <= 1 { n as i64 } else { 
+        // In reality this should use the cache recursively,
+        // but here's a simplified version
+        (n as i64).pow(2)  // Simple calculation for example
+    }
+})
+
+benchmark("Fibonacci calculation", |_| {
+    for i in 1..=20 {
+        fibonacciCache.execute(i)
+    }
+}, ())
+
+print!("Cache size: {}", fibonacciCache.cacheSize())
+```
+
+##  Mastering Closures
+
+Closures are one of Topaz's most powerful features:
+
+###  When to use closures:
+- **Callback functions** and event handling
+- **Higher-order function** implementation
+- When **state encapsulation** is needed
+- **Lazy execution** and **partial application**
+
+###  Precautions:
+- Prevent **memory leaks** (watch for circular references)
+- **Performance considerations** (avoid unnecessary closure creation)
+- **Lifetime management** (choose appropriate capture methods)
+- Recognize **debugging complexity**
+
+###  Advantages of Topaz closures:
+- **Type safety** guaranteed
+- **Automatic memory management**
+- Support for **various capture methods**
+- Perfect support for **functional programming** paradigm
+
+Write more expressive code with closures! 

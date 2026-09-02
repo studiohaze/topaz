@@ -1,0 +1,5 @@
+
+enum Shape derives Eq, Order, Show { Dot, Circle(int) }
+let s = Shape.Circle(3)
+print("{s}")
+s

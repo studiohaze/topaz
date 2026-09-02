@@ -1,0 +1,2 @@
+let f = Map.ofEntries
+f([{ key: "a", value: 1 }]).getOr("a", 0)

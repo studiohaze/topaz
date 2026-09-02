@@ -1,0 +1,45 @@
+import std.math
+import std.bytes
+import std.codec
+
+function demo() -> Result<string, string> {
+  let gz = codec.gzipCompress(bytes.encodeUtf8("hello"))?
+  let deflated = codec.deflateCompress(bytes.encodeUtf8("topaz"))?
+  let zstd = codec.zstdCompress(bytes.encodeUtf8("hi"), 7)?
+  let gzPlain = codec.gzipDecompress(gz)?
+  let defPlain = codec.deflateDecompress(deflated)?
+  let zstdPlain = codec.zstdDecompress(zstd)?
+  let round = gzPlain.decodeUtf8()?
+  let defRound = defPlain.decodeUtf8()?
+  let zstdRound = zstdPlain.decodeUtf8()?
+  let parsed = math.parseFloat("  3.5  ")?
+  let bad = match math.parseFloat("nan") {
+    case Ok(_) => "bad"
+    case Err(_) => "err"
+  }
+  let trig = math.sin(1.5707963267948966) > 0.999999 && math.cos(3.141592653589793) < -0.999999
+  let built = bytes.fromArray([65, 66, 67])?
+  let emptyBytes = bytes.empty()
+  let decoded = bytes.decodeUtf8(bytes.slice(bytes.encodeUtf8("abcdef"), 1, 4))?
+  let byteGet = match bytes.get(built, 2) {
+    case Some(n) => "{n}"
+    case None => "none"
+  }
+  let byteMissing = match bytes.get(built, 9) {
+    case Some(n) => "{n}"
+    case None => "none"
+  }
+  let arr = bytes.toArray(built)
+  let arrGet = match arr.get(2) {
+    case Some(n) => "{n}"
+    case None => "none"
+  }
+  let badBytes = match bytes.fromArray([256]) {
+    case Ok(_) => "ok"
+    case Err(error) => error
+  }
+  let byteSummary = "{bytes.length(built)}:{bytes.isEmpty(emptyBytes)}:{byteGet}:{byteMissing}:{bytes.toHex(built)}:{bytes.toBase64(built)}:{arr.length}:{arrGet}:{decoded}:{badBytes}"
+  Ok("{math.round(-2.5)}|{math.floor(3.7)}|{parsed}|{bad}|{trig}|{gz.toHex()}|{deflated.toHex()}|{zstd.toHex()}|{round}/{defRound}/{zstdRound}|{byteSummary}")
+}
+
+demo()

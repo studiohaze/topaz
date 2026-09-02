@@ -1,0 +1,6 @@
+function deep(n: int) -> int { if n == 0 { 0 } else { deep(n - 1) } }
+let r = concurrent {
+  a: deep(900)
+  b: deep(900)
+}
+r.a + r.b

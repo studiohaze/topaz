@@ -1,0 +1,3 @@
+let v = [Ok(Some(3))]
+let [Ok(Some(x))] = v
+x

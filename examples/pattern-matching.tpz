@@ -1,0 +1,16 @@
+// pattern-matching.tpz — match expressions with literals, guards, ranges,
+// and a catch-all, used to return a value from a function.
+// Run: topaz run examples/pattern-matching.tpz
+
+function classify(n: int) -> string {
+    return match n {
+        case 0 => "zero"
+        case x if x < 0 => "negative"
+        case 1..9 => "single digit"
+        case _ => "large"
+    }
+}
+
+for n in [0, -3, 4, 99] {
+    print("{n} -> {classify(n)}")
+}

@@ -1,0 +1,8 @@
+let nums = [3, 7, 11, 4]
+let mut idx = 0
+let found = loop {
+  if idx >= nums.length { break -1 }
+  if nums[idx] == 11 { break idx }
+  idx = idx + 1
+}
+found

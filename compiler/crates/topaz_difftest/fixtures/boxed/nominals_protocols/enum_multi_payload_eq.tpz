@@ -1,0 +1,6 @@
+enum Op { Add }
+enum Expr { Num(int), Bin(Op, Expr, Expr) }
+let a = Expr.Bin(Op.Add, Expr.Num(1), Expr.Num(2)) == Expr.Bin(Op.Add, Expr.Num(1), Expr.Num(2))
+let b = Expr.Bin(Op.Add, Expr.Num(1), Expr.Num(2)) == Expr.Bin(Op.Add, Expr.Num(1), Expr.Num(9))
+print("{a}/{b}")
+0

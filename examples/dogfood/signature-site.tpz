@@ -1,0 +1,31 @@
+function cell(row: Map<string, string>, name: string) -> string {
+  row.getOr(name, "")
+}
+
+function slug(name: string) -> Result<string, string> {
+  let spaces = Regex.compile(" ")?
+  Ok(spaces.replaceAll(name.trim(), "-"))
+}
+
+function renderSignatures(csv: string) -> Result<string, string> {
+  let rows = CSV.parseWithHeader(csv)?
+  let mut lines: Array<string> = ["# API", ""]
+  for row in rows {
+    let name = cell(row, "name")
+    let kind = cell(row, "kind")
+    let path = cell(row, "path")
+    let anchor = slug(name)?
+    lines.push("## {name}")
+    lines.push("")
+    lines.push("- kind: {kind}")
+    lines.push("- path: {path}")
+    lines.push("- anchor: #{anchor}")
+    lines.push("")
+  }
+  Ok(lines.join("\n"))
+}
+
+match renderSignatures(input()) {
+  case Ok(markdown) => print(markdown)
+  case Err(error) => print("error: {error}")
+}

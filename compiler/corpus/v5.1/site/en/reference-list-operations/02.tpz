@@ -1,0 +1,2 @@
+let base = Array.of(1, 2)
+let extended = [0, ...base, 3]     // [0, 1, 2, 3]

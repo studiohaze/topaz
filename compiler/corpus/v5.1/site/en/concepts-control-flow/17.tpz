@@ -1,0 +1,32 @@
+// Result-first error handling
+function safeFileRead(filename: string) -> Result<string, string> {
+    if !filename.endsWith(".txt") {
+        return Err("Only text files are supported")
+    }
+    
+    // File reading simulation
+    if Math.random() > 0.7 {
+        return Err("File not found")
+    }
+    
+    return Ok("File content here")
+}
+
+// Control flow with error handling
+for filename in ["data.txt", "config.json", "readme.txt"] {
+    match safeFileRead(filename) {
+        case Ok(content) => {
+            print("Successfully read: {filename}")
+            print("Content: {content}")
+            // Success path for this file
+        }
+        case Err(errorMessage) => {
+            print("Error ({filename}): {errorMessage}")
+            if errorMessage.contains("supported") {
+                print("Unsupported file format, noted")
+            } else {
+                print("Critical error noted")
+            }
+        }
+    }
+}

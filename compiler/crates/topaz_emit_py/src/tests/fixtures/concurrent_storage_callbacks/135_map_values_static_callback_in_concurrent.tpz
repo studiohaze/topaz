@@ -1,0 +1,13 @@
+
+function dbl(x: int) -> int {
+    x * 2
+}
+
+concurrent {
+    slow: {
+        let values = map { "a": 1, "b": 2 }
+        values.mapValues(dbl)
+    }
+    fast: 0
+}
+0

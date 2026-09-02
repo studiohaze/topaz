@@ -1,0 +1,12 @@
+enum Color {
+    Red,
+    Blue,
+}
+
+let same = Color.Red == Color.Red
+let ordered = Color.Red < Color.Blue
+let mut labels: Map<Color, string> = Map.new()
+labels.insert(Color.Blue, "blue")
+let mut seen: Set<Color> = Set.of()
+seen.add(Color.Red)
+print("{same}:{ordered}:{labels.get(Color.Blue)}:{Color.Red}")

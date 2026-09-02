@@ -1,0 +1,18 @@
+let trueValue = true
+let falseValue = false
+
+// Logical AND
+let andResult = trueValue && falseValue     // false
+let andResult2 = trueValue && trueValue     // true
+
+// Logical OR  
+let orResult = trueValue || falseValue      // true
+let orResult2 = falseValue || falseValue    // false
+
+// Logical NOT
+let notResult = !trueValue           // false
+let notResult2 = !falseValue         // true
+
+print("AND result: {andResult}")
+print("OR result: {orResult}")
+print("NOT result: {notResult}")

@@ -1,0 +1,17 @@
+
+record User { name: string }
+record Admin { name: string }
+function classify(value: User | Admin | { name: string }) -> string {
+    match value {
+        case User { name } => "user:{name}"
+        case Admin { name } => "admin:{name}"
+        case { name } => "structural:{name}"
+    }
+}
+function main() -> string {
+    let user: User = User { name: "Ada" }
+    let admin: Admin = Admin { name: "root" }
+    let structural = { name: "plain" }
+    "{classify(user)}|{classify(admin)}|{classify(structural)}"
+}
+main()

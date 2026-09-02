@@ -1,0 +1,9 @@
+protocol Label {
+  function label(value: Self) -> string
+}
+record User derives Eq, Order, Show, JSON { name: string }
+impl Label<User> {
+  function label(value: User) -> string { "user:{value.name}" }
+}
+let user: User = User { name: "Ada" }
+print("{Label.label(user)}:{Show.show(user)}:{Eq.equals(user, user)}")

@@ -1,0 +1,10 @@
+
+function mark(label: string, xs: Array<int>) -> Array<int> {
+    print(label)
+    xs
+}
+function main() -> Option<Array<int>> {
+    let xs: Option<Array<int>> = Some([1])
+    xs?.filter(...mark("array-filter", [0]))
+}
+main()

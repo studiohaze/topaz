@@ -1,0 +1,15 @@
+
+export record Response { status: int, body: string }
+
+export function text(status: int, body: string) -> Response {
+    Response { status: status, body: body }
+}
+
+export function renderResponse(res: Response) -> Result<string, string> {
+    let raw = "\{\"body\":\"{res.body}\",\"status\":{res.status}\}"
+    let parsed = match JSON.parse(raw) {
+        case Ok(value) => value
+        case Err(e) => return Err(e.message)
+    }
+    JSON.stringify(parsed)
+}

@@ -1,0 +1,7 @@
+let base = { x: 1, y: 2 }
+let moved = base { x: 3 }
+
+let other = base
+{
+    standalone()
+}

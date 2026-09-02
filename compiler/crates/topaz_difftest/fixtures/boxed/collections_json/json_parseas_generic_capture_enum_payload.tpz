@@ -1,0 +1,8 @@
+enum Cell<T> { Value(T) }
+record Envelope<T> { cell: Cell<T> }
+match JSON.parseAs<Envelope<int>>("\{\"cell\":\{\"tag\":\"Value\",\"values\":[7]\}\}") {
+  case Ok(envelope) => match envelope.cell {
+    case Cell.Value(value) => value
+  }
+  case Err(e) => 0
+}

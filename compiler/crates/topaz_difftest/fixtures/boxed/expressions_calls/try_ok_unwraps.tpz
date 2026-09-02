@@ -1,0 +1,3 @@
+let f = (r) => { let v = r?
+v + 1 }
+f(Ok(5))

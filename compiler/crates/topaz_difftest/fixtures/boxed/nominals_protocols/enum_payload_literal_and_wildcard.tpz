@@ -1,0 +1,10 @@
+enum Shape { Circle(int), Dot }
+function f(s: Shape) -> string {
+  match s {
+    case Circle(0) => "zero"
+    case Circle(_) => "some"
+    case Dot => "dot"
+  }
+}
+print("{f(Shape.Circle(0))}/{f(Shape.Circle(9))}/{f(Shape.Dot)}")
+0

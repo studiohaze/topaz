@@ -1,0 +1,30 @@
+record Entry derives Show {
+  key: string,
+  value: int,
+}
+
+enum Lookup derives Show {
+  Hit(int),
+  Miss,
+}
+
+function lookup(entries: Array<Entry>, key: string) -> Lookup {
+  for entry in entries {
+    if entry.key == key {
+      return Lookup.Hit(entry.value)
+    }
+  }
+  Lookup.Miss
+}
+
+let entries = [Entry { key: "b", value: 2 }, Entry { key: "a", value: 1 }]
+let mut index: Map<string, int> = Map.new()
+index.insert("b", 2)
+index.insert("a", 1)
+let tags = Set.of("portable", "data", "portable")
+let keys: Array<string> = index.keys
+let tagList: Array<string> = tags.toArray()
+print("lookup={lookup(entries, "a")}")
+print("keys={keys.sorted().join(",")}")
+print("tags={tagList.sorted().join(",")}")
+print("entry={entries[0]}")

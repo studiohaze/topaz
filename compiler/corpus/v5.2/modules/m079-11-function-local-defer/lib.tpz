@@ -1,0 +1,5 @@
+function setup() -> int {
+    defer { () }
+    1
+}
+export let v = setup()

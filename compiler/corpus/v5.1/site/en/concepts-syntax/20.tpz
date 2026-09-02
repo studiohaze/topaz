@@ -1,0 +1,3 @@
+let user = { name: "Alice", age: 20, city: "Seoul" }
+let updated = user{ age: user.age + 1, city: "Busan" }
+// { name: "Alice", age: 21, city: "Busan" }

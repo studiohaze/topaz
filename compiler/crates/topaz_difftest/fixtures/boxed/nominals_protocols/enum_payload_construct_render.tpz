@@ -1,0 +1,4 @@
+enum Shape { Circle(int), Dot }
+let s: Shape = Shape.Circle(3)
+print("{s}")
+0

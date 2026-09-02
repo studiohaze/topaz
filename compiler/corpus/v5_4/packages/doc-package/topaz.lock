@@ -1,0 +1,5 @@
+[[package]]
+name = "docpkg"
+version = "0.1.0"
+source = "root"
+manifest_hash = "sha256:2c2a8e580fe38d55c807c31139c649bdea3fdb4afe45e15016e2258b08bf12d5"

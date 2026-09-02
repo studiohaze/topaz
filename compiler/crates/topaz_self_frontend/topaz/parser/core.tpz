@@ -1,0 +1,445 @@
+// Parser cursor, diagnostics, node construction, and recovery primitives.
+// Grammar leaves share this state and these token helpers; no grammar family is
+// selected or dispatched from the core itself.
+
+import types {
+  PreviewAstAttribute,
+  PreviewDiagnostic,
+  PreviewToken,
+  SyntaxNode,
+}
+
+export record ParserRequest {
+  kind: string,
+  precedence: int,
+  field: string,
+  index: int,
+}
+
+// Position, synthetic-token, and diagnostic state shared across recursive grammar services.
+export record Parser {
+  source: Bytes,
+  tokens: Array<PreviewToken>,
+  position: Array<int>,
+  lastHi: Array<int>,
+  pendingGt: Array<int>,
+  nakedLambda: Array<bool>,
+  recordUpdate: Array<bool>,
+  diagnostics: Array<PreviewDiagnostic>,
+}
+
+export type ParserService = (Parser, ParserRequest) -> Result<SyntaxNode, string>
+
+export function invokeParseBlock(
+  service: ParserService,
+  parser: Parser,
+  field: string,
+  index: int,
+) -> Result<SyntaxNode, string> {
+  service(parser, ParserRequest {
+    kind: "parse-block",
+    precedence: 0,
+    field: field,
+    index: index,
+  })
+}
+
+export function invokeParseExpressionBp(
+  service: ParserService,
+  parser: Parser,
+  precedence: int,
+  field: string,
+  index: int,
+) -> Result<SyntaxNode, string> {
+  service(parser, ParserRequest {
+    kind: "parse-expression-bp",
+    precedence: precedence,
+    field: field,
+    index: index,
+  })
+}
+
+export function boxValue(values: Array<int>) -> int {
+  values[0]
+}
+
+export function setBox(values: Array<int>, value: int) -> () {
+  let mut target = values
+  target[0] = value
+  ()
+}
+
+export function lambdaAllowed(parser: Parser) -> bool {
+  parser.nakedLambda[0]
+}
+
+export function setLambdaAllowed(parser: Parser, value: bool) -> () {
+  let mut target = parser.nakedLambda
+  target[0] = value
+  ()
+}
+
+export function recordUpdateAllowed(parser: Parser) -> bool {
+  parser.recordUpdate[0]
+}
+
+export function setRecordUpdateAllowed(parser: Parser, value: bool) -> () {
+  let mut target = parser.recordUpdate
+  target[0] = value
+  ()
+}
+
+export function layoutTokenAt(parser: Parser, position: int) -> PreviewToken {
+  match parser.tokens.get(position) {
+    case Some(value) => value
+    case None => parser.tokens[parser.tokens.length - 1]
+  }
+}
+
+export function tokenAt(parser: Parser, offset: int) -> PreviewToken {
+  if parser.pendingGt.length > 0 {
+    if offset == 0 {
+      let hi = boxValue(parser.pendingGt)
+      return PreviewToken {
+        kind: "gt",
+        lo: hi - 1,
+        hi: hi,
+        stream: "layout",
+        synthetic: true,
+      }
+    }
+    let position = boxValue(parser.position) + offset - 1
+    return layoutTokenAt(parser, position)
+  }
+  let position = boxValue(parser.position) + offset
+  layoutTokenAt(parser, position)
+}
+
+export function current(parser: Parser) -> PreviewToken {
+  tokenAt(parser, 0)
+}
+
+export function at(parser: Parser, kind: string) -> bool {
+  current(parser).kind == kind
+}
+
+export function bump(parser: Parser) -> PreviewToken {
+  let value = current(parser)
+  if parser.pendingGt.length > 0 {
+    let mut pending = parser.pendingGt
+    pending.pop()
+    setBox(parser.lastHi, value.hi)
+    return value
+  }
+  if value.kind != "eof" {
+    setBox(parser.position, boxValue(parser.position) + 1)
+  }
+  setBox(parser.lastHi, value.hi)
+  value
+}
+
+export function eat(parser: Parser, kind: string) -> bool {
+  if at(parser, kind) {
+    bump(parser)
+    true
+  } else {
+    false
+  }
+}
+
+export function text(parser: Parser, lo: int, hi: int) -> string {
+  match parser.source.slice(lo, hi).decodeUtf8() {
+    case Ok(value) => value
+    case Err(_) => ""
+  }
+}
+
+export function diagnostic(code: string, message: string, lo: int, hi: int) -> PreviewDiagnostic {
+  PreviewDiagnostic { code: code, message: message, lo: lo, hi: hi, notes: [] }
+}
+
+export function addDiagnostic(
+  parser: Parser,
+  code: string,
+  message: string,
+  lo: int,
+  hi: int,
+) -> () {
+  let mut diagnostics = parser.diagnostics
+  diagnostics.push(diagnostic(code, message, lo, hi))
+  ()
+}
+
+export function rejectReservedBinding(parser: Parser, name: PreviewToken) -> () {
+  if text(parser, name.lo, name.hi) == "None" {
+    addDiagnostic(
+      parser,
+      "TPZ2012",
+      "`None` is the Option constructor (§22.1) and cannot be a binding name",
+      name.lo,
+      name.hi,
+    )
+  }
+  ()
+}
+
+export function fail(parser: Parser, message: string) -> Result<int, string> {
+  let token = current(parser)
+  let mut diagnostics = parser.diagnostics
+  diagnostics.push(diagnostic("TPZ2001", message, token.lo, token.hi))
+  Err(message)
+}
+
+export function expect(
+  parser: Parser,
+  kind: string,
+  description: string,
+) -> Result<PreviewToken, string> {
+  if at(parser, kind) {
+    return Ok(bump(parser))
+  }
+  fail(parser, "expected {description}")?
+  Err("expected {description}")
+}
+
+export function expectLeftBrace(parser: Parser) -> Result<PreviewToken, string> {
+  expect(parser, "left-brace", "`\{`")
+}
+
+export function expectRightBrace(parser: Parser) -> Result<PreviewToken, string> {
+  expect(parser, "right-brace", "`\}`")
+}
+
+export function identifier(parser: Parser, description: string) -> Result<PreviewToken, string> {
+  if at(parser, "identifier") {
+    return Ok(bump(parser))
+  }
+  fail(parser, "expected {description}")?
+  Err("expected {description}")
+}
+
+export function isFieldNameKind(kind: string) -> bool {
+  kind == "identifier" || kind.startsWith("keyword/")
+}
+
+export function fieldName(parser: Parser, description: string) -> Result<PreviewToken, string> {
+  if isFieldNameKind(current(parser).kind) {
+    return Ok(bump(parser))
+  }
+  fail(parser, "expected {description}")?
+  Err("expected {description}")
+}
+
+export function matchingParenFollowedBy(parser: Parser, expected: string) -> bool {
+  let mut depth = 0
+  let mut offset = 0
+  while true {
+    let kind = tokenAt(parser, offset).kind
+    if kind == "eof" {
+      return false
+    }
+    if kind == "left-paren" || kind == "left-bracket" || kind == "left-brace" {
+      depth += 1
+    } else if kind == "right-paren" ||
+      kind == "right-bracket" ||
+      kind == "right-brace" {
+      depth -= 1
+      if depth == 0 {
+        return tokenAt(parser, offset + 1).kind == expected
+      }
+    }
+    offset += 1
+  }
+  false
+}
+
+export function stringAttribute(name: string, value: string) -> PreviewAstAttribute {
+  PreviewAstAttribute { name: name, kind: "string", value: value }
+}
+
+export function boolAttribute(name: string, value: bool) -> PreviewAstAttribute {
+  PreviewAstAttribute {
+    name: name,
+    kind: "bool",
+    value: if value { "true" } else { "false" },
+  }
+}
+
+export function node(
+  kind: string,
+  lo: int,
+  hi: int,
+  field: string,
+  index: int,
+  attributes: Array<PreviewAstAttribute>,
+  children: Array<SyntaxNode>,
+) -> SyntaxNode {
+  SyntaxNode {
+    kind: kind,
+    lo: lo,
+    hi: hi,
+    field: field,
+    index: index,
+    attributes: attributes,
+    children: children,
+  }
+}
+
+export function attach(value: SyntaxNode, field: string, index: int) -> SyntaxNode {
+  node(
+    value.kind,
+    value.lo,
+    value.hi,
+    field,
+    index,
+    value.attributes,
+    value.children,
+  )
+}
+
+export function identNode(value: PreviewToken, field: string, index: int) -> SyntaxNode {
+  node("identifier", value.lo, value.hi, field, index, [], [])
+}
+
+function parseNestedExpression(
+  service: ParserService,
+  parser: Parser,
+  field: string,
+  index: int,
+) -> Result<SyntaxNode, string> {
+  let previousLambda = lambdaAllowed(parser)
+  let previousRecordUpdate = recordUpdateAllowed(parser)
+  setLambdaAllowed(parser, true)
+  setRecordUpdateAllowed(parser, true)
+  let result = invokeParseExpressionBp(service, parser, 1, field, index)
+  setRecordUpdateAllowed(parser, previousRecordUpdate)
+  setLambdaAllowed(parser, previousLambda)
+  result
+}
+
+export function parseString(
+  service: ParserService,
+  parser: Parser,
+  field: string,
+  index: int,
+) -> Result<SyntaxNode, string> {
+  let start = bump(parser)
+  let tagged = start.kind.contains("tagged=true")
+  let multiline = start.kind.contains("multiline=true")
+  let delimiterLength = if multiline { 3 } else { 1 }
+  let mut children: Array<SyntaxNode> = []
+  if tagged {
+    let tagHi = start.hi - delimiterLength
+    let tag = text(parser, start.lo, tagHi)
+    if tag != "p" && tag != "r" && tag != "sh" && tag != "sql" {
+      let mut diagnostics = parser.diagnostics
+      diagnostics.push(diagnostic(
+        "TPZ2002",
+        "unknown template tag `{tag}`; the registry is `p`, `r`, `sh`, `sql`",
+        start.lo,
+        tagHi,
+      ))
+    }
+    children.push(node("template-tag", start.lo, tagHi, "tag", 0, [], []))
+  }
+  let mut partIndex = 0
+  while !at(parser, "string-end") && !at(parser, "eof") {
+    if at(parser, "string-text") {
+      let part = bump(parser)
+      children.push(node(
+        "string-part/text",
+        part.lo,
+        part.hi,
+        "parts",
+        partIndex,
+        [],
+        [],
+      ))
+      partIndex += 1
+      continue
+    }
+    if eat(parser, "interpolation-start") {
+      if at(parser, "interpolation-end") {
+        addDiagnostic(
+          parser,
+          "TPZ2001",
+          "expected an expression",
+          current(parser).lo,
+          current(parser).hi,
+        )
+        bump(parser)
+      } else {
+        let expression = parseNestedExpression(service, parser, "value", 0)?
+        expect(parser, "interpolation-end", "an interpolation close")?
+        children.push(node(
+          "string-part/interpolation",
+          expression.lo,
+          expression.hi,
+          "parts",
+          partIndex,
+          [],
+          [expression],
+        ))
+        partIndex += 1
+      }
+      continue
+    }
+    fail(parser, "expected string content")?
+  }
+  let close = expect(parser, "string-end", "a string close")?
+  Ok(node(
+    if tagged { "expression/template" } else { "expression/string" },
+    start.lo,
+    close.hi,
+    field,
+    index,
+    [],
+    children,
+  ))
+}
+
+export function skipSeparators(parser: Parser) -> () {
+  while eat(parser, "separator") {}
+  ()
+}
+
+export function synchronize(parser: Parser) -> () {
+  let mut depth = 0
+  while !at(parser, "eof") {
+    let kind = current(parser).kind
+    if depth == 0 && (kind == "separator" || kind == "right-brace") {
+      break
+    }
+    if kind == "left-paren" || kind == "left-bracket" ||
+      kind == "left-brace" || kind == "interpolation-start" ||
+      kind.startsWith("string-start/") {
+      depth += 1
+    } else if kind == "right-paren" || kind == "right-bracket" ||
+      kind == "right-brace" || kind == "interpolation-end" ||
+      kind == "string-end" {
+      if depth == 0 {
+        break
+      }
+      depth -= 1
+    }
+    bump(parser)
+  }
+  eat(parser, "separator")
+  ()
+}
+
+export function itemBoundary(parser: Parser) -> () {
+  if at(parser, "separator") {
+    skipSeparators(parser)
+  } else if !at(parser, "right-brace") && !at(parser, "eof") {
+    addDiagnostic(
+      parser,
+      "TPZ2001",
+      "expected a statement separator",
+      current(parser).lo,
+      current(parser).hi,
+    )
+    synchronize(parser)
+  }
+  ()
+}

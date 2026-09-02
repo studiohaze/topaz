@@ -1,0 +1,31 @@
+// Add context information to errors
+function loadUserData(id: int) -> Result<{ name: string, settings: { theme: string } }, string> {
+    return match requireUser(id) {
+        case Ok(user) => match readConfigFile("user_{id}.json") {
+            case Ok(settings) => Ok({ name: user.name, settings: settings })
+            case Err(error) => Err("User settings load failed (ID: {id}): {error.message}")
+        }
+        case Err(error) => Err("User lookup failed (ID: {id}): {error}")
+    }
+}
+
+// Step-by-step error handling
+function stepByStepProcessing() -> Result<string, string> {
+    print("Step 1: Validating data...")
+    return match validateData() {
+        case Err(error) => Err("Step 1 failed: {error}")
+        case Ok(validationResult) => {
+            print("Step 2: Transforming data...")
+            match transformData(validationResult) {
+                case Err(error) => Err("Step 2 failed: {error}")
+                case Ok(transformResult) => {
+                    print("Step 3: Saving data...")
+                    match saveData(transformResult) {
+                        case Err(error) => Err("Step 3 failed: {error}")
+                        case Ok(saveResult) => Ok("All steps completed: {saveResult}")
+                    }
+                }
+            }
+        }
+    }
+}

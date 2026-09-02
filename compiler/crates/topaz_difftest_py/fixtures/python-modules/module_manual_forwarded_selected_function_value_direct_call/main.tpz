@@ -1,0 +1,6 @@
+
+import facade { forwarded }
+function main() -> int {
+    forwarded(a: 5) + forwarded(10, b: 3)
+}
+main()

@@ -1,0 +1,7 @@
+function writeLog(message: string) -> Result<(), string> {
+    let file = open("app.log")?
+    defer { file.close() }
+
+    file.write(message)?
+    return Ok(())
+}

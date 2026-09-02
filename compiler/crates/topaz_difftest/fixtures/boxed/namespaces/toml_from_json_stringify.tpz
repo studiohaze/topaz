@@ -1,0 +1,3 @@
+match JSON.parse("{\"name\":\"Ada\",\"age\":36}") { case Ok(j) => match TOML.fromJson(j) { case Ok(t) => TOML.stringify(t)
+case Err(e) => Err(e) }
+case Err(e) => Err(e.message) }

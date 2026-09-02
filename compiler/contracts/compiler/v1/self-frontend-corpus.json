@@ -1,0 +1,147 @@
+{
+  "schema": "topaz.compiler.self-frontend-corpus/v1",
+  "languageMode": "topaz-5.16",
+  "documentationClassificationManifest": "docs/site-samples.json",
+  "inventoryRoots": [
+    "compiler/corpus/v5.1",
+    "compiler/corpus/v5.2",
+    "compiler/corpus/v5_4",
+    "compiler/corpus/v5_6",
+    "compiler/corpus/v5_10",
+    "compiler/corpus/exec",
+    "compiler/crates/topaz_self_frontend/tests/fixtures",
+    "docs/samples"
+  ],
+  "rules": [
+    {
+      "prefix": "compiler/corpus/v5.1/",
+      "disposition": "compatibility-only",
+      "ownerHarness": "explicit topaz-5.1 compatibility verification",
+      "reason": "Frozen v5.1 syntax and diagnostics are not current-mode preview inputs."
+    },
+    {
+      "prefix": "compiler/corpus/v5.2/",
+      "disposition": "compatibility-only",
+      "ownerHarness": "explicit topaz-5.2 compatibility verification",
+      "reason": "Frozen v5.2 evolution fixtures retain their exact historical selector."
+    },
+    {
+      "prefix": "compiler/corpus/v5_4/packages/",
+      "disposition": "compatibility-only",
+      "ownerHarness": "v5.4 package verification",
+      "reason": "The checked package manifests explicitly select language 5.4."
+    },
+    {
+      "prefix": "compiler/corpus/v5_4/extern/",
+      "disposition": "compatibility-only",
+      "ownerHarness": "v5.4 extern replay verification",
+      "reason": "The package manifest explicitly selects language 5.4."
+    },
+    {
+      "prefix": "compiler/corpus/v5_4/exec/",
+      "disposition": "backend/runtime-only",
+      "ownerHarness": "execution corpus verification",
+      "reason": "Observable execution is not a typed-terminal front-end outcome."
+    },
+    {
+      "prefix": "compiler/corpus/v5_4/native-negative/",
+      "disposition": "backend/runtime-only",
+      "ownerHarness": "native lowering negative verification",
+      "reason": "The expected decline belongs to native lowering, not the front end."
+    },
+    {
+      "prefix": "compiler/corpus/v5_4/pending/",
+      "disposition": "pending-invalid",
+      "ownerHarness": "v5.4 pending inventory",
+      "reason": "Prospective syntax cannot be counted as current acceptance."
+    },
+    {
+      "prefix": "compiler/corpus/v5_4/diagnostics/",
+      "disposition": "negative",
+      "ownerHarness": "self-front-end corpus comparison",
+      "reason": "Current-mode source rejection and diagnostic bytes are the expected terminal."
+    },
+    {
+      "prefix": "compiler/corpus/v5_4/check/",
+      "disposition": "admitted",
+      "ownerHarness": "self-front-end corpus comparison",
+      "reason": "Current static-checker inputs compare through their natural accepted or rejected terminal."
+    },
+    {
+      "prefix": "compiler/corpus/v5_4/parse/",
+      "disposition": "admitted",
+      "terminal": "ast",
+      "ownerHarness": "self-front-end corpus comparison",
+      "reason": "Current parser-owned inputs compare through their canonical AST terminal."
+    },
+    {
+      "prefix": "compiler/corpus/v5_4/performance-smoke/",
+      "disposition": "admitted",
+      "ownerHarness": "self-front-end resource verification",
+      "reason": "The fixed small workload is both a semantic and resource canary."
+    },
+    {
+      "prefix": "compiler/corpus/v5_4/stdlib/test-assertions.tpz",
+      "disposition": "backend/runtime-only",
+      "ownerHarness": "v5.4 stdlib execution verification",
+      "reason": "The fixture manifest assigns this assertion-helper program to execution; Rust Stage 0 cannot emit a clean typed projection for its inference-local helper values."
+    },
+    {
+      "prefix": "compiler/corpus/v5_4/stdlib/",
+      "disposition": "admitted",
+      "ownerHarness": "self-front-end corpus comparison",
+      "reason": "Current standard-library surface inputs compare through typed."
+    },
+    {
+      "prefix": "compiler/corpus/v5_6/",
+      "disposition": "historical",
+      "ownerHarness": "V5.6 authority-foundation manifest",
+      "reason": "These multi-mode authority fixtures retain their machine-pinned historical modes and expected flips."
+    },
+    {
+      "prefix": "compiler/corpus/v5_10/",
+      "disposition": "admitted",
+      "ownerHarness": "complete K_front and bootstrap workload verification",
+      "reason": "The locked Bootstrap workload is a current package and compiler-grade front-end input."
+    },
+    {
+      "prefix": "compiler/corpus/exec/",
+      "disposition": "backend/runtime-only",
+      "ownerHarness": "execution corpus verification",
+      "reason": "The expected observation is program execution rather than a front-end terminal."
+    },
+    {
+      "prefix": "compiler/crates/topaz_self_frontend/tests/fixtures/",
+      "disposition": "admitted",
+      "terminal": "ast",
+      "ownerHarness": "self-front-end parser and corpus verification",
+      "reason": "Focused current parser fixtures are direct preview inputs."
+    },
+    {
+      "prefix": "docs/samples/migration/",
+      "disposition": "compatibility-only",
+      "ownerHarness": "documentation migration sample verification",
+      "reason": "Migration samples intentionally preserve an older source boundary."
+    },
+    {
+      "prefix": "docs/samples/learn/first-application/",
+      "disposition": "admitted",
+      "ownerHarness": "locked learning-application verification",
+      "reason": "The complete current locked package is a maintained public workflow."
+    },
+    {
+      "prefix": "docs/samples/",
+      "disposition": "admitted",
+      "ownerHarness": "documentation sample and self-front-end corpus verification",
+      "reason": "Current Modern documentation source is checked as current language."
+    }
+  ],
+  "allowedDispositions": [
+    "admitted",
+    "negative",
+    "compatibility-only",
+    "backend/runtime-only",
+    "historical",
+    "pending-invalid"
+  ]
+}

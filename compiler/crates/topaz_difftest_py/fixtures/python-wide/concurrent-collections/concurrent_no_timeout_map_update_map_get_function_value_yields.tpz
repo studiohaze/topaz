@@ -1,0 +1,25 @@
+
+function spin(x: int) -> int {
+    let mut i = 0
+    while i < 200 {
+        i = i + 1
+    }
+    1 / 0
+}
+
+let callbacks = map { "primary": spin }
+
+concurrent {
+    slow: {
+        let mut values = map { "a": 1 }
+        match callbacks.get("primary") {
+            case Some(cb) => values.update("a", 0, cb)
+            case None => ()
+        }
+    }
+    boom: {
+        let ys = [1]
+        ys[2]
+    }
+}
+0

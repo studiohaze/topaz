@@ -1,0 +1,9 @@
+
+function mark(label: string, xs: Array<int>) -> Array<int> {
+    print(label)
+    xs
+}
+function main() -> Option<int> {
+    Some(1).map(...mark("option-map", [0]))
+}
+main()

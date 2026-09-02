@@ -1,0 +1,18 @@
+function registerUser(name: string, email: string, age: int) -> Result<string, string> {
+    // Early validation and return
+    if name == "" {
+        return Err("Name is required")
+    }
+    
+    if !email.contains("@") {
+        return Err("Valid email is required")
+    }
+    
+    if age < 0 || age > 120 {
+        return Err("Valid age is required")
+    }
+    
+    // Process only when all validations pass
+    let user = createNewUser(name, email, age)
+    return Ok("User registration complete: {user.id}")
+}

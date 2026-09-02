@@ -1,0 +1,18 @@
+
+import util
+let callbacks = if true {
+    util.callbacks
+} else {
+    util.callbacks
+}
+concurrent {
+    slow: {
+        let xs = [1]
+        xs.map(callbacks[1])
+    }
+    boom: {
+        let zs = [1]
+        zs[2]
+    }
+}
+0

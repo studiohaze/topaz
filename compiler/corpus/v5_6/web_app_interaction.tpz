@@ -1,0 +1,65 @@
+import std.dom { AppStep, BrowserEvent, Html, attr, dispatch, element, event, focus, navigate, text }
+
+export record Model {
+  status: string,
+}
+
+export enum Msg {
+  Clicked,
+  Typed,
+  Toggled,
+  Keyed,
+  Submitted,
+  DispatchStart,
+  Dispatched,
+  UnsafeTree,
+  UnsafeNavigate,
+  DispatchLoop,
+  DuplicateIds,
+}
+
+export function init() -> AppStep<Model, Msg> {
+  AppStep { model: Model { status: "ready" }, commands: [] }
+}
+
+export function update(model: Model, message: Msg, event: BrowserEvent) -> AppStep<Model, Msg> {
+  match message {
+    case Clicked => AppStep { model: Model { status: "clicked" }, commands: [focus("#text-input")] }
+    case Typed => AppStep { model: Model { status: "typed" }, commands: [] }
+    case Toggled => AppStep { model: Model { status: "toggled" }, commands: [] }
+    case Keyed => AppStep { model: Model { status: "keyed" }, commands: [] }
+    case Submitted => AppStep { model: Model { status: "submitted" }, commands: [] }
+    case DispatchStart => AppStep { model: Model { status: "dispatching" }, commands: [dispatch(Msg.Dispatched)] }
+    case Dispatched => AppStep { model: Model { status: "dispatched" }, commands: [] }
+    case UnsafeTree => AppStep { model: Model { status: "unsafe-tree" }, commands: [] }
+    case UnsafeNavigate => AppStep { model: model, commands: [navigate("javascript:alert(1)")] }
+    case DispatchLoop => AppStep { model: model, commands: [dispatch(Msg.DispatchLoop)] }
+    case DuplicateIds => AppStep { model: Model { status: "duplicate-ids" }, commands: [] }
+  }
+}
+
+export function view(model: Model) -> Html<Msg> {
+  if model.status == "unsafe-tree" {
+    return element("script", [], [], [text("must not execute")])
+  }
+  if model.status == "duplicate-ids" {
+    return element("div", [], [], [
+      element("span", [attr("id", "duplicate")], [], [text("one")]),
+      element("span", [attr("id", "duplicate")], [], [text("two")]),
+    ])
+  }
+  element("div", [attr("id", "app-root")], [], [
+    element("p", [attr("id", "status")], [], [text(model.status)]),
+    element("button", [attr("id", "click-button"), attr("type", "button")], [event("click", Msg.Clicked)], [text("Click")]),
+    element("input", [attr("id", "text-input"), attr("type", "text")], [event("input", Msg.Typed), event("keydown", Msg.Keyed)], []),
+    element("input", [attr("id", "check-input"), attr("type", "checkbox")], [event("change", Msg.Toggled)], []),
+    element("form", [attr("id", "submit-form")], [event("submit", Msg.Submitted)], [
+      element("button", [attr("id", "submit-button"), attr("type", "submit")], [], [text("Submit")]),
+    ]),
+    element("button", [attr("id", "dispatch-button"), attr("type", "button")], [event("click", Msg.DispatchStart)], [text("Dispatch")]),
+    element("button", [attr("id", "unsafe-tree-button"), attr("type", "button")], [event("click", Msg.UnsafeTree)], [text("Unsafe tree")]),
+    element("button", [attr("id", "unsafe-nav-button"), attr("type", "button")], [event("click", Msg.UnsafeNavigate)], [text("Unsafe navigation")]),
+    element("button", [attr("id", "dispatch-loop-button"), attr("type", "button")], [event("click", Msg.DispatchLoop)], [text("Dispatch loop")]),
+    element("button", [attr("id", "duplicate-button"), attr("type", "button")], [event("click", Msg.DuplicateIds)], [text("Duplicate ids")]),
+  ])
+}

@@ -1,0 +1,55 @@
+# corpus/v5_4/diagnostics -- stable v5.4 diagnostic codes
+
+[totals]
+recorded = 7
+runnable = 7
+pending = 0
+
+[[fixture]]
+file = "derive-hash-deferred.tpz"
+phase = "diagnostics"
+versions = "5.4"
+result = "error"
+code = "TPZ5530"
+
+[[fixture]]
+file = "derive-eq-function-field.tpz"
+phase = "diagnostics"
+versions = "5.4"
+result = "error"
+code = "TPZ5530"
+
+[[fixture]]
+file = "refutable-let.tpz"
+phase = "diagnostics"
+versions = "5.4"
+result = "error"
+code = "TPZ5026"
+
+[[fixture]]
+file = "type-arg-arity.tpz"
+phase = "diagnostics"
+versions = "5.4"
+result = "error"
+code = "TPZ5510"
+
+[[fixture]]
+file = "duplicate-map-key.tpz"
+phase = "diagnostics"
+versions = "5.4"
+result = "error"
+code = "TPZ5602"
+
+[[fixture]]
+file = "empty-comprehension.tpz"
+phase = "diagnostics"
+versions = "5.4"
+result = "error"
+code = "TPZ5612"
+
+[[fixture]]
+file = "or-pattern-names.tpz"
+phase = "diagnostics"
+versions = "5.4"
+result = "error"
+code = "TPZ5710"

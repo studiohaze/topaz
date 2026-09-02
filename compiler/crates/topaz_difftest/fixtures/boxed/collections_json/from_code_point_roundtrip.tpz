@@ -1,0 +1,1 @@
+fromCodePoint("한".codePointAt(0) ?? 0)

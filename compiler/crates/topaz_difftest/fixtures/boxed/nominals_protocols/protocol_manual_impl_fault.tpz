@@ -1,0 +1,5 @@
+protocol Calc { function calc(value: Self) -> int }
+record N { v: int }
+impl Calc<N> { function calc(value: N) -> int { 1 / value.v } }
+print("{Calc.calc(N { v: 0 })}")
+0

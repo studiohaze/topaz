@@ -1,0 +1,23 @@
+
+export record Request { method: string, path: string }
+
+function jsonString(root: JSONValue, key: string) -> Result<string, string> {
+    let value = match root.get(key) {
+        case Some(found) => found
+        case None => return Err("missing {key}")
+    }
+    match value.asString() {
+        case Some(text) => Ok(text)
+        case None => Err("{key} must be string")
+    }
+}
+
+export function parseRequest(text: string) -> Result<Request, string> {
+    let root = match JSON.parse(text) {
+        case Ok(value) => value
+        case Err(e) => return Err(e.message)
+    }
+    let method = jsonString(root, "method")?
+    let path = jsonString(root, "path")?
+    Ok(Request { method: method, path: path })
+}

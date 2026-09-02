@@ -1,0 +1,30 @@
+name: build
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13.14"
+      - name: Install Rust 1.96.0
+        run: |
+          rustup toolchain install 1.96.0 --profile minimal
+          rustup target add wasm32-unknown-unknown --toolchain 1.96.0
+      - name: Build
+        working-directory: compiler
+        run: cargo build
+      - name: Test
+        working-directory: compiler
+        run: cargo test

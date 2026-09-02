@@ -1,0 +1,30 @@
+
+function codeSix() -> int {
+    print("hit")
+    6
+}
+
+function codeFour() -> int {
+    4
+}
+
+function codeZero() -> int {
+    0
+}
+
+function choose(x: int) -> int {
+    let i = x - 2
+    let r = concurrent {
+        slow: {
+            let mut cbs = [codeZero, codeFour]
+            cbs[i] = codeSix
+            let values: Array<Option<Option<int>>> = [Some(Some(1)), Some(None)]
+            let out = values[1]?.okOrElse(cbs[i])
+            if out == null { -1 } else { 6 }
+        }
+        fast: 0
+    }
+    r.slow + r.fast
+}
+
+choose(3)

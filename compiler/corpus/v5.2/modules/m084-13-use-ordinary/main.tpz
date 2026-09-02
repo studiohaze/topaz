@@ -1,0 +1,3 @@
+let use = 1
+let r = { use: 2 }
+let v = r.use

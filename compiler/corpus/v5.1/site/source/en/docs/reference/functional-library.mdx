@@ -1,0 +1,133 @@
+---
+title: 'Functional Library'
+description: 'Canonical Topaz public-example patterns for higher-order functions, pipelines, Option values, and Result flows.'
+covers: '§2, §7, §11, §12, §13, §18, §22'
+---
+
+Topaz keeps the public functional surface small. Canonical examples use function signatures (concrete or rank-1 generic), lambdas, `|>` pipelines, optional access, `match`, and Result propagation. Namespace-style extension blocks remain deferred, so this page shows direct helper patterns instead.
+
+## Concrete Higher-Order Functions
+
+Higher-order functions can take or return function values. Topaz also supports rank-1 generic declarations (see the functions page); this cookbook keeps its helpers concrete for clarity.
+
+```topaz
+function applyTwiceInt(transform: (int) -> int, value: int) -> int {
+    transform(transform(value))
+}
+
+function multiplier(factor: int) -> (int) -> int {
+    return (value: int) => value * factor
+}
+
+let triple = multiplier(3)
+let result = applyTwiceInt(triple, 5)
+
+print("Result: {result}")  // 45
+```
+
+## Closure Factories
+
+Lambdas capture values from their lexical scope. Use this for concrete partial-application style helpers.
+
+```topaz
+function addWith(amount: int) -> (int) -> int {
+    return (value: int) => value + amount
+}
+
+let add10 = addWith(10)
+let total = add10(5)
+
+print("Total: {total}")  // 15
+```
+
+## Function Composition
+
+Compose steps by piping a value through them, or wrap the chain in a lambda when you need a reusable function value.
+
+```topaz
+let double = (x: int) => x * 2
+let increment = (x: int) => x + 1
+let labelInt = (x: int) => "value: {x}"
+
+let process = (x: int) => x |> double() |> increment() |> labelInt()
+let message = process(5)
+
+print(message)  // "value: 11"
+```
+
+Topaz's public composition idiom is the `|>` pipeline, as above. A dedicated composition operator exists only at the SPEC level and is not part of any current profile surface — see the operators reference.
+
+## Pipelines
+
+Use `|>` when a value should flow through ordinary helper calls. Pass the piped value with `_`.
+
+```topaz
+let numbers = Array.of(1, 2, 3, 4, 5, 6)
+
+let total = numbers
+    |> filter(_, x => x % 2 == 0)
+    |> map(_, x => x * x)
+    |> reduce(_, 0, (acc, x) => acc + x)   // reduce(xs, initial, f)
+
+print("Total: {total}")  // 56
+```
+
+## Option Values
+
+For optional records, use `?.`, `??`, and `match`. Do not model this page as a separate Option helper namespace.
+
+```topaz
+let user: Option<{ name: string }> = Some({ name: "Topaz" })
+let display = user?.name ?? "guest"
+
+print("Display: {display}")
+
+match user {
+    case Some(currentUser) => print("User: {currentUser.name}")
+    case None => print("No user")
+}
+```
+
+## Result Pipelines
+
+Use `?` to propagate errors inside a Result-returning function, and use `match` at the boundary where you handle success or failure.
+
+```topaz
+function divide(a: float, b: float) -> Result<float, string> {
+    if b == 0.0 {
+        Err("divide by zero")
+    } else {
+        Ok(a / b)
+    }
+}
+
+function compute(a: float, b: float) -> Result<float, string> {
+    let quotient = divide(a, b)?
+    Ok(quotient + 1.0)
+}
+
+match compute(10.0, 2.0) {
+    case Ok(value) => print("Result: {value}")
+    case Err(error) => print("Error: {error}")
+}
+```
+
+## Function Selection
+
+Literal unions can select a concrete function value without custom variant declarations, strategy objects, or generic sorting helpers.
+
+```topaz
+type TransformMode = "double" | "square"
+
+function chooseTransform(mode: TransformMode) -> (int) -> int {
+    return match mode {
+        case "double" => (x: int) => x * 2
+        case "square" => (x: int) => x * x
+    }
+}
+
+let transform = chooseTransform("square")
+let value = transform(5)
+
+print("Value: {value}")  // 25
+```

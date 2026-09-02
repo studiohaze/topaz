@@ -1,0 +1,12 @@
+
+function main() -> string {
+    let xs = Array.of(0, ...[1, 2], 3)
+    let dupes = [2, 1, 2]
+    let mut total = 0
+    for x in Set.of(...dupes, 3) {
+        total = total + x
+    }
+    let empty = Array.of(...[])
+    "{xs.length}:{xs[0]}:{xs[3]}:{total}:{empty.length}"
+}
+main()

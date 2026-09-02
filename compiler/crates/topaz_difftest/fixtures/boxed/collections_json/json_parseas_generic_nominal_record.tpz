@@ -1,0 +1,5 @@
+record Box<T> { value: T }
+match JSON.parseAs<Box<int>>("\{\"value\":7\}") {
+  case Ok(boxed) => boxed.value
+  case Err(e) => 0
+}

@@ -1,0 +1,33 @@
+// ? 연산자로 에러 자동 전파
+function 복잡한계산(a: float, b: float, c: float) -> Result<float, string> {
+    let 첫번째 = 나누기(a, b)?          // 에러시 자동 반환
+    let 두번째 = 제곱근(첫번째)?         // 에러시 자동 반환
+    let 최종 = 나누기(두번째, c)?        // 에러시 자동 반환
+    
+    return Ok(최종)
+}
+
+// 위 코드는 아래와 동일
+function 복잡한계산_수동(a: float, b: float, c: float) -> Result<float, string> {
+    return match 나누기(a, b) {
+        case Ok(첫번째) => match 제곱근(첫번째) {
+            case Ok(두번째) => match 나누기(두번째, c) {
+                case Ok(최종) => Ok(최종)
+                case Err(오류) => Err(오류)
+            }
+            case Err(오류) => Err(오류)
+        }
+        case Err(오류) => Err(오류)
+    }
+}
+
+// Option 값은 명시적 match를 사용 (`?`는 Result 전용)
+function 첫번째와두번째합(배열: Array<int>) -> Option<int> {
+    match 첫번째정수요소(배열) {
+        case Some(첫번째) => match 배열.get(1) {
+            case Some(두번째) => Some(첫번째 + 두번째)
+            case None => None
+        }
+        case None => None
+    }
+}

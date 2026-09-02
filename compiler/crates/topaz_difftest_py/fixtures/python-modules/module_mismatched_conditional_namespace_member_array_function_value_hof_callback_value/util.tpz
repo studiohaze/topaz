@@ -1,0 +1,9 @@
+
+function fast(x: int) -> int {
+    x + 4
+}
+function spin(x: int) -> int {
+    1 / 0
+}
+export let fastCallbacks = [fast]
+export let slowCallbacks = [spin]

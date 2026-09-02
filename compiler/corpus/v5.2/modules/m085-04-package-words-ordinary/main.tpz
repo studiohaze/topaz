@@ -1,0 +1,4 @@
+let package = 1
+let module = 2
+let r = { package: 3 }
+let v = r.module

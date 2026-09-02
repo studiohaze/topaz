@@ -1,0 +1,3 @@
+enum Bad { Box(Map<string, int>) }
+let b = Bad.Box(Map.new())
+map { b: "bad" }

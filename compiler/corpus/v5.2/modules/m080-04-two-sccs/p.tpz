@@ -1,0 +1,2 @@
+import q
+export function ok() -> int { 1 }

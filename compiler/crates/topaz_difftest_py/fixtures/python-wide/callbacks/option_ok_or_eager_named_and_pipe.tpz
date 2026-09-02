@@ -1,0 +1,23 @@
+
+function mark(label: string, n: int) -> int {
+    print(label)
+    n
+}
+function main() -> int {
+    let none: Option<int> = None
+    let some: Option<int> = Some(2)
+    let a = match some.okOr(mark("some-error", 40)) {
+        case Ok(n) => n
+        case Err(e) => e
+    }
+    let b = match none.okOr(error: mark("none-error", 5)) {
+        case Ok(n) => n
+        case Err(e) => e
+    }
+    let c = match 7 |> none.okOr() {
+        case Ok(n) => n
+        case Err(e) => e
+    }
+    a + b + c
+}
+main()

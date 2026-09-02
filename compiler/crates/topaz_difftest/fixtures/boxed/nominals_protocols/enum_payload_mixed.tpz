@@ -1,0 +1,10 @@
+enum Shape { Circle(int), Square(int), Dot }
+function area(s: Shape) -> int {
+  match s {
+    case Circle(r) => r * r
+    case Square(side) => side * side
+    case Dot => 0
+  }
+}
+print("{area(Shape.Circle(2))}/{area(Shape.Square(3))}/{area(Shape.Dot)}")
+0

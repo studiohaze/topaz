@@ -1,0 +1,23 @@
+
+function optIntText(value: Option<int>) -> string {
+    match value {
+        case Some(n) => "{n}"
+        case None => "none"
+    }
+}
+function main() -> string {
+    let a = [10, 20, 30, 40]
+    let mid = a.slice(start: 1, end: 3).join(sep: "|")
+    let clamp = a.slice(0, 99).join(",")
+    let inverted = a.slice(3, 1).join(",")
+    let hit = optIntText(a.indexOf(x: 30))
+    let miss = optIntText(a.indexOf(99))
+    let pipedIndex = optIntText(20 |> a.indexOf())
+    let pipedSlice = 3 |> a.slice(1)
+    let pipedJoin = ", " |> [1, 2, 3].join()
+    let sortedInts = [3, 1, 2, 1].sorted()
+    let original = [3, 1, 2].join(",")
+    let sortedHangul = ["나", "가", "다"].sorted().join("")
+    "{mid}:{clamp}:{inverted}:{hit}:{miss}:{pipedIndex}:{pipedSlice.join("-")}:{pipedJoin}:{sortedInts.join(",")}:{original}:{sortedHangul}"
+}
+main()

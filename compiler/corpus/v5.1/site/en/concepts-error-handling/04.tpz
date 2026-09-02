@@ -1,0 +1,32 @@
+// Option<T> - value may or may not exist
+function findUser(id: int) -> Option<{ name: string, age: int }> {
+    let users = [
+        { id: 1, name: "TopazDev", age: 25 },
+        { id: 2, name: "CodeMaster", age: 30 }
+    ]
+    
+    for user in users {
+        if user.id == id {
+            return Some({ name: user.name, age: user.age })
+        }
+    }
+    
+    return None
+}
+
+// Handling Option
+match findUser(1) {
+    case Some(user) => print("User found: {user.name}, {user.age} years old")
+    case None => print("User not found")
+}
+
+// Finding element in array — .get is the non-faulting read
+function firstElementInt(array: Array<int>) -> Option<int> {
+    array.get(0)
+}
+
+let numbers = [1, 2, 3, 4, 5]
+match firstElementInt(numbers) {
+    case Some(first) => print("First element: {first}")
+    case None => print("Array is empty")
+}

@@ -1,0 +1,9 @@
+
+function mark(label: string, xs: Array<int>) -> Array<int> {
+    print(label)
+    xs
+}
+function main() -> int {
+    [1].reduce(0, ...mark("array-reduce", [0]))
+}
+main()

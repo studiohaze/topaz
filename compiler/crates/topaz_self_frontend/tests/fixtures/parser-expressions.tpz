@@ -1,0 +1,9 @@
+function choose(flag: bool, values: Array<int>) -> int {
+  let label = "value {values[0]}"
+  let expanded = [1, ...values]
+  let point = { x: 1, y: 2 }
+  let apply = (value: int) => value + 1
+  let pipeline = 1 + 2 * 3 |> apply >> show ?? fallback
+  let powered = -2 ** 3 ** 2
+  if flag { apply(expanded[0]) } else { point.x }
+}

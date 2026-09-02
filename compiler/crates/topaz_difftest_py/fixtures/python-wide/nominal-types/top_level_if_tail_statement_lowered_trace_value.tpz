@@ -1,0 +1,9 @@
+
+if true {
+    loop {
+        print("if-loop")
+        break 9
+    }
+} else {
+    0
+}

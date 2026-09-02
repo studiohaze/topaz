@@ -1,0 +1,2 @@
+newtype UserId = int
+set { UserId(1), 1 }.length

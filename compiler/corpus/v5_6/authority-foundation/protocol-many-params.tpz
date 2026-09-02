@@ -1,0 +1,2 @@
+protocol Pair<A, B> { function first(value: A) -> A }
+0

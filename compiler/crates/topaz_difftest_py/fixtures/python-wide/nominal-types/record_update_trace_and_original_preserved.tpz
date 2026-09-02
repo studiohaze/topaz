@@ -1,0 +1,5 @@
+
+let r = { x: 1, y: 2 }
+let updated = r { x: 9 }
+print("{r.x}:{updated.x}:{updated.y}")
+updated

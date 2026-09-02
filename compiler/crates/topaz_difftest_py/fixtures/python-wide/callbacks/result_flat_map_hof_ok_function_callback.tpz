@@ -1,0 +1,12 @@
+
+function okInc(x: int) -> Result<int, string> {
+    Ok(x + 1)
+}
+function main() -> int {
+    let res = Ok(1).flatMap(okInc)
+    match res {
+        case Ok(n) => n
+        case Err(_) => 0
+    }
+}
+main()

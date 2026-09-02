@@ -1,0 +1,11 @@
+let temperature = 25
+let humidity = 60
+let season = "summer"
+
+match { temperature: temperature, humidity: humidity, season: season } {
+    case { temperature, humidity, season: "summer" } if temperature > 30 && humidity > 70 => print("Very hot and humid")
+    case { temperature, humidity, season: "summer" } if temperature > 25 && humidity < 50 => print("Warm and dry")
+    case { temperature, season: "winter" } if temperature < 0 => print("Very cold")
+    case { temperature, humidity } if temperature >= 20 && temperature <= 25 && humidity >= 40 && humidity <= 60 => print("Pleasant weather")
+    case _ => print("Regular weather")
+}

@@ -1,0 +1,8 @@
+let v = 1
+match v {
+  case 1 => {
+    defer print("a")
+    print("matched")
+  }
+  case _ => {}
+}

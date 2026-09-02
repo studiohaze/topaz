@@ -1,0 +1,6 @@
+let r = { insert: (left: int, right: int) => left * 10 + right }
+let direct = r.insert(left: 1, right: 2)
+let optional = Some(r)?.insert(left: 3, right: 4)
+let piped = 5 |> r.insert(left: 6, right: _)
+let optionalPiped = 7 |> Some(r)?.insert(left: 8, right: _)
+{ direct: direct, optional: optional, piped: piped, optionalPiped: optionalPiped }

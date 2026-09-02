@@ -1,0 +1,8 @@
+export enum Maybe<T> {
+    Missing,
+    Present(T),
+}
+
+export function present(value: int) -> Maybe<int> {
+    Maybe.Present(value)
+}

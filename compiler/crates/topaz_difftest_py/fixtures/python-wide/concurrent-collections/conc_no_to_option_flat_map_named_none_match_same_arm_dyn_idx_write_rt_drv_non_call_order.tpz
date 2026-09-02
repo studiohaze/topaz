@@ -1,0 +1,47 @@
+
+function boom(x: int) -> Option<int> {
+    let n = 0
+    Some(x / n)
+}
+
+function someFour(x: int) -> Option<int> {
+    Some(4)
+}
+
+function someZero(x: int) -> Option<int> {
+    Some(0)
+}
+
+function main() -> int {
+    let mut order = 0
+
+    function tick(label: int, value: int) -> int {
+        order = order * 10 + label
+        value
+    }
+
+    let r = concurrent {
+        slow: {
+            let mut cbs = [someZero, someFour]
+            let i = 1
+            match i {
+                case 0 => -2
+                case 1 => {
+                    cbs[tick(1, i)] = boom
+                    let value: Option<int> = None
+                    let out = value.flatMap(f: cbs[tick(2, i)])
+                    let payload = match out {
+                        case Some(_) => -1
+                        case None => 7
+                    }
+                    order * 100 + payload
+                }
+                case _ => -3
+            }
+        }
+        fast: 0
+    }
+    r.slow + r.fast
+}
+
+main()

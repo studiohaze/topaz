@@ -1,0 +1,18 @@
+
+function inc(x: int) -> int {
+    x + 1
+}
+function dbl(x: int) -> int {
+    x * 2
+}
+function main() -> int {
+    let callbacks = map { "both": inc >> dbl }
+    match callbacks.get("both") {
+        case Some(raw) => {
+            let cb: (int) -> int = raw
+            cb(5)
+        }
+        case None => 0
+    }
+}
+main()

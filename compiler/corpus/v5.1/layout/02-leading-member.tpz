@@ -1,0 +1,7 @@
+let name = user
+    .profile
+    .name
+
+let city = response
+    ?.body
+    ?.city

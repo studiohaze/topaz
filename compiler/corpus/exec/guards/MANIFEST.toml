@@ -1,0 +1,30 @@
+# corpus/exec/guards — execution transcripts (CDR-003 §11)
+
+[totals]
+recorded = 3
+runnable = 3
+pending = 0
+
+[[fixture]]
+file = "unbound.tpz"
+phase = "exec"
+versions = "5.2"
+result = "error"
+code = "TPZ5002"
+message = "`nope` is not bound"
+
+[[fixture]]
+file = "redeclare.tpz"
+phase = "exec"
+versions = "5.2"
+result = "error"
+code = "TPZ5008"
+message = "`x` is already declared in this scope (§4)"
+
+[[fixture]]
+file = "print-nonstring.tpz"
+phase = "exec"
+versions = "5.2"
+result = "error"
+code = "TPZ5001"
+message = "`print` is string-only; interpolate `int` instead (§22.2)"

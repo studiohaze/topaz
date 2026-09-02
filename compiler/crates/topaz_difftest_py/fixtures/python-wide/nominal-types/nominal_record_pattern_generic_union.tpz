@@ -1,0 +1,16 @@
+
+record Box<T> { value: T }
+function render(box: Box<int> | Box<string>) -> string {
+    match box {
+        case Box { value, } => match value {
+            case n: int => "int:{n}"
+            case s: string => "string:{s}"
+        }
+    }
+}
+function main() -> string {
+    let number: Box<int> = Box { value: 7 }
+    let text: Box<string> = Box { value: "ok" }
+    "{render(number)}|{render(text)}"
+}
+main()

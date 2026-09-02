@@ -1,0 +1,9 @@
+type TrafficLight = "red" | "yellow" | "green"
+
+function next(light: TrafficLight) -> TrafficLight {
+    return match light {
+        case "red" => "green"
+        case "green" => "yellow"
+        case _ => "red"
+    }
+}

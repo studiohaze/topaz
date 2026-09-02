@@ -1,0 +1,5 @@
+
+enum Color derives Eq, Order, Show { Red, Blue }
+let c = Color.Red
+print("{c}")
+c

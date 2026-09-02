@@ -1,0 +1,17 @@
+
+function makeJson() {
+    JSON.parse(text: "\{\"s\":\"AZ\",\"n\":3\}")
+}
+function main() -> Result<int, string> {
+    let root = makeJson()?
+    let kind = root.kind()
+    let got = match root.get(key: "s") {
+        case Some(value) => match value.asString() {
+            case Some(text) => text.byteLength()
+            case None => 0
+        }
+        case None => 0
+    }
+    Ok(kind.byteLength() + got)
+}
+main()

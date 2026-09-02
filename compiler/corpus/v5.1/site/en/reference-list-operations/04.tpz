@@ -1,0 +1,10 @@
+let numbers = Array.of(1, 2, 3, 4, 5)
+
+let count = numbers.length
+let third = numbers[2]          // 3 — direct indexing faults when out of bounds
+let safe = numbers.get(10)      // None — non-faulting read returns Option<int>
+let hasThree = 3 in numbers
+
+print("Count: {count}")
+print("Third: {third}")
+print("Has three: {hasThree}")

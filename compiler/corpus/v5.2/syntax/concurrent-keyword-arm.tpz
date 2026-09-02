@@ -1,0 +1,3 @@
+let x = concurrent {
+    type: fetch()
+}

@@ -1,0 +1,41 @@
+type ManifestSummary = { name: string, version: string, dependencies: Array<string> }
+
+function jsonField(obj: JSONValue, key: string) -> Option<JSONValue> {
+  obj.get(key)
+}
+
+function jsonString(obj: JSONValue, key: string) -> string {
+  match jsonField(obj, key) {
+    case Some(value) => value.asString() ?? ""
+    case None => ""
+  }
+}
+
+function jsonObjectKeys(obj: JSONValue, key: string) -> Array<string> {
+  match jsonField(obj, key) {
+    case Some(value) => value.keys() ?? []
+    case None => []
+  }
+}
+
+function auditManifest(text: string) -> Result<ManifestSummary, string> {
+  let toml = TOML.parse(text)?
+  let json = TOML.toJson(toml)
+  let package = match jsonField(json, "package") {
+    case Some(value) => value
+    case None => return Err("missing [package]")
+  }
+  let name = jsonString(package, "name")
+  let version = jsonString(package, "version")
+  if name.byteLength() == 0 { return Err("missing package.name") }
+  if version.byteLength() == 0 { return Err("missing package.version") }
+  Ok({ name: name, version: version, dependencies: jsonObjectKeys(json, "dependencies").sorted() })
+}
+
+match auditManifest(input()) {
+  case Ok(summary) => {
+    let deps = if summary.dependencies.length == 0 { "-" } else { summary.dependencies.join(",") }
+    print("manifest {summary.name}@{summary.version} deps={deps}")
+  }
+  case Err(error) => print("error: {error}")
+}

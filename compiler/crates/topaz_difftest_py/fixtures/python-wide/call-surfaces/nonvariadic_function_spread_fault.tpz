@@ -1,0 +1,13 @@
+
+function f(a: int, b: int = 0) -> int {
+    a + b
+}
+function mark(label: string, xs: Array<int>) -> Array<int> {
+    print(label)
+    xs
+}
+function main() -> int {
+    let xs = mark("spread", [1])
+    f(...xs)
+}
+main()

@@ -1,0 +1,17 @@
+import users
+
+type Callback = (...int, string) -> Result<int, string>
+type Shape = { name: string, count: 1 }
+type Nested = users.Box<List<Option<int>>>
+
+function inspect(value: Choice, user: users.User) -> int {
+  match value {
+    case Some({ name }) if name != "" => 1
+    case [first, ..rest] => first
+    case 1..<5 | 8 => 2
+    case item: int | string => 3
+    case User { name, age: 36 } => age
+    case None => 0
+    case _ => 0
+  }
+}

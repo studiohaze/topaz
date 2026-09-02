@@ -1,0 +1,21 @@
+{
+  "schema": "lispex.profile-tombstone-registry/v1",
+  "profiles": [
+    {
+      "profile_id": "hosted-h6d-tco-bounded",
+      "lifecycle": "retired",
+      "included_in_1_20_conformance_target": false,
+      "fallback_to_another_profile": false,
+      "silent_remapping": false,
+      "reactivation_requires_new_decision": true
+    },
+    {
+      "profile_id": "hosted-h6d-resource-bounded",
+      "lifecycle": "retired",
+      "included_in_1_20_conformance_target": false,
+      "fallback_to_another_profile": false,
+      "silent_remapping": false,
+      "reactivation_requires_new_decision": true
+    }
+  ]
+}

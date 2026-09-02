@@ -1,0 +1,887 @@
+// Source-mode tokenization and iterative datum reading.
+// Resource charging and frontend diagnostics are fixed here; normalization sees
+// only the admitted reader arena and source locations.
+
+import lit.model {
+  GuestInt,
+  GuestRational,
+  ErrorObjectRow,
+  GuestValue,
+  FrontendRequest,
+  ScalarRow,
+  FrontendToken,
+  FrontendFault,
+  DecodedSource,
+  TokenizedSource,
+  ReaderDatumKind,
+  ReaderDatum,
+  ReaderOutput,
+  ReaderParseFrame,
+}
+import lit.value_runtime {
+  scalarText,
+}
+import lit.numeric {
+  guestIntZero,
+  guestIntIsZero,
+  parseGuestInt,
+  renderGuestInt,
+  parseGuestNumberToken,
+}
+
+export function frontendFault(
+  code: string,
+  templateId: string,
+  phase: string,
+  startByte: int,
+  endByte: int,
+  message: string,
+  resource: bool,
+) -> FrontendFault {
+  FrontendFault {
+    code: code,
+    templateId: templateId,
+    phase: phase,
+    startByte: startByte,
+    endByte: endByte,
+    message: message,
+    resource: resource,
+    diagnosticCode: "backend-protocol",
+    diagnosticPhase: "infrastructure",
+    diagnosticMessage: "frontend fault has no canonical diagnostic projection: {code}",
+    diagnosticStartByte: startByte,
+  }
+}
+
+export function projectFrontendFault(
+  fault: FrontendFault,
+  code: string,
+  phase: string,
+  message: string,
+  startByte: int,
+) -> FrontendFault {
+  FrontendFault {
+    code: fault.code,
+    templateId: fault.templateId,
+    phase: fault.phase,
+    startByte: fault.startByte,
+    endByte: fault.endByte,
+    message: fault.message,
+    resource: fault.resource,
+    diagnosticCode: code,
+    diagnosticPhase: phase,
+    diagnosticMessage: message,
+    diagnosticStartByte: startByte,
+  }
+}
+
+export function chargeFrontend(
+  transitions: Array<int>,
+  amount: int,
+  limit: int,
+  phase: string,
+  startByte: int,
+  endByte: int,
+) -> Result<(), FrontendFault> {
+  let mut counter = transitions
+  if amount < 0 || counter[0] > limit - amount {
+    return Err(frontendFault(
+      "HF900",
+      "logical-transition-limit",
+      phase,
+      startByte,
+      endByte,
+      "logical transition limit exceeded",
+      true,
+    ))
+  }
+  counter[0] += amount
+  Ok(())
+}
+
+function utf8Continuation(byte: int) -> bool { byte >= 128 && byte <= 191 }
+
+function decodeSourceUtf8(
+  bytes: Array<int>,
+  transitions: Array<int>,
+  limit: int,
+) -> Result<DecodedSource, FrontendFault> {
+  let mut scalars: Array<ScalarRow> = []
+  let mut newlines: Array<int> = [0]
+  let mut index = 0
+  while index < bytes.length {
+    let start = index
+    let first = bytes[index]
+    let mut value = -1
+    let mut width = 1
+    if first <= 127 {
+      value = first
+    } else if first >= 194 && first <= 223 {
+      width = 2
+      if index + width > bytes.length {
+        return Err(frontendFault("HF100", "truncated-utf8", "tokenize", start, bytes.length, "truncated UTF-8 sequence", false))
+      }
+      let second = bytes[index + 1]
+      if !utf8Continuation(second) {
+        return Err(frontendFault("HF100", "invalid-utf8-continuation", "tokenize", start, index + width, "invalid UTF-8 continuation byte", false))
+      }
+      value = (first - 192) * 64 + (second - 128)
+    } else if first >= 224 && first <= 239 {
+      width = 3
+      if index + width > bytes.length {
+        return Err(frontendFault("HF100", "truncated-utf8", "tokenize", start, bytes.length, "truncated UTF-8 sequence", false))
+      }
+      let second = bytes[index + 1]
+      let third = bytes[index + 2]
+      let secondOk = utf8Continuation(second)
+        && (first != 224 || second >= 160)
+        && (first != 237 || second <= 159)
+      if !secondOk || !utf8Continuation(third) {
+        return Err(frontendFault("HF100", "invalid-utf8-continuation", "tokenize", start, index + width, "invalid UTF-8 scalar encoding", false))
+      }
+      value = (first - 224) * 4096 + (second - 128) * 64 + (third - 128)
+    } else if first >= 240 && first <= 244 {
+      width = 4
+      if index + width > bytes.length {
+        return Err(frontendFault("HF100", "truncated-utf8", "tokenize", start, bytes.length, "truncated UTF-8 sequence", false))
+      }
+      let second = bytes[index + 1]
+      let third = bytes[index + 2]
+      let fourth = bytes[index + 3]
+      let secondOk = utf8Continuation(second)
+        && (first != 240 || second >= 144)
+        && (first != 244 || second <= 143)
+      if !secondOk || !utf8Continuation(third) || !utf8Continuation(fourth) {
+        return Err(frontendFault("HF100", "invalid-utf8-continuation", "tokenize", start, index + width, "invalid UTF-8 scalar encoding", false))
+      }
+      value = (first - 240) * 262144 + (second - 128) * 4096 + (third - 128) * 64 + (fourth - 128)
+    } else {
+      return Err(frontendFault("HF100", "invalid-utf8-leading-byte", "tokenize", start, start + 1, "invalid UTF-8 leading byte", false))
+    }
+    if value < 0 || value > 1114111 || (value >= 55296 && value <= 57343) {
+      return Err(frontendFault("HF100", "invalid-unicode-scalar", "tokenize", start, start + width, "UTF-8 decodes to an invalid Unicode scalar", false))
+    }
+    chargeFrontend(transitions, width, limit, "tokenize", start, start + width)?
+    scalars.push(ScalarRow { value: value, startByte: start, endByte: start + width })
+    if value == 10 { newlines.push(start + width) }
+    index += width
+  }
+  Ok(DecodedSource { scalars: scalars, newlineIndex: newlines })
+}
+
+export function unicodeWhitespace(value: int) -> bool {
+  (value >= 9 && value <= 13)
+    || value == 32
+    || value == 133
+    || value == 160
+    || value == 5760
+    || (value >= 8192 && value <= 8202)
+    || value == 8232
+    || value == 8233
+    || value == 8239
+    || value == 8287
+    || value == 12288
+}
+
+function tokenDelimiter(value: int) -> bool {
+  unicodeWhitespace(value)
+    || value == 40
+    || value == 41
+    || value == 91
+    || value == 93
+    || value == 123
+    || value == 125
+    || value == 34
+    || value == 39
+    || value == 44
+    || value == 59
+    || value == 96
+}
+
+function sourceSlice(bytes: Array<int>, start: int, end: int) -> Array<int> {
+  let mut result: Array<int> = []
+  let mut index = start
+  while index < end {
+    result.push(bytes[index])
+    index += 1
+  }
+  result
+}
+
+function scalarSliceText(scalars: Array<ScalarRow>, start: int, end: int) -> string {
+  let mut output = ""
+  let mut index = start
+  while index < end {
+    output += scalarText(scalars[index].value)
+    index += 1
+  }
+  output
+}
+
+function addFrontendToken(
+  tokens: Array<FrontendToken>,
+  bytes: Array<int>,
+  scalars: Array<ScalarRow>,
+  kind: string,
+  startScalar: int,
+  endScalar: int,
+  tokenLimit: int,
+) -> Result<(), FrontendFault> {
+  let mut outputTokens = tokens
+  let startByte = scalars[startScalar].startByte
+  let endByte = scalars[endScalar - 1].endByte
+  if outputTokens.length >= tokenLimit {
+    return Err(frontendFault("HF901", "token-limit", "tokenize", startByte, endByte, "token limit exceeded", true))
+  }
+  outputTokens.push(FrontendToken {
+    kind: kind,
+    startByte: startByte,
+    endByte: endByte,
+    raw: sourceSlice(bytes, startByte, endByte),
+    text: scalarSliceText(scalars, startScalar, endScalar),
+  })
+  Ok(())
+}
+
+export function tokenizeSource(request: FrontendRequest) -> Result<TokenizedSource, FrontendFault> {
+  let transitions: Array<int> = [0]
+  let decoded = decodeSourceUtf8(request.sourceBytes, transitions, request.transitionLimit)?
+  let scalars = decoded.scalars
+  let mut tokens: Array<FrontendToken> = []
+  let mut index = 0
+  while index < scalars.length {
+    let current = scalars[index].value
+    if unicodeWhitespace(current) {
+      chargeFrontend(transitions, 1, request.transitionLimit, "tokenize", scalars[index].startByte, scalars[index].endByte)?
+      index += 1
+      continue
+    }
+    if current == 59 {
+      while index < scalars.length && scalars[index].value != 10 {
+        chargeFrontend(transitions, 1, request.transitionLimit, "tokenize", scalars[index].startByte, scalars[index].endByte)?
+        index += 1
+      }
+      continue
+    }
+    if current == 35 && index + 1 < scalars.length && scalars[index + 1].value == 124 {
+      let commentStart = scalars[index].startByte
+      let mut depth = 1
+      index += 2
+      while index < scalars.length && depth > 0 {
+        chargeFrontend(transitions, 1, request.transitionLimit, "tokenize", scalars[index].startByte, scalars[index].endByte)?
+        if scalars[index].value == 35 && index + 1 < scalars.length && scalars[index + 1].value == 124 {
+          depth += 1
+          index += 2
+        } else if scalars[index].value == 124 && index + 1 < scalars.length && scalars[index + 1].value == 35 {
+          depth -= 1
+          index += 2
+        } else {
+          index += 1
+        }
+      }
+      if depth != 0 {
+        return Err(frontendFault("HF102", "unterminated-block-comment", "tokenize", commentStart, request.sourceBytes.length, "unterminated block comment", false))
+      }
+      continue
+    }
+
+    let start = index
+    if current == 40 {
+      index += 1
+      addFrontendToken(tokens, request.sourceBytes, scalars, "open-paren", start, index, request.tokenLimit)?
+    } else if current == 41 {
+      index += 1
+      addFrontendToken(tokens, request.sourceBytes, scalars, "close-paren", start, index, request.tokenLimit)?
+    } else if current == 91 || current == 93 || current == 123 || current == 125 {
+      index += 1
+      addFrontendToken(tokens, request.sourceBytes, scalars, "unsupported-bracket", start, index, request.tokenLimit)?
+    } else if current == 39 {
+      index += 1
+      addFrontendToken(tokens, request.sourceBytes, scalars, "quote", start, index, request.tokenLimit)?
+    } else if current == 96 {
+      index += 1
+      addFrontendToken(tokens, request.sourceBytes, scalars, "quasiquote", start, index, request.tokenLimit)?
+    } else if current == 44 {
+      index += 1
+      let kind = if index < scalars.length && scalars[index].value == 64 {
+        index += 1
+        "unquote-splicing"
+      } else {
+        "unquote"
+      }
+      addFrontendToken(tokens, request.sourceBytes, scalars, kind, start, index, request.tokenLimit)?
+    } else if current == 34 {
+      index += 1
+      let mut escaped = false
+      let mut terminated = false
+      while index < scalars.length {
+        chargeFrontend(transitions, 1, request.transitionLimit, "tokenize", scalars[index].startByte, scalars[index].endByte)?
+        let value = scalars[index].value
+        index += 1
+        if escaped {
+          escaped = false
+        } else if value == 92 {
+          escaped = true
+        } else if value == 34 {
+          terminated = true
+          break
+        }
+      }
+      if !terminated {
+        return Err(frontendFault("HF103", "unterminated-string", "tokenize", scalars[start].startByte, request.sourceBytes.length, "unterminated string literal", false))
+      }
+      addFrontendToken(tokens, request.sourceBytes, scalars, "string", start, index, request.tokenLimit)?
+    } else if current == 35 && index + 1 < scalars.length && scalars[index + 1].value == 40 {
+      index += 2
+      addFrontendToken(tokens, request.sourceBytes, scalars, "vector-open", start, index, request.tokenLimit)?
+    } else if current == 35 && index + 3 < scalars.length
+      && scalars[index + 1].value == 117
+      && scalars[index + 2].value == 56
+      && scalars[index + 3].value == 40 {
+      index += 4
+      addFrontendToken(tokens, request.sourceBytes, scalars, "bytevector-open", start, index, request.tokenLimit)?
+    } else if current == 35 && index + 1 < scalars.length && scalars[index + 1].value == 92 {
+      index += 2
+      if index >= scalars.length {
+        return Err(frontendFault("HF104", "empty-character", "tokenize", scalars[start].startByte, request.sourceBytes.length, "character literal has no scalar", false))
+      }
+      if tokenDelimiter(scalars[index].value) {
+        index += 1
+      } else {
+        while index < scalars.length && !tokenDelimiter(scalars[index].value) { index += 1 }
+      }
+      addFrontendToken(tokens, request.sourceBytes, scalars, "character", start, index, request.tokenLimit)?
+    } else if current == 35 && index + 1 < scalars.length && scalars[index + 1].value == 59 {
+      index += 2
+      addFrontendToken(tokens, request.sourceBytes, scalars, "datum-comment", start, index, request.tokenLimit)?
+    } else {
+      while index < scalars.length && !tokenDelimiter(scalars[index].value) { index += 1 }
+      if index == start {
+        return Err(frontendFault("HF105", "unknown-token", "tokenize", scalars[index].startByte, scalars[index].endByte, "cannot tokenize source scalar", false))
+      }
+      let kind = if index == start + 1 && scalars[start].value == 46 { "dot" } else { "atom" }
+      addFrontendToken(tokens, request.sourceBytes, scalars, kind, start, index, request.tokenLimit)?
+    }
+  }
+  Ok(TokenizedSource {
+    scalars: scalars,
+    newlineIndex: decoded.newlineIndex,
+    tokens: tokens,
+    transitions: transitions[0],
+  })
+}
+
+function hexDigitValue(value: int) -> int {
+  if value >= 48 && value <= 57 { return value - 48 }
+  if value >= 65 && value <= 70 { return value - 55 }
+  if value >= 97 && value <= 102 { return value - 87 }
+  -1
+}
+
+function readFault(
+  code: string,
+  templateId: string,
+  startByte: int,
+  endByte: int,
+  message: string,
+) -> FrontendFault {
+  frontendFault(code, templateId, "read", startByte, endByte, message, false)
+}
+
+function projectedReadFault(
+  code: string,
+  templateId: string,
+  startByte: int,
+  endByte: int,
+  message: string,
+  diagnosticCode: string,
+  diagnosticMessage: string,
+  diagnosticStartByte: int,
+) -> FrontendFault {
+  projectFrontendFault(
+    readFault(code, templateId, startByte, endByte, message),
+    diagnosticCode,
+    "reader",
+    diagnosticMessage,
+    diagnosticStartByte,
+  )
+}
+
+function scalarPrefixByteLength(scalars: Array<string>, endIndex: int) -> int {
+  let mut byteLength = 0
+  let mut index = 0
+  while index < endIndex {
+    byteLength += scalars[index].byteLength()
+    index += 1
+  }
+  byteLength
+}
+
+function decodeStringLiteral(token: FrontendToken) -> Result<string, FrontendFault> {
+  let scalars = token.text.scalars()
+  if scalars.length < 2 || scalars[0] != "\"" || scalars[scalars.length - 1] != "\"" {
+    return Err(readFault("LIT410", "malformed-string-token", token.startByte, token.endByte, "malformed string token"))
+  }
+  let mut output = ""
+  let mut index = 1
+  while index + 1 < scalars.length {
+    let scalar = scalars[index]
+    if scalar != "\\" {
+      output += scalar
+      index += 1
+      continue
+    }
+    index += 1
+    if index + 1 > scalars.length {
+      return Err(readFault("LIT411", "trailing-string-escape", token.startByte, token.endByte, "trailing string escape"))
+    }
+    let escaped = scalars[index]
+    if escaped == "\"" { output += "\""; index += 1 }
+    else if escaped == "\\" { output += "\\"; index += 1 }
+    else if escaped == "n" { output += "\n"; index += 1 }
+    else if escaped == "t" { output += "\t"; index += 1 }
+    else if escaped == "r" { output += "\r"; index += 1 }
+    else if escaped == "x" {
+      let escapeStartByte = token.startByte + scalarPrefixByteLength(scalars, index)
+      index += 1
+      let mut scalarValue = 0
+      let mut digits = 0
+      while index + 1 < scalars.length && scalars[index] != ";" {
+        let code = scalars[index].codePointAt(0) ?? -1
+        let digit = hexDigitValue(code)
+        if digit < 0 || scalarValue > 1114111 / 16 {
+          return Err(projectedReadFault(
+            "LIT412", "invalid-string-hex-escape", token.startByte, token.endByte,
+            "invalid string scalar escape", "E150", "invalid string scalar escape", escapeStartByte,
+          ))
+        }
+        scalarValue = scalarValue * 16 + digit
+        digits += 1
+        index += 1
+      }
+      if digits == 0 || index + 1 >= scalars.length || scalars[index] != ";"
+        || scalarValue > 1114111 || (scalarValue >= 55296 && scalarValue <= 57343) {
+        let diagnosticMessage = if digits == 0 && index < scalars.length && scalars[index] == ";" {
+          "empty `\\x;` escape (no hex digits)"
+        } else { "invalid string scalar escape" }
+        return Err(projectedReadFault(
+          "LIT412", "invalid-string-hex-escape", token.startByte, token.endByte,
+          "invalid string scalar escape", "E150", diagnosticMessage, escapeStartByte,
+        ))
+      }
+      output += scalarText(scalarValue)
+      index += 1
+    } else {
+      return Err(readFault("LIT413", "unknown-string-escape", token.startByte, token.endByte, "unknown string escape"))
+    }
+  }
+  Ok(output)
+}
+
+function decodeCharacterLiteral(token: FrontendToken) -> Result<int, FrontendFault> {
+  let scalars = token.text.scalars()
+  if scalars.length < 3 || scalars[0] != "#" || scalars[1] != "\\" {
+    return Err(readFault("LIT414", "malformed-character-token", token.startByte, token.endByte, "malformed character token"))
+  }
+  let mut body: Array<string> = []
+  let mut index = 2
+  while index < scalars.length { body.push(scalars[index]); index += 1 }
+  let text = body.join("")
+  if body.length == 1 { return Ok(body[0].codePointAt(0) ?? 0) }
+  if text == "space" { return Ok(32) }
+  if text == "newline" { return Ok(10) }
+  if text == "tab" { return Ok(9) }
+  if text == "return" { return Ok(13) }
+  if text == "null" { return Ok(0) }
+  if body.length >= 2 && body[0] == "x" {
+    let mut value = 0
+    index = 1
+    while index < body.length {
+      let digit = hexDigitValue(body[index].codePointAt(0) ?? -1)
+      if digit < 0 || value > 1114111 / 16 {
+        return Err(readFault("LIT415", "invalid-character-hex", token.startByte, token.endByte, "invalid character scalar"))
+      }
+      value = value * 16 + digit
+      index += 1
+    }
+    if value > 1114111 || (value >= 55296 && value <= 57343) {
+      return Err(readFault("LIT415", "invalid-character-hex", token.startByte, token.endByte, "invalid character scalar"))
+    }
+    return Ok(value)
+  }
+  Err(readFault("LIT416", "unknown-character-name", token.startByte, token.endByte, "unknown character name"))
+}
+
+function numericLooking(text: string) -> bool {
+  let scalars = text.scalars()
+  if scalars.length == 0 { return false }
+  if scalars[0] >= "0" && scalars[0] <= "9" { return true }
+  scalars.length > 1 && scalars[0] == "-" && scalars[1] >= "0" && scalars[1] <= "9"
+}
+
+function sourceTokenHasHashPrefix(text: string) -> bool { text.startsWith("#") }
+
+function sourceNumber(text: string) -> Result<Option<GuestValue>, string> {
+  if text == "-0" { return Ok(Some(GuestValue.VInt(guestIntZero()))) }
+  if text.startsWith("-0/") {
+    let parts = text.split("/")
+    if parts.length == 2 {
+      let denominator = parseGuestInt(parts[1])?
+      if denominator.negative || guestIntIsZero(denominator) { return Err("invalid rational denominator") }
+      return Ok(Some(GuestValue.VInt(guestIntZero())))
+    }
+  }
+  parseGuestNumberToken(text)
+}
+
+export function addReaderDatum(
+  datums: Array<ReaderDatum>,
+  startByte: int,
+  endByte: int,
+  kind: ReaderDatumKind,
+) -> int {
+  let mut arena = datums
+  let id = arena.length
+  arena.push(ReaderDatum { startByte: startByte, endByte: endByte, kind: kind })
+  id
+}
+
+export function listDatumIds(datums: Array<ReaderDatum>, id: int) -> Result<Array<int>, FrontendFault> {
+  let mut result: Array<int> = []
+  let mut cursor = id
+  let mut hops = 0
+  loop {
+    if cursor < 0 || cursor >= datums.length {
+      return Err(readFault("LIT417", "broken-reader-datum", 0, 0, "broken reader datum reference"))
+    }
+    match datums[cursor].kind {
+      case DatumNil => { break }
+      case DatumPair(car, cdr) => {
+        result.push(car)
+        cursor = cdr
+        hops += 1
+        if hops > datums.length {
+          return Err(readFault("LIT417", "cyclic-reader-datum", datums[id].startByte, datums[id].endByte, "cyclic reader datum"))
+        }
+      }
+      case _ => return Err(readFault("LIT418", "proper-list-required", datums[id].startByte, datums[id].endByte, "proper list required"))
+    }
+  }
+  Ok(result)
+}
+
+function pushReaderFrame(
+  frames: Array<ReaderParseFrame>,
+  active: Array<int>,
+  maximum: Array<int>,
+  frame: ReaderParseFrame,
+) -> Result<(), FrontendFault> {
+  let mut stack: Array<ReaderParseFrame> = frames
+  let mut length: Array<int> = active
+  let mut maxNesting: Array<int> = maximum
+  if length[0] >= 256 {
+    return Err(frontendFault("HF902", "reader-nesting-limit", "read", frame.startByte, frame.startByte, "reader nesting limit exceeded", true))
+  }
+  if length[0] < stack.length { stack[length[0]] = frame } else { stack.push(frame) }
+  length[0] += 1
+  if length[0] > maxNesting[0] { maxNesting[0] = length[0] }
+  Ok(())
+}
+
+function readerFrameIsPrefix(kind: string) -> bool { kind.startsWith("prefix-") }
+
+function wrapReaderPrefix(
+  datums: Array<ReaderDatum>,
+  frame: ReaderParseFrame,
+  value: int,
+) -> int {
+  let name = if frame.kind == "prefix-quote" { "quote" }
+    else if frame.kind == "prefix-quasiquote" { "quasiquote" }
+    else if frame.kind == "prefix-unquote" { "unquote" }
+    else { "unquote-splicing" }
+  let endByte = datums[value].endByte
+  let symbol = addReaderDatum(datums, frame.startByte, frame.startByte + 1, ReaderDatumKind.DatumSymbol(name))
+  let nil = addReaderDatum(datums, frame.startByte, endByte, ReaderDatumKind.DatumNil)
+  let valuePair = addReaderDatum(datums, frame.startByte, endByte, ReaderDatumKind.DatumPair(value, nil))
+  addReaderDatum(datums, frame.startByte, endByte, ReaderDatumKind.DatumPair(symbol, valuePair))
+}
+
+function deliverReaderDatum(
+  frames: Array<ReaderParseFrame>,
+  active: Array<int>,
+  roots: Array<int>,
+  datums: Array<ReaderDatum>,
+  datum: int,
+) -> Result<(), FrontendFault> {
+  let mut stack: Array<ReaderParseFrame> = frames
+  let mut length: Array<int> = active
+  let mut outputRoots: Array<int> = roots
+  let mut current = datum
+  loop {
+    if length[0] == 0 {
+      outputRoots.push(current)
+      break Ok(())
+    }
+    let frameIndex = length[0] - 1
+    let frame = stack[frameIndex]
+    if readerFrameIsPrefix(frame.kind) {
+      length[0] -= 1
+      current = wrapReaderPrefix(datums, frame, current)
+      continue
+    }
+    if frame.kind == "comment" {
+      length[0] -= 1
+      break Ok(())
+    }
+    if frame.dottedState == 2 {
+      break Err(projectedReadFault(
+        "LIT427", "malformed-dotted-list", datums[current].startByte, datums[current].endByte,
+        "dotted tail must be followed by a close parenthesis", "E140",
+        "dotted list has more than one datum after `.`", frame.dotStartByte,
+      ))
+    }
+    if frame.dottedState == 1 {
+      stack[frameIndex] = ReaderParseFrame {
+        kind: frame.kind,
+        startByte: frame.startByte,
+        items: frame.items,
+        dottedState: 2,
+        tail: current,
+        dotStartByte: frame.dotStartByte,
+      }
+      break Ok(())
+    }
+    let mut items: Array<int> = frame.items
+    items.push(current)
+    break Ok(())
+  }
+}
+
+function isNonfiniteNumberSignal(value: string) -> bool {
+  value.startsWith("E314 ")
+}
+
+function atomicReaderDatum(datums: Array<ReaderDatum>, token: FrontendToken) -> Result<int, FrontendFault> {
+  if token.kind == "string" {
+    return Ok(addReaderDatum(datums, token.startByte, token.endByte, ReaderDatumKind.DatumString(decodeStringLiteral(token)?)))
+  }
+  if token.kind == "character" {
+    return Ok(addReaderDatum(datums, token.startByte, token.endByte, ReaderDatumKind.DatumChar(decodeCharacterLiteral(token)?)))
+  }
+  if token.kind != "atom" {
+    return Err(readFault("LIT429", "unknown-token-kind", token.startByte, token.endByte, "unknown token kind in reader"))
+  }
+  if token.text == "#t" {
+    return Ok(addReaderDatum(datums, token.startByte, token.endByte, ReaderDatumKind.DatumBool(true)))
+  }
+  if token.text == "#f" {
+    return Ok(addReaderDatum(datums, token.startByte, token.endByte, ReaderDatumKind.DatumBool(false)))
+  }
+  let number = match sourceNumber(token.text) {
+    case Ok(value) => value
+    case Err(error) => {
+      let fault = readFault("LIT430", "invalid-number", token.startByte, token.endByte, "invalid numeric literal: {error}")
+      if isNonfiniteNumberSignal(error) {
+        return Err(projectFrontendFault(
+          fault,
+          "E314",
+          "reader",
+          "inexact (real) literal is not finite: `{token.text}`",
+          token.startByte,
+        ))
+      }
+      return Err(fault)
+    }
+  }
+  match number {
+    case Some(value) => match value {
+      case VInt(number) => Ok(addReaderDatum(datums, token.startByte, token.endByte, ReaderDatumKind.DatumInt(number)))
+      case VRational(number) => Ok(addReaderDatum(datums, token.startByte, token.endByte, ReaderDatumKind.DatumRational(number)))
+      case VReal(number) => Ok(addReaderDatum(datums, token.startByte, token.endByte, ReaderDatumKind.DatumReal(number)))
+      case _ => Err(readFault("LIT430", "invalid-number", token.startByte, token.endByte, "numeric decoder returned a non-number"))
+    }
+    case None => {
+      if numericLooking(token.text) {
+        return Err(projectedReadFault(
+          "LIT430", "invalid-number", token.startByte, token.endByte,
+          "invalid numeric literal", "E314",
+          "inexact (real) literal is not finite: `{token.text}`", token.startByte,
+        ))
+      }
+      if sourceTokenHasHashPrefix(token.text) {
+        return Err(projectedReadFault(
+          "LIT431", "unsupported-reader-prefix", token.startByte, token.endByte,
+          "unsupported reader prefix", "E100", "unrecognized `#` syntax: `{token.text}`", token.startByte,
+        ))
+      }
+      Ok(addReaderDatum(datums, token.startByte, token.endByte, ReaderDatumKind.DatumSymbol(token.text)))
+    }
+  }
+}
+
+function finishReaderContainer(
+  datums: Array<ReaderDatum>,
+  frame: ReaderParseFrame,
+  endByte: int,
+) -> Result<int, FrontendFault> {
+  if frame.dottedState == 1 {
+    return Err(projectedReadFault(
+      "LIT427", "malformed-dotted-list", frame.startByte, endByte,
+      "dotted list is missing its tail datum", "E140", "dotted list has no cdr after `.`", frame.dotStartByte,
+    ))
+  }
+  if frame.kind == "vector" {
+    return Ok(addReaderDatum(datums, frame.startByte, endByte, ReaderDatumKind.DatumVector(frame.items)))
+  }
+  if frame.kind == "bytevector" {
+    let mut bytes: Array<int> = []
+    for item in frame.items {
+      match datums[item].kind {
+        case DatumInt(value) => match toInt(renderGuestInt(value)) {
+          case Some(byte) => {
+            if byte < 0 || byte > 255 {
+              return Err(projectedReadFault(
+                "LIT426", "bytevector-octet-range", datums[item].startByte, datums[item].endByte,
+                "bytevector element is outside 0..255", "E100",
+                "bytevector element out of range 0..=255: `{renderGuestInt(value)}`", datums[item].startByte,
+              ))
+            }
+            bytes.push(byte)
+          }
+          case None => return Err(readFault("LIT426", "bytevector-octet-range", datums[item].startByte, datums[item].endByte, "bytevector element is outside 0..255"))
+        }
+        case _ => return Err(readFault("LIT426", "bytevector-octet-type", datums[item].startByte, datums[item].endByte, "bytevector element must be an exact integer"))
+      }
+    }
+    return Ok(addReaderDatum(datums, frame.startByte, endByte, ReaderDatumKind.DatumBytevector(bytes)))
+  }
+  let mut tail = if frame.dottedState == 2 {
+    frame.tail
+  } else {
+    addReaderDatum(datums, frame.startByte, endByte, ReaderDatumKind.DatumNil)
+  }
+  let mut index = frame.items.length - 1
+  while index >= 0 {
+    tail = addReaderDatum(datums, frame.startByte, endByte, ReaderDatumKind.DatumPair(frame.items[index], tail))
+    index -= 1
+  }
+  Ok(tail)
+}
+
+export function readSourceIterative(request: FrontendRequest, tokenized: TokenizedSource) -> Result<ReaderOutput, FrontendFault> {
+  let mut datums: Array<ReaderDatum> = []
+  let mut roots: Array<int> = []
+  let mut frames: Array<ReaderParseFrame> = []
+  let mut active: Array<int> = [0]
+  let maximum: Array<int> = [0]
+  let transitions: Array<int> = [tokenized.transitions]
+  let mut cursor = 0
+  while cursor < tokenized.tokens.length {
+    let token = tokenized.tokens[cursor]
+    chargeFrontend(transitions, 1, request.transitionLimit, "read", token.startByte, token.endByte)?
+    cursor += 1
+    if token.kind == "unsupported-bracket" {
+      return Err(readFault("LIT420", "unsupported-bracket", token.startByte, token.endByte, "square and brace brackets are unsupported"))
+    }
+    if token.kind == "open-paren" || token.kind == "vector-open" || token.kind == "bytevector-open" {
+      let kind = if token.kind == "open-paren" { "list" } else if token.kind == "vector-open" { "vector" } else { "bytevector" }
+      pushReaderFrame(frames, active, maximum, ReaderParseFrame {
+        kind: kind,
+        startByte: token.startByte,
+        items: [],
+        dottedState: 0,
+        tail: -1,
+        dotStartByte: -1,
+      })?
+      continue
+    }
+    if token.kind == "quote" || token.kind == "quasiquote" || token.kind == "unquote" || token.kind == "unquote-splicing" {
+      let kind = if token.kind == "quote" { "prefix-quote" }
+        else if token.kind == "quasiquote" { "prefix-quasiquote" }
+        else if token.kind == "unquote" { "prefix-unquote" }
+        else { "prefix-unquote-splicing" }
+      pushReaderFrame(frames, active, maximum, ReaderParseFrame {
+        kind: kind,
+        startByte: token.startByte,
+        items: [],
+        dottedState: 0,
+        tail: -1,
+        dotStartByte: -1,
+      })?
+      continue
+    }
+    if token.kind == "datum-comment" {
+      return Err(projectedReadFault(
+        "LIT424", "forbidden-datum-comment", token.startByte, token.endByte,
+        "datum comments are forbidden", "E120",
+        "datum comment `#;` is a banned reader extension (LISPEX §4)", token.startByte,
+      ))
+    }
+    if token.kind == "dot" {
+      if active[0] == 0 {
+        return Err(readFault("LIT422", "misplaced-dot", token.startByte, token.endByte, "misplaced dotted-tail marker"))
+      }
+      let frameIndex = active[0] - 1
+      let frame = frames[frameIndex]
+      if frame.kind != "list" || frame.items.length == 0 || frame.dottedState != 0 {
+        return Err(readFault("LIT427", "malformed-dotted-list", token.startByte, token.endByte, "malformed dotted list"))
+      }
+      frames[frameIndex] = ReaderParseFrame {
+        kind: frame.kind,
+        startByte: frame.startByte,
+        items: frame.items,
+        dottedState: 1,
+        tail: -1,
+        dotStartByte: token.startByte,
+      }
+      continue
+    }
+    if token.kind == "close-paren" {
+      if active[0] == 0 {
+        return Err(readFault("LIT421", "unexpected-close-paren", token.startByte, token.endByte, "unexpected close parenthesis"))
+      }
+      let frameIndex = active[0] - 1
+      let frame = frames[frameIndex]
+      if readerFrameIsPrefix(frame.kind) {
+        return Err(readFault("LIT428", "shorthand-without-datum", frame.startByte, token.endByte, "reader shorthand has no following datum"))
+      }
+      if frame.kind == "comment" {
+        return Err(readFault("LIT424", "datum-comment-without-datum", frame.startByte, token.endByte, "datum comment has no following datum"))
+      }
+      active[0] -= 1
+      let completed = finishReaderContainer(datums, frame, token.endByte)?
+      deliverReaderDatum(frames, active, roots, datums, completed)?
+      continue
+    }
+    let datum = atomicReaderDatum(datums, token)?
+    deliverReaderDatum(frames, active, roots, datums, datum)?
+  }
+  if active[0] > 0 {
+    let frame = frames[active[0] - 1]
+    let endByte = request.sourceBytes.length
+    if frame.kind == "comment" {
+      return Err(readFault("LIT424", "datum-comment-without-datum", frame.startByte, endByte, "datum comment has no following datum"))
+    }
+    if readerFrameIsPrefix(frame.kind) {
+      return Err(readFault("LIT428", "shorthand-without-datum", frame.startByte, endByte, "reader shorthand has no following datum"))
+    }
+    return Err(projectedReadFault(
+      "LIT425", "unterminated-list", frame.startByte, endByte,
+      "unterminated list, vector, or bytevector", "E100", "unterminated list (missing `)`)", frame.startByte,
+    ))
+  }
+  Ok(ReaderOutput {
+    datums: datums,
+    roots: roots,
+    transitions: transitions[0],
+    maxNesting: maximum[0],
+  })
+}
+
+export function datumSymbol(datums: Array<ReaderDatum>, datum: int) -> Option<string> {
+  if datum < 0 || datum >= datums.length { return None }
+  match datums[datum].kind {
+    case DatumSymbol(name) => Some(name)
+    case _ => None
+  }
+}

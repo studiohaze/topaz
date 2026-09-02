@@ -1,0 +1,19 @@
+
+import util
+function main() -> int {
+    let seeds = [1, 0]
+    let f = if seeds[0] == 1 {
+        util.sum
+    } else {
+        util.pack
+    }
+    let g = if seeds[1] == 1 {
+        util.sum
+    } else {
+        util.pack
+    }
+    let a = 5 |> f(...[1, 2], seed: 9, base: _)
+    let b = 5 |> g(...[1, 2], seed: 9, base: _)
+    a * 1000 + (b + 100)
+}
+main()

@@ -1,0 +1,9 @@
+enum Shape { Circle(int), Square(int), Dot }
+function side(s: Shape) -> int {
+  match s {
+    case Circle(x) | Square(x) => x
+    case Dot => 0
+  }
+}
+print("{side(Shape.Circle(4))}/{side(Shape.Square(9))}/{side(Shape.Dot)}")
+0

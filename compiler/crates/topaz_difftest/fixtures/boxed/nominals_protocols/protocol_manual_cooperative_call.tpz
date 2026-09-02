@@ -1,0 +1,11 @@
+protocol Spin { function spin(value: Self) -> int }
+record Counter { base: int }
+impl Spin<Counter> { function spin(value: Counter) -> int { let mut i = 0
+while i < 3 { i = i + 1 }
+value.base + i } }
+function main() -> int { let result = concurrent {
+work: Spin.spin(Counter { base: 5 })
+idle: 0
+}
+result.work }
+main()

@@ -1,0 +1,16 @@
+
+function main() -> int {
+    let mut counter = 0
+    function bump() -> int {
+        let marker = if true {
+            counter = 5
+            1
+        } else {
+            0
+        }
+        marker
+    }
+    let got = bump()
+    counter + got
+}
+main()

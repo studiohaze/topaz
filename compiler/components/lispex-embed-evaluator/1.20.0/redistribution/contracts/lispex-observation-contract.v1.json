@@ -1,0 +1,78 @@
+{
+  "schema": "lispex.observation-contract/v1",
+  "contract_id": "lispex-observation-contract/1",
+  "rule_id": "OBSERVATION-CONTRACT-1",
+  "decision_id": "L120-SDL-RERAT-20260811-01",
+  "ratified_at": "2026-08-11",
+  "always_normative_when_applicable": [
+    {
+      "field": "outcome",
+      "ledger_field": "outcome",
+      "wording": "outcome category"
+    },
+    {
+      "field": "canonical_stdout_bytes",
+      "ledger_field": "stdout",
+      "wording": "canonical stdout bytes"
+    },
+    {
+      "field": "warning_order",
+      "ledger_field": "warning_order",
+      "wording": "warning order"
+    },
+    {
+      "field": "exit_status",
+      "ledger_field": "exit_status",
+      "wording": "exit status"
+    }
+  ],
+  "diagnostic_fields": [
+    {
+      "field": "diagnostic_code",
+      "classification": "conditional-normative",
+      "condition": "the governing contract fixes an exact stable code",
+      "wording": "diagnostic_code is normative when the governing contract fixes an exact stable code."
+    },
+    {
+      "field": "diagnostic_phase",
+      "classification": "conditional-normative",
+      "condition": "the governing contract or a ratified family rule fixes a canonical phase identifier",
+      "wording": "diagnostic_phase is normative only when the governing contract or a ratified family rule fixes a canonical phase identifier."
+    },
+    {
+      "field": "primary_span",
+      "classification": "conditional-normative",
+      "condition": "a ratified span-selection rule fixes its source-origin rule",
+      "wording": "primary_span is normative only when a ratified span-selection rule fixes its source-origin rule. For 1.20, this currently includes UNBOUND-LOOKUP-1 for E300."
+    },
+    {
+      "field": "diagnostic_prose",
+      "classification": "advisory",
+      "wording": "diagnostic_prose is advisory."
+    }
+  ],
+  "ratified_span_selection_rules": [
+    {
+      "rule_id": "UNBOUND-LOOKUP-1",
+      "diagnostic_code": "E300",
+      "source_origin_rule": "the original-source occurrence whose lookup first fails under the specified evaluation order"
+    }
+  ],
+  "advisory_fields": {
+    "retention": "are retained in raw observations and receipts",
+    "semantic_equality": "are excluded from semantic equality",
+    "conformance": "cannot independently establish conformance or nonconformance"
+  },
+  "unknown": {
+    "meaning": "the contract or evidence does not determine the field",
+    "wildcard": false,
+    "comparison": "unknown is not a wildcard value that automatically matches an observation; a comparison with no normative mismatch and at least one undetermined normative value is unknown"
+  },
+  "projection": {
+    "comparison_result_values": [true, false, "unknown"],
+    "exact_code_field": "diagnostic_code",
+    "code_family_predicates_supported": false,
+    "phase_aliases_require_ratified_rule": true,
+    "advisory_fields_excluded": true
+  }
+}

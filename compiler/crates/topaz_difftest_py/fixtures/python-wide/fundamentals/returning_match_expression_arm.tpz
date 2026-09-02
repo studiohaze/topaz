@@ -1,0 +1,12 @@
+
+function f(n: int) -> int {
+    let x = match n {
+        case 0 => return 7
+        case _ => n
+    }
+    x + 1
+}
+function main() -> int {
+    f(0) + f(3)
+}
+main()

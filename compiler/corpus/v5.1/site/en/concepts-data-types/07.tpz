@@ -1,0 +1,14 @@
+// Result type for error handling
+function readFile(path: string) -> Result<string, string> {
+    if fileExists(path) {
+        Ok(readFileContent(path))
+    } else {
+        Err("File not found")
+    }
+}
+
+// Safe error handling
+match readFile("data.txt") {
+    case Ok(content) => print("File content: {content}")
+    case Err(errorMessage) => print("Error occurred: {errorMessage}")
+}

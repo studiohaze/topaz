@@ -1,0 +1,4 @@
+let extern = 1
+let ffi = 2
+let r = { native: 3 }
+let v = r.native

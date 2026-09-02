@@ -1,0 +1,17 @@
+let 요일 = "월요일"
+
+match 요일 {
+    case "월요일" => print("한 주의 시작!")
+    case "금요일" => print("불금!")
+    case 오늘 if 오늘 in ["토요일", "일요일"] => print("주말!")
+    case _ => print("평범한 요일")
+}
+
+// 값을 반환하는 match
+let 주말 = ["토요일", "일요일"]
+let 근무형태 = match 요일 {
+    case 오늘 if 오늘 in 주말 => "휴일"
+    case _ => "근무일"
+}
+
+print("오늘은 {근무형태}입니다")

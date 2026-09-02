@@ -1,0 +1,24 @@
+
+let andSkipped = false && loop {
+    print("and-skip")
+    break true
+}
+let andHit = true && loop {
+    print("and-hit")
+    break true
+}
+let orSkipped = true || loop {
+    print("or-skip")
+    break false
+}
+let orHit = false || loop {
+    print("or-hit")
+    break true
+}
+print("{andSkipped}:{andHit}:{orSkipped}:{orHit}")
+let result = if andHit && orHit {
+    1
+} else {
+    0
+}
+result

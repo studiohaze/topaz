@@ -1,0 +1,22 @@
+
+function mix(acc: int, value: int) -> int {
+    let mut i = 0
+    while i < 200 {
+        i = i + 1
+    }
+    acc * 10 + value
+}
+
+let callbacks = map { "plain": (acc, value) => mix(acc, value) }
+
+let r = concurrent {
+    slow: {
+        let xs = [2, 3]
+        match callbacks.get("plain") {
+            case Some(cb) => xs.reduce(initial: 1, f: cb)
+            case None => -1
+        }
+    }
+    fast: 0
+}
+r.slow + r.fast

@@ -1,0 +1,6 @@
+
+export record Response { status: int, body: string }
+
+export function text(status: int, body: string) -> Response {
+    Response { status: status, body: body }
+}

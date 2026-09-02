@@ -1,0 +1,10 @@
+function разобратьПорт(текст: string) -> Result<int, string> {
+    if текст == "" {
+        return Err("Порт обязателен")
+    }
+
+    match toInt(текст) {
+        case Some(порт) => Ok(порт)
+        case None => Err("Порт должен быть целым числом")
+    }
+}

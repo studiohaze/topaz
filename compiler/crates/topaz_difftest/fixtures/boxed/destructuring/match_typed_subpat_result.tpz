@@ -1,0 +1,2 @@
+match Ok(5) { case Ok(n: int) => n
+case _ => 0 }

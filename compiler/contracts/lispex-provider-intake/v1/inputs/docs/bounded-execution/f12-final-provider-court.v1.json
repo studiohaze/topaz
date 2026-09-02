@@ -1,0 +1,64 @@
+{
+  "schema": "lispex.f12-final-provider-court/v1",
+  "subjects": {
+    "sourceRevision": "5423eb32a1f456163de1a4898bef4eebd7f3c91e",
+    "artifactSha256": "fa6e52559e1f5a43e50a3b7ac0cc5add6930cff0aed8aaff462cff4609362870"
+  },
+  "evidence": [
+    {
+      "kind": "post-b7-structural-closure",
+      "path": "docs/bounded-execution/f12-provider-evidence/post-b7-structural-closure.v1.json",
+      "sha256": "a926e88bd68473ba8ebde2823794aa088ba9c280ac87582a02f5d993781affba"
+    },
+    {
+      "kind": "post-closure-meter-site-reachability",
+      "path": "docs/bounded-execution/f12-provider-evidence/post-closure-meter-site-reachability.v1.json",
+      "sha256": "9038710160155d7c7471c6fc11d835e065a9faa3593f7bd6ca502d13c46dcfc7"
+    },
+    {
+      "kind": "post-closure-mutation",
+      "path": "docs/bounded-execution/f12-provider-evidence/post-closure-mutation.v1.json",
+      "sha256": "8696e6fb92e226a8d67f343fb4d592d70469c445f2b51237997e05527b83fc2c"
+    },
+    {
+      "kind": "post-closure-property-fuzz",
+      "path": "docs/bounded-execution/f12-provider-evidence/post-closure-property-fuzz.v1.json",
+      "sha256": "a9c5ac559d5198842af8409bbb6a644fb2eb67db398e81836094625957d7a5a7"
+    },
+    {
+      "kind": "post-closure-safety-dominance",
+      "path": "docs/bounded-execution/f12-provider-evidence/post-closure-safety-dominance.v1.json",
+      "sha256": "0ef3299447d883f515d35dd27f79cbd20ccf2a7eab6c5070c27cb2fee3ed8ad0"
+    },
+    {
+      "kind": "cross-architecture-portable-core",
+      "path": "docs/bounded-execution/f12-provider-evidence/cross-architecture-portable-core.v1.json",
+      "sha256": "731eb0566b44a413294f36cf69b94b221465ea4b0f26a019109a0c607b96a774"
+    },
+    {
+      "kind": "installed-source-free-product",
+      "path": "docs/bounded-execution/f12-provider-evidence/installed-source-free-product.v1.json",
+      "sha256": "9e4841ed5ca93702d712e10d2bf6eace12d2e16ca8d27173395b193f8e7c9b32"
+    }
+  ],
+  "evidenceDigests": [
+    "a926e88bd68473ba8ebde2823794aa088ba9c280ac87582a02f5d993781affba",
+    "9038710160155d7c7471c6fc11d835e065a9faa3593f7bd6ca502d13c46dcfc7",
+    "8696e6fb92e226a8d67f343fb4d592d70469c445f2b51237997e05527b83fc2c",
+    "a9c5ac559d5198842af8409bbb6a644fb2eb67db398e81836094625957d7a5a7",
+    "0ef3299447d883f515d35dd27f79cbd20ccf2a7eab6c5070c27cb2fee3ed8ad0",
+    "731eb0566b44a413294f36cf69b94b221465ea4b0f26a019109a0c607b96a774",
+    "9e4841ed5ca93702d712e10d2bf6eace12d2e16ca8d27173395b193f8e7c9b32"
+  ],
+  "result": {
+    "status": "passed",
+    "safetyPrecedenceCount": 0,
+    "freshInstancePassed": true
+  },
+  "boundaries": {
+    "wholeReleasePin": false,
+    "componentAdmission": false,
+    "topazImplementationAuthority": false,
+    "publicCompatibilityClaim": false
+  }
+}

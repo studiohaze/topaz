@@ -1,0 +1,3 @@
+match "b" { case "a" => 1
+case "b" => 2
+case _ => 3 }

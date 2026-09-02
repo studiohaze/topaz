@@ -1,0 +1,3 @@
+let a = [Some(Some(3))]
+match a { case [Some(Some(z))] => z
+case _ => 0 }

@@ -1,0 +1,2 @@
+let mut cached: Option<int> = None
+cached ??= Some(42)

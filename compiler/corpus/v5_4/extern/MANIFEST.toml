@@ -1,0 +1,27 @@
+# corpus/v5_4/extern -- package-mode extern replay fixtures
+
+[totals]
+recorded = 3
+runnable = 3
+pending = 0
+
+[[fixture]]
+dir = "extern-replay-package"
+phase = "package-run"
+versions = "5.4"
+result = "ok"
+status = "locked"
+
+[[fixture]]
+dir = "extern-replay-package"
+phase = "package-build-run"
+versions = "5.4"
+result = "ok"
+status = "locked"
+
+[[fixture]]
+dir = "extern-replay-package"
+phase = "package-test"
+versions = "5.4"
+result = "ok"
+status = "locked"

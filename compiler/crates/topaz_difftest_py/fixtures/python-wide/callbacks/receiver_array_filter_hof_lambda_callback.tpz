@@ -1,0 +1,7 @@
+
+function main() -> int {
+    let xs = [1, 2, 3]
+    let ys = xs.filter((x) => x > 1)
+    ys.length
+}
+main()

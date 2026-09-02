@@ -1,0 +1,5 @@
+function hidden() -> int {
+    newtype Hidden = int
+    0
+}
+hidden()

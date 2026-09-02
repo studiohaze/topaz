@@ -1,0 +1,7 @@
+
+record Box<T> { value: T }
+let b = Box { value: 7 }
+match b {
+    case Box { value } => print("{value}")
+}
+b.value

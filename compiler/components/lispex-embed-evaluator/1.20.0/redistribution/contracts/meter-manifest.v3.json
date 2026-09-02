@@ -1,0 +1,175 @@
+{
+  "schema": "lispex.meter-manifest/v3",
+  "manifest_id": "lispex.meter-manifest/3",
+  "meter_id": "lispex.product-resource-meter/v1",
+  "semantic_profile_id": "lispex-profile-1.5",
+  "status": "ratified-product-contract",
+  "supersedes": {
+    "path": "manifests/meter-manifest.v2.json",
+    "sha256": "0e7bfe9be2ea155d7f9d8b5f83f49b0df4451710891769b77423e1c7cecbf657",
+    "disposition": "retain-v2-as-immutable-pre-ratification-implementation-description"
+  },
+  "ratification": {
+    "packet": {
+      "path": "differential/hunt/ratification/hunt3-meter-batch-02-20260814/packet.json",
+      "git_commit": "0b2c164a5b12e7ecd6186afe5c3d31e13af90589",
+      "byte_len": 15363,
+      "sha256": "b64b8e60d37705e5ba1e0e39303e76b16d265c0f868bdc250ccd7019038ee1b8"
+    },
+    "owner_receipt": {
+      "path": "differential/hunt/ratification/hunt3-meter-batch-02-20260814/owner-ratification-receipt.json",
+      "git_commit": "f5f17ca4bc90c04d03560bf30bc015293c6616f4",
+      "git_blob": "5f281a297371923028b9f81f0f6be9224009f958",
+      "byte_len": 1681,
+      "sha256": "5b6e2b5d5a1fcc235fb9a0df6a1337744036a49584005a79393fda834ad69754"
+    },
+    "comparison_policy": {
+      "packet": {
+        "path": "differential/hunt/ratification/hunt3-meter-batch-03-20260814/packet.json",
+        "git_commit": "46cabe0936bfe8047c71d88b17d42c1511b18f93",
+        "git_blob": "888b9321dca0cd8f795e46c6f5b55c4ed1753c89",
+        "byte_len": 5782,
+        "sha256": "7e7cc3066ed00a00b43694bb4f3d4326783b99d6c22dc4f6fb5cabca472a60f1"
+      },
+      "owner_receipt": {
+        "path": "differential/hunt/ratification/hunt3-meter-batch-03-20260814/owner-ratification-receipt.json",
+        "git_commit": "9e64f97f4a0498709463833bca9fdb3275069a3c",
+        "git_blob": "5081db4cf388de9ebf3b288759cdf289a32a6cc6",
+        "byte_len": 1627,
+        "sha256": "58b84a5ba316d626c82ccc5ed8ac98a344d10a0b7f595f25f7c08ce7a7cdfae2"
+      }
+    }
+  },
+  "profile_bindings": {
+    "contract": "product/contracts/resource-profiles.v1.json",
+    "contract_sha256": "3dcd098d67ace9d9a01e38eb52b469a6924a05d9fe88eb93130415b9df041501",
+    "limit_order": [
+      "frontend-transition-limit",
+      "token-limit",
+      "normalization-step-limit",
+      "machine-transition-limit",
+      "output-byte-limit"
+    ],
+    "semantics_shared_across_profiles": true
+  },
+  "axis_order": [
+    "frontend-transition",
+    "token",
+    "normalization-step",
+    "machine-transition",
+    "output-byte"
+  ],
+  "axes": [
+    {
+      "axis_id": "frontend-transition",
+      "limit_field": "frontend-transition-limit",
+      "limit_index": 0,
+      "usage_field": "frontend_transitions",
+      "tariff": "one unit immediately before an attempt to decode the next source Unicode scalar for tokenizer processing",
+      "exhaustion_code": "frontend-transition-limit"
+    },
+    {
+      "axis_id": "token",
+      "limit_field": "token-limit",
+      "limit_index": 1,
+      "usage_field": "tokens",
+      "tariff": "one unit immediately before an otherwise recognized lexical token is appended to tokenizer output",
+      "exhaustion_code": "token-limit"
+    },
+    {
+      "axis_id": "normalization-step",
+      "limit_field": "normalization-step-limit",
+      "limit_index": 2,
+      "usage_field": "normalization_steps",
+      "tariff": "one unit on every entry to recursive surface-syntax normalization dispatch, including generated surface syntax",
+      "exhaustion_code": "normalization-limit"
+    },
+    {
+      "axis_id": "machine-transition",
+      "limit_field": "machine-transition-limit",
+      "limit_index": 3,
+      "usage_field": "machine_transitions",
+      "tariff": "one unit immediately before each evaluator evaluation, delivery, or condition-transfer control transition",
+      "exhaustion_code": "machine-transition-limit"
+    },
+    {
+      "axis_id": "output-byte",
+      "limit_field": "output-byte-limit",
+      "limit_index": 4,
+      "usage_field": "output_bytes",
+      "tariff": "the UTF-8 byte length of the next candidate stdout append",
+      "exhaustion_code": "output-limit"
+    }
+  ],
+  "rules": {
+    "METER-AXIS-TARIFF-1": "The axes array defines the exact event and charge amount for every axis.",
+    "METER-PRECHARGE-1": {
+      "arithmetic": "checked-u64",
+      "admit_when": "current-plus-amount-is-representable-and-less-than-or-equal-to-limit",
+      "mutation_after_admission_only": true,
+      "overflow_is_exhaustion": true
+    },
+    "METER-EXHAUSTION-PROJECTION-1": {
+      "status": "resource",
+      "exit_status": 2,
+      "resource_outcome_status": "limit-exceeded",
+      "resource_outcome_limit": "axis_id",
+      "diagnostic_count": 1,
+      "diagnostic_phase": "resource",
+      "stdout_bytes": "empty",
+      "value_projection_values": "empty",
+      "warnings": "previously-admitted-in-occurrence-order"
+    },
+    "METER-USAGE-REPORTING-1": {
+      "count": "admitted-reservations-including-work-before-a-later-fault",
+      "denied_reservation": "not-counted",
+      "unentered_stage": 0
+    },
+    "METER-EXHAUSTION-TIE-BREAK-1": {
+      "ordinary": "first-denied-reservation-in-product-execution-order",
+      "same_event": "axis_order"
+    },
+    "METER-EFFECT-ATOMICITY-1": {
+      "denied_event_mutates_counter": false,
+      "denied_event_commits_guarded_effect": false,
+      "retain_prior_usage": true,
+      "resource_product_projection": {
+        "stdout_bytes": "empty",
+        "value_projection_values": "empty",
+        "warnings": "retain",
+        "resource_diagnostic": "single"
+      }
+    },
+    "METER-USAGE-SHAPE-1": {
+      "location": "resource_outcome.usage",
+      "always_present": true,
+      "fields": {
+        "frontend_transitions": "u64",
+        "tokens": "u64",
+        "normalization_steps": "u64",
+        "machine_transitions": "u64",
+        "output_bytes": "u64"
+      },
+      "semantic_observation": true,
+      "cross_backend_comparison": {
+        "shape_and_axis_meaning": "normative",
+        "numeric_values": "backend-local admitted work; not compared for family equality",
+        "resource_status_limit_and_limits": "compared for family equality"
+      },
+      "backend_private_metrics_are_advisory": true
+    },
+    "METER-USAGE-COMPARISON-1": {
+      "same_backend_replay": "exact usage object for the same artifact, request bytes, profile, and rendering mode",
+      "cross_backend_family_equality": {
+        "shape_and_axis_meaning": "normative",
+        "numeric_values": "backend-local admitted work; not compared for family equality",
+        "resource_status_limit_and_limits": "compared for family equality"
+      }
+    }
+  },
+  "backend_application": {
+    "rust": "required-in-this-change-unit",
+    "lil": "required-in-this-change-unit",
+    "lit": "Topaz-owned; exact synchronization notice required"
+  }
+}

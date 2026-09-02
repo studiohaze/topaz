@@ -1,0 +1,11 @@
+function mark(value: int) -> int {
+    print("{value}")
+    value
+}
+
+record User {
+    age: int = mark(36),
+}
+
+let user: User = User {}
+print("{user.age}")

@@ -1,0 +1,10 @@
+let mut scores: Map<string, int> = Map.new()
+scores.insert("alice", 92)
+scores.insert("bob", 78)
+
+for name in scores.keys {
+    print("Stored score for {name}")    // "alice" first, then "bob" (insertion order)
+}
+
+let hasAlice = "alice" in scores.keys
+print("Has alice: {hasAlice}")

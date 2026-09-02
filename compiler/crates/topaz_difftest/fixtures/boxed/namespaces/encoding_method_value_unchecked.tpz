@@ -1,0 +1,2 @@
+let f = Encoding.hexEncode
+f(Encoding.utf8Encode("abc"))

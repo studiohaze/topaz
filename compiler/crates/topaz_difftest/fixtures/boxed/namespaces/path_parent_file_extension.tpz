@@ -1,0 +1,2 @@
+match Path.from("out/result.txt") { case Ok(p) => "{p.parent()}/{p.fileName()}/{p.extension()}"
+case Err(e) => e }

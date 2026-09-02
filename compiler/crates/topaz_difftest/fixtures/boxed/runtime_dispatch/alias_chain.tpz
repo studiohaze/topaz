@@ -1,0 +1,4 @@
+type A = int
+type B = A
+let x: B = 7
+x

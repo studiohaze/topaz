@@ -1,0 +1,10 @@
+
+import model { User as Person }
+function main() -> int {
+    let a = Person { name: "Ada", age: 36 }
+    let b = Person { name: "Ada", age: 36 }
+    let mut m = Map.new<Person, int>()
+    m.insert(a, 7)
+    m.getOr(b, 0)
+}
+main()

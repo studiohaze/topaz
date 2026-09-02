@@ -1,0 +1,18 @@
+// null 병합 연산자 (??)
+let 이름: string | null = null
+let 표시이름 = 이름 ?? "guest"
+
+print("표시 이름: {표시이름}")
+
+let 사용자: Option<{ 이름: string, 프로필: Option<{ 도시: string }> }> =
+    Some({ 이름: "김토파즈", 프로필: Some({ 도시: "Seoul" }) })
+
+let 도시 = 사용자?.프로필?.도시 ?? "Unknown"
+print("도시: {도시}")
+
+let 나이옵션: Option<int> = Some(25)
+let 나이 = match 나이옵션 {
+    case Some(v) => v
+    case None => 0
+}
+print("나이: {나이}")

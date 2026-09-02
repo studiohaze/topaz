@@ -1,0 +1,2 @@
+function f(...xs: int) -> int { xs[2] }
+f(1, ...[2], 3)

@@ -1,0 +1,12 @@
+
+newtype Ints = Array<int>
+function describe(value: Ints) -> string {
+    match value {
+        case found: Ints => {
+            let inner = found.value()
+            "hit:{inner.length}:{inner[0]}:{found}"
+        }
+        case _ => "miss"
+    }
+}
+describe(Ints([4, 5, 6]))

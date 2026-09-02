@@ -1,0 +1,16 @@
+import syntax { Diagnostic, Syntax, finish, start }
+
+function invalid(node: Syntax) -> bool {
+  finish(node) < start(node)
+}
+
+export function collectDiagnostics(nodes: Array<Syntax>) -> Array<Diagnostic> {
+  [
+    for node in nodes if invalid(node) => Diagnostic {
+      code: "E-SPAN",
+      lo: start(node),
+      hi: finish(node),
+      message: "end precedes start",
+    }
+  ]
+}

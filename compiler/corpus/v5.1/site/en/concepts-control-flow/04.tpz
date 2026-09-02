@@ -1,0 +1,20 @@
+// Range-based for loop
+for i in 0..5 {
+    print("Iteration {i}")
+}
+
+// Inclusive range
+for i in 1..10 {
+    print("Number: {i}")
+}
+
+// Array iteration
+let fruits = ["apple", "banana", "orange", "grape"]
+for fruit in fruits {
+    print("Fruit: {fruit}")
+}
+
+// Step iteration
+for i in 0..20 by 2 {
+    print("Even: {i}")
+}

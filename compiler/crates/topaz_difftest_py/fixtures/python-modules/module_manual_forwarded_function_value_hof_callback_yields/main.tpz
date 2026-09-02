@@ -1,0 +1,20 @@
+
+import selected_facade { forwarded }
+import facade
+let local = facade.forwarded
+concurrent {
+    selectedValue: {
+        let xs = [1]
+        xs.map(forwarded)
+    }
+    namespaceValue: {
+        let ys = [1]
+        ys.map(facade.forwarded)
+    }
+    aliasValue: {
+        let zs = [1]
+        zs.map(local)
+    }
+    fast: 0
+}
+0

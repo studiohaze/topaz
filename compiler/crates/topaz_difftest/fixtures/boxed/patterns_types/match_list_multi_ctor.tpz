@@ -1,0 +1,3 @@
+let a = [Ok(1), Err(2)]
+match a { case [Ok(p), Err(q)] => p + q
+case _ => 0 }

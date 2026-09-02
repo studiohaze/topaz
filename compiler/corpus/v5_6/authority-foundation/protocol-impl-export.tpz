@@ -1,0 +1,4 @@
+protocol P { function test(value: Self) -> bool }
+record R {}
+impl P<R> { export function test(value: R) -> bool { true } }
+0

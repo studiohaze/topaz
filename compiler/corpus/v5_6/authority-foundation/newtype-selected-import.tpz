@@ -1,0 +1,6 @@
+import newtype_model { UserId as Uid }
+let id: Uid = Uid(7)
+let value: int = match id {
+    case Uid(inner) => inner
+}
+print("{value}")

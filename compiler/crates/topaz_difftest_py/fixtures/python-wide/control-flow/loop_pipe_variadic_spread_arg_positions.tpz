@@ -1,0 +1,17 @@
+
+function sum(seed: int, ...xs: int) -> int {
+    let mut total = seed
+    for x in xs {
+        total = total + x
+    }
+    total
+}
+let result = loop {
+    print("lhs")
+    break 1
+} |> sum(...loop {
+    print("spread")
+    break [2, 3]
+})
+print("{result}")
+result

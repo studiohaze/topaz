@@ -1,0 +1,1000 @@
+---
+title: 'Creating Your First Interop Project'
+description: 'Build a Rust/Actix interop project with Topaz. This walkthrough focuses on platform integration rather than pure Topaz syntax.'
+---
+
+**Platform/Rust Integration**  
+This walkthrough blends Topaz with the Rust/Actix ecosystem. Examples show interop glue so you can deploy Topaz logic inside existing Rust services.
+
+<Tip tone="warning" content="This page is an interop walkthrough, not a pure Topaz syntax reference. Rust macros, traits, derives, crate imports, and Actix-specific APIs appear throughout. Use the Concepts and Reference sections for canonical Topaz grammar.">Interop</Tip>
+
+Build your **first interop project** with Topaz! We'll create a Todo Management API while seeing how Topaz logic can live inside a Rust service.
+
+##  Project Overview
+
+**What we're building**  
+Personal Todo Management REST API
+
+**Technologies used**  
+Topaz web server, JSON processing, file storage, error handling
+
+**What you'll learn**  
+Project structure, routing, data modeling, testing
+
+##  Project Setup
+
+### 1. Create New Project
+
+```bash
+# Create new Topaz project
+topaz new TodoAPI --template=web-api
+cd TodoAPI
+
+# Check project structure
+tree .
+```
+
+Generated structure:
+```text
+ src/
+   ├─ main.tpz           # Main entry point
+   ├─ models/            # Data models
+   ├─ handlers/          # Request handlers
+   └─ utils/             # Utility functions
+ tests/                 # Test files
+ data/                  # Data storage
+ topaz.toml            # Project configuration
+ README.md
+```
+
+### 2. Add Dependencies
+
+```toml
+# topaz.toml
+[package]
+name = "TodoAPI"
+version = "0.1.0"
+description = "REST API for personal todo management"
+
+[dependencies]
+web = "2.0"           # Web server framework
+json = "1.5"          # JSON processing
+uuid = "1.0"          # Unique ID generation
+chrono = "0.9"        # Date/time handling
+serde = "2.1"         # Serialization/deserialization
+
+[dev-dependencies]
+test-framework = "1.0"
+http-client = "0.8"
+```
+
+##  Data Modeling
+
+### Todo Model Definition
+
+```rust
+// src/models/todo.tpz
+use chrono::{DateTime, Utc}
+use uuid::Uuid
+use serde::{Serialize, Deserialize}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+struct Todo {
+    id: Uuid,
+    title: string,
+    description: Option<string>,
+    completed: bool,
+    priority: Priority,
+    createdAt: DateTime<Utc>,
+    completedAt: Option<DateTime<Utc>>,
+    tags: Array<string>
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+enum Priority {
+    Low,
+    Normal,
+    High,
+    Urgent
+}
+
+impl Todo {
+    // Create new todo
+    function new(
+        title: string,
+        description: Option<string> = None,
+        priority: Priority = Priority::Normal
+    ) -> Todo {
+        return Todo {
+            id: Uuid::new_v4(),
+            title,
+            description,
+            completed: false,
+            priority,
+            createdAt: Utc::now(),
+            completedAt: None,
+            tags: []
+        }
+    }
+
+    // Mark todo as completed
+    function complete(&mut self) {
+        self.completed = true
+        self.completedAt = Some(Utc::now())
+    }
+
+    // Add tag
+    function addTag(&mut self, newTag: string) {
+        if !self.tags.contains(&newTag) {
+            self.tags.push(newTag)
+        }
+    }
+
+    // Get priority score for sorting
+    function priorityScore(&self) -> int {
+        match self.priority {
+            case Priority::Urgent => 4
+            case Priority::High => 3
+            case Priority::Normal => 2
+            case Priority::Low => 1
+        }
+    }
+} test {
+    // Todo creation test
+    let todo = Todo::new("Learn Topaz".to_string(), None, Priority::High)
+    assert todo.title == "Learn Topaz"
+    assert todo.completed == false
+    assert todo.priority == Priority::High
+
+    // Completion test
+    let mut todo = Todo::new("Test".to_string(), None, Priority::Normal)
+    todo.complete()
+    assert todo.completed == true
+    assert todo.completedAt.is_some() == true
+
+    // Tag addition test
+    let mut todo = Todo::new("Project".to_string(), None, Priority::Normal)
+    todo.addTag("development".to_string())
+    todo.addTag("learning".to_string())
+    todo.addTag("development".to_string())  // Duplicate attempt
+    assert todo.tags.len() == 2
+    assert todo.tags.contains(&"development".to_string())
+    assert todo.tags.contains(&"learning".to_string())
+}
+```
+
+### Request/Response Models
+
+```rust
+// src/models/dto.tpz
+use serde::{Serialize, Deserialize}
+use uuid::Uuid
+
+#[derive(Deserialize)]
+struct CreateTodoRequest {
+    title: string,
+    description: Option<string>,
+    priority: Option<Priority>,
+    tags: Option<Array<string>>
+}
+
+#[derive(Deserialize)]
+struct UpdateTodoRequest {
+    title: Option<string>,
+    description: Option<string>,
+    priority: Option<Priority>,
+    tags: Option<Array<string>>
+}
+
+#[derive(Serialize)]
+struct TodoResponse {
+    id: Uuid,
+    title: string,
+    description: Option<string>,
+    completed: bool,
+    priority: Priority,
+    createdAt: string,
+    completedAt: Option<string>,
+    tags: Array<string>
+}
+
+impl From<Todo> for TodoResponse {
+    function from(todo: Todo) -> TodoResponse {
+        return TodoResponse {
+            id: todo.id,
+            title: todo.title,
+            description: todo.description,
+            completed: todo.completed,
+            priority: todo.priority,
+            createdAt: todo.createdAt.format("%Y-%m-%d %H:%M:%S").to_string(),
+            completedAt: todo.completedAt.map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string()),
+            tags: todo.tags
+        }
+    }
+}
+
+#[derive(Serialize)]
+struct ApiResponse<T> {
+    success: bool,
+    data: Option<T>,
+    message: string
+}
+
+impl<T> ApiResponse<T> {
+    function success(data: T) -> ApiResponse<T> {
+        return ApiResponse {
+            success: true,
+            data: Some(data),
+            message: "Success".to_string()
+        }
+    }
+
+    function error(message: string) -> ApiResponse<T> {
+        return ApiResponse {
+            success: false,
+            data: None,
+            message
+        }
+    }
+}
+```
+
+##  Data Storage
+
+### Simple File-based Storage
+
+```rust
+// src/storage/file_store.tpz
+use std::fs
+use std::path::Path
+use uuid::Uuid
+use crate::models::Todo
+
+struct FileStore {
+    dataPath: string
+}
+
+impl FileStore {
+    function new(dataPath: string) -> Result<FileStore, string> {
+        // Create data directory
+        if !Path::new(&dataPath).exists() {
+            fs::create_dir_all(&dataPath)
+                .map_err(|e| "Failed to create data directory: {e}".to_string())?
+        }
+
+        return Ok(FileStore { dataPath })
+    }
+
+    function filePath(&self) -> string {
+        return format!("{}/todos.json", self.dataPath)
+    }
+
+    // Load all todos
+    function getAll(&self) -> Result<Array<Todo>, string> {
+        let path = self.filePath()
+        
+        if !Path::new(&path).exists() {
+            return Ok([])
+        }
+
+        let content = fs::read_to_string(&path)
+            .map_err(|e| "Failed to read file: {e}".to_string())?
+
+        let todos: Array<Todo> = serde_json::from_str(&content)
+            .map_err(|e| "Failed to parse JSON: {e}".to_string())?
+
+        return Ok(todos)
+    }
+
+    // Save all todos
+    function saveAll(&self, todos: &Array<Todo>) -> Result<(), string> {
+        let jsonString = serde_json::to_string_pretty(todos)
+            .map_err(|e| "Failed to serialize JSON: {e}".to_string())?
+
+        fs::write(self.filePath(), jsonString)
+            .map_err(|e| "Failed to write file: {e}".to_string())?
+
+        return Ok(())
+    }
+
+    // Add todo
+    function add(&self, todo: Todo) -> Result<Todo, string> {
+        let mut todos = self.getAll()?
+        todos.push(todo.clone())
+        self.saveAll(&todos)?
+        return Ok(todo)
+    }
+
+    // Find todo by ID
+    function findById(&self, id: Uuid) -> Result<Option<Todo>, string> {
+        let todos = self.getAll()?
+        let foundTodo = todos.iter().find(|todo| todo.id == id).cloned()
+        return Ok(foundTodo)
+    }
+
+    // Update todo
+    function update(&self, id: Uuid, updatedTodo: Todo) -> Result<Option<Todo>, string> {
+        let mut todos = self.getAll()?
+        
+        return match todos.iter().position(|todo| todo.id == id) {
+            case Some(index) => {
+                todos[index] = updatedTodo.clone()
+                self.saveAll(&todos)?
+                Ok(Some(updatedTodo))
+            }
+            case None => Ok(None)
+        }
+    }
+
+    // Delete todo
+    function delete(&self, id: Uuid) -> Result<bool, string> {
+        let mut todos = self.getAll()?
+        
+        return match todos.iter().position(|todo| todo.id == id) {
+            case Some(index) => {
+                todos.remove(index)
+                self.saveAll(&todos)?
+                Ok(true)
+            }
+            case None => Ok(false)
+        }
+    }
+
+    // Search todos with filter
+    function search<F>(&self, filter: F) -> Result<Array<Todo>, string>
+    where
+        F: Fn(&Todo) -> bool
+    {
+        let todos = self.getAll()?
+        let result = todos.into_iter().filter(filter).collect()
+        return Ok(result)
+    }
+} test {
+    use tempfile::tempdir
+
+    // Test in temporary directory
+    let tempDir = tempdir().unwrap()
+    let store = FileStore::new(tempDir.path().to_str().unwrap().to_string()).unwrap()
+
+    // Add todo test
+    let newTodo = Todo::new("Test Todo".to_string(), None, Priority::Normal)
+    let addedTodo = store.add(newTodo.clone()).unwrap()
+    assert addedTodo.id == newTodo.id
+
+    // Find todo test
+    let foundTodo = store.findById(newTodo.id).unwrap()
+    assert foundTodo.is_some()
+    assert foundTodo.unwrap().title == "Test Todo"
+
+    // Get all todos test
+    let allTodos = store.getAll().unwrap()
+    assert allTodos.len() == 1
+}
+```
+
+##  Web Server and Routing
+
+### Main Server Setup
+
+```rust
+// src/main.tpz
+mod models
+mod storage
+mod handlers
+
+use web::{App, HttpServer, middleware}
+use storage::FileStore
+use handlers::*
+
+#[tokio::main]
+function main() -> Result<(), Box<dyn std::error::Error>> {
+    // Setup logging
+    env_logger::init()
+
+    // Initialize data store
+    let store = FileStore::new("./data".to_string())?
+
+    println!(" Starting Todo Management API server...")
+    println!(" Server address: http://localhost:8080")
+    println!(" API docs: http://localhost:8080/docs")
+
+    // Start HTTP server
+    HttpServer::new(move || {
+        App::new()
+            .app_data(web::Data::new(store.clone()))
+            .wrap(middleware::Logger::default())
+            .wrap(middleware::DefaultHeaders::new()
+                .header("Content-Type", "application/json; charset=utf-8"))
+            .service(
+                web::scope("/api/v1")
+                    .route("/todos", web::get().to(getAllTodos))
+                    .route("/todos", web::post().to(createTodo))
+                    .route("/todos/{id}", web::get().to(getTodo))
+                    .route("/todos/{id}", web::put().to(updateTodo))
+                    .route("/todos/{id}", web::delete().to(deleteTodo))
+                    .route("/todos/{id}/complete", web::patch().to(completeTodo))
+                    .route("/todos/search", web::get().to(searchTodos))
+            )
+            .route("/health", web::get().to(healthCheck))
+            .route("/docs", web::get().to(apiDocs))
+    })
+    .bind("127.0.0.1:8080")?
+    .run()?
+
+    Ok(())
+}
+```
+
+### Request Handlers
+
+```rust
+// src/handlers/todo_handlers.tpz
+use web::{web, HttpRequest, HttpResponse, Result as WebResult}
+use uuid::Uuid
+use crate::models::{Todo, CreateTodoRequest, UpdateTodoRequest, TodoResponse, ApiResponse}
+use crate::storage::FileStore
+
+// Get all todos
+function getAllTodos(
+    store: web::Data<FileStore>
+) -> WebResult<HttpResponse> {
+    match store.getAll() {
+        case Ok(todos) => {
+            let responseTodos: Array<TodoResponse> = todos
+                .into_iter()
+                .map(|todo| TodoResponse::from(todo))
+                .collect()
+            
+            return Ok(HttpResponse::Ok()
+                .json(ApiResponse::success(responseTodos)))
+        }
+        case Err(error) => {
+            return Ok(HttpResponse::InternalServerError()
+                .json(ApiResponse::<()>::error(error)))
+        }
+    }
+}
+
+// Create new todo
+function createTodo(
+    request: web::Json<CreateTodoRequest>,
+    store: web::Data<FileStore>
+) -> WebResult<HttpResponse> {
+    let mut newTodo = Todo::new(
+        request.title.clone(),
+        request.description.clone(),
+        request.priority.unwrap_or(Priority::Normal)
+    )
+
+    // Add tags if provided
+    match &request.tags {
+        case Some(tagList) => {
+            for tag in tagList {
+                newTodo.addTag(tag.clone())
+            }
+        }
+        case None => {}
+    }
+
+    match store.add(newTodo) {
+        case Ok(createdTodo) => {
+            return Ok(HttpResponse::Created()
+                .json(ApiResponse::success(TodoResponse::from(createdTodo))))
+        }
+        case Err(error) => {
+            return Ok(HttpResponse::InternalServerError()
+                .json(ApiResponse::<()>::error(error)))
+        }
+    }
+}
+
+// Get specific todo
+function getTodo(
+    path: web::Path<Uuid>,
+    store: web::Data<FileStore>
+) -> WebResult<HttpResponse> {
+    let id = path.into_inner()
+
+    match store.findById(id) {
+        case Ok(Some(todo)) => {
+            return Ok(HttpResponse::Ok()
+                .json(ApiResponse::success(TodoResponse::from(todo))))
+        }
+        case Ok(None) => {
+            return Ok(HttpResponse::NotFound()
+                .json(ApiResponse::<()>::error("Todo not found".to_string())))
+        }
+        case Err(error) => {
+            return Ok(HttpResponse::InternalServerError()
+                .json(ApiResponse::<()>::error(error)))
+        }
+    }
+}
+
+// Update todo
+function updateTodo(
+    path: web::Path<Uuid>,
+    request: web::Json<UpdateTodoRequest>,
+    store: web::Data<FileStore>
+) -> WebResult<HttpResponse> {
+    let id = path.into_inner()
+
+    match store.findById(id) {
+        case Ok(Some(mut existingTodo)) => {
+            // Update only requested fields
+            match &request.title {
+                case Some(title) => {
+                    existingTodo.title = title.clone()
+                }
+                case None => {}
+            }
+            match &request.description {
+                case Some(description) => {
+                    existingTodo.description = Some(description.clone())
+                }
+                case None => {}
+            }
+            match &request.priority {
+                case Some(priority) => {
+                    existingTodo.priority = priority.clone()
+                }
+                case None => {}
+            }
+            match &request.tags {
+                case Some(tagList) => {
+                    existingTodo.tags = tagList.clone()
+                }
+                case None => {}
+            }
+
+            match store.update(id, existingTodo) {
+                case Ok(Some(updatedTodo)) => {
+                    return Ok(HttpResponse::Ok()
+                        .json(ApiResponse::success(TodoResponse::from(updatedTodo))))
+                }
+                case Ok(None) => {
+                    return Ok(HttpResponse::NotFound()
+                        .json(ApiResponse::<()>::error("Todo not found".to_string())))
+                }
+                case Err(error) => {
+                    return Ok(HttpResponse::InternalServerError()
+                        .json(ApiResponse::<()>::error(error)))
+                }
+            }
+        }
+        case Ok(None) => {
+            return Ok(HttpResponse::NotFound()
+                .json(ApiResponse::<()>::error("Todo not found".to_string())))
+        }
+        case Err(error) => {
+            return Ok(HttpResponse::InternalServerError()
+                .json(ApiResponse::<()>::error(error)))
+        }
+    }
+}
+
+// Delete todo
+function deleteTodo(
+    path: web::Path<Uuid>,
+    store: web::Data<FileStore>
+) -> WebResult<HttpResponse> {
+    let id = path.into_inner()
+
+    match store.delete(id) {
+        case Ok(true) => {
+            return Ok(HttpResponse::Ok()
+                .json(ApiResponse::success("Todo deleted successfully".to_string())))
+        }
+        case Ok(false) => {
+            return Ok(HttpResponse::NotFound()
+                .json(ApiResponse::<()>::error("Todo not found".to_string())))
+        }
+        case Err(error) => {
+            return Ok(HttpResponse::InternalServerError()
+                .json(ApiResponse::<()>::error(error)))
+        }
+    }
+}
+
+// Complete todo
+function completeTodo(
+    path: web::Path<Uuid>,
+    store: web::Data<FileStore>
+) -> WebResult<HttpResponse> {
+    let id = path.into_inner()
+
+    match store.findById(id) {
+        case Ok(Some(mut todo)) => {
+            todo.complete()
+            
+            match store.update(id, todo) {
+                case Ok(Some(completedTodo)) => {
+                    return Ok(HttpResponse::Ok()
+                        .json(ApiResponse::success(TodoResponse::from(completedTodo))))
+                }
+                case Err(error) => {
+                    return Ok(HttpResponse::InternalServerError()
+                        .json(ApiResponse::<()>::error(error)))
+                }
+                case _ => {
+                    return Ok(HttpResponse::InternalServerError()
+                        .json(ApiResponse::<()>::error("Failed to complete todo".to_string())))
+                }
+            }
+        }
+        case Ok(None) => {
+            return Ok(HttpResponse::NotFound()
+                .json(ApiResponse::<()>::error("Todo not found".to_string())))
+        }
+        case Err(error) => {
+            return Ok(HttpResponse::InternalServerError()
+                .json(ApiResponse::<()>::error(error)))
+        }
+    }
+}
+
+// Search todos (using query parameters)
+function searchTodos(
+    request: HttpRequest,
+    store: web::Data<FileStore>
+) -> WebResult<HttpResponse> {
+    let query = web::Query::<HashMap<String, String>>::from_query(request.query_string())
+        .map_err(|_| HttpResponse::BadRequest().json(ApiResponse::<()>::error("Invalid query parameters".to_string())))?
+
+    let todos = match store.getAll() {
+        case Ok(list) => list
+        case Err(error) => {
+            return Ok(HttpResponse::InternalServerError()
+                .json(ApiResponse::<()>::error(error)))
+        }
+    }
+
+    let mut filteredTodos = todos
+
+    // Filter by completion status
+    match query.get("completed") {
+        case Some(completedStr) => {
+            let completedStatus = completedStr.parse::<bool>().unwrap_or(false)
+            filteredTodos = filteredTodos.into_iter()
+                .filter(|todo| todo.completed == completedStatus)
+                .collect()
+        }
+        case None => {}
+    }
+
+    // Filter by priority
+    match query.get("priority") {
+        case Some(priorityStr) => {
+            match priorityStr.parse::<Priority>() {
+                case Ok(priority) => {
+                    filteredTodos = filteredTodos.into_iter()
+                        .filter(|todo| todo.priority == priority)
+                        .collect()
+                }
+                case Err(_) => {}
+            }
+        }
+        case None => {}
+    }
+
+    // Filter by tag
+    match query.get("tag") {
+        case Some(tag) => {
+            filteredTodos = filteredTodos.into_iter()
+                .filter(|todo| todo.tags.contains(tag))
+                .collect()
+        }
+        case None => {}
+    }
+
+    // Search in title
+    match query.get("search") {
+        case Some(searchTerm) => {
+            let lowercaseSearch = searchTerm.to_lowercase()
+            filteredTodos = filteredTodos.into_iter()
+                .filter(|todo| todo.title.to_lowercase().contains(&lowercaseSearch))
+                .collect()
+        }
+        case None => {}
+    }
+
+    // Sort by priority
+    filteredTodos.sort_by(|a, b| b.priorityScore().cmp(&a.priorityScore()))
+
+    let responseTodos: Array<TodoResponse> = filteredTodos
+        .into_iter()
+        .map(|todo| TodoResponse::from(todo))
+        .collect()
+
+    return Ok(HttpResponse::Ok()
+        .json(ApiResponse::success(responseTodos)))
+}
+
+// Health check
+function healthCheck() -> WebResult<HttpResponse> {
+    return Ok(HttpResponse::Ok()
+        .json(json!({
+            "status": "healthy",
+            "timestamp": chrono::Utc::now().to_rfc3339(),
+            "version": "0.1.0"
+        })))
+}
+
+// API documentation
+function apiDocs() -> WebResult<HttpResponse> {
+    let docs = r#"
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Todo Management API Documentation</title>
+        <meta charset="utf-8">
+        <style>
+            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 40px; }
+            .endpoint { background: #f8f9fa; padding: 15px; margin: 10px 0; border-radius: 5px; }
+            .method { font-weight: bold; padding: 3px 8px; border-radius: 3px; color: white; }
+            .get { background: #28a745; }
+            .post { background: #007bff; }
+            .put { background: #ffc107; color: black; }
+            .delete { background: #dc3545; }
+            .patch { background: #6f42c1; }
+        </style>
+    </head>
+    <body>
+        <h1> Todo Management API Documentation</h1>
+        
+        <div class="endpoint">
+            <span class="method get">GET</span>
+            <strong>/api/v1/todos</strong>
+            <p>Get all todos.</p>
+        </div>
+        
+        <div class="endpoint">
+            <span class="method post">POST</span>
+            <strong>/api/v1/todos</strong>
+            <p>Create a new todo.</p>
+            <pre>{ "title": "string", "description": "string?", "priority": "enum?", "tags": "string[]?" }</pre>
+        </div>
+        
+        <div class="endpoint">
+            <span class="method get">GET</span>
+            <strong>/api/v1/todos/{id}</strong>
+            <p>Get a specific todo.</p>
+        </div>
+        
+        <div class="endpoint">
+            <span class="method put">PUT</span>
+            <strong>/api/v1/todos/{id}</strong>
+            <p>Update a todo.</p>
+        </div>
+        
+        <div class="endpoint">
+            <span class="method delete">DELETE</span>
+            <strong>/api/v1/todos/{id}</strong>
+            <p>Delete a todo.</p>
+        </div>
+        
+        <div class="endpoint">
+            <span class="method patch">PATCH</span>
+            <strong>/api/v1/todos/{id}/complete</strong>
+            <p>Mark a todo as completed.</p>
+        </div>
+        
+        <div class="endpoint">
+            <span class="method get">GET</span>
+            <strong>/api/v1/todos/search</strong>
+            <p>Search todos. Query parameters: completed, priority, tag, search</p>
+        </div>
+        
+        <h2> Health Check</h2>
+        <div class="endpoint">
+            <span class="method get">GET</span>
+            <strong>/health</strong>
+            <p>Check server status.</p>
+        </div>
+    </body>
+    </html>
+    "#;
+
+    return Ok(HttpResponse::Ok()
+        .content_type("text/html; charset=utf-8")
+        .body(docs))
+}
+```
+
+##  Writing Tests
+
+### Integration Tests
+
+```rust
+// tests/integration_test.tpz
+use actix_web::{test, App}
+use serde_json::json
+use tempfile::tempdir
+use TodoAPI::*
+
+#[actix_rt::test]
+function todo_crud_test() -> Result<(), Box<dyn std::error::Error>> {
+    // Setup temporary storage
+    let tempDir = tempdir().unwrap()
+    let store = FileStore::new(tempDir.path().to_str().unwrap().to_string()).unwrap()
+
+    let mut app = test::init_service(
+        App::new()
+            .app_data(web::Data::new(store))
+            .service(
+                web::scope("/api/v1")
+                    .route("/todos", web::get().to(getAllTodos))
+                    .route("/todos", web::post().to(createTodo))
+                    .route("/todos/{id}", web::get().to(getTodo))
+                    .route("/todos/{id}", web::put().to(updateTodo))
+                    .route("/todos/{id}", web::delete().to(deleteTodo))
+            )
+    )?
+
+    // 1. Create todo test
+    let newTodoRequest = json!({
+        "title": "Complete Topaz Project",
+        "description": "Finish the first Topaz project",
+        "priority": "High",
+        "tags": ["development", "learning"]
+    })
+
+    let req = test::TestRequest::post()
+        .uri("/api/v1/todos")
+        .set_json(&newTodoRequest)
+        .to_request()
+
+    let resp = test::call_service(&mut app, req)?
+    assert!(resp.status().is_success())
+
+    let respBody: serde_json::Value = test::read_body_json(resp)?
+    assert!(respBody["success"].as_bool().unwrap())
+    
+    let createdTodo = &respBody["data"]
+    let todoId = createdTodo["id"].as_str().unwrap()
+
+    // 2. Get todo test
+    let req = test::TestRequest::get()
+        .uri(&format!("/api/v1/todos/{}", todoId))
+        .to_request()
+
+    let resp = test::call_service(&mut app, req)?
+    assert!(resp.status().is_success())
+
+    let respBody: serde_json::Value = test::read_body_json(resp)?
+    let retrievedTodo = &respBody["data"]
+    assert_eq!(retrievedTodo["title"], "Complete Topaz Project")
+
+    // 3. Get all todos test
+    let req = test::TestRequest::get()
+        .uri("/api/v1/todos")
+        .to_request()
+
+    let resp = test::call_service(&mut app, req)?
+    assert!(resp.status().is_success())
+
+    let respBody: serde_json::Value = test::read_body_json(resp)?
+    let todoList = respBody["data"].as_array().unwrap()
+    assert_eq!(todoList.len(), 1)
+
+    // 4. Update todo test
+    let updateRequest = json!({
+        "title": "Complete Topaz Project (Updated)",
+        "priority": "Urgent"
+    })
+
+    let req = test::TestRequest::put()
+        .uri(&format!("/api/v1/todos/{}", todoId))
+        .set_json(&updateRequest)
+        .to_request()
+
+    let resp = test::call_service(&mut app, req)?
+    assert!(resp.status().is_success())
+
+    // 5. Delete todo test
+    let req = test::TestRequest::delete()
+        .uri(&format!("/api/v1/todos/{}", todoId))
+        .to_request()
+
+    let resp = test::call_service(&mut app, req)?
+    assert!(resp.status().is_success())
+
+    // 6. Verify deletion
+    let req = test::TestRequest::get()
+        .uri(&format!("/api/v1/todos/{}", todoId))
+        .to_request()
+
+    let resp = test::call_service(&mut app, req)?
+    assert_eq!(resp.status(), 404)
+
+    Ok(())
+}
+
+#[actix_rt::test]
+function todo_search_test() -> Result<(), Box<dyn std::error::Error>> {
+    // Test data setup and search functionality testing
+    // ... (search-related test code)
+
+    Ok(())
+}
+```
+
+##  Running and Testing
+
+### Run Project
+
+```bash
+# Install dependencies
+topaz build
+
+# Run development server
+topaz run
+
+# Or run in release mode
+topaz run --release
+```
+
+### API Testing
+
+```bash
+# Health check
+curl http://localhost:8080/health
+
+# Create new todo
+curl -X POST http://localhost:8080/api/v1/todos \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "Learn Topaz",
+    "description": "Learn all features of Topaz language",
+    "priority": "High",
+    "tags": ["learning", "programming"]
+  }'
+
+# Get all todos
+curl http://localhost:8080/api/v1/todos
+
+# Search incomplete todos
+curl "http://localhost:8080/api/v1/todos/search?completed=false"
+
+# Search high priority todos
+curl "http://localhost:8080/api/v1/todos/search?priority=High"
+```
+
+### Run Tests
+
+```bash
+# Run all tests
+topaz test
+
+# Run specific test
+topaz test integration_test
+
+# Check test coverage
+topaz test --coverage
+```
+
+##  Next Steps
+
+Congratulations! You've completed your first complete Topaz project! 
+
+### Additional features to implement:
+
+1. **Database Integration**: PostgreSQL, MongoDB, etc.
+2. **User Authentication**: JWT token-based authentication
+3. **Real-time Updates**: Real-time todo synchronization via WebSocket
+4. **File Upload**: File attachment feature for todos
+5. **Email Notifications**: Deadline reminder notifications
+6. **Docker Deployment**: Containerization and cloud deployment
+
+### Core Topaz concepts you've learned:
+
+-  Project structure design
+-  Data modeling and type system
+-  Error handling (Result/Option types)
+-  Web server and REST API construction
+-  File-based data storage
+-  Pattern matching utilization
+-  Test-driven development
+-  Multi-language identifiers and natural code writing
+
+You're now ready to tackle more complex Topaz projects! 

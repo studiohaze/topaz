@@ -1,0 +1,4 @@
+
+let values: Array<Option<Option<string>>> = [Some(None)]
+let out = values[0]?.okOr("yield from")
+if out == null { -1 } else { 7 }

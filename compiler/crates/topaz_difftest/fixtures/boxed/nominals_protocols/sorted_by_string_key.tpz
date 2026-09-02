@@ -1,0 +1,4 @@
+record User { id: int, name: string }
+let xs = [User { id: 1, name: "Bo" }, User { id: 2, name: "Ada" }, User { id: 3, name: "Cy" }]
+print("{xs.sortedBy((u) => u.name)}")
+0

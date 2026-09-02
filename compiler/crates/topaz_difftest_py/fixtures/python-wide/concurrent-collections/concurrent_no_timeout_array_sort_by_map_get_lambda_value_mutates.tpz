@@ -1,0 +1,23 @@
+
+function rank(x: int) -> int {
+    let mut i = 0
+    while i < 200 {
+        i = i + 1
+    }
+    10 - x
+}
+
+let callbacks = map { "plain": (x) => rank(x) }
+
+let r = concurrent {
+    slow: {
+        let mut xs = [1, 3, 2]
+        match callbacks.get("plain") {
+            case Some(cb) => xs.sortBy(f: cb)
+            case None => ()
+        }
+        xs[0] * 100 + xs[1] * 10 + xs[2]
+    }
+    fast: 0
+}
+r.slow + r.fast

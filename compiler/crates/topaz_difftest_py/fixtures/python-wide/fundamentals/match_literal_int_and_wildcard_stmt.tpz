@@ -1,0 +1,9 @@
+
+function main() -> int {
+    match 7 {
+        case 8 => print("bad")
+        case _ => print("ok")
+    }
+    7
+}
+main()

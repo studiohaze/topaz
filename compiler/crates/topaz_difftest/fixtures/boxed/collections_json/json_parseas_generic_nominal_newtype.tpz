@@ -1,0 +1,5 @@
+newtype Id<T> = T
+match JSON.parseAs<Id<int>>("7") {
+  case Ok(Id(value)) => value
+  case Err(e) => 0
+}

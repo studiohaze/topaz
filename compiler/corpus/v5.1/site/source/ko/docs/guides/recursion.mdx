@@ -1,0 +1,937 @@
+---
+title: '재귀'
+description: '재귀 관련 레거시·런타임 중심 예제를 보존한 가이드입니다.'
+---
+
+<Tip tone="warning" triggerLabel="레거시 가이드" title="레거시 가이드">
+**왜 레거시?** 옛 Topaz 시기의 Rust 스타일 재귀 패턴(trait bound, where 절, 차용 보조 API)을 보존합니다.
+
+**대체 자료?** 정식 재귀 패턴은 [함수와 클로저](/ko/docs/concepts/functions-closures) · [제어 흐름](/ko/docs/concepts/control-flow)을 참고하세요.
+
+**상태:** 레거시 — v5.1 이전, non-canonical. 현재 문법은 레퍼런스 페이지를 사용하세요. 아래 예제는 역사적 참고용으로 수정 없이 보존된 것이며 canonical Topaz가 아닙니다.
+</Tip>
+
+이 페이지는 마이그레이션과 비교를 위해 예전 재귀 패턴을 보존합니다.
+
+##  재귀의 기본 개념
+
+### 재귀란 무엇인가?
+
+재귀는 함수가 **자기 자신을 호출**하는 프로그래밍 기법입니다. 복잡한 문제를 더 작은 동일한 문제로 분해하여 해결합니다.
+
+```rust
+// 가장 간단한 재귀 - 팩토리얼
+function 팩토리얼(n: int) -> int {
+    match n {
+        case 0 | 1 => 1                    // 기저 조건 (Base Case)
+        case _ => n * 팩토리얼(n - 1)      // 재귀 호출
+    }
+} test {
+    assert 팩토리얼(0) == 1
+    assert 팩토리얼(1) == 1
+    assert 팩토리얼(5) == 120
+    assert 팩토리얼(10) == 3628800
+}
+
+// 피보나치 수열
+function 피보나치(n: int) -> int {
+    match n {
+        case 0 => 0
+        case 1 => 1
+        case _ => 피보나치(n - 1) + 피보나치(n - 2)
+    }
+} test {
+    assert 피보나치(0) == 0
+    assert 피보나치(1) == 1
+    assert 피보나치(8) == 21
+    assert 피보나치(12) == 144
+}
+
+print("팩토리얼(5) = {팩토리얼(5)}")
+print("피보나치(8) = {피보나치(8)}")
+```
+
+### 재귀의 핵심 요소
+
+1. **기저 조건 (Base Case)**: 재귀를 멈추는 조건
+2. **재귀 관계 (Recursive Relation)**: 자기 자신을 호출하는 부분
+3. **수렴성 (Convergence)**: 반드시 기저 조건에 도달해야 함
+
+##  재귀의 다양한 패턴
+
+### 선형 재귀 (Linear Recursion)
+
+```rust
+// 배열의 합 구하기
+function 배열합(배열: Array<int>, 인덱스: int = 0) -> int {
+    if 인덱스 >= 배열.length {
+        return 0
+    }
+    return 배열[인덱스] + 배열합(배열, 인덱스 + 1)
+}
+
+// 문자열 뒤집기
+function 문자열뒤집기(문자열: string) -> string {
+    if 문자열.length <= 1 {
+        return 문자열
+    }
+    
+    let 첫글자 = 문자열.charAt(0)
+    let 나머지 = 문자열.substring(1)
+    
+    return 문자열뒤집기(나머지) + 첫글자
+}
+
+// 최대공약수 (유클리드 호제법)
+function 최대공약수(a: int, b: int) -> int {
+    match b {
+        case 0 => a
+        case _ => 최대공약수(b, a % b)
+    }
+} test {
+    let 숫자들 = [1, 2, 3, 4, 5]
+    assert 배열합(숫자들) == 15
+    
+    assert 문자열뒤집기("hello") == "olleh"
+    assert 문자열뒤집기("Topaz") == "zapoT"
+    
+    assert 최대공약수(48, 18) == 6
+    assert 최대공약수(100, 25) == 25
+}
+
+print("배열 합: {배열합([1, 2, 3, 4, 5])}")
+print("문자열 뒤집기: {문자열뒤집기("안녕하세요")}")
+print("최대공약수(48, 18): {최대공약수(48, 18)}")
+```
+
+### 분할 정복 (Divide and Conquer)
+
+```rust
+// 이진 탐색
+function 이진탐색<T>(
+    배열: Array<T>,
+    대상: T,
+    시작: int = 0,
+    끝: int = -1
+) -> Option<int>
+where
+    T: PartialOrd + PartialEq
+{
+    let 실제끝 = if 끝 == -1 { 배열.length - 1 } else { 끝 }
+    
+    if 시작 > 실제끝 {
+        return None
+    }
+    
+    let 중간 = (시작 + 실제끝) / 2
+    
+    match 배열[중간] {
+        case x if x == 대상 => Some(중간)
+        case x if x > 대상 => 이진탐색(배열, 대상, 시작, 중간 - 1)
+        case _ => 이진탐색(배열, 대상, 중간 + 1, 실제끝)
+    }
+}
+
+// 병합 정렬
+function 병합정렬(배열: Array<int>) -> Array<int> {
+    if 배열.length <= 1 {
+        return 배열
+    }
+    
+    let 중간 = 배열.length / 2
+    let 왼쪽 = 배열[0..중간].to_vec()
+    let 오른쪽 = 배열[중간..].to_vec()
+    
+    let 정렬된왼쪽 = 병합정렬(왼쪽)
+    let 정렬된오른쪽 = 병합정렬(오른쪽)
+    
+    return 병합(정렬된왼쪽, 정렬된오른쪽)
+}
+
+function 병합(왼쪽: Array<int>, 오른쪽: Array<int>) -> Array<int> {
+    let mut 결과: Array<int> = []
+    let mut i = 0
+    let mut j = 0
+    
+    while i < 왼쪽.length && j < 오른쪽.length {
+        if 왼쪽[i] <= 오른쪽[j] {
+            결과.push(왼쪽[i])
+            i += 1
+        } else {
+            결과.push(오른쪽[j])
+            j += 1
+        }
+    }
+    
+    // 남은 요소들 추가
+    결과.extend(&왼쪽[i..])
+    결과.extend(&오른쪽[j..])
+    
+    return 결과
+}
+
+// 퀵 정렬
+function 퀵정렬(배열: Array<int>) -> Array<int> {
+    if 배열.length <= 1 {
+        return 배열
+    }
+    
+    let 피벗 = 배열[배열.length / 2]
+    let 작은것들 = 배열.filter(|&x| x < 피벗)
+    let 같은것들 = 배열.filter(|&x| x == 피벗)
+    let 큰것들 = 배열.filter(|&x| x > 피벗)
+    
+    return [
+        ...퀵정렬(작은것들),
+        ...같은것들,
+        ...퀵정렬(큰것들)
+    ]
+} test {
+    let 정렬된배열 = [1, 3, 5, 7, 9, 11, 13]
+    assert 이진탐색(정렬된배열, 7) == Some(3)
+    assert 이진탐색(정렬된배열, 14) == None
+    
+    let 무작위배열 = [64, 34, 25, 12, 22, 11, 90]
+    let 정렬결과1 = 병합정렬(무작위배열.clone())
+    let 정렬결과2 = 퀵정렬(무작위배열.clone())
+    
+    assert 정렬결과1 == [11, 12, 22, 25, 34, 64, 90]
+    assert 정렬결과2 == [11, 12, 22, 25, 34, 64, 90]
+}
+
+print("이진 탐색 결과: {이진탐색([1, 3, 5, 7, 9], 5)}")
+print("병합 정렬: {병합정렬([3, 1, 4, 1, 5, 9])}")
+print("퀵 정렬: {퀵정렬([3, 1, 4, 1, 5, 9])}")
+```
+
+### 트리 재귀 (Tree Recursion)
+
+```rust
+// 이진 트리 구조
+enum 이진트리<T> {
+    Empty,
+    Node {
+        값: T,
+        왼쪽: Box<이진트리<T>>,
+        오른쪽: Box<이진트리<T>>
+    }
+}
+
+impl<T> 이진트리<T>
+where
+    T: Clone + std::fmt::Display + PartialOrd
+{
+    function 새로운노드(값: T) -> 이진트리<T> {
+        return 이진트리::Node {
+            값,
+            왼쪽: Box::new(이진트리::Empty),
+            오른쪽: Box::new(이진트리::Empty)
+        }
+    }
+    
+    // 트리에 값 삽입
+    function 삽입(&mut self, 새값: T) {
+        match self {
+            case 이진트리::Empty => {
+                *self = 이진트리::새로운노드(새값)
+            }
+            case 이진트리::Node { 값, 왼쪽, 오른쪽 } => {
+                if 새값 <= *값 {
+                    왼쪽.삽입(새값)
+                } else {
+                    오른쪽.삽입(새값)
+                }
+            }
+        }
+    }
+    
+    // 트리 검색
+    function 검색(&self, 대상: &T) -> bool {
+        match self {
+            case 이진트리::Empty => false
+            case 이진트리::Node { 값, 왼쪽, 오른쪽 } => {
+                if 대상 == 값 {
+                    return true
+                } else if 대상 < 값 {
+                    return 왼쪽.검색(대상)
+                } else {
+                    return 오른쪽.검색(대상)
+                }
+            }
+        }
+    }
+    
+    // 중위 순회 (In-order Traversal)
+    function 중위순회(&self) -> Array<T> {
+        match self {
+            case 이진트리::Empty => []
+            case 이진트리::Node { 값, 왼쪽, 오른쪽 } => {
+                let mut 결과 = 왼쪽.중위순회()
+                결과.push(값.clone())
+                결과.extend(오른쪽.중위순회())
+                return 결과
+            }
+        }
+    }
+    
+    // 트리 높이 계산
+    function 높이(&self) -> int {
+        match self {
+            case 이진트리::Empty => 0
+            case 이진트리::Node { 왼쪽, 오른쪽, .. } => {
+                let 왼쪽높이 = 왼쪽.높이()
+                let 오른쪽높이 = 오른쪽.높이()
+                return 1 + std::cmp::max(왼쪽높이, 오른쪽높이)
+            }
+        }
+    }
+    
+    // 노드 수 계산
+    function 노드수(&self) -> int {
+        match self {
+            case 이진트리::Empty => 0
+            case 이진트리::Node { 왼쪽, 오른쪽, .. } => {
+                return 1 + 왼쪽.노드수() + 오른쪽.노드수()
+            }
+        }
+    }
+} test {
+    let mut 트리 = 이진트리::Empty
+    
+    // 값들 삽입
+    let 값들 = [5, 3, 7, 1, 9, 4, 6]
+    for 값 in 값들 {
+        트리.삽입(값)
+    }
+    
+    // 검색 테스트
+    assert 트리.검색(&5) == true
+    assert 트리.검색(&10) == false
+    
+    // 중위 순회 (정렬된 순서)
+    let 순회결과 = 트리.중위순회()
+    assert 순회결과 == [1, 3, 4, 5, 6, 7, 9]
+    
+    // 트리 속성 확인
+    assert 트리.높이() == 4
+    assert 트리.노드수() == 7
+}
+
+// 사용 예시
+let mut 내트리 = 이진트리::Empty
+[15, 10, 20, 8, 12, 16, 25].iter().for_each(|&값| 내트리.삽입(값))
+
+print("트리 중위 순회: {내트리.중위순회()}")
+print("트리 높이: {내트리.높이()}")
+print("노드 수: {내트리.노드수()}")
+print("15 검색: {내트리.검색(&15)}")
+```
+
+##  재귀 최적화 기법
+
+### 꼬리 재귀 (Tail Recursion)
+
+```rust
+// 일반 재귀 vs 꼬리 재귀 비교
+
+// 일반 재귀 - 스택 오버플로 위험
+function 팩토리얼_일반(n: int) -> int {
+    if n <= 1 {
+        return 1
+    }
+    return n * 팩토리얼_일반(n - 1)  // 곱셈이 재귀 호출 후에 발생
+}
+
+// 꼬리 재귀 - 최적화 가능
+function 팩토리얼_꼬리(n: int, 누적값: int = 1) -> int {
+    if n <= 1 {
+        return 누적값
+    }
+    return 팩토리얼_꼬리(n - 1, 누적값 * n)  // 재귀 호출이 마지막 작업
+}
+
+// 피보나치 꼬리 재귀
+function 피보나치_꼬리(n: int, a: int = 0, b: int = 1) -> int {
+    match n {
+        case 0 => a
+        case 1 => b
+        case _ => 피보나치_꼬리(n - 1, b, a + b)
+    }
+}
+
+// 리스트 뒤집기 꼬리 재귀
+function 리스트뒤집기_꼬리<T>(
+    원본: Array<T>,
+    결과: Array<T> = [],
+    인덱스: int = 0
+) -> Array<T> {
+    if 인덱스 >= 원본.length {
+        return 결과
+    }
+    
+    let mut 새결과 = [원본[인덱스]].to_vec()
+    새결과.extend(결과)
+    
+    return 리스트뒤집기_꼬리(원본, 새결과, 인덱스 + 1)
+}
+
+// 거듭제곱 꼬리 재귀
+function 거듭제곱_꼬리(밑: int, 지수: int, 누적값: int = 1) -> int {
+    match 지수 {
+        case 0 => 누적값
+        case n if n % 2 == 0 => 거듭제곱_꼬리(밑 * 밑, n / 2, 누적값)
+        case n => 거듭제곱_꼬리(밑, n - 1, 누적값 * 밑)
+    }
+} test {
+    // 성능 비교를 위한 테스트
+    assert 팩토리얼_일반(10) == 팩토리얼_꼬리(10)
+    assert 피보나치_꼬리(10) == 55
+    
+    let 원본리스트 = [1, 2, 3, 4, 5]
+    let 뒤집힌리스트 = 리스트뒤집기_꼬리(원본리스트)
+    assert 뒤집힌리스트 == [5, 4, 3, 2, 1]
+    
+    assert 거듭제곱_꼬리(2, 10) == 1024
+    assert 거듭제곱_꼬리(3, 4) == 81
+}
+
+print("꼬리 재귀 팩토리얼(10): {팩토리얼_꼬리(10)}")
+print("꼬리 재귀 피보나치(15): {피보나치_꼬리(15)}")
+print("거듭제곱 2^10: {거듭제곱_꼬리(2, 10)}")
+```
+
+### 메모이제이션 (Memoization)
+
+```rust
+use std::collections::HashMap
+
+// 메모이제이션을 위한 래퍼 구조체
+struct 메모이제이션<K, V>
+where
+    K: Clone + std::hash::Hash + Eq,
+    V: Clone
+{
+    캐시: HashMap<K, V>,
+    함수: fn(K, &mut 메모이제이션<K, V>) -> V
+}
+
+impl<K, V> 메모이제이션<K, V>
+where
+    K: Clone + std::hash::Hash + Eq,
+    V: Clone
+{
+    function new(함수: fn(K, &mut 메모이제이션<K, V>) -> V) -> Self {
+        return 메모이제이션 {
+            캐시: HashMap::new(),
+            함수
+        }
+    }
+    
+    function 호출(&mut self, 인자: K) -> V {
+        match self.캐시.get(&인자) { case Some(결과) => return 결과.clone(), case None => {} }
+        
+        let 결과 = (self.함수)(인자.clone(), self)
+        self.캐시.insert(인자, 결과.clone())
+        return 결과
+    }
+}
+
+// 메모이제이션을 사용한 피보나치
+function 피보나치_메모_함수(n: int, 메모: &mut 메모이제이션<int, int>) -> int {
+    match n {
+        case 0 => 0
+        case 1 => 1
+        case _ => 메모.호출(n - 1) + 메모.호출(n - 2)
+    }
+}
+
+// 조합 계산 (nCr) 메모이제이션
+function 조합_메모_함수(
+    매개변수: (int, int),
+    메모: &mut 메모이제이션<(int, int), int>
+) -> int {
+    let (n, r) = 매개변수
+    
+    match (n, r) {
+        case (_, 0) | (n, r) if n == r => 1
+        case (n, r) if r > n => 0
+        case (n, r) => {
+            return 메모.호출((n - 1, r - 1)) + 메모.호출((n - 1, r))
+        }
+    }
+}
+
+// 최장 공통 부분 수열 (LCS) 메모이제이션
+function LCS_메모_함수(
+    매개변수: (string, string),
+    메모: &mut 메모이제이션<(string, string), int>
+) -> int {
+    let (문자열1, 문자열2) = 매개변수
+    
+    if 문자열1.is_empty() || 문자열2.is_empty() {
+        return 0
+    }
+    
+    if 문자열1.chars().last() == 문자열2.chars().last() {
+        let 앞부분1 = &문자열1[..문자열1.len() - 1]
+        let 앞부분2 = &문자열2[..문자열2.len() - 1]
+        return 1 + 메모.호출((앞부분1.to_string(), 앞부분2.to_string()))
+    } else {
+        let 앞부분1 = &문자열1[..문자열1.len() - 1]
+        let 앞부분2 = &문자열2[..문자열2.len() - 1]
+        let 경우1 = 메모.호출((문자열1.clone(), 앞부분2.to_string()))
+        let 경우2 = 메모.호출((앞부분1.to_string(), 문자열2.clone()))
+        return std::cmp::max(경우1, 경우2)
+    }
+} test {
+    // 피보나치 메모이제이션 테스트
+    let mut 피보나치메모 = 메모이제이션::new(피보나치_메모_함수)
+    assert 피보나치메모.호출(10) == 55
+    assert 피보나치메모.호출(20) == 6765
+    
+    // 조합 메모이제이션 테스트
+    let mut 조합메모 = 메모이제이션::new(조합_메모_함수)
+    assert 조합메모.호출((5, 2)) == 10
+    assert 조합메모.호출((10, 3)) == 120
+    
+    // LCS 메모이제이션 테스트
+    let mut LCS메모 = 메모이제이션::new(LCS_메모_함수)
+    let 결과 = LCS메모.호출(("ABCDGH".to_string(), "AEDFHR".to_string()))
+    assert 결과 == 3  // "ADH"
+}
+
+// 사용 예시
+let mut 피보나치메모 = 메모이제이션::new(피보나치_메모_함수)
+print("메모이제이션 피보나치(30): {피보나치메모.호출(30)}")
+
+let mut 조합메모 = 메모이제이션::new(조합_메모_함수)
+print("조합 C(20, 10): {조합메모.호출((20, 10))}")
+```
+
+##  실전 재귀 응용
+
+### 백트래킹 (Backtracking)
+
+```rust
+// N-Queen 문제
+function N퀸해결(n: int) -> Array<Array<int>> {
+    let mut 해답들: Array<Array<int>> = []
+    let mut 현재해답: Array<int> = vec![0; n]
+    
+    function 백트래킹(행: int) {
+        if 행 == n {
+            해답들.push(현재해답.clone())
+            return
+        }
+        
+        for 열 in 0..n {
+            if 안전한위치(행, 열, &현재해답) {
+                현재해답[행] = 열
+                백트래킹(행 + 1)
+                // 백트래킹: 자동으로 이전 상태로 복원
+            }
+        }
+    }
+    
+    function 안전한위치(행: int, 열: int, 해답: &Array<int>) -> bool {
+        for 이전행 in 0..행 {
+            let 이전열 = 해답[이전행]
+            
+            // 같은 열 체크
+            if 이전열 == 열 {
+                return false
+            }
+            
+            // 대각선 체크
+            if (이전행 - 행).abs() == (이전열 as int - 열 as int).abs() {
+                return false
+            }
+        }
+        return true
+    }
+    
+    백트래킹(0)
+    return 해답들
+}
+
+// 미로 탈출
+struct 미로 {
+    격자: Array<Array<bool>>,  // true = 길, false = 벽
+    높이: int,
+    너비: int
+}
+
+impl 미로 {
+    function new(격자: Array<Array<bool>>) -> 미로 {
+        let 높이 = 격자.len() as int
+        let 너비 = if 높이 > 0 { 격자[0].len() as int } else { 0 }
+        
+        return 미로 { 격자, 높이, 너비 }
+    }
+    
+    function 경로찾기(&self) -> Option<Array<(int, int)>> {
+        let mut 방문함: Array<Array<bool>> = vec![vec![false; self.너비 as usize]; self.높이 as usize]
+        let mut 경로: Array<(int, int)> = []
+        
+        if self.DFS(0, 0, &mut 방문함, &mut 경로) {
+            return Some(경로)
+        } else {
+            return None
+        }
+    }
+    
+    function DFS(
+        &self,
+        행: int,
+        열: int,
+        방문함: &mut Array<Array<bool>>,
+        경로: &mut Array<(int, int)>
+    ) -> bool {
+        // 경계 체크
+        if 행 < 0 || 행 >= self.높이 || 열 < 0 || 열 >= self.너비 {
+            return false
+        }
+        
+        // 벽이거나 이미 방문한 곳
+        if !self.격자[행 as usize][열 as usize] || 방문함[행 as usize][열 as usize] {
+            return false
+        }
+        
+        // 현재 위치를 경로에 추가
+        경로.push((행, 열))
+        방문함[행 as usize][열 as usize] = true
+        
+        // 목표 지점 도달
+        if 행 == self.높이 - 1 && 열 == self.너비 - 1 {
+            return true
+        }
+        
+        // 4방향 탐색
+        let 방향들 = [(0, 1), (1, 0), (0, -1), (-1, 0)]
+        for (dr, dc) in 방향들 {
+            if self.DFS(행 + dr, 열 + dc, 방문함, 경로) {
+                return true
+            }
+        }
+        
+        // 백트래킹: 경로에서 제거
+        경로.pop()
+        방문함[행 as usize][열 as usize] = false
+        
+        return false
+    }
+} test {
+    // 4-Queen 문제 테스트
+    let 해답들 = N퀸해결(4)
+    assert 해답들.len() == 2  // 4x4에서는 2개의 해답이 존재
+    
+    // 미로 테스트
+    let 미로격자 = [
+        [true, false, true, true],
+        [true, true, false, true],
+        [false, true, true, true],
+        [false, false, false, true]
+    ]
+    
+    let 내미로 = 미로::new(미로격자.map(|행| 행.to_vec()).to_vec())
+    let 경로 = 내미로.경로찾기()
+    assert 경로.is_some()
+}
+
+// 사용 예시
+let 해답들 = N퀸해결(8)  // 8-Queen 문제
+print("8-Queen 해답 개수: {해답들.len()}")
+
+match 해답들.first() { case Some(첫번째해답) => print("첫 번째 해답: {첫번째해답:?}"), case None => {} }
+```
+
+### 동적 계획법과 재귀
+
+```rust
+// 배낭 문제 (Knapsack Problem)
+struct 물건 {
+    무게: int,
+    가치: int,
+    이름: string
+}
+
+function 배낭문제_재귀(
+    물건들: &Array<물건>,
+    용량: int,
+    인덱스: int = 0
+) -> int {
+    // 기저 조건
+    if 인덱스 >= 물건들.len() || 용량 <= 0 {
+        return 0
+    }
+    
+    let 현재물건 = &물건들[인덱스]
+    
+    // 현재 물건을 넣을 수 없는 경우
+    if 현재물건.무게 > 용량 {
+        return 배낭문제_재귀(물건들, 용량, 인덱스 + 1)
+    }
+    
+    // 두 가지 선택 중 최대값 선택
+    let 넣는경우 = 현재물건.가치 + 배낭문제_재귀(
+        물건들,
+        용량 - 현재물건.무게,
+        인덱스 + 1
+    )
+    let 안넣는경우 = 배낭문제_재귀(물건들, 용량, 인덱스 + 1)
+    
+    return std::cmp::max(넣는경우, 안넣는경우)
+}
+
+// 편집 거리 (Edit Distance)
+function 편집거리_재귀(문자열1: &str, 문자열2: &str) -> int {
+    if 문자열1.is_empty() {
+        return 문자열2.len() as int
+    }
+    if 문자열2.is_empty() {
+        return 문자열1.len() as int
+    }
+    
+    let 문자1들: Vec<char> = 문자열1.chars().collect()
+    let 문자2들: Vec<char> = 문자열2.chars().collect()
+    
+    if 문자1들.last() == 문자2들.last() {
+        let 앞부분1: String = 문자1들[..문자1들.len()-1].iter().collect()
+        let 앞부분2: String = 문자2들[..문자2들.len()-1].iter().collect()
+        return 편집거리_재귀(&앞부분1, &앞부분2)
+    }
+    
+    let 앞부분1: String = 문자1들[..문자1들.len()-1].iter().collect()
+    let 앞부분2: String = 문자2들[..문자2들.len()-1].iter().collect()
+    
+    let 삽입 = 1 + 편집거리_재귀(문자열1, &앞부분2)
+    let 삭제 = 1 + 편집거리_재귀(&앞부분1, 문자열2)
+    let 교체 = 1 + 편집거리_재귀(&앞부분1, &앞부분2)
+    
+    return std::cmp::min(삽입, std::cmp::min(삭제, 교체))
+}
+
+// 계단 오르기 문제
+function 계단오르기(n: int) -> int {
+    match n {
+        case 0 => 1
+        case 1 => 1
+        case 2 => 2
+        case _ => 계단오르기(n - 1) + 계단오르기(n - 2)
+    }
+} test {
+    // 배낭 문제 테스트
+    let 물건들 = [
+        물건 { 무게: 10, 가치: 60, 이름: "책".to_string() },
+        물건 { 무게: 20, 가치: 100, 이름: "컴퓨터".to_string() },
+        물건 { 무게: 30, 가치: 120, 이름: "텔레비전".to_string() }
+    ]
+    
+    let 최대가치 = 배낭문제_재귀(&물건들, 50)
+    assert 최대가치 == 220  // 책 + 컴퓨터 = 60 + 100 + 60 = 220
+    
+    // 편집 거리 테스트
+    assert 편집거리_재귀("kitten", "sitting") == 3
+    assert 편집거리_재귀("hello", "hallo") == 1
+    
+    // 계단 오르기 테스트
+    assert 계단오르기(1) == 1
+    assert 계단오르기(3) == 3
+    assert 계단오르기(5) == 8
+}
+
+print("배낭 문제 최대 가치: {배낭문제_재귀(&물건들, 50)}")
+print("편집 거리 (hello -> world): {편집거리_재귀("hello", "world")}")
+print("10층 계단 오르는 방법: {계단오르기(10)}가지")
+```
+
+##  재귀 사용 시 주의사항
+
+### 스택 오버플로 방지
+
+```rust
+// 위험한 재귀 - 스택 오버플로 가능성
+function 위험한재귀(n: int) -> int {
+    if n <= 0 {
+        return 0
+    }
+    return 1 + 위험한재귀(n - 1)  // 큰 n에서 스택 오버플로
+}
+
+// 안전한 반복문 버전
+function 안전한반복(n: int) -> int {
+    let mut 결과 = 0
+    for i in 1..=n {
+        결과 += 1
+    }
+    return 결과
+}
+
+// 스택 오버플로 체크와 함께 재귀
+function 안전한재귀(n: int, 깊이: int = 0) -> Result<int, string> {
+    const 최대깊이: int = 1000
+    
+    if 깊이 > 최대깊이 {
+        return Err("재귀 깊이 초과: 스택 오버플로 위험".to_string())
+    }
+    
+    if n <= 0 {
+        return Ok(0)
+    }
+    
+    match 안전한재귀(n - 1, 깊이 + 1) {
+        case Ok(결과) => Ok(1 + 결과)
+        case Err(오류) => Err(오류)
+    }
+}
+
+// 트램폴린 기법으로 스택 오버플로 방지
+enum 트램폴린<T> {
+    Done(T),
+    Continue(Box<dyn FnOnce() -> 트램폴린<T>>)
+}
+
+function 트램폴린실행<T>(mut 결과: 트램폴린<T>) -> T {
+    loop {
+        match 결과 {
+            case 트램폴린::Done(값) => return 값
+            case 트램폴린::Continue(함수) => 결과 = 함수()
+        }
+    }
+}
+
+function 팩토리얼_트램폴린(n: int, 누적값: int = 1) -> 트램폴린<int> {
+    if n <= 1 {
+        return 트램폴린::Done(누적값)
+    }
+    
+    return 트램폴린::Continue(Box::new(move || {
+        팩토리얼_트램폴린(n - 1, 누적값 * n)
+    }))
+} test {
+    // 안전한 재귀 테스트
+    assert 안전한재귀(100).is_ok()
+    assert 안전한재귀(2000).is_err()
+    
+    // 트램폴린 테스트
+    let 결과 = 트램폴린실행(팩토리얼_트램폴린(10))
+    assert 결과 == 3628800
+}
+
+print("안전한 재귀 (100): {안전한재귀(100).unwrap()}")
+print("트램폴린 팩토리얼(10): {트램폴린실행(팩토리얼_트램폴린(10))}")
+```
+
+##  함수형 재귀 패턴
+
+### 고차 함수와 재귀
+
+```rust
+// 재귀적 map 구현
+function 재귀_map<T, U>(
+    배열: Array<T>,
+    변환함수: fn(T) -> U,
+    인덱스: int = 0
+) -> Array<U> {
+    if 인덱스 >= 배열.len() {
+        return []
+    }
+    
+    let mut 결과 = [변환함수(배열[인덱스].clone())]
+    결과.extend(재귀_map(배열, 변환함수, 인덱스 + 1))
+    return 결과
+}
+
+// 재귀적 filter 구현
+function 재귀_filter<T>(
+    배열: Array<T>,
+    조건함수: fn(&T) -> bool,
+    인덱스: int = 0
+) -> Array<T> {
+    if 인덱스 >= 배열.len() {
+        return []
+    }
+    
+    let 현재요소 = &배열[인덱스]
+    let 나머지결과 = 재귀_filter(배열.clone(), 조건함수, 인덱스 + 1)
+    
+    if 조건함수(현재요소) {
+        let mut 결과 = [현재요소.clone()]
+        결과.extend(나머지결과)
+        return 결과
+    } else {
+        return 나머지결과
+    }
+}
+
+// 재귀적 reduce 구현
+function 재귀_reduce<T, U>(
+    배열: Array<T>,
+    초기값: U,
+    축약함수: fn(U, T) -> U,
+    인덱스: int = 0
+) -> U {
+    if 인덱스 >= 배열.len() {
+        return 초기값
+    }
+    
+    let 새초기값 = 축약함수(초기값, 배열[인덱스].clone())
+    return 재귀_reduce(배열, 새초기값, 축약함수, 인덱스 + 1)
+}
+
+// Y 콤비네이터 구현
+function Y<F, T>(함수: F) -> impl Fn(T) -> T
+where
+    F: Fn(&dyn Fn(T) -> T, T) -> T,
+    T: 'static
+{
+    move |입력| {
+        let 재귀함수 = |자기자신: &dyn Fn(T) -> T, 매개변수: T| -> T {
+            함수(자기자신, 매개변수)
+        }
+        재귀함수(&재귀함수, 입력)
+    }
+} test {
+    let 숫자들 = [1, 2, 3, 4, 5]
+    
+    // 재귀적 map 테스트
+    let 제곱들 = 재귀_map(숫자들.clone(), |x| x * x)
+    assert 제곱들 == [1, 4, 9, 16, 25]
+    
+    // 재귀적 filter 테스트
+    let 짝수들 = 재귀_filter(숫자들.clone(), |&x| x % 2 == 0)
+    assert 짝수들 == [2, 4]
+    
+    // 재귀적 reduce 테스트
+    let 합계 = 재귀_reduce(숫자들.clone(), 0, |acc, x| acc + x)
+    assert 합계 == 15
+}
+
+print("재귀 map (제곱): {재귀_map([1, 2, 3, 4], |x| x * x)}")
+print("재귀 filter (짝수): {재귀_filter([1, 2, 3, 4, 5, 6], |&x| x % 2 == 0)}")
+print("재귀 reduce (합계): {재귀_reduce([1, 2, 3, 4, 5], 0, |acc, x| acc + x)}")
+```
+
+##  재귀 마스터하기
+
+재귀는 복잡한 문제를 우아하게 해결하는 강력한 도구입니다:
+
+###  재귀를 사용하면 좋은 경우:
+- **트리/그래프 구조** 처리
+- **분할 정복** 알고리즘
+- **백트래킹** 문제
+- **수학적 정의**가 재귀적인 경우
+
+###  재귀 사용 시 주의점:
+- **기저 조건** 명확히 정의
+- **스택 오버플로** 방지
+- **성능 최적화** 고려 (메모이제이션, 꼬리 재귀)
+- **디버깅** 어려움 고려
+
+###  토파즈의 재귀 장점:
+- **패턴 매칭**으로 명확한 조건 분리
+- **타입 안전성**으로 오류 방지
+- **함수형 프로그래밍** 패러다임 지원
+- **꼬리 재귀 최적화** 자동 지원
+
+재귀의 아름다운 세계를 토파즈와 함께 탐험해보세요! 

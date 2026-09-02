@@ -1,0 +1,9 @@
+enum Shape { Circle(int), Square(int), Dot }
+function big(s: Shape) -> string {
+  match s {
+    case Circle(x) | Square(x) if x > 5 => "big"
+    case _ => "small"
+  }
+}
+print("{big(Shape.Circle(9))}/{big(Shape.Square(2))}/{big(Shape.Dot)}")
+0

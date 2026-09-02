@@ -1,0 +1,78 @@
+# corpus/v5_4/stdlib -- practical v5.4 stdlib execution rows
+
+[totals]
+recorded = 12
+runnable = 12
+pending = 0
+
+[[fixture]]
+file = "dom-trace.tpz"
+phase = "exec"
+versions = "5.4"
+result = "ok"
+
+[[fixture]]
+file = "dom-generic.tpz"
+phase = "exec"
+versions = "5.4"
+result = "ok"
+
+[[fixture]]
+file = "http-values.tpz"
+phase = "exec"
+versions = "5.4"
+result = "ok"
+
+[[fixture]]
+file = "property-helpers.tpz"
+phase = "exec"
+versions = "5.4"
+result = "ok"
+
+[[fixture]]
+file = "math-codec.tpz"
+phase = "exec"
+versions = "5.4"
+result = "ok"
+
+[[fixture]]
+file = "math-boundaries.tpz"
+phase = "exec"
+versions = "5.4"
+result = "ok"
+
+[[fixture]]
+file = "codec-boundaries.tpz"
+phase = "exec"
+versions = "5.4"
+result = "ok"
+
+[[fixture]]
+file = "fs-boundary.tpz"
+phase = "exec"
+versions = "5.4"
+result = "ok"
+
+[[fixture]]
+file = "io-boundary.tpz"
+phase = "exec"
+versions = "5.4"
+result = "ok"
+
+[[fixture]]
+file = "data-tools.tpz"
+phase = "exec"
+versions = "5.4"
+result = "ok"
+
+[[fixture]]
+file = "data-errors.tpz"
+phase = "exec"
+versions = "5.4"
+result = "ok"
+
+[[fixture]]
+file = "test-assertions.tpz"
+phase = "exec"
+versions = "5.4"
+result = "ok"

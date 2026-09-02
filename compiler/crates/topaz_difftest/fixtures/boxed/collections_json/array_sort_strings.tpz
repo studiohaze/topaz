@@ -1,0 +1,3 @@
+let mut xs = ["banana", "apple", "cherry"]
+xs.sort()
+xs

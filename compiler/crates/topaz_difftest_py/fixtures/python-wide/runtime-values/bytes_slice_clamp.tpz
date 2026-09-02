@@ -1,0 +1,7 @@
+
+function f() -> Bytes {
+    let b = Bytes.encodeUtf8("foobar")
+    print("{b.slice(1, 3).toHex()}:{b.slice(0, 99).toHex()}:{b.slice(4, 2).toHex()}")
+    b.slice(4, 2)
+}
+f()

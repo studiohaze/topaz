@@ -1,0 +1,6 @@
+{
+    defer print("first-registered")
+    defer print("last-registered")
+    print("body")
+}
+print("end")

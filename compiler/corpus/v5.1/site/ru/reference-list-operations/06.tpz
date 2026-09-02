@@ -1,0 +1,10 @@
+let mut оценки: Map<string, int> = Map.new()
+оценки.insert("alice", 92)
+оценки.insert("bob", 78)
+
+for имя in оценки.keys {
+    print("Оценка сохранена для {имя}")    // сначала "alice", затем "bob" (порядок вставки)
+}
+
+let естьAlice = "alice" in оценки.keys
+print("Есть alice: {естьAlice}")

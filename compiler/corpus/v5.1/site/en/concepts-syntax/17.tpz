@@ -1,0 +1,8 @@
+// Basic arrays
+let numbers = [1, 2, 3, 4, 5]
+let fruits = ["apple", "banana", "cherry"]
+
+// Functional helpers
+let large = filter(numbers, x => x > 2)                  // [3, 4, 5]
+let squares = map(numbers, x => x * x)                   // [1, 4, 9, 16, 25]
+let sum = reduce(numbers, (acc, x) => acc + x, 0)        // 15

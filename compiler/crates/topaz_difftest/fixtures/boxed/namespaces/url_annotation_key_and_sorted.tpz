@@ -1,0 +1,9 @@
+match URL.parse("HTTPS://Example.COM/b") { case Ok(x) => match URL.parse("https://example.com/a") { case Ok(a) => { let mut m: Map<URL, int> = Map.new()
+m.insert(x, 7)
+let same = match URL.parse("https://example.com/b") { case Ok(k) => m.getOr(k, 0)
+case Err(_) => 0 }
+let first = [x, a].sorted().get(0)
+match first { case Some(u0) => "{same}/{u0.toString()}"
+case None => "none" } }
+case Err(e) => e }
+case Err(e) => e }

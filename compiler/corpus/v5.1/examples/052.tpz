@@ -1,0 +1,13 @@
+let mut total = 0
+let mut n = 1
+
+while true {
+    if total + n > 100 {
+        break
+    }
+
+    total = total + n
+    n = n + 1
+}
+
+print("{total}")

@@ -1,0 +1,17 @@
+// Use if as an expression instead of a ternary.
+let adultStatus = if age >= 18 { "adult" } else { "minor" }
+let passStatus = if score >= 60 { "pass" } else { "fail" }
+
+// Nested conditions
+let grade = if score >= 90 { "A" }
+    else if score >= 80 { "B" }
+    else if score >= 70 { "C" }
+    else { "F" }
+
+// Conditional value
+let discount = if memberLevel == "VIP" { 0.2 }
+    else if memberLevel == "Gold" { 0.1 }
+    else { 0.05 }
+
+print("Age: {age}, Status: {adultStatus}")
+print("Score: {score}, Grade: {grade}")

@@ -1,0 +1,2 @@
+record User derives Show { name: string }
+Show.show<User>(User { name: "Ada" })

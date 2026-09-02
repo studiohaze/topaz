@@ -1,0 +1,2 @@
+function f(...xs: int) -> int { xs[0] }
+f(...[], 3)

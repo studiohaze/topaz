@@ -1,0 +1,7 @@
+record Point { x: int }
+
+impl Point {
+    function keep<T>(self, value: T) -> T { value }
+}
+
+0

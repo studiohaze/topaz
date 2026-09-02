@@ -1,0 +1,24 @@
+# corpus/exec/values — execution transcripts (CDR-003 §11)
+
+[totals]
+recorded = 3
+runnable = 3
+pending = 0
+
+[[fixture]]
+file = "int-arith.tpz"
+phase = "exec"
+versions = "5.2"
+result = "ok"
+
+[[fixture]]
+file = "float-render.tpz"
+phase = "exec"
+versions = "5.2"
+result = "ok"
+
+[[fixture]]
+file = "option-result.tpz"
+phase = "exec"
+versions = "5.2"
+result = "ok"

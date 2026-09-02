@@ -1,0 +1,2 @@
+let mut 이름: Option<string> = None
+이름 ??= Some("guest")

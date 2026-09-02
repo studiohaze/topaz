@@ -1,0 +1,7 @@
+enum Color derives Eq, Order, Show, JSON {
+    Red,
+    Blue,
+}
+
+let color: Color = Color.Red
+print("{color}")

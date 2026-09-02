@@ -1,0 +1,16 @@
+function createCounter(initialValue: int) -> () -> int {
+    let mut count = initialValue  // Captured by closure
+    
+    return () => {
+        count += 1      // Access to outer variable
+        count
+    }
+}
+
+let counter1 = createCounter(0)
+let counter2 = createCounter(100)
+
+print("{counter1()}")  // 1
+print("{counter1()}")  // 2
+print("{counter2()}")  // 101
+print("{counter1()}")  // 3

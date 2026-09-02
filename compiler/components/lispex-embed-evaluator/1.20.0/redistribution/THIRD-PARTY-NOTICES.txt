@@ -1,0 +1,126 @@
+Lispex exact evaluator third-party notices
+
+This file distinguishes the exact target-normal runtime closure from the
+procedural-macro build-tool closure selected for lispex-embed-evaluator 1.20.0
+on wasm32-unknown-unknown. Test-only and unrelated workspace packages are not
+part of either list. The main LICENSE file contains Apache License 2.0,
+selected where a package offers that choice.
+
+Runtime closure (linked into the evaluator)
+base64 0.22.1 | declared: MIT OR Apache-2.0 | selected: Apache-2.0 | https://crates.io/crates/base64/0.22.1
+block-buffer 0.10.4 | declared: MIT OR Apache-2.0 | selected: Apache-2.0 | https://crates.io/crates/block-buffer/0.10.4
+cfg-if 1.0.4 | declared: MIT OR Apache-2.0 | selected: Apache-2.0 | https://crates.io/crates/cfg-if/1.0.4
+crypto-common 0.1.7 | declared: MIT OR Apache-2.0 | selected: Apache-2.0 | https://crates.io/crates/crypto-common/0.1.7
+digest 0.10.7 | declared: MIT OR Apache-2.0 | selected: Apache-2.0 | https://crates.io/crates/digest/0.10.7
+generic-array 0.14.7 | declared: MIT | selected: MIT | https://crates.io/crates/generic-array/0.14.7
+itoa 1.0.18 | declared: MIT OR Apache-2.0 | selected: Apache-2.0 | https://crates.io/crates/itoa/1.0.18
+memchr 2.8.3 | declared: Unlicense OR MIT | selected: MIT | https://crates.io/crates/memchr/2.8.3
+num-bigint 0.4.8 | declared: MIT OR Apache-2.0 | selected: Apache-2.0 | https://crates.io/crates/num-bigint/0.4.8
+num-integer 0.1.46 | declared: MIT OR Apache-2.0 | selected: Apache-2.0 | https://crates.io/crates/num-integer/0.1.46
+num-rational 0.4.2 | declared: MIT OR Apache-2.0 | selected: Apache-2.0 | https://crates.io/crates/num-rational/0.4.2
+num-traits 0.2.19 | declared: MIT OR Apache-2.0 | selected: Apache-2.0 | https://crates.io/crates/num-traits/0.2.19
+ryu 1.0.23 | declared: Apache-2.0 OR BSL-1.0 | selected: Apache-2.0 | https://crates.io/crates/ryu/1.0.23
+serde 1.0.219 | declared: MIT OR Apache-2.0 | selected: Apache-2.0 | https://crates.io/crates/serde/1.0.219
+serde_json 1.0.140 | declared: MIT OR Apache-2.0 | selected: Apache-2.0 | https://crates.io/crates/serde_json/1.0.140
+sha2 0.10.8 | declared: MIT OR Apache-2.0 | selected: Apache-2.0 | https://crates.io/crates/sha2/0.10.8
+typenum 1.20.1 | declared: MIT OR Apache-2.0 | selected: Apache-2.0 | https://crates.io/crates/typenum/1.20.1
+
+Build-tool closure (used to produce bytes; not linked into the evaluator)
+proc-macro2 1.0.106 | declared: MIT OR Apache-2.0 | selected: Apache-2.0 | https://crates.io/crates/proc-macro2/1.0.106
+quote 1.0.46 | declared: MIT OR Apache-2.0 | selected: Apache-2.0 | https://crates.io/crates/quote/1.0.46
+serde_derive 1.0.219 | declared: MIT OR Apache-2.0 | selected: Apache-2.0 | https://crates.io/crates/serde_derive/1.0.219
+syn 2.0.118 | declared: MIT OR Apache-2.0 | selected: Apache-2.0 | https://crates.io/crates/syn/2.0.118
+unicode-ident 1.0.24 | declared: (MIT OR Apache-2.0) AND Unicode-3.0 | selected: Apache-2.0 AND Unicode-3.0 | https://crates.io/crates/unicode-ident/1.0.24
+
+---
+generic-array 0.14.7 — MIT
+---
+The MIT License (MIT)
+
+Copyright (c) 2015 Bartłomiej Kamiński
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+---
+memchr 2.8.3 — MIT
+---
+The MIT License (MIT)
+
+Copyright (c) 2015 Andrew Gallant
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+
+---
+unicode-ident 1.0.24 — Unicode License v3
+---
+UNICODE LICENSE V3
+
+COPYRIGHT AND PERMISSION NOTICE
+
+Copyright © 1991-2023 Unicode, Inc.
+
+NOTICE TO USER: Carefully read the following legal agreement. BY
+DOWNLOADING, INSTALLING, COPYING OR OTHERWISE USING DATA FILES, AND/OR
+SOFTWARE, YOU UNEQUIVOCALLY ACCEPT, AND AGREE TO BE BOUND BY, ALL OF THE
+TERMS AND CONDITIONS OF THIS AGREEMENT. IF YOU DO NOT AGREE, DO NOT
+DOWNLOAD, INSTALL, COPY, DISTRIBUTE OR USE THE DATA FILES OR SOFTWARE.
+
+Permission is hereby granted, free of charge, to any person obtaining a
+copy of data files and any associated documentation (the "Data Files") or
+software and any associated documentation (the "Software") to deal in the
+Data Files or Software without restriction, including without limitation
+the rights to use, copy, modify, merge, publish, distribute, and/or sell
+copies of the Data Files or Software, and to permit persons to whom the
+Data Files or Software are furnished to do so, provided that either (a)
+this copyright and permission notice appear with all copies of the Data
+Files or Software, or (b) this copyright and permission notice appear in
+associated Documentation.
+
+THE DATA FILES AND SOFTWARE ARE PROVIDED "AS IS", WITHOUT WARRANTY OF ANY
+KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT OF
+THIRD PARTY RIGHTS.
+
+IN NO EVENT SHALL THE COPYRIGHT HOLDER OR HOLDERS INCLUDED IN THIS NOTICE
+BE LIABLE FOR ANY CLAIM, OR ANY SPECIAL INDIRECT OR CONSEQUENTIAL DAMAGES,
+OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS,
+WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION,
+ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THE DATA
+FILES OR SOFTWARE.
+
+Except as contained in this notice, the name of a copyright holder shall
+not be used in advertising or otherwise to promote the sale, use or other
+dealings in these Data Files or Software without prior written
+authorization of the copyright holder.

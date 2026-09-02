@@ -1,0 +1,2 @@
+match [0, 1, Some(5)] { case [0, ..mid, Some(x)] => mid.length + x
+case _ => 0 }

@@ -1,0 +1,3 @@
+function force(g: () -> int) -> int { g() }
+export let a = force(() => later)
+export let later = 1

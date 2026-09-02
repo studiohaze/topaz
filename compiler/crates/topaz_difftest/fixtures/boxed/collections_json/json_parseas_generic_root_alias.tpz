@@ -1,0 +1,5 @@
+type Scalar<T> = T
+match JSON.parseAs<Scalar<int>>("7") {
+  case Ok(value) => value
+  case Err(e) => 0
+}

@@ -1,0 +1,9 @@
+
+let mut i = 0
+let _u = loop {
+    i = i + 1
+    if i >= 3 {
+        break
+    }
+}
+i

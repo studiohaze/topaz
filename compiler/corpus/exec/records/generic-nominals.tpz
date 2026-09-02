@@ -1,0 +1,19 @@
+record Box<T> { value: T }
+enum Maybe<T> { Missing, Present(T) }
+newtype Id<T> = T
+
+let b: Box<int> = Box { value: 7 }
+let sbox: Box<string> = Box { value: "ok" }
+let m: Maybe<int> = Maybe.Present(5)
+let none: Maybe<string> = Maybe.Missing
+let id: Id<string> = Id("id")
+
+let boxed = match sbox {
+    case Box { value } => value
+}
+let n = match m {
+    case Present(x) => x
+    case Missing => 0
+}
+
+print("{b.value} {boxed} {n} {none} {id.value()}")

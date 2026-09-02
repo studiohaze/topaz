@@ -1,0 +1,2 @@
+match Date.fromYmd(2024, 2, 29) { case Ok(d) => "{d.toIso()}/{d.addDays(1).toIso()}/{d.year()}/{d.month()}/{d.day()}"
+case Err(e) => e }

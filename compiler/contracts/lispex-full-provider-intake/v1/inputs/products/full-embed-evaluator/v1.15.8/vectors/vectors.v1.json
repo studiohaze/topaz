@@ -1,0 +1,230 @@
+{
+  "schema": "lispex.full-provider-vectors/v1",
+  "status": "qualification-input",
+  "evaluator_sha256": "dd4cde2976d825ae99b542d308d87489ac96848e0710329dbb9173664d8c5ad8",
+  "contracts": {
+    "semantic_profile_id": "lispex/r7rs-rule-current-profile-bounded/1",
+    "model_id": "lispex-full-vm-meter/1",
+    "abi_id": "lispex.embed-wasm-abi/v1",
+    "value_codec_id": "lispex.embed-value/v1",
+    "transcript_id": "lispex.embed-transcript/v1",
+    "receipt_schema_id": "lispex.embed-receipt-core/v1",
+    "component_id": "lispex-evaluator/rust-vm-current-profile/1"
+  },
+  "positives": [
+    {
+      "name": "prepared",
+      "artifact": {
+        "path": "products/full-embed-evaluator/v1.15.8/vectors/prepared.lpxfull",
+        "bytes": 1620,
+        "sha256": "32974951510a7b499cd8f73eec26afa3c9994df6e96dd58139f1d201a797b79f"
+      },
+      "operation": "prepare",
+      "category": "prepared",
+      "portable_core": null
+    },
+    {
+      "name": "complete",
+      "artifact": {
+        "path": "products/full-embed-evaluator/v1.15.8/vectors/complete.lpxfull",
+        "bytes": 3883,
+        "sha256": "11cc735f0797c02355a095165c394a1e1dcd53f5a0cd7161213edc4e238414f1"
+      },
+      "operation": "evaluate",
+      "category": "complete",
+      "portable_core": {
+        "path": "products/full-embed-evaluator/v1.15.8/vectors/complete.core",
+        "bytes": 1930,
+        "sha256": "3cbd38dc840902d4e606431545bf9cadb584fafe6c023add26745a49a9da7dd0"
+      }
+    },
+    {
+      "name": "semantic-fault",
+      "artifact": {
+        "path": "products/full-embed-evaluator/v1.15.8/vectors/semantic-fault.lpxfull",
+        "bytes": 3796,
+        "sha256": "97ce18277f7d72ce1d156d87fb9ababa688399bf1134177396072b997280d608"
+      },
+      "operation": "evaluate",
+      "category": "semantic-fault",
+      "portable_core": {
+        "path": "products/full-embed-evaluator/v1.15.8/vectors/semantic-fault.core",
+        "bytes": 1915,
+        "sha256": "c44709264835ff53f44708e2f58ddd895e18573f332a4914c64d9f7cc1e93297"
+      }
+    },
+    {
+      "name": "evaluation-exhausted",
+      "artifact": {
+        "path": "products/full-embed-evaluator/v1.15.8/vectors/evaluation-exhausted.lpxfull",
+        "bytes": 3689,
+        "sha256": "df8e7db62f8aaec84ec68edf07c632d10e439ff402f0b175c71e8fe5410a2751"
+      },
+      "operation": "evaluate",
+      "category": "exhausted",
+      "portable_core": {
+        "path": "products/full-embed-evaluator/v1.15.8/vectors/evaluation-exhausted.core",
+        "bytes": 1901,
+        "sha256": "b927023f6447e3d15e0fb5fc97c1a5e3b3c344c018f027c8c68acd04103ed514"
+      }
+    },
+    {
+      "name": "preparation-exhausted",
+      "artifact": {
+        "path": "products/full-embed-evaluator/v1.15.8/vectors/preparation-exhausted.lpxfull",
+        "bytes": 835,
+        "sha256": "15e1ef79c9228e1e795e53c3db6626fe2bae8fe80ba57aec0c46a4cfb9300aa1"
+      },
+      "operation": "prepare",
+      "category": "exhausted",
+      "portable_core": {
+        "path": "products/full-embed-evaluator/v1.15.8/vectors/preparation-exhausted.core",
+        "bytes": 547,
+        "sha256": "3f67f868db59af7a0e0351351f618b11e85e53b956fc8f4637671c53a2fee703"
+      }
+    },
+    {
+      "name": "request-refusal",
+      "artifact": {
+        "path": "products/full-embed-evaluator/v1.15.8/vectors/request-refusal.lpxfull",
+        "bytes": 675,
+        "sha256": "115fdf82e3318da0c1f34f00398337a3bc93f32fb6ecb7c9ea76659395137ae7"
+      },
+      "operation": "prepare",
+      "category": "request-refusal",
+      "portable_core": {
+        "path": "products/full-embed-evaluator/v1.15.8/vectors/request-refusal.core",
+        "bytes": 393,
+        "sha256": "a0c7c5bd34747d41b240b8ae64f6b5a339bc9f385db39391e282c8e13d8ef45c"
+      }
+    }
+  ],
+  "negatives": [
+    {
+      "name": "magic",
+      "artifact": {
+        "path": "products/full-embed-evaluator/v1.15.8/vectors/negative-magic.lpxfull",
+        "bytes": 3883,
+        "sha256": "24ed123bf96271f1fa0ffa2dd7c52999c50c36eaa013a2bdc9496bfbfb4d7c97"
+      },
+      "expectation": "magic-refusal"
+    },
+    {
+      "name": "truncated",
+      "artifact": {
+        "path": "products/full-embed-evaluator/v1.15.8/vectors/negative-truncated.lpxfull",
+        "bytes": 3882,
+        "sha256": "311352b50cb99118cc82fe38bd050408609363d912af61acaef5970551384a68"
+      },
+      "expectation": "truncation-refusal"
+    },
+    {
+      "name": "trailing",
+      "artifact": {
+        "path": "products/full-embed-evaluator/v1.15.8/vectors/negative-trailing.lpxfull",
+        "bytes": 3884,
+        "sha256": "76f1df34279918e02bd46fc654123afcea85a8390bf1c2232ba218ab12364759"
+      },
+      "expectation": "trailing-byte-refusal"
+    },
+    {
+      "name": "evaluator",
+      "artifact": {
+        "path": "products/full-embed-evaluator/v1.15.8/vectors/negative-evaluator.lpxfull",
+        "bytes": 3883,
+        "sha256": "18b74b5fe36de7f01b96917a21cf5ec4fc6b9143f1183312e6cbdc79467b70ec"
+      },
+      "expectation": "identity-refusal"
+    },
+    {
+      "name": "limit-count",
+      "artifact": {
+        "path": "products/full-embed-evaluator/v1.15.8/vectors/negative-limit-count.lpxfull",
+        "bytes": 3875,
+        "sha256": "f1ce9f13532560fb3d97155920f95aaf6ed71f27eaeca7799551f970975deb21"
+      },
+      "expectation": "limit-count-refusal"
+    },
+    {
+      "name": "limit-value",
+      "artifact": {
+        "path": "products/full-embed-evaluator/v1.15.8/vectors/negative-limit-value.lpxfull",
+        "bytes": 3883,
+        "sha256": "ba842e6e786b6e486e5f1129c430ab430fc08682a359c716e168bce5cecb48c5"
+      },
+      "expectation": "exact-limit-value-mismatch-refusal"
+    },
+    {
+      "name": "identity-tag",
+      "artifact": {
+        "path": "products/full-embed-evaluator/v1.15.8/vectors/negative-identity-tag.lpxfull",
+        "bytes": 3883,
+        "sha256": "f7dd9473365429d4fe4330a921516b44c77e1d572e6200dc6cc7bf23e72d0604"
+      },
+      "expectation": "identity-tag-refusal"
+    },
+    {
+      "name": "identity-noncanonical-case",
+      "artifact": {
+        "path": "products/full-embed-evaluator/v1.15.8/vectors/negative-identity-noncanonical-case.lpxfull",
+        "bytes": 3883,
+        "sha256": "1f775bf4a9667e2c27180d7dde3cdc322a53620f03c287ad03aa85fb8a1c020b"
+      },
+      "expectation": "noncanonical-identity-refusal"
+    },
+    {
+      "name": "identity-mismatch",
+      "artifact": {
+        "path": "products/full-embed-evaluator/v1.15.8/vectors/negative-identity-mismatch.lpxfull",
+        "bytes": 3883,
+        "sha256": "9fe922486b5b7dbf90cae493d65e2da5b1583c18fa3052fff6b55a2208365890"
+      },
+      "expectation": "inconsistent-identity-refusal"
+    },
+    {
+      "name": "request",
+      "artifact": {
+        "path": "products/full-embed-evaluator/v1.15.8/vectors/negative-request.lpxfull",
+        "bytes": 3883,
+        "sha256": "6c267f517c001200f48662ee19d5072d3da0665a6c81ea9095b027d60c84a296"
+      },
+      "expectation": "request-binding-refusal"
+    },
+    {
+      "name": "response",
+      "artifact": {
+        "path": "products/full-embed-evaluator/v1.15.8/vectors/negative-response.lpxfull",
+        "bytes": 3883,
+        "sha256": "c86f093e4d7dae0222522a4000b02cf92a330d3621296266c62a55db0e958b1e"
+      },
+      "expectation": "response-refusal"
+    },
+    {
+      "name": "portable-core",
+      "artifact": {
+        "path": "products/full-embed-evaluator/v1.15.8/vectors/negative-portable-core.lpxfull",
+        "bytes": 3883,
+        "sha256": "6edd851fe48366d553ed55600c6b0da88f5bb66b39a14d779e2f5cde80b6c59d"
+      },
+      "expectation": "portable-core-refusal"
+    },
+    {
+      "name": "portable-core-duplicate-key",
+      "artifact": {
+        "path": "products/full-embed-evaluator/v1.15.8/vectors/negative-portable-core-duplicate-key.lpxfull",
+        "bytes": 3978,
+        "sha256": "0d0e8e61b0ae24f9ed5dd8595f6681e6023d805fd19f665ddfaa84e62c2282a1"
+      },
+      "expectation": "duplicate-core-key-refusal"
+    },
+    {
+      "name": "envelope-digest",
+      "artifact": {
+        "path": "products/full-embed-evaluator/v1.15.8/vectors/negative-envelope-digest.lpxfull",
+        "bytes": 3883,
+        "sha256": "214768d2612728849e179ec5f291f3b7b8b644adfc56037b937eec1fb1dbe7d8"
+      },
+      "expectation": "envelope-digest-refusal"
+    }
+  ]
+}

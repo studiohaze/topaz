@@ -1,0 +1,3 @@
+let r = { x: 5 }
+match r { case { x: 5 } => 1
+case _ => 0 }

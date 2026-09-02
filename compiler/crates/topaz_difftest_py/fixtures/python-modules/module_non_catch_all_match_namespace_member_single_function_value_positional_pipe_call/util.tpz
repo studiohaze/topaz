@@ -1,0 +1,9 @@
+
+function incImpl(a: int) -> int {
+    a + 1
+}
+function doubleImpl(a: int) -> int {
+    a * 2
+}
+export let inc = incImpl
+export let double = doubleImpl

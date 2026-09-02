@@ -1,0 +1,2 @@
+let add = (a, b) => a + b
+5 |> add(3)

@@ -1,0 +1,9 @@
+
+function makeText() {
+    ("abc")
+}
+function main() -> int {
+    let text = makeText()
+    text.byteLength()
+}
+main()

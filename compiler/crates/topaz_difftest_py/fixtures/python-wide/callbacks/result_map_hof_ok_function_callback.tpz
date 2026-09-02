@@ -1,0 +1,12 @@
+
+function inc(x: int) -> int {
+    x + 1
+}
+function main() -> int {
+    let res = Ok(1).map(inc)
+    match res {
+        case Ok(n) => n
+        case Err(_) => 0
+    }
+}
+main()

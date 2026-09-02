@@ -1,0 +1,5 @@
+let label = match 3 {
+    case 0..1 |
+        5..9 => "edge"
+    case _ => "rest"
+}

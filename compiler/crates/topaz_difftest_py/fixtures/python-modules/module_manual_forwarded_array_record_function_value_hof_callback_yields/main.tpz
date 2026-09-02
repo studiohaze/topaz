@@ -1,0 +1,21 @@
+
+import facade
+let callbacks = facade.callbacks
+let handlers = facade.handlers
+let spread = [...callbacks]
+concurrent {
+    arraySlot: {
+        let xs = [1]
+        xs.map(facade.callbacks[1])
+    }
+    recordField: {
+        let ys = [1]
+        ys.map(handlers.primary)
+    }
+    spreadSlot: {
+        let zs = [1]
+        zs.map(spread[1])
+    }
+    fast: 0
+}
+0

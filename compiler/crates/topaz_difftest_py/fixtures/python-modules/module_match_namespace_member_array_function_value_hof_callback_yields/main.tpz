@@ -1,0 +1,17 @@
+
+import util
+let callbacks = match true {
+    case true => util.callbacks
+    case _ => util.callbacks
+}
+concurrent {
+    slow: {
+        let xs = [1]
+        xs.map(callbacks[1])
+    }
+    boom: {
+        let zs = [1]
+        zs[2]
+    }
+}
+0

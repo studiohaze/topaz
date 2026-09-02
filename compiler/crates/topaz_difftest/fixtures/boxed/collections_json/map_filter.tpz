@@ -1,0 +1,5 @@
+let mut m = Map.new()
+m.insert("a", 1)
+m.insert("b", 2)
+m.insert("c", 3)
+m.filter((k, v) => v > 1).keys

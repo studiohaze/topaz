@@ -1,0 +1,14 @@
+function safeDivide(a: int, b: int) -> Result<int, string> {
+    if b == 0 {
+        Err("Cannot divide by zero")
+    } else {
+        Ok(a / b)
+    }
+}
+
+// Simple with ? operator
+function complexCalculation(x: int) -> Result<int, string> {
+    let result1 = safeDivide(x, 2)?
+    let result2 = safeDivide(result1, 3)?
+    Ok(result2 * 10)
+}

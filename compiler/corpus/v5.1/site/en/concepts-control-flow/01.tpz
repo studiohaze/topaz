@@ -1,0 +1,33 @@
+let age = 25
+let score = 85
+
+// Basic if statement
+if age >= 18 {
+    print("You are an adult")
+}
+
+// if-else statement
+if score >= 90 {
+    print("Grade A")
+} else {
+    print("More effort needed")
+}
+
+// if-else if chain
+if score >= 90 {
+    print("Grade A - Excellent")
+} else if score >= 80 {
+    print("Grade B - Good")
+} else if score >= 70 {
+    print("Grade C - Average")
+} else {
+    print("Retake required")
+}
+
+// Compound conditions
+let username = "TopazDev"
+let attempts = 3
+
+if username != "" && attempts < 5 {
+    print("You can attempt to login")
+}

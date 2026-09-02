@@ -1,0 +1,4 @@
+function half(x: int) -> Option<int> {
+  if x % 2 == 0 { Some(x / 2) } else { None }
+}
+Some(3).flatMap(half)

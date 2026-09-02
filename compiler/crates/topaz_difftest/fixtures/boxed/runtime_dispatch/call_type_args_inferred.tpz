@@ -1,0 +1,5 @@
+function first<T>(xs: Array<T>) -> T {
+  return xs[0]
+}
+let a: int = first([1, 2, 3])
+a

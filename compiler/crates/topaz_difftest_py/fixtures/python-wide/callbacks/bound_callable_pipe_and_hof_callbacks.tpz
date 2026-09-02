@@ -1,0 +1,22 @@
+
+function inc(x: int) -> int {
+    x + 1
+}
+function add(a: int, b: int) -> int {
+    a + b
+}
+function main() -> int {
+    let xs = [1, 2, 3]
+    let topInc = inc
+    let topAdd = add
+    let localDouble = (x: int) => x * 2
+    let localKeep = (x: int) => x > 2
+    let directTop = 4 |> topInc
+    let namedTop = 5 |> topAdd(b: 7, a: _)
+    let directLocal = 6 |> localDouble
+    let mappedTop = xs.map(topInc)
+    let filteredLocal = xs.filter(localKeep)
+    let reducedTop = 0 |> xs.reduce(topAdd)
+    directTop + namedTop + directLocal + mappedTop[0] + filteredLocal.length + reducedTop
+}
+main()

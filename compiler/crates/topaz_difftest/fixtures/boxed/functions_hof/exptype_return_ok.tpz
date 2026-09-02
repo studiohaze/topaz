@@ -1,0 +1,2 @@
+function g() -> Result<int, string> { Ok(7) }
+print("{g()}")

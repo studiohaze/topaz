@@ -1,0 +1,17 @@
+
+function spin(x: int) -> int {
+    x * 2
+}
+
+let mut callbacks = [spin]
+let i = 0
+callbacks[i] = spin
+
+let r = concurrent {
+    slow: {
+        let xs = [1, 2, 3]
+        xs.map(callbacks[0])
+    }
+    fast: 0
+}
+r.slow[0] + r.slow[1] + r.slow[2] + r.fast

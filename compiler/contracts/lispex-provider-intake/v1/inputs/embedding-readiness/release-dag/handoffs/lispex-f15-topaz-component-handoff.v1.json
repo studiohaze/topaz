@@ -1,0 +1,366 @@
+{
+  "schema": "studio-haze.lispex-topaz-component-handoff/v1",
+  "id": "lispex-f15-topaz-component-handoff/v1",
+  "status": "provider-complete-consumer-authority-not-granted",
+  "provider": "lispex-release",
+  "provider_root": {
+    "path": "docs/bounded-execution/f15-final-provider-root.v1.json",
+    "sha256": "6ef0fafd3467d5dbfc89291574f83220bd4e204b11e34b3a40ca9a064274bcd9"
+  },
+  "provider_court": {
+    "path": "docs/bounded-execution/f15-final-provider-court.v1.json",
+    "sha256": "d4810055356c4cbd6ff046786b88d1af78ead561b74c5d656d5bd784cd4ad4b1"
+  },
+  "coordination_snapshot": {
+    "path": "embedding-readiness/release-dag/snapshots/lispex-1.15.8-full-provider.v1.json",
+    "sha256": "eaa574b51256d9b9186f980f0e788ab71e2ace3423b0405ad824320c000dccf6"
+  },
+  "retention": {
+    "path": "embedding-readiness/release-dag/retention/lispex-v1.15.8-topaz-component-handoff.v1.json",
+    "sha256": "15850989358a536eda4274b80720ea819f9c8c0a1dda337a4097d536bf9ac526"
+  },
+  "bounded_lda_c1": {
+    "purpose": "independent Topaz construction of retained restricted artifacts and receipt cores",
+    "component_id": "lispex-embed-evaluator/1.12.4",
+    "evaluator_source_revision": "5423eb32a1f456163de1a4898bef4eebd7f3c91e",
+    "artifact": {
+      "path": "products/embed-evaluator/v1.12.4/lispex-embed-evaluator.wasm",
+      "bytes": 1387762,
+      "sha256": "fa6e52559e1f5a43e50a3b7ac0cc5add6930cff0aed8aaff462cff4609362870",
+      "imports": 0
+    },
+    "contracts": {
+      "language_profile_id": "lispex-profile-1.5",
+      "semantic_profile_id": "lispex/r7rs-rule-embedded-core/1",
+      "feature_set_sha256": "c7ac2d3037b43dd90889467aabdcd2d3c061559bde12bb8330d878886c5ab429",
+      "model_id": "lispex-vm-meter/1",
+      "abi_id": "lispex.embed-wasm-abi/v1",
+      "value_codec_id": "lispex.embed-value/v1",
+      "transcript_id": "lispex.embed-transcript/v1",
+      "receipt_schema_id": "lispex.embed-receipt-core/v1"
+    },
+    "native_artifact_magic": "LPXART01",
+    "request_digest_present": false,
+    "replay_request_present": false,
+    "whole_envelope_digest_present": false,
+    "machine_contract": {
+      "path": "docs/bounded-execution/f15-retained-restricted-lda-c1-machine-contract.v1.json",
+      "sha256": "e860efb53189f6f0c9de64a31eb2b1b331a96aaeebf99a76835aa25fb8920662"
+    },
+    "vectors": {
+      "path": "products/embed-evaluator/handoffs/lda-c1/v1/vectors/vectors.v1.json",
+      "sha256": "d110f7c2c4e52a321c8c808992b2bfadd7658e9cc739faaa9064841471975d9d"
+    },
+    "vector_artifacts": [
+      {
+        "path": "products/embed-evaluator/handoffs/lda-c1/v1/vectors/prepared.lpxembed",
+        "sha256": "852fd77c760593e1b36db1ffbcd2c1a6398e3f051be7e9001540d584974d0249"
+      },
+      {
+        "path": "products/embed-evaluator/handoffs/lda-c1/v1/vectors/complete.lpxembed",
+        "sha256": "75f8b6f6e54ac6a8ca5519be7146f523e4dc8bf25e1a7215a27f29a6a11b0fa7"
+      },
+      {
+        "path": "products/embed-evaluator/handoffs/lda-c1/v1/vectors/complete.core",
+        "sha256": "430c91c2094f3eb8190dcd5122fcef06a8512f6250fc9761706525af71fafda7"
+      },
+      {
+        "path": "products/embed-evaluator/handoffs/lda-c1/v1/vectors/semantic-fault.lpxembed",
+        "sha256": "30afda93fcc2a8eb712498cf569cacd760c8dc92cc707161c54c1159538a6c97"
+      },
+      {
+        "path": "products/embed-evaluator/handoffs/lda-c1/v1/vectors/semantic-fault.core",
+        "sha256": "99a6bc83f46fee158eed05c367bd227f6e29f703a419b36661e7c72456cd3020"
+      },
+      {
+        "path": "products/embed-evaluator/handoffs/lda-c1/v1/vectors/evaluation-exhausted.lpxembed",
+        "sha256": "c33393ce19b326e5f97cec217d26e1ddfd3540f1a785553f16f5c4d9e0ceaba7"
+      },
+      {
+        "path": "products/embed-evaluator/handoffs/lda-c1/v1/vectors/evaluation-exhausted.core",
+        "sha256": "05faf71bfdd54f4696f5fc906721ff13230e30065ed5fe355800e25a20def320"
+      },
+      {
+        "path": "products/embed-evaluator/handoffs/lda-c1/v1/vectors/preparation-exhausted.lpxembed",
+        "sha256": "0ca4d16287bd3069036232d5ab3bc9fb203023caed9dac465fc07ec56f4e3921"
+      },
+      {
+        "path": "products/embed-evaluator/handoffs/lda-c1/v1/vectors/preparation-exhausted.core",
+        "sha256": "3367bee172ffd1680f61b992a9b563755c95af98b181042c5564f4045cc5f6eb"
+      },
+      {
+        "path": "products/embed-evaluator/handoffs/lda-c1/v1/vectors/request-refusal.lpxembed",
+        "sha256": "44b30a8e1192b9ddb96bb8a9351e1bbbf5cba12765df7a49a35fa2a46b5debb5"
+      },
+      {
+        "path": "products/embed-evaluator/handoffs/lda-c1/v1/vectors/request-refusal.core",
+        "sha256": "f3193386d4f11376a76a700b8f7443b1cd6fc512fb461cafd8646d08f89be6f6"
+      },
+      {
+        "path": "products/embed-evaluator/handoffs/lda-c1/v1/vectors/negative-magic.lpxembed",
+        "sha256": "7ee9f203e2bf167ff9d18c82a2fe4099f3d7d43887510da563ef10aba5d27516"
+      },
+      {
+        "path": "products/embed-evaluator/handoffs/lda-c1/v1/vectors/negative-truncated.lpxembed",
+        "sha256": "9613a9a1280b1cfa6b3ee3e3f49e2db454cb2ed15f80e09d66e1dc33f45080c9"
+      },
+      {
+        "path": "products/embed-evaluator/handoffs/lda-c1/v1/vectors/negative-trailing.lpxembed",
+        "sha256": "77726245db6b2647f6567a3654f45faf157f312dca625f5ab076c64c46590fba"
+      },
+      {
+        "path": "products/embed-evaluator/handoffs/lda-c1/v1/vectors/negative-evaluator.lpxembed",
+        "sha256": "5dc9ccb2941f71349c0a590dfbd85ca08cf0c5f327a1842b03f2151f891de2e5"
+      },
+      {
+        "path": "products/embed-evaluator/handoffs/lda-c1/v1/vectors/negative-limit-count.lpxembed",
+        "sha256": "b8a0b00b7ab836e7aeea6cf1688b07a2ed69dbb35326558ac823efd0bd90d4dc"
+      },
+      {
+        "path": "products/embed-evaluator/handoffs/lda-c1/v1/vectors/negative-limit-value.lpxembed",
+        "sha256": "b6c3cfaccebbc2b12371aa6f63719779969110b81072d29de873a619393190df"
+      },
+      {
+        "path": "products/embed-evaluator/handoffs/lda-c1/v1/vectors/negative-identity-tag.lpxembed",
+        "sha256": "4f9e27c0d29e387d1de8b5bcd70eefd2465ea7f4274a0e3b635336af39e54710"
+      },
+      {
+        "path": "products/embed-evaluator/handoffs/lda-c1/v1/vectors/negative-identity-noncanonical-case.lpxembed",
+        "sha256": "a29bb52e17d3ea37ba497b2e8c687a9cdb04e759425aca4e0d9592805b29b5aa"
+      },
+      {
+        "path": "products/embed-evaluator/handoffs/lda-c1/v1/vectors/negative-identity-mismatch.lpxembed",
+        "sha256": "3a1e9e7de5847c163b9fead958b7c47f5983a830800f0149e7c68f8c00d39362"
+      },
+      {
+        "path": "products/embed-evaluator/handoffs/lda-c1/v1/vectors/negative-category-binding.lpxembed",
+        "sha256": "19c1b0cad9a0872d202434a86d906a75e2732b54c7c3333fb1d6b09e6d67aeff"
+      },
+      {
+        "path": "products/embed-evaluator/handoffs/lda-c1/v1/vectors/negative-response.lpxembed",
+        "sha256": "71ebaae34a1b3958707ffb0bd2db97addf74e246ccc7cb111cbba8116e57bcb4"
+      },
+      {
+        "path": "products/embed-evaluator/handoffs/lda-c1/v1/vectors/negative-portable-core.lpxembed",
+        "sha256": "054fa31dcd540341828e5b28ed6827fe3a7d3ae7a83e8c56f0120a167508ce60"
+      },
+      {
+        "path": "products/embed-evaluator/handoffs/lda-c1/v1/vectors/negative-portable-core-duplicate-key.lpxembed",
+        "sha256": "ad4322908b41e04b5f88990ca6851e386805acf027edcb22ee154bb09d7d83d0"
+      }
+    ],
+    "provider_component": {
+      "path": "embedding-readiness/release-dag/components/lispex-embed-evaluator-1.12.4.v1.json",
+      "sha256": "818454bab1eb60042f4fdcf3da07b4eca6cee017ba7bdaf2b73f7e10e8fc37ad"
+    },
+    "provider_court": {
+      "path": "docs/bounded-execution/f12-final-provider-court.v1.json",
+      "sha256": "5baefccbe837dab8b1e817ec757016a1221cea7f823e95cd652ccd8aabe571c3"
+    },
+    "redistribution": {
+      "path": "products/embed-evaluator/v1.12.4/lispex-embed-evaluator-redistribution.zip",
+      "sha256": "fd8c2ba441c977c207147690272f09df3ce3b74c1bd3223c295593a3c5dd1b92",
+      "bytes": 1416611
+    },
+    "changed": false
+  },
+  "full_lda_f0": {
+    "purpose": "separately qualified complete current-profile component intake input",
+    "language_profile_authority": {
+      "id": "lispex-profile-1.5",
+      "path": "product/contracts/lispex-profile-1.5.json",
+      "sha256": "f42ed5f9fb38ea0c8c84b597fbff2d9ebb47b853364b9c3eee118d8b03947fc0"
+    },
+    "executable_profile_id": "lispex/r7rs-rule-current-profile-bounded/1",
+    "feature_set_sha256": "6ff16159ab9c6758c1485b67c928a9b3b4a896e4f2ecf96e4cf3cbaf5ac22fae",
+    "component_id": "lispex-evaluator/rust-vm-current-profile/1",
+    "evaluator_source_revision": "e3909e56491b53c61a63efaff51b6093019d8b27",
+    "provider_wire_revision": "451027beb8daff90c09364a1fd38a2a9f3790e55",
+    "qualification_revision": "8e7d4bf2a1bc550b5e1315449002cf2938952ec4",
+    "cross_architecture_revision": "baf0907c229283e6706a6ceb91dcaef41e225a37",
+    "artifact": {
+      "path": "products/full-embed-evaluator/v1.15.7/lispex-full-embed-evaluator.wasm",
+      "bytes": 1484873,
+      "sha256": "dd4cde2976d825ae99b542d308d87489ac96848e0710329dbb9173664d8c5ad8",
+      "imports": 0
+    },
+    "contracts": {
+      "language_profile_id": "lispex-profile-1.5",
+      "semantic_profile_id": "lispex/r7rs-rule-current-profile-bounded/1",
+      "feature_set_sha256": "6ff16159ab9c6758c1485b67c928a9b3b4a896e4f2ecf96e4cf3cbaf5ac22fae",
+      "model_id": "lispex-full-vm-meter/1",
+      "abi_id": "lispex.embed-wasm-abi/v1",
+      "value_codec_id": "lispex.embed-value/v1",
+      "transcript_id": "lispex.embed-transcript/v1",
+      "receipt_schema_id": "lispex.embed-receipt-core/v1",
+      "component_id": "lispex-evaluator/rust-vm-current-profile/1"
+    },
+    "native_artifact_magic": "LPXFAR01",
+    "request_digest_present": true,
+    "replay_request_present": true,
+    "whole_envelope_digest": "trailing raw SHA-256 over every preceding artifact byte",
+    "semantic_surface_closure": {
+      "path": "docs/bounded-execution/f15-final-semantic-surface-closure.v1.json",
+      "sha256": "271ac76509fd77363eb317f0511b697604484d653ffd9d5a09194d691b4bb8d8"
+    },
+    "machine_contract": {
+      "path": "docs/bounded-execution/f15-full-provider-machine-contract.v1.json",
+      "sha256": "de774f9de996faa848f5088f23202403ad2889f070f5ce4b89bc859a2ed0f58a"
+    },
+    "vectors": {
+      "path": "products/full-embed-evaluator/v1.15.8/vectors/vectors.v1.json",
+      "sha256": "7455460787a0ce53d92d96834e055462b0d4407795c61033b0bdf274e5627337"
+    },
+    "vector_artifacts": [
+      {
+        "path": "products/full-embed-evaluator/v1.15.8/vectors/prepared.lpxfull",
+        "sha256": "32974951510a7b499cd8f73eec26afa3c9994df6e96dd58139f1d201a797b79f"
+      },
+      {
+        "path": "products/full-embed-evaluator/v1.15.8/vectors/complete.lpxfull",
+        "sha256": "11cc735f0797c02355a095165c394a1e1dcd53f5a0cd7161213edc4e238414f1"
+      },
+      {
+        "path": "products/full-embed-evaluator/v1.15.8/vectors/complete.core",
+        "sha256": "3cbd38dc840902d4e606431545bf9cadb584fafe6c023add26745a49a9da7dd0"
+      },
+      {
+        "path": "products/full-embed-evaluator/v1.15.8/vectors/semantic-fault.lpxfull",
+        "sha256": "97ce18277f7d72ce1d156d87fb9ababa688399bf1134177396072b997280d608"
+      },
+      {
+        "path": "products/full-embed-evaluator/v1.15.8/vectors/semantic-fault.core",
+        "sha256": "c44709264835ff53f44708e2f58ddd895e18573f332a4914c64d9f7cc1e93297"
+      },
+      {
+        "path": "products/full-embed-evaluator/v1.15.8/vectors/evaluation-exhausted.lpxfull",
+        "sha256": "df8e7db62f8aaec84ec68edf07c632d10e439ff402f0b175c71e8fe5410a2751"
+      },
+      {
+        "path": "products/full-embed-evaluator/v1.15.8/vectors/evaluation-exhausted.core",
+        "sha256": "b927023f6447e3d15e0fb5fc97c1a5e3b3c344c018f027c8c68acd04103ed514"
+      },
+      {
+        "path": "products/full-embed-evaluator/v1.15.8/vectors/preparation-exhausted.lpxfull",
+        "sha256": "15e1ef79c9228e1e795e53c3db6626fe2bae8fe80ba57aec0c46a4cfb9300aa1"
+      },
+      {
+        "path": "products/full-embed-evaluator/v1.15.8/vectors/preparation-exhausted.core",
+        "sha256": "3f67f868db59af7a0e0351351f618b11e85e53b956fc8f4637671c53a2fee703"
+      },
+      {
+        "path": "products/full-embed-evaluator/v1.15.8/vectors/request-refusal.lpxfull",
+        "sha256": "115fdf82e3318da0c1f34f00398337a3bc93f32fb6ecb7c9ea76659395137ae7"
+      },
+      {
+        "path": "products/full-embed-evaluator/v1.15.8/vectors/request-refusal.core",
+        "sha256": "a0c7c5bd34747d41b240b8ae64f6b5a339bc9f385db39391e282c8e13d8ef45c"
+      },
+      {
+        "path": "products/full-embed-evaluator/v1.15.8/vectors/negative-magic.lpxfull",
+        "sha256": "24ed123bf96271f1fa0ffa2dd7c52999c50c36eaa013a2bdc9496bfbfb4d7c97"
+      },
+      {
+        "path": "products/full-embed-evaluator/v1.15.8/vectors/negative-truncated.lpxfull",
+        "sha256": "311352b50cb99118cc82fe38bd050408609363d912af61acaef5970551384a68"
+      },
+      {
+        "path": "products/full-embed-evaluator/v1.15.8/vectors/negative-trailing.lpxfull",
+        "sha256": "76f1df34279918e02bd46fc654123afcea85a8390bf1c2232ba218ab12364759"
+      },
+      {
+        "path": "products/full-embed-evaluator/v1.15.8/vectors/negative-evaluator.lpxfull",
+        "sha256": "18b74b5fe36de7f01b96917a21cf5ec4fc6b9143f1183312e6cbdc79467b70ec"
+      },
+      {
+        "path": "products/full-embed-evaluator/v1.15.8/vectors/negative-limit-count.lpxfull",
+        "sha256": "f1ce9f13532560fb3d97155920f95aaf6ed71f27eaeca7799551f970975deb21"
+      },
+      {
+        "path": "products/full-embed-evaluator/v1.15.8/vectors/negative-limit-value.lpxfull",
+        "sha256": "ba842e6e786b6e486e5f1129c430ab430fc08682a359c716e168bce5cecb48c5"
+      },
+      {
+        "path": "products/full-embed-evaluator/v1.15.8/vectors/negative-identity-tag.lpxfull",
+        "sha256": "f7dd9473365429d4fe4330a921516b44c77e1d572e6200dc6cc7bf23e72d0604"
+      },
+      {
+        "path": "products/full-embed-evaluator/v1.15.8/vectors/negative-identity-noncanonical-case.lpxfull",
+        "sha256": "1f775bf4a9667e2c27180d7dde3cdc322a53620f03c287ad03aa85fb8a1c020b"
+      },
+      {
+        "path": "products/full-embed-evaluator/v1.15.8/vectors/negative-identity-mismatch.lpxfull",
+        "sha256": "9fe922486b5b7dbf90cae493d65e2da5b1583c18fa3052fff6b55a2208365890"
+      },
+      {
+        "path": "products/full-embed-evaluator/v1.15.8/vectors/negative-request.lpxfull",
+        "sha256": "6c267f517c001200f48662ee19d5072d3da0665a6c81ea9095b027d60c84a296"
+      },
+      {
+        "path": "products/full-embed-evaluator/v1.15.8/vectors/negative-response.lpxfull",
+        "sha256": "c86f093e4d7dae0222522a4000b02cf92a330d3621296266c62a55db0e958b1e"
+      },
+      {
+        "path": "products/full-embed-evaluator/v1.15.8/vectors/negative-portable-core.lpxfull",
+        "sha256": "6edd851fe48366d553ed55600c6b0da88f5bb66b39a14d779e2f5cde80b6c59d"
+      },
+      {
+        "path": "products/full-embed-evaluator/v1.15.8/vectors/negative-portable-core-duplicate-key.lpxfull",
+        "sha256": "0d0e8e61b0ae24f9ed5dd8595f6681e6023d805fd19f665ddfaa84e62c2282a1"
+      },
+      {
+        "path": "products/full-embed-evaluator/v1.15.8/vectors/negative-envelope-digest.lpxfull",
+        "sha256": "214768d2612728849e179ec5f291f3b7b8b644adfc56037b937eec1fb1dbe7d8"
+      }
+    ],
+    "component_manifest": {
+      "path": "embedding-readiness/release-dag/components/lispex-full-embed-evaluator-1.v1.json",
+      "sha256": "741275df24d81b7eb002657c285fb142a6f089ec5ebc744fbb5a88c749fc1b09"
+    },
+    "qualification": {
+      "path": "docs/bounded-execution/f15-final-qualification.v1.json",
+      "sha256": "962cf009c2f95fae0eca2eab14cea13dea90dc5996eb887dbf32e57cab4746db"
+    },
+    "provider_attestation": {
+      "path": "embedding-readiness/release-dag/attestations/lispex-full-embed-evaluator-1.v1.json",
+      "sha256": "320af9cefe541f5196ac82a3250db7dca273ce102cdf75cb046e38870a25d9d6"
+    },
+    "redistribution_attestation": {
+      "path": "embedding-readiness/release-dag/attestations/lispex-full-embed-evaluator-redistribution-1.v1.json",
+      "sha256": "70412c2f69a45bef54fa7cf7cfafef05e1a301ced92d24e33ec7886819ada460"
+    },
+    "redistribution": {
+      "path": "products/full-embed-evaluator/v1.15.8/lispex-full-embed-evaluator-redistribution.zip",
+      "sha256": "7b28fb74bd0d05b9b6aee190a2d4cb863f5b0fcea7ed23946bd00068a3fc4511",
+      "bytes": 1623427
+    }
+  },
+  "preserved_relations": {
+    "aot_topaz_compiler": {
+      "version": "5.11",
+      "artifact_sha256": "3c5742ee9a34836db49acf47930a127fffc5eb00fa417e5240f91a33ad5d9123",
+      "changed": false
+    },
+    "lit_evidence_changed": false,
+    "restricted_receipts_changed": false
+  },
+  "authority_not_granted": {
+    "topaz_adapter_implementation": true,
+    "topaz_package_implementation": true,
+    "topaz_target_admission": true,
+    "topaz_component_admission": true,
+    "topaz_release": true,
+    "public_compatibility": true,
+    "public_distribution": true,
+    "portable_receipt_issuer": true,
+    "vouch": true,
+    "external_action": true
+  },
+  "graph_rules": {
+    "component_only": true,
+    "whole_lispex_release_pin": false,
+    "source_dependency": false,
+    "latest_resolution": false,
+    "mutual_final_manifest_digest_reference": false
+  }
+}

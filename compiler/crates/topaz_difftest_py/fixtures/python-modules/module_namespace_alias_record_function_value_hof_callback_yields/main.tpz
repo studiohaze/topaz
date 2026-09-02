@@ -1,0 +1,14 @@
+
+import util
+let handlers = util.handlers
+concurrent {
+    slow: {
+        let xs = [1]
+        xs.map(handlers.primary)
+    }
+    boom: {
+        let ys = [1]
+        ys[2]
+    }
+}
+0

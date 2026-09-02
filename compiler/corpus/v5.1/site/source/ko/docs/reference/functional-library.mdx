@@ -1,0 +1,133 @@
+---
+title: '함수형 라이브러리'
+description: '고차 함수, 파이프라인, Option 값, Result 흐름을 위한 canonical Topaz public-example 패턴입니다.'
+covers: '§2, §7, §11, §12, §13, §18, §22'
+---
+
+Topaz는 public 함수형 표면을 작게 유지합니다. canonical 예시는 함수 시그니처(구체 또는 랭크-1 제네릭), lambda, `|>` 파이프라인, optional access, `match`, Result 전파를 사용합니다. namespace-style extension block은 계속 deferred 상태이므로, 이 페이지는 직접적인 helper 패턴을 보여줍니다.
+
+## 구체 고차 함수
+
+고차 함수는 함수 값을 인자로 받거나 반환할 수 있습니다. Topaz는 랭크-1 제네릭 선언도 지원합니다(함수 페이지 참고). 이 cookbook은 명확성을 위해 helper를 구체 타입으로 둡니다.
+
+```topaz
+function 정수두번적용(변환: (int) -> int, 값: int) -> int {
+    변환(변환(값))
+}
+
+function 곱셈기(배수: int) -> (int) -> int {
+    return (값: int) => 값 * 배수
+}
+
+let 세배 = 곱셈기(3)
+let 결과 = 정수두번적용(세배, 5)
+
+print("결과: {결과}")  // 45
+```
+
+## 클로저 팩토리
+
+lambda는 lexical scope의 값을 캡처합니다. 구체 partial-application style helper에 이 패턴을 사용합니다.
+
+```topaz
+function 더하기함수(양: int) -> (int) -> int {
+    return (값: int) => 값 + 양
+}
+
+let 십더하기 = 더하기함수(10)
+let 합계 = 십더하기(5)
+
+print("합계: {합계}")  // 15
+```
+
+## 함수 합성
+
+값을 단계들에 파이프해서 합성하고, 재사용 가능한 함수 값이 필요하면 체인을 람다로 감싸세요.
+
+```topaz
+let 두배 = (x: int) => x * 2
+let 하나증가 = (x: int) => x + 1
+let 정수라벨 = (x: int) => "값: {x}"
+
+let 처리 = (x: int) => x |> 두배() |> 하나증가() |> 정수라벨()
+let 메시지 = 처리(5)
+
+print(메시지)  // "값: 11"
+```
+
+Topaz의 공개 합성 관용구는 위처럼 `|>` 파이프라인입니다. 전용 합성 연산자는 SPEC 레벨에만 존재하며 현재 어떤 profile 표면에도 속하지 않습니다 — 연산자 레퍼런스를 참고하세요.
+
+## 파이프라인
+
+값이 ordinary helper call을 따라 흐를 때 `|>`를 사용합니다. piped value는 `_`로 전달합니다.
+
+```topaz
+let 숫자들 = Array.of(1, 2, 3, 4, 5, 6)
+
+let 합계 = 숫자들
+    |> filter(_, x => x % 2 == 0)
+    |> map(_, x => x * x)
+    |> reduce(_, 0, (누적, x) => 누적 + x)   // reduce(xs, initial, f)
+
+print("합계: {합계}")  // 56
+```
+
+## Option 값
+
+optional record에는 `?.`, `??`, `match`를 사용합니다. 이 페이지를 별도 Option helper namespace처럼 모델링하지 않습니다.
+
+```topaz
+let 사용자: Option<{ 이름: string }> = Some({ 이름: "Topaz" })
+let 표시 = 사용자?.이름 ?? "guest"
+
+print("표시: {표시}")
+
+match 사용자 {
+    case Some(현재사용자) => print("사용자: {현재사용자.이름}")
+    case None => print("사용자 없음")
+}
+```
+
+## Result 파이프라인
+
+Result를 반환하는 함수 안에서는 `?`로 오류를 전파하고, 성공 또는 실패를 처리하는 경계에서는 `match`를 사용합니다.
+
+```topaz
+function 나누기(a: float, b: float) -> Result<float, string> {
+    if b == 0.0 {
+        Err("0으로 나눌 수 없습니다")
+    } else {
+        Ok(a / b)
+    }
+}
+
+function 계산(a: float, b: float) -> Result<float, string> {
+    let 몫 = 나누기(a, b)?
+    Ok(몫 + 1.0)
+}
+
+match 계산(10.0, 2.0) {
+    case Ok(값) => print("결과: {값}")
+    case Err(오류) => print("오류: {오류}")
+}
+```
+
+## 함수 선택
+
+리터럴 유니언은 custom variant declaration, strategy object, generic sorting helper 없이 구체 함수 값을 선택할 수 있습니다.
+
+```topaz
+type 변환모드 = "double" | "square"
+
+function 변환선택(모드: 변환모드) -> (int) -> int {
+    return match 모드 {
+        case "double" => (x: int) => x * 2
+        case "square" => (x: int) => x * x
+    }
+}
+
+let 변환 = 변환선택("square")
+let 값 = 변환(5)
+
+print("값: {값}")  // 25
+```

@@ -1,0 +1,8 @@
+// File top level - global scope
+let globalVariable = "Accessible everywhere"
+const globalConstant = 100
+
+function useAnywhere() {
+    print(globalVariable)      // Accessible
+    print("{globalConstant}")  // Accessible
+}

@@ -1,0 +1,2 @@
+let xs: Array<int> = []
+JSON.stringify(xs)

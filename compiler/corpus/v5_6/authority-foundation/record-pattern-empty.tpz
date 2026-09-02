@@ -1,0 +1,10 @@
+record User {
+    name: string,
+}
+
+let user: User = User { name: "Ada" }
+let label = match user {
+    case User {} => "user"
+    case _ => "none"
+}
+print(label)

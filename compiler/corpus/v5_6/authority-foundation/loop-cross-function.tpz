@@ -1,0 +1,6 @@
+loop 'outer {
+    let jump = () => {
+        break 'outer 1
+    }
+    jump()
+}

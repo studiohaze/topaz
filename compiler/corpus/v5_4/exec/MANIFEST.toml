@@ -1,0 +1,66 @@
+# corpus/v5_4/exec -- v5.4 execution transcripts
+
+[totals]
+recorded = 10
+runnable = 10
+pending = 0
+
+[[fixture]]
+file = "protocols-and-derive.tpz"
+phase = "exec"
+versions = "5.4"
+result = "ok"
+
+[[fixture]]
+file = "collections-and-patterns.tpz"
+phase = "exec"
+versions = "5.4"
+result = "ok"
+
+[[fixture]]
+file = "using-resource.tpz"
+phase = "exec"
+versions = "5.4"
+result = "ok"
+
+[[fixture]]
+file = "nominal-generics.tpz"
+phase = "exec"
+versions = "5.4"
+result = "ok"
+
+[[fixture]]
+file = "generic-nominal-pass-through.tpz"
+phase = "exec"
+versions = "5.4"
+result = "ok"
+
+[[fixture]]
+file = "nominal-newtype-keys.tpz"
+phase = "exec"
+versions = "5.4"
+result = "ok"
+
+[[fixture]]
+file = "nominal-record-keys.tpz"
+phase = "exec"
+versions = "5.4"
+result = "ok"
+
+[[fixture]]
+file = "nominal-enum-keys.tpz"
+phase = "exec"
+versions = "5.4"
+result = "ok"
+
+[[fixture]]
+file = "string-level1.tpz"
+phase = "exec"
+versions = "5.4"
+result = "ok"
+
+[[fixture]]
+file = "map-of-entries.tpz"
+phase = "exec"
+versions = "5.4"
+result = "ok"

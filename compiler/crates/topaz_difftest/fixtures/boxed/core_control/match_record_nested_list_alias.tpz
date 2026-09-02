@@ -1,0 +1,7 @@
+let mut inner = [1]
+let r = { a: inner }
+match r { case { a: [x] } => {
+inner.push(2)
+inner.length
+}
+case _ => 0 }

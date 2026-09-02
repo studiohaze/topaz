@@ -1,0 +1,3 @@
+export function trim(s: string) -> string { s }
+export let user = { name: "u" }
+export type User = { id: int }

@@ -1,0 +1,10 @@
+function f() -> string {
+  {
+    defer print("a")
+    match 0 {
+      case 0 => return "r"
+      case _ => "x"
+    }
+  }
+}
+f()

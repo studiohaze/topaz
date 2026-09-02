@@ -1,0 +1,10 @@
+enum A {
+    Value,
+}
+
+enum B {
+    Value,
+}
+
+let a: A = A.Value
+let b: B = a

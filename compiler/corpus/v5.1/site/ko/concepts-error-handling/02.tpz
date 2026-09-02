@@ -1,0 +1,47 @@
+// match로 성공값 변환
+let 결과 = match 나누기(10.0, 2.0) {
+    case Ok(값) => Ok("결과: {값 * 2.0}")
+    case Err(오류) => Err(오류)
+}
+
+match 결과 {
+    case Ok(메시지) => print(메시지)     // 성공 메시지
+    case Err(오류) => print("오류: {오류}")
+}
+
+// 중첩 match로 연쇄 처리
+function 제곱근(값: float) -> Result<float, string> {
+    if 값 < 0.0 {
+        return Err("음수의 제곱근은 구할 수 없습니다")
+    }
+    return Ok(Math.sqrt(값))
+}
+
+let 최종결과 = match 나누기(100.0, 4.0) {
+    case Ok(값) => match 제곱근(값) {
+        case Ok(근) => Ok("제곱근: {근}")
+        case Err(오류) => Err(오류)
+    }
+    case Err(오류) => Err(오류)
+}
+
+match 최종결과 {
+    case Ok(메시지) => print(메시지)         // 제곱근 메시지
+    case Err(오류) => print("오류: {오류}")
+}
+
+// match로 에러 복구
+function 기본값사용(오류: string) -> Result<float, string> {
+    print("기본값 사용: {오류}")
+    return Ok(0.0)
+}
+
+let 복구된결과 = match 나누기(10.0, 0.0) {
+    case Ok(값) => Ok(값)
+    case Err(오류) => 기본값사용(오류)
+}
+
+match 복구된결과 {
+    case Ok(값) => print("복구됨: {값}")
+    case Err(오류) => print("오류: {오류}")
+}

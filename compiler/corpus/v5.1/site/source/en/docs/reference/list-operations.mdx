@@ -1,0 +1,123 @@
+---
+title: 'List Operations'
+description: 'Canonical Topaz cookbook patterns for common Array, Map, and Set tasks.'
+covers: '§9, §11, §22'
+---
+
+This page is a task cookbook for the small collection surface used in public Topaz examples. For the complete named surface, see [Core Functions](/en/docs/reference/core-functions).
+
+## Building Collections
+
+Use `Array.of`, `Map.new`, and `Set.of` to build collections. Mutating operations require a mutable binding.
+
+```topaz
+let numbers = Array.of(1, 2, 3, 4, 5)
+
+let mut scores: Map<string, int> = Map.new()
+scores.insert("alice", 92)
+scores.insert("bob", 78)
+
+let mut tags = Set.of("docs")
+tags.add("v5")
+
+print("Numbers: {numbers}")
+```
+
+Array literals accept an array spread `...expr` to splice an existing array's elements in place:
+
+```topaz
+let base = Array.of(1, 2)
+let extended = [0, ...base, 3]     // [0, 1, 2, 3]
+```
+
+## Transforming Arrays
+
+Use free `filter`, `map`, and `reduce` helpers in a pipeline. Pass the piped collection through `_`.
+
+```topaz
+let numbers = Array.of(1, 2, 3, 4, 5)
+
+let evenSquaresSum = numbers
+    |> filter(_, x => x % 2 == 0)
+    |> map(_, x => x * x)
+    |> reduce(_, 0, (acc, x) => acc + x)   // reduce(xs, initial, f)
+
+print("Sum of even squares: {evenSquaresSum}")  // 20
+```
+
+## Querying Arrays
+
+Arrays support `.length`, index access, the non-faulting `.get` read, and membership with `in`. Iteration order is increasing index order.
+
+```topaz
+let numbers = Array.of(1, 2, 3, 4, 5)
+
+let count = numbers.length
+let third = numbers[2]          // 3 — direct indexing faults when out of bounds
+let safe = numbers.get(10)      // None — non-faulting read returns Option<int>
+let hasThree = 3 in numbers
+
+print("Count: {count}")
+print("Third: {third}")
+print("Has three: {hasThree}")
+```
+
+Prefer `arr.get(i)` whenever the index might be out of range; reserve `arr[i]` for indices already proven valid.
+
+## Reading and Removing Map Entries
+
+`m.get` is the non-faulting map read; `m.remove` deletes a key and reports what was there. Both return `Option<V>`.
+
+```topaz
+let mut scores: Map<string, int> = Map.new()
+scores.insert("alice", 92)
+scores.insert("bob", 78)
+
+let aliceScore = scores.get("alice")    // Some(92) — None when the key is absent
+let removed = scores.remove("bob")      // Some(78) — Some(old) if present, else None
+let missing = scores.remove("carol")    // None
+
+match scores.get("alice") {
+    case Some(score) => print("Alice scored {score}")
+    case None => print("No score for alice")
+}
+```
+
+## Iterating Map Keys
+
+Iterate `map.keys` when a task only needs keys. `map.keys` is an `Array<K>` **snapshot** in key insertion order — mutating the map afterwards does not change an already produced keys array.
+
+```topaz
+let mut scores: Map<string, int> = Map.new()
+scores.insert("alice", 92)
+scores.insert("bob", 78)
+
+for name in scores.keys {
+    print("Stored score for {name}")    // "alice" first, then "bob" (insertion order)
+}
+
+let hasAlice = "alice" in scores.keys
+print("Has alice: {hasAlice}")
+```
+
+Direct `x in map` is not canonical Topaz — membership goes through the keys view: `x in map.keys`.
+
+## Set Membership
+
+Sets use `Set.of`, mutable `add` and `remove`, and `in` for membership checks.
+
+```topaz
+let mut tags = Set.of("docs")
+tags.add("v5")
+
+let hasDocs = "docs" in tags
+let hasLegacy = "legacy" in tags
+let dropped = tags.remove("docs")       // true iff an element was removed
+
+print("Has docs: {hasDocs}")
+print("Has legacy: {hasLegacy}")
+```
+
+## Boundaries
+
+Topaz public examples do not specify a separate List collection, set algebra helpers, sorting/grouping/zipping helpers, lazy collection pipelines, or parallel collection pipelines. Use `Array`, `Map`, `Set`, and the canonical surface above until a future decision expands the collection library.

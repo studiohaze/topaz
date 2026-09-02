@@ -1,0 +1,9 @@
+
+function main() -> string {
+    let mut m = Map.new<float, string>()
+    m.insert(-0.0, "negative")
+    m.insert(0.0, "positive")
+    let s = Set.of(-0.0, 0.0)
+    "{m.length}:{m.keys[0]}:{m.getOr(-0.0, "missing")}:{m.getOr(0.0, "missing")}:{s.length}:{s.toArray()[0]}"
+}
+main()

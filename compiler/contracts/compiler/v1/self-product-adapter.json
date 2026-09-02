@@ -1,0 +1,73 @@
+{
+  "schema": "topaz.self-product-adapter-contract/v1",
+  "productSchema": "topaz.self-compilation-product/v1",
+  "exchangeSchema": "topaz.compiler.stage1-exchange/v2",
+  "selectedEngine": "self",
+  "producer": "topaz-stage2",
+  "statuses": [
+    "completed",
+    "rejected"
+  ],
+  "allowedOperations": [
+    "validate-schema",
+    "validate-length",
+    "validate-order",
+    "validate-identity",
+    "validate-canonical-encoding",
+    "decode-supplied-field",
+    "map-stable-id-to-supplied-source",
+    "materialize-index-from-supplied-facts",
+    "reject-missing-data",
+    "reject-contradictory-data",
+    "reject-unsupported-data",
+    "reject-noncanonical-data"
+  ],
+  "forbiddenCompilerDecisions": [
+    "lex",
+    "parse",
+    "resolve",
+    "infer",
+    "check",
+    "profile",
+    "lower",
+    "optimize",
+    "replace-diagnostic",
+    "regenerate-rust",
+    "retry-rust",
+    "reuse-previous-result"
+  ],
+  "forbiddenTargetCompilerCrates": [
+    "topaz_lexer",
+    "topaz_parser",
+    "topaz_resolve",
+    "topaz_check",
+    "topaz_lower",
+    "topaz_emit"
+  ],
+  "requiredCategories": [
+    "ordered-sources-and-modules",
+    "tokens-and-ast",
+    "resolution-and-exports",
+    "typed-profile-and-diagnostics",
+    "lowered-operations-and-runtime-requirements",
+    "generated-rust",
+    "shared-service-typed-data",
+    "complete-provenance"
+  ],
+  "requiredPhaseTrace": [
+    "host.source-and-package-facts",
+    "self.c2-front-end",
+    "self.c2-profile",
+    "self.c2-lowering",
+    "self.c2-rust-source",
+    "host.mechanical-product-validation"
+  ],
+  "failureRules": {
+    "missingField": "compiler-fault",
+    "contradictoryIdentity": "compiler-fault",
+    "unknownSchema": "compiler-fault",
+    "rustTargetPhase": "compiler-fault",
+    "fallback": false,
+    "outputMutationBeforeValidation": false
+  }
+}

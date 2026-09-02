@@ -1,0 +1,11 @@
+
+function add(a: int, b: int) -> int {
+    a + b
+}
+let xs = [1, 2, 3]
+let reduced = loop {
+    print("initial")
+    break 0
+} |> xs.reduce(add)
+print("{reduced}")
+reduced

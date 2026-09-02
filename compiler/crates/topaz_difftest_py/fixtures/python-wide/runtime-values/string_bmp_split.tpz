@@ -1,0 +1,5 @@
+
+function f() -> Array<string> {
+    "한,글".split(",")
+}
+f()

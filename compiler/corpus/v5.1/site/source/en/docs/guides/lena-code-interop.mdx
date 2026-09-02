@@ -1,0 +1,59 @@
+---
+title: "Lena Code Interop"
+description: "How Topaz fits into Lena Code conversion workflows as an input and output language."
+---
+
+<Tip
+  tone="warning"
+  content="This page intentionally mixes Rust, TypeScript, and Topaz snippets to illustrate conversion flow. Rust and TypeScript snippets are not Topaz grammar."
+>
+  Mixed-language examples
+</Tip>
+
+Lena Code is a sibling product of Topaz. Its conversion workflows can use Topaz
+as an input language or an output language. Topaz focuses on a small checked
+source surface and deterministic execution, while Lena Code focuses on
+language-to-language conversion workflows.
+
+## Before/After Snapshots
+
+### Rust → TypeScript
+
+```rust
+pub fn greet(name: &str) -> String {
+    format!("Hello, {}!", name)
+}
+```
+
+```typescript
+export function greet(name: string): string {
+  return `Hello, ${name}!`;
+}
+```
+
+### Rust → Topaz
+
+```rust
+pub fn add(a: i32, b: i32) -> i32 {
+    a + b
+}
+```
+
+```topaz
+function add(a: int, b: int) -> int {
+    a + b
+}
+```
+
+These examples show the shape of an interop boundary. When Topaz is the target, the output should stay on the canonical Topaz surface. Run/build differential checks are engineering gates for supported Topaz programs. When this site says proof, it means exactly those checks.
+
+## Getting Access
+
+- Lena Code behavior and supported language pairs are documented at <a href="https://www.lenacode.com" target="_blank" rel="noopener noreferrer">lenacode.com</a>.
+- Converted Topaz is ordinary Topaz: parse it, run it, and compare the run path with the built artifact when the program produces output.
+
+## Notes & Constraints
+
+- The Rust and TypeScript snippets above are not accepted by the Topaz parser.
+- Topaz does not claim automatic round-trip conversion with arbitrary external languages.
+- Keep Result-first and pattern-matching idioms in mind when moving logic into Topaz.

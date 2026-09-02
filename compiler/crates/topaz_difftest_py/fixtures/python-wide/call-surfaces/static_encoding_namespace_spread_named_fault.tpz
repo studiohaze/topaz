@@ -1,0 +1,13 @@
+
+function markArray(label: string, xs: Array<string>) -> Array<string> {
+    print(label)
+    xs
+}
+function markString(label: string, value: string) -> string {
+    print(label)
+    value
+}
+function main() -> Bytes {
+    Encoding.utf8Encode(...markArray("encoding-spread", ["x"]), text: markString("encoding-named", "y"))
+}
+main()

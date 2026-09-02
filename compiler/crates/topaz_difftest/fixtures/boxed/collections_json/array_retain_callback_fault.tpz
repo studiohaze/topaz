@@ -1,0 +1,2 @@
+let mut xs = [1, 2, 0, 3]
+xs.retain((x) => (10 / x) > 0)

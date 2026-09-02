@@ -1,0 +1,1 @@
+[toFloat(3), toFloat(0), toFloat(-5), 9 |> toFloat(), toFloat(10) / toFloat(4), map([1, 2], (x) => toFloat(x))]

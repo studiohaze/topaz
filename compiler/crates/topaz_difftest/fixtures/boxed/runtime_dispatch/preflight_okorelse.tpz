@@ -1,0 +1,2 @@
+let n = 5
+n.okOrElse(() => print("e"))

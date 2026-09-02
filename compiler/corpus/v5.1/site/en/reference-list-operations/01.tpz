@@ -1,0 +1,10 @@
+let numbers = Array.of(1, 2, 3, 4, 5)
+
+let mut scores: Map<string, int> = Map.new()
+scores.insert("alice", 92)
+scores.insert("bob", 78)
+
+let mut tags = Set.of("docs")
+tags.add("v5")
+
+print("Numbers: {numbers}")

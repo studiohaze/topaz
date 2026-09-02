@@ -1,0 +1,8 @@
+enum Color {
+    Red,
+    Blue,
+}
+
+enum Box {
+    Wrap(Color | int),
+}

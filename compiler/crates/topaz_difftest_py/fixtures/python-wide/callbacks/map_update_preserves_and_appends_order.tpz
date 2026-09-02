@@ -1,0 +1,10 @@
+
+function main() -> Array<string> {
+    let mut m = Map.new()
+    m.insert("a", 1)
+    m.insert("b", 2)
+    m.update("a", 0, (v) => v + 10)
+    m.update("z", 7, (v) => v / 0)
+    m.keys
+}
+main()

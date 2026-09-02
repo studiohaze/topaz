@@ -1,0 +1,10 @@
+function parsePort(text: string) -> Result<int, string> {
+    if text == "" {
+        return Err("Port is required")
+    }
+
+    match toInt(text) {
+        case Some(port) => Ok(port)
+        case None => Err("Port must be an integer")
+    }
+}

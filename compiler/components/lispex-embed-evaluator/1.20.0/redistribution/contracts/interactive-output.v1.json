@@ -1,0 +1,84 @@
+{
+  "schema": "lispex.ratified-semantic-rule/v1",
+  "rule_id": "INTERACTIVE-OUTPUT-1",
+  "decision_id": "H4-INTERACTIVE-0001",
+  "ratified_at": "2026-08-14",
+  "authority": "owner",
+  "interface_scope": [
+    "native-whole-source-cli",
+    "npm-whole-source-cli",
+    "browser-playground-run_lispex"
+  ],
+  "scope_note": "These products read and run one complete submitted source. This contract does not create an incremental stateful REPL and does not alter batch or campaign evaluation.",
+  "source_lifecycle": {
+    "order": [
+      "read-complete-source",
+      "normalize-complete-source",
+      "evaluate-forms"
+    ],
+    "source_failure_stdout_utf8": "",
+    "source_failure_exit_status": 1,
+    "source_failure_ok": false
+  },
+  "successful_form_projection": {
+    "order": ["explicit-output-effects", "write-rendered-result-values"],
+    "zero_values": "append-nothing",
+    "one_value": "write-plus-line-feed",
+    "multiple_values": "each-write-plus-line-feed",
+    "encoding": "UTF-8",
+    "definitions_and_output_procedures": "zero-values"
+  },
+  "warning_projection": {
+    "channel": "diagnostics",
+    "order": "occurrence-order",
+    "stdout_membership": "excluded",
+    "changes_ok": false,
+    "changes_exit_status": false
+  },
+  "terminal_projection": {
+    "clean": {
+      "ok": true,
+      "exit_status": 0
+    },
+    "source_or_ordinary_runtime_fault": {
+      "ok": false,
+      "exit_status": 1,
+      "stdout": "retain-output-committed-before-fault",
+      "failed_form_auto_print": "none",
+      "remaining_forms": "not-evaluated"
+    },
+    "meter_or_host_safety_resource": {
+      "ok": false,
+      "exit_status": 2,
+      "stdout_utf8": "",
+      "diagnostic": "canonical-resource-diagnostic",
+      "partial_stdout_permitted": false
+    }
+  },
+  "browser_mapping": {
+    "process_exists": false,
+    "run_result_fields": ["output", "diagnostics", "ok", "exit_status"],
+    "exit_status_meaning": "The same portable terminal category exposed by process products, not a browser process status."
+  },
+  "preserved_contracts": {
+    "batch_output": {
+      "rule_id": "TOPLEVEL-VALUE-OUTPUT-1",
+      "path": "product/contracts/toplevel-value-output.v2.json",
+      "unchanged": true
+    },
+    "ordinary_guest_fault": {
+      "rule_id": "GUEST-FAULT-VS-INFRASTRUCTURE-1",
+      "path": "product/contracts/guest-fault-vs-infrastructure.v1.json"
+    },
+    "resource_atomicity": {
+      "rule_id": "METER-EFFECT-ATOMICITY-1",
+      "path": "manifests/meter-manifest.v3.json"
+    },
+    "host_safety": {
+      "rule_id": "HOST-SAFETY-RESOURCE-1",
+      "path": "product/contracts/observation-result.v1.json"
+    }
+  },
+  "semantic_change": false,
+  "append_only": true
+}

@@ -1,0 +1,10 @@
+
+record Tag<T> { label: string }
+function main() -> string {
+    let tag = Tag { label: "hit" }
+    match tag {
+        case found: Tag<int> => found.label
+        case _ => "miss"
+    }
+}
+main()

@@ -1,0 +1,34 @@
+
+function dbl(x: int) -> int {
+    x * 2
+}
+
+function inc(x: int) -> int {
+    x + 1
+}
+
+function zero(x: int) -> int {
+    0
+}
+
+function choose(i: int) -> int {
+    let r = concurrent {
+        slow: {
+            let mut cbs = [zero, inc]
+            match i {
+                case 0 => -1
+                case 1 => {
+                    cbs[i] = dbl
+                    let mut values = map { "a": 1, "b": 2, "c": 3 }
+                    values.update("b", 0, cbs[i])
+                    values.getOr("a", 0) + values.getOr("b", 0) + values.getOr("c", 0)
+                }
+                case _ => -2
+            }
+        }
+        fast: 0
+    }
+    r.slow + r.fast
+}
+
+choose(1)

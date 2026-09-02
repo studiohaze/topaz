@@ -1,0 +1,4 @@
+let word = "topaz"
+print("{word.scalars().length}")
+print("{word.scalars()[0]}")
+print("{toInt(" 42 ") ?? 0}")

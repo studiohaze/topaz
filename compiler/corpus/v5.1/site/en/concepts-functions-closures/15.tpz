@@ -1,0 +1,10 @@
+let square = (x: int) => x * x
+let double = (x: int) => x * 2
+let formatInt = (x: int) => "value: {x}"
+
+// Compose by piping a value through the stages
+let squareThenDouble = (x: int) => x |> square() |> double()
+let squareThenDoubleThenLabel = (x: int) => x |> square() |> double() |> formatInt()
+
+print("{squareThenDouble(3)}")           // 18 (3² * 2)
+print(squareThenDoubleThenLabel(4))      // "value: 32" (4² * 2 → label)

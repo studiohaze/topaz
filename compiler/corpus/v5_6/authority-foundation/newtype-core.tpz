@@ -1,0 +1,7 @@
+newtype UserId = int
+let id: UserId = UserId(41)
+let direct: int = id.value()
+let matched: int = match id {
+    case UserId(value) => value + 1
+}
+direct + matched

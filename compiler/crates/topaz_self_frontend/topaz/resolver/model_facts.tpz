@@ -1,0 +1,407 @@
+// Data contracts for resolver drafts, tables, host facts, and outputs.
+// The records keep graph discovery and scope walking acyclic while the facade
+// retains ownership of the public ResolveResult.
+
+import types {
+  PreviewDiagnostic,
+  PreviewGeneratedStdModule,
+  PreviewHostFact,
+  PreviewHostQuery,
+  PreviewImportEdge,
+  PreviewModuleResult,
+  PreviewResolvedDeclaration,
+  PreviewResolvedDiagnostic,
+  PreviewResolvedExport,
+  PreviewResolvedReference,
+  PreviewResolvedScope,
+  SyntaxNode,
+}
+
+export record ImportDraft {
+  target: string,
+  segments: Array<string>,
+  pathLo: int,
+  pathHi: int,
+  selectedNames: Array<string>,
+  selectedLos: Array<int>,
+  selectedHis: Array<int>,
+}
+
+export record EdgeDraft {
+  from: string,
+  to: string,
+  moduleIndex: int,
+  lo: int,
+  hi: int,
+}
+
+export record ModuleDraft {
+  result: PreviewModuleResult,
+  source: Bytes,
+  root: SyntaxNode,
+  imports: Array<ImportDraft>,
+  diagnostics: Array<PreviewDiagnostic>,
+}
+
+export record Binding {
+  moduleIndex: int,
+  scopeOrdinal: int,
+  name: string,
+  namespace: string,
+  declarationKind: string,
+  lo: int,
+  hi: int,
+  exported: bool,
+  targetModule: string,
+  targetName: string,
+  mutable: bool,
+}
+
+export record ExportBinding {
+  bindingIndex: int,
+  namespace: string,
+}
+
+export record ModuleTable {
+  moduleIndex: int,
+  identity: string,
+  bindings: Array<Binding>,
+  bindingIndexes: Map<string, int>,
+  exportedBindings: Map<string, ExportBinding>,
+  exportedNames: Array<string>,
+}
+
+export record ModuleTableCatalog {
+  tables: Array<ModuleTable>,
+  indexes: Map<string, int>,
+}
+
+export record LocalScope {
+  ordinal: int,
+  values: Map<string, Binding>,
+  types: Map<string, Binding>,
+}
+
+export record ResolverWalkContext {
+  moduleIndex: int,
+  source: Bytes,
+  table: ModuleTable,
+  tables: ModuleTableCatalog,
+  nextScope: Array<int>,
+  scopeOutput: Array<PreviewResolvedScope>,
+  declarationOutput: Array<PreviewResolvedDeclaration>,
+  referenceOutput: Array<PreviewResolvedReference>,
+  diagnostics: Array<PreviewResolvedDiagnostic>,
+  recordDefaultStack: Array<bool>,
+}
+
+// Admitted entry, mount, and host-fact view for one resolution pass.
+export record ResolverInputs {
+  root: string,
+  hostFacts: ResolverHostFactCatalog,
+  externModules: Array<string>,
+  generatedStdModules: Array<PreviewGeneratedStdModule>,
+  maxAstNodes: int,
+  maxAstDepth: int,
+}
+
+export record ResolverHostFactCatalog {
+  values: Array<PreviewHostFact>,
+  readSources: Map<string, int>,
+  directoryListings: Map<string, int>,
+  physicalContainments: Map<string, int>,
+}
+
+// Loaded module drafts and dependency edges before scope resolution.
+export record DiscoveredGraph {
+  modules: Array<ModuleDraft>,
+  edges: Array<EdgeDraft>,
+}
+
+export record ModuleDependencyCatalog {
+  identities: Array<string>,
+  moduleIndexes: Map<string, int>,
+  dependencies: Map<string, Set<string>>,
+  dependents: Map<string, Set<string>>,
+  publicEdges: Array<PreviewImportEdge>,
+}
+
+// Internal scope and reference catalogs used to build the public projection.
+export record ResolverOutputs {
+  modules: Array<PreviewModuleResult>,
+  scopes: Array<PreviewResolvedScope>,
+  declarations: Array<PreviewResolvedDeclaration>,
+  references: Array<PreviewResolvedReference>,
+  exports: Array<PreviewResolvedExport>,
+}
+
+// SPEC v5.2 §17. This phase mirrors Stage 0 init_rule: it scans only
+// each imported item's own immediately evaluated positions. Short-circuit RHS,
+// optional-call arguments, and function, lambda, defer, branch, arm, and loop
+// bodies stay delayed; top-level consts are ready before runtime initialization
+// and the entry module has the separate §4 rule.
+export record InitViolation {
+  name: string,
+  lo: int,
+  hi: int,
+}
+
+export record ReferenceResolution {
+  referenceNamespace: string,
+  targetModuleIndex: int,
+  targetLo: int,
+  targetHi: int,
+  targetNamespace: string,
+  targetModule: string,
+  targetName: string,
+}
+
+export record ImportPathDisposition {
+  kind: string,
+  collisionDetail: string,
+}
+
+export record PreparedImport {
+  path: string,
+  source: string,
+  physicalAlias: string,
+  generatedStd: bool,
+}
+export function text(source: Bytes, node: SyntaxNode) -> string {
+  spanText(source, node.lo, node.hi)
+}
+
+export function child(value: SyntaxNode, field: string) -> Option<SyntaxNode> {
+  for found in value.children {
+    if found.field == field {
+      return Some(found)
+    }
+  }
+  None
+}
+
+export function children(value: SyntaxNode, field: string) -> Array<SyntaxNode> {
+  let mut output: Array<SyntaxNode> = []
+  for found in value.children {
+    if found.field == field {
+      output.push(found)
+    }
+  }
+  output
+}
+
+export function attribute(value: SyntaxNode, name: string) -> string {
+  for found in value.attributes {
+    if found.name == name {
+      return found.value
+    }
+  }
+  ""
+}
+
+export function boolAttribute(value: SyntaxNode, name: string) -> bool {
+  attribute(value, name) == "true"
+}
+
+export function contains(values: Array<string>, needle: string) -> bool {
+  for value in values {
+    if value == needle {
+      return true
+    }
+  }
+  false
+}
+
+export function hasParentPathSegment(path: string) -> bool {
+  for segment in path.split("/") {
+    if segment == ".." {
+      return true
+    }
+  }
+  false
+}
+
+export function isNone<T>(value: Option<T>) -> bool {
+  match value {
+    case Some(_) => false
+    case None => true
+  }
+}
+
+export function stringJoin(values: Array<string>, separator: string) -> string {
+  let mut output = ""
+  let mut index = 0
+  for value in values {
+    if index > 0 {
+      output = "{output}{separator}"
+    }
+    output = "{output}{value}"
+    index += 1
+  }
+  output
+}
+
+export function pathJoin(left: string, right: string) -> string {
+  if left == "" {
+    right
+  } else {
+    "{left}/{right}"
+  }
+}
+
+export function resolverHostFacts(
+  facts: Array<PreviewHostFact>,
+) -> ResolverHostFactCatalog {
+  let mut readSources: Map<string, int> = Map.new()
+  let mut directoryListings: Map<string, int> = Map.new()
+  let mut physicalContainments: Map<string, int> = Map.new()
+  let mut index = 0
+  for fact in facts {
+    if fact.mountId == "root" {
+      if fact.kind == "read-source" &&
+        !readSources.containsKey(fact.logicalPath) {
+        readSources.insert(fact.logicalPath, index)
+      } else if fact.kind == "list-directory" &&
+        !directoryListings.containsKey(fact.logicalPath) {
+        directoryListings.insert(fact.logicalPath, index)
+      } else if fact.kind == "physical-containment" &&
+        !physicalContainments.containsKey(fact.logicalPath) {
+        physicalContainments.insert(fact.logicalPath, index)
+      }
+    }
+    index += 1
+  }
+  ResolverHostFactCatalog {
+    values: facts,
+    readSources: readSources,
+    directoryListings: directoryListings,
+    physicalContainments: physicalContainments,
+  }
+}
+
+export function sourceFact(
+  facts: ResolverHostFactCatalog,
+  kind: string,
+  path: string,
+) -> Option<PreviewHostFact> {
+  let index = if kind == "read-source" {
+    facts.readSources.get(path)
+  } else if kind == "list-directory" {
+    facts.directoryListings.get(path)
+  } else if kind == "physical-containment" {
+    facts.physicalContainments.get(path)
+  } else {
+    None
+  }
+  match index {
+    case Some(value) => Some(facts.values[value])
+    case None => None
+  }
+}
+
+export function addQuery(
+  output: Array<PreviewHostQuery>,
+  facts: ResolverHostFactCatalog,
+  kind: string,
+  path: string,
+) -> () {
+  let mut target = output
+  match sourceFact(facts, kind, path) {
+    case Some(_) => return ()
+    case None => ()
+  }
+  for query in output {
+    if query.kind == kind && query.mountId == "root" && query.logicalPath == path {
+      return ()
+    }
+  }
+  target.push(PreviewHostQuery {
+    kind: kind,
+    mountId: "root",
+    logicalPath: path,
+  })
+}
+
+function queryRank(kind: string) -> int {
+  match kind {
+    case "read-source" => 0
+    case "list-directory" => 1
+    case "physical-containment" => 2
+    case _ => 3
+  }
+}
+
+function queryBefore(left: PreviewHostQuery, right: PreviewHostQuery) -> bool {
+  let leftRank = queryRank(left.kind)
+  let rightRank = queryRank(right.kind)
+  leftRank < rightRank ||
+    (leftRank == rightRank && left.mountId < right.mountId) ||
+    (leftRank == rightRank && left.mountId == right.mountId &&
+      left.logicalPath < right.logicalPath)
+}
+
+export function sortQueries(values: Array<PreviewHostQuery>) -> Array<PreviewHostQuery> {
+  let mut output: Array<PreviewHostQuery> = []
+  for value in values {
+    let mut inserted = false
+    let mut index = 0
+    while index < output.length {
+      let existing = output[index]
+      if queryBefore(value, existing) {
+        output.insert(index, value)
+        inserted = true
+        break
+      }
+      index += 1
+    }
+    if !inserted {
+      output.push(value)
+    }
+  }
+  output
+}
+
+export function diagnostic(
+  output: Array<PreviewResolvedDiagnostic>,
+  moduleIndex: int,
+  code: string,
+  message: string,
+  lo: int,
+  hi: int,
+) -> () {
+  let mut target = output
+  target.push(PreviewResolvedDiagnostic {
+    moduleIndex: moduleIndex,
+    code: code,
+    message: message,
+    lo: lo,
+    hi: hi,
+    notes: [],
+  })
+}
+
+export function appendModuleDiagnostics(
+  output: Array<PreviewResolvedDiagnostic>,
+  moduleIndexValue: int,
+  values: Array<PreviewDiagnostic>,
+) -> () {
+  for value in values {
+    let mut target = output
+    target.push(PreviewResolvedDiagnostic {
+      moduleIndex: moduleIndexValue,
+      code: value.code,
+      message: value.message,
+      lo: value.lo,
+      hi: value.hi,
+      notes: value.notes,
+    })
+  }
+  ()
+}
+
+export function spanText(source: Bytes, lo: int, hi: int) -> string {
+  match source.slice(lo, hi).decodeUtf8() {
+    case Ok(found) => found
+    case Err(_) => ""
+  }
+}

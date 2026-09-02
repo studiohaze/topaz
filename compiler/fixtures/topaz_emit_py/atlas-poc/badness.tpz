@@ -1,0 +1,53 @@
+// B1 — fixed-point badness in Topaz (ATLAS-POC-P1-DESIGN.md §합). Must equal badness_fp.rs exactly.
+// I/O: stdin lines "width|target|char|spaces|kind|isLast(0/1)" -> badness B-units per line.
+
+let R = 100000000   // 1e8 ratio scale
+let B = 1000000     // 1e6 badness scale
+
+function roundDiv(n: int, d: int) -> int {   // round-half-up, non-negative only
+  let q = n / d
+  let r = n % d
+  if r >= (d + 1) / 2 { q + 1 } else { q }
+}
+function absI(x: int) -> int { if x < 0 { 0 - x } else { x } }
+
+function badness(width: int, target: int, charCount: int, spaces: int, kind: string, isLast: bool) -> int {
+  let slack = target - width
+  let absSlack = absI(slack)
+  let rawR = if absSlack >= 4 * target { 4 * R } else { absSlack * R / target }
+  let adjcapCenti = if slack >= 0 { 100 + spaces * 45 } else { 100 + spaces * 25 }
+  let srR = roundDiv(rawR * 100, adjcapCenti)
+  let sq = srR * srR
+  let q = roundDiv(sq, R)
+  let mut baseB = roundDiv(q * (1000 * B), R)
+  if isLast {
+    baseB = roundDiv(baseB * 2, 5)
+    if width * 100 < target * 52 && charCount > 0 { baseB = baseB + 500 * B }
+  }
+  if slack < 0 {
+    baseB = baseB + 20000 * B + roundDiv(20000 * B * srR, R)
+  }
+  if kind == "latin_hyphen" { baseB = baseB + 65 * B }
+  if kind == "hard_fallback" { baseB = baseB + 50000 * B }
+  if charCount <= 2 { baseB = baseB + 275 * B }
+  baseB = baseB + 10 * B
+  baseB
+}
+
+function 처리(input: string) -> string {
+  let mut out = ""
+  for line in input.split("\n") {
+    let f = line.split("|")
+    let w = toInt(f[0]) ?? 0
+    let t = toInt(f[1]) ?? 0
+    let c = toInt(f[2]) ?? 0
+    let sp = toInt(f[3]) ?? 0
+    let kind = f[4]
+    let isLast = f[5] == "1"
+    let b = badness(w, t, c, sp, kind, isLast)
+    out = if out == "" { "{b}" } else { "{out}\n{b}" }
+  }
+  out
+}
+
+print(처리(input()))

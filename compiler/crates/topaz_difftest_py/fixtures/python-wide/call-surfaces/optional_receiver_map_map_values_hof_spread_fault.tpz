@@ -1,0 +1,10 @@
+
+function mark(label: string, xs: Array<int>) -> Array<int> {
+    print(label)
+    xs
+}
+function main() -> Option<Map<string, int>> {
+    let m: Option<Map<string, int>> = Some(map { "x": 1 })
+    m?.mapValues(...mark("map-values", [0]))
+}
+main()

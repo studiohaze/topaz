@@ -1,0 +1,7 @@
+let userData = fetch("https://api.example.com/users/1")
+    |> json()
+    |> (data => {
+        name: data.name,
+        email: data.email,
+        joinDate: Date.parse(data.created_at)
+    })

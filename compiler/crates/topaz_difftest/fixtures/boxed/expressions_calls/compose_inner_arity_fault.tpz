@@ -1,0 +1,4 @@
+let f = (x) => x
+let g = (a, b) => a + b
+let h = f >> g
+h(5)

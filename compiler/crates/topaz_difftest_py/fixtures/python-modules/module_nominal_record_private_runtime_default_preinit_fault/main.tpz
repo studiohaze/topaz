@@ -1,0 +1,6 @@
+
+import model { trigger }
+function main() -> int {
+    trigger
+}
+main()

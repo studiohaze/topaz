@@ -1,0 +1,3 @@
+let n = BigInt.fromInt(-42)
+let f = n.toString
+f(2)

@@ -1,0 +1,17 @@
+// Accumulate until a budget is reached
+let mut total = 0
+let mut n = 1
+
+while total + n <= 100 {
+    total = total + n
+    n = n + 1
+}
+
+print("Sum within budget: {total}")
+
+// Countdown
+let mut countdown = 3
+while countdown > 0 {
+    print("T-minus {countdown}")
+    countdown = countdown - 1
+}

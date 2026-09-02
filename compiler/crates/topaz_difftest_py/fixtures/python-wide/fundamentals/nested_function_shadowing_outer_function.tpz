@@ -1,0 +1,11 @@
+
+function helper() -> int {
+    1
+}
+function main() -> int {
+    function helper() -> int {
+        2
+    }
+    helper()
+}
+main()

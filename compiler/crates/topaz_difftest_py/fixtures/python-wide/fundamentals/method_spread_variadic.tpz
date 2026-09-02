@@ -1,0 +1,7 @@
+record Bag { base: int }
+impl Bag { function total(self, ...xs: int) -> int { let mut t = self.base
+for x in xs { t = t + x }
+t } }
+let b: Bag = Bag { base: 10 }
+print("{b.total(...[1, 2, 3])}")
+0

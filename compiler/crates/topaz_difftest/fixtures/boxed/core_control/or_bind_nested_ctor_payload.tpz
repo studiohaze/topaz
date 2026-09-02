@@ -1,0 +1,7 @@
+enum E { A(int), B(int) }
+let o: Option<E> = Some(E.B(7))
+let v = match o {
+  case Some(A(x) | B(x)) => x
+  case None => 0
+}
+print("{v}")

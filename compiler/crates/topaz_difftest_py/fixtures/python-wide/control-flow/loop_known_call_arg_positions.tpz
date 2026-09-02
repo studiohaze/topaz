@@ -1,0 +1,10 @@
+
+function combine(a: int, b: int) -> int {
+    a * 10 + b
+}
+let x = combine(loop {
+    break 2
+}, b: loop {
+    break 3
+})
+x

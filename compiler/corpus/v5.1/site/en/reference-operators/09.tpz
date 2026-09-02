@@ -1,0 +1,18 @@
+// Null coalescing operator (??)
+let name: string | null = null
+let display = name ?? "guest"
+
+print("Display name: {display}")
+
+let user: Option<{ name: string, profile: Option<{ city: string }> }> =
+    Some({ name: "TopazDev", profile: Some({ city: "Seoul" }) })
+
+let city = user?.profile?.city ?? "Unknown"
+print("City: {city}")
+
+let ageOpt: Option<int> = Some(25)
+let age = match ageOpt {
+    case Some(v) => v
+    case None => 0
+}
+print("Age: {age}")

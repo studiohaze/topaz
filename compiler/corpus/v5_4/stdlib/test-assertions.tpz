@@ -1,0 +1,22 @@
+import std.test {
+  assertContains,
+  assertEq,
+  assertErr,
+  assertGolden,
+  assertNe,
+  assertNone,
+  assertOk,
+  assertSome,
+}
+
+let ok = assertOk(Ok(41))
+let err = assertErr(Err("bad"))
+let some = assertSome(Some(1))
+
+assertEq(ok + some, 42)
+assertNe(err, "good")
+assertContains("topaz", "opa")
+assertNone(None)
+assertGolden("golden.txt", "snap")
+
+print("{ok}/{err}/{some}")

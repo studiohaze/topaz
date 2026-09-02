@@ -1,0 +1,5 @@
+let mut m = Map.new()
+m.insert("a", 1)
+m.insert("b", 2)
+let mm = ((v) => v * 10) |> m.mapValues()
+mm.values

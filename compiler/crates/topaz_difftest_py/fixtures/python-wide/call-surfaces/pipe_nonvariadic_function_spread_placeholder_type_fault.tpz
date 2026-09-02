@@ -1,0 +1,8 @@
+
+function f(a: int, b: int = 0) -> int {
+    a + b
+}
+function main() -> int {
+    1 |> f(..._)
+}
+main()

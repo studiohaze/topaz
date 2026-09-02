@@ -1,0 +1,80 @@
+{
+  "schema": "lispex.resource-profiles/v1",
+  "profile": "lispex-profile-1.5",
+  "fields": [
+    "frontend-transition-limit",
+    "token-limit",
+    "normalization-step-limit",
+    "machine-transition-limit",
+    "output-byte-limit"
+  ],
+  "profiles": [
+    {
+      "id": "lispex-product-native/v1",
+      "purpose": "installed-product",
+      "public_selectable": true,
+      "limits": [
+        20000000,
+        2000000,
+        20000000,
+        100000000,
+        16777216
+      ]
+    },
+    {
+      "id": "lispex-product-web/v1",
+      "purpose": "installed-product",
+      "public_selectable": true,
+      "limits": [
+        5000000,
+        500000,
+        5000000,
+        20000000,
+        4194304
+      ]
+    },
+    {
+      "id": "lispex-mcp-local-authoring/v1",
+      "purpose": "local-authoring",
+      "public_selectable": true,
+      "limits": [
+        20000000,
+        2000000,
+        20000000,
+        100000000,
+        1048576
+      ]
+    },
+    {
+      "id": "lispex-receipt-144/v1",
+      "purpose": "bounded-evidence",
+      "public_selectable": false,
+      "limits": [
+        2000000,
+        100000,
+        2000000,
+        5000000,
+        1048576
+      ]
+    },
+    {
+      "id": "lispex-generated-11088/v1",
+      "purpose": "bounded-evidence",
+      "public_selectable": false,
+      "limits": [
+        400000,
+        16384,
+        400000,
+        400000,
+        65536
+      ]
+    }
+  ],
+  "policy": {
+    "default_native": "lispex-product-native/v1",
+    "default_web": "lispex-product-web/v1",
+    "receipt_profiles_forbidden_in_product_api": true,
+    "semantics_shared_across_profiles": true,
+    "resource_outcome_is_semantic_observation": true
+  }
+}

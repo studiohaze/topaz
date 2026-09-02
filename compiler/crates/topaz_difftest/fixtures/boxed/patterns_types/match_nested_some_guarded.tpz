@@ -1,0 +1,2 @@
+match Some(Some(7)) { case Some(Some(x)) if x > 5 => x
+case _ => 0 }

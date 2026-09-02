@@ -1,0 +1,1 @@
+[toIntRadix("ff", 16), toIntRadix("-10", 2), toIntRadix("zz", 16), toIntRadix("5", 1), toIntRadix("5", 37)]

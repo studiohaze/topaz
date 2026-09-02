@@ -1,0 +1,9 @@
+// String (single character or longer)
+let grade: string = "A"
+let emoji: string = "😀"
+let name = "John Topaz"
+let longSentence = "Welcome to Topaz — one way to say it!"
+
+// String interpolation
+let greeting = "Hello, {name}! Nice weather today."
+print(greeting)  // "Hello, John Topaz! Nice weather today."

@@ -1,0 +1,8 @@
+newtype Money = int
+impl Money {
+  function doubled(self) -> Money { Money(self.value() * 2) }
+  function cents(self) -> int { self.value() }
+}
+let m: Money = Money(50)
+print("{m.doubled().cents()}")
+0

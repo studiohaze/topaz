@@ -1,0 +1,2 @@
+import users
+export function load() -> users.User { { id: 1 } }

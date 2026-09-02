@@ -1,0 +1,7 @@
+function 파일처리(경로: string) -> Result<string, string> {
+    let 파일 = open(경로)?
+    defer { 파일.close() }                  // 항상 닫힘 (LIFO)
+
+    let 내용 = 파일.read()?                 // 자원 사용
+    Ok(내용)
+}

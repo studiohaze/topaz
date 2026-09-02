@@ -1,0 +1,9 @@
+
+function main() -> int {
+    let x = 7
+    let command = sh"echo {x}"
+    let parts = command.parts
+    print("{command.tag}:{parts.length}:{parts[0]}:{parts[1]}")
+    if command.tag == "sh" && parts.length == 2 && parts[0] == "echo " && parts[1] == "" { 1 } else { 0 }
+}
+main()

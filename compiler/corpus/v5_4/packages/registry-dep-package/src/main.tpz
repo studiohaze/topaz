@@ -1,0 +1,3 @@
+import greeter
+
+print(greeter.message)

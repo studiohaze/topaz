@@ -1,0 +1,7 @@
+let mut o = 0
+let mut i = 0
+while o < 2 { i = 0
+while true { i = i + 1
+if i >= 2 { break } }
+o = o + 1 }
+[o, i]

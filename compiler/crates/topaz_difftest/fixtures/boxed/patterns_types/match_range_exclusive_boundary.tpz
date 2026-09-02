@@ -1,0 +1,2 @@
+match 5 { case 1..<5 => 1
+case _ => 0 }

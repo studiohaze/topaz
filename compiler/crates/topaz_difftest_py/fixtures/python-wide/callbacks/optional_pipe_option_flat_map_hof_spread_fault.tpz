@@ -1,0 +1,12 @@
+
+function mark(label: string, xs: Array<int>) -> Array<int> {
+    print(label)
+    xs
+}
+function maybeInc(x: int) -> Option<int> { Some(x + 1) }
+function main() -> string {
+    let opt: Option<Option<int>> = Some(Some(1))
+    maybeInc |> opt?.flatMap(...mark("pipe-option-flat", [0]))
+    "unreachable"
+}
+main()

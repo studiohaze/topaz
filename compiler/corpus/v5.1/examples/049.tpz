@@ -1,0 +1,7 @@
+function logAll(...items: string) -> () {
+    for item in items {
+        print(item)
+    }
+}
+
+let sink: (...string) -> () = logAll

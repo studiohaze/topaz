@@ -1,0 +1,6 @@
+import left
+import right
+let a: left.Point = left.make()
+let b: right.Point = right.make()
+print("{a.coordinate()}/{b.coordinate()}")
+a.coordinate() * 10 + b.coordinate()

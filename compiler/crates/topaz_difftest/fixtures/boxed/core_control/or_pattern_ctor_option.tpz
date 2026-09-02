@@ -1,0 +1,6 @@
+function g(o: Option<int>) -> int {
+    match o {
+        case Some(_) | None => 7
+    }
+}
+g(None)

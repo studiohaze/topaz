@@ -1,0 +1,15 @@
+let mut direct = [0, 1]
+direct.insert(value: 9, index: 1)
+let mut optional = Some([0, 1])
+optional?.insert(value: 8, index: 1)
+let mut piped = [0, 1]
+7 |> piped.insert(index: 1, value: _)
+let mut optionalPiped = Some([0, 1])
+6 |> optionalPiped?.insert(index: 1, value: _)
+let sliced = 1 |> [0, 1, 2, 3].slice(end: 3)
+let optionalSliced = 1 |> Some([0, 1, 2, 3])?.slice(end: 3)
+let mut buffer = ByteBuffer.allocate(3)
+buffer.set(value: 9, index: 0)
+let mut optionalBuffer = Some(ByteBuffer.allocate(3))
+optionalBuffer?.fill(value: 7, length: 2, start: 1)
+{ direct: direct, optional: optional, piped: piped, optionalPiped: optionalPiped, sliced: sliced, optionalSliced: optionalSliced, buffer: buffer.toBytes().toHex(), optionalBuffer: optionalBuffer?.toBytes()?.toHex() }

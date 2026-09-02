@@ -1,0 +1,14 @@
+
+let xs = [1, 2, 3]
+let m = map { "a": 1, "b": 2 }
+let mapped = loop {
+    print("map-callback")
+    break (x) => x + 1
+} |> xs.map()
+let kept = loop {
+    print("filter-callback")
+    break (k, v) => v > 1
+} |> m.filter()
+let keptB = kept.getOr("b", 0)
+print("{mapped[0]}:{keptB}")
+mapped[0] + keptB

@@ -1,0 +1,8 @@
+enum Msg { Text(string), Empty }
+let m: Msg = Msg.Text("hello")
+let r = match m {
+  case Text(s) => s
+  case Empty => "none"
+}
+print("{r}")
+0

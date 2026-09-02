@@ -1,0 +1,19 @@
+// 기본 함수
+function 인사하기(이름: string) -> string {
+    "안녕하세요, {이름}님!"
+}
+
+// 기본값 매개변수
+function 계산하기(x: int, y: int = 10) -> int {
+    x + y
+}
+
+// 레코드 반환값
+function 좌표계산() -> { x: int, y: int } {
+    { x: 100, y: 200 }
+}
+
+// 고차 함수
+function 변환(데이터: Array<int>, 함수: (int) -> int) -> Array<int> {
+    map(데이터, 함수)
+}

@@ -1,0 +1,12 @@
+let day = 3
+let label = match day {
+    case 0..1 | 5..9 => "edge"
+    case 2 | 3 | 4 => "mid"
+    case _ => "rest"
+}
+
+function classify(r: Result<int, string>) -> int {
+    match r {
+        case Ok(_) | Err(_) => 1
+    }
+}

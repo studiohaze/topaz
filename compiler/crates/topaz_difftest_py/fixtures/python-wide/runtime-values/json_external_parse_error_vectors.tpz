@@ -1,0 +1,21 @@
+
+function parseError(text: string) -> string {
+    match JSON.parse(text) {
+        case Err(e) => "{e.line}:{e.column}:{e.message}"
+        case Ok(value) => "ok"
+    }
+}
+
+function f() -> string {
+    let trailingComma = parseError("[1,]")
+    let unterminated = parseError("\"abc")
+    let highSurrogate = parseError("\"\\uD800\"")
+    let lowSurrogate = parseError("\"\\uDC00\"")
+    let leadingZero = parseError("01")
+    let missingExponent = parseError("1e")
+    let escapedDuplicate = parseError("\{\"A\":1,\"\\u0041\":2\}")
+    let nonAsciiDigit = parseError("١")
+    let superscriptDigit = parseError("1²")
+    "{trailingComma}|{unterminated}|{highSurrogate}|{lowSurrogate}|{leadingZero}|{missingExponent}|{escapedDuplicate}|{nonAsciiDigit}|{superscriptDigit}"
+}
+f()

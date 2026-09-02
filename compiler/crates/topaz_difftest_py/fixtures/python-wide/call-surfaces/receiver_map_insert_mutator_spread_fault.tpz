@@ -1,0 +1,11 @@
+
+function mark(label: string, xs: Array<int>) -> Array<int> {
+    print(label)
+    xs
+}
+function main() -> Map<string, int> {
+    let mut m = map { "x": 1 }
+    m.insert("y", ...mark("map-insert", [2]))
+    m
+}
+main()

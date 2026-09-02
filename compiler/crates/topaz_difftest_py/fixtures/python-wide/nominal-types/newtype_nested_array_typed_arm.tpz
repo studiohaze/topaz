@@ -1,0 +1,12 @@
+
+newtype Rows = Array<Array<int>>
+function describe(value: Rows) -> string {
+    match value {
+        case found: Rows => {
+            let rows = found.value()
+            "{rows.length}:{rows[0][1]}:{found}"
+        }
+        case _ => "miss"
+    }
+}
+describe(Rows([[1, 2], [3, 4]]))

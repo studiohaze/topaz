@@ -1,0 +1,12 @@
+
+function f() -> Array<int> {
+    let mut xs = [1, 2, 3]
+    xs[0] += xs[1]
+    xs[2] *= 4
+    let mut slots = [null, 2]
+    slots[0] ??= xs[0]
+    slots[1] ??= 99
+    print("{xs}:{slots}")
+    xs
+}
+f()

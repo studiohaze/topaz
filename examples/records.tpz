@@ -1,0 +1,11 @@
+// records.tpz — record literals, functional update, and destructuring.
+// Run: topaz run examples/records.tpz
+
+let origin = { x: 0, y: 0 }
+
+// Functional update: `origin { ... }` yields a new record, origin unchanged.
+let shifted = origin { x: 3, y: 4 }
+
+let { x, y } = shifted
+print("origin stays ({origin.x}, {origin.y})")
+print("shifted is ({x}, {y})")

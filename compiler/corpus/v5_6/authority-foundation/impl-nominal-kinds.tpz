@@ -1,0 +1,27 @@
+record Point { x: int }
+enum Flag { Off, On }
+newtype Count = int
+
+impl Point {
+    function shifted(self, n: int) -> Point { Point { x: self.x + n } }
+}
+
+impl Flag {
+    function enabled(self) -> bool {
+        match self {
+            case Off => false
+            case On => true
+        }
+    }
+
+    function On(self) -> bool { self.enabled() }
+}
+
+impl Count {
+    function next(self) -> Count { Count(self.value() + 1) }
+}
+
+let point: Point = Point { x: 1 }.shifted(2)
+let flag: Flag = Flag.On
+let count: Count = Count(3).next()
+print("{point.x}:{flag.On()}:{count.value()}")

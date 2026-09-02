@@ -1,0 +1,3 @@
+record R {}
+impl JSON<R> {}
+0

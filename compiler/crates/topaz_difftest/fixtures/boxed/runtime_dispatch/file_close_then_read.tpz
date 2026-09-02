@@ -1,0 +1,5 @@
+match open("input.txt") { case Ok(f) => {
+f.close()
+f.read()
+}
+case Err(e) => Err(e) }

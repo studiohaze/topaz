@@ -1,0 +1,9 @@
+
+function addDefault(a: int, b: int = 2) -> int {
+    a + b
+}
+function main() -> int {
+    let mut callbacks = { nested: { plus: addDefault } }
+    callbacks.nested.plus(a: 5)
+}
+main()

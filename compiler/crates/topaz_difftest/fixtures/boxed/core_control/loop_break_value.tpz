@@ -1,0 +1,2 @@
+let x = loop { break 5 }
+x

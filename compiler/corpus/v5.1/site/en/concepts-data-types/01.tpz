@@ -1,0 +1,11 @@
+// Integer
+let age: int = 25
+let bigCount: int = 9999999999
+
+// Float
+let price: float = 19.99
+let pi: float = 3.141592653589793
+
+// Type inference
+let score = 95        // inferred int
+let average = 87.5    // inferred float

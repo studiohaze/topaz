@@ -1,0 +1,4 @@
+function f(n: int) -> int { if n <= 0 { return 0 }
+return g(n) }
+function g(n: int) -> int { return n + 1 }
+f(4)

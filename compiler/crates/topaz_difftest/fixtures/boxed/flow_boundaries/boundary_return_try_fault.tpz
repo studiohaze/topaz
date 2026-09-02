@@ -1,0 +1,5 @@
+function bad() -> int {
+  let r: Result<int, string> = Err("e")
+  r?
+}
+bad()

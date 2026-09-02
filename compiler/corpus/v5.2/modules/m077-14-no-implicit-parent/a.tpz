@@ -1,0 +1,2 @@
+let free = 1
+print(free)

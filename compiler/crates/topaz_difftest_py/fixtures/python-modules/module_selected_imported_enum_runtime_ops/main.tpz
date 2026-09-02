@@ -1,0 +1,22 @@
+
+import model { Status as RemoteStatus }
+function main() -> string {
+    let ready = RemoteStatus.Ready
+    let busy = RemoteStatus.Busy(7)
+    let a = match ready {
+        case Ready => 1
+        case Busy(_) => 100
+    }
+    let b = match busy {
+        case Busy(n) => n
+        case Ready => 0
+    }
+    let typed = match busy {
+        case found: RemoteStatus => if found == RemoteStatus.Busy(7) { "typed" } else { "miss" }
+    }
+    let mut labels = Map.new()
+    labels.insert(RemoteStatus.Busy(7), "hit")
+    let statuses = set { ready, RemoteStatus.Ready, busy }
+    "{ready}:{busy}:{a}:{b}:{typed}:{RemoteStatus.Ready < busy}:{statuses.length}:{labels.getOr(busy, "miss")}"
+}
+main()

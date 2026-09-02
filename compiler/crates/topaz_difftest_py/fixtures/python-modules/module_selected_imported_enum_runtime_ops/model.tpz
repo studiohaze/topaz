@@ -1,0 +1,2 @@
+
+export enum Status derives Eq, Order, Show { Ready, Busy(int) }

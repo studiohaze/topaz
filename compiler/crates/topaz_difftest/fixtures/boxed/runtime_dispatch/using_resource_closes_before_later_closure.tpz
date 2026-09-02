@@ -1,0 +1,14 @@
+function scenario() -> Result<string, string> {
+  let mut later: () -> string = () => "unset"
+  using file = open("input.txt")? {
+    later = () => match file.read() {
+      case Ok(text) => text
+      case Err(e) => e
+    }
+  }
+  Ok(later())
+}
+match scenario() {
+  case Ok(text) => text
+  case Err(e) => e
+}

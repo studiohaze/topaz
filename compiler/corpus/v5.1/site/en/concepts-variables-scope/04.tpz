@@ -1,0 +1,15 @@
+// Type inference (recommended)
+let inferredNumber = 42           // int
+let inferredString = "Hello"      // string
+let inferredArray = [1, 2, 3]     // Array<int>
+
+// Explicit types (when needed)
+let explicitNumber: int = 42
+let explicitString: string = "Hello"
+let explicitArray: Array<int> = [1, 2, 3]
+
+// Explicit types help with complex cases
+let userData: { name: string, age: int } = {
+    name: "Developer Kim",
+    age: 30
+}

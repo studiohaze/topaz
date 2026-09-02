@@ -1,0 +1,36 @@
+
+record Meter { value: float }
+record Gauge { value: float }
+
+function entrySign(entries: Array<{ key: Meter | Gauge | { value: float }, value: string }>, label: string) -> string {
+    for row in entries {
+        if row.value == label {
+            return "{1.0 / row.key.value}"
+        }
+    }
+    "missing"
+}
+
+function main() -> string {
+    let neg = Meter { value: -0.0 }
+    let pos = Meter { value: 0.0 }
+    let nan = Meter { value: 0.0 / 0.0 }
+    let gauge = Gauge { value: -0.0 }
+    let structural = { value: 0.0 }
+
+    let mut m: Map<Meter | Gauge | { value: float }, string> = Map.new()
+    m.insert(neg, "negative")
+    m.insert(pos, "positive")
+    m.insert(nan, "nan")
+    m.insert(gauge, "gauge")
+
+    let snap = m.entries
+    m.insert(gauge, "gauge-mutated")
+    m.insert(Meter { value: 7.0 }, "late")
+
+    let restored: Map<Meter | Gauge | { value: float }, string> = Map.ofEntries(entries: snap)
+    let restoredEntries = restored.entries
+
+    "{snap.length}:{m.length}:{restored.length}:{restored.getOr(pos, "missing")}:{restored.getOr(gauge, "missing")}:{restored.getOr(structural, "missing")}:{restored.containsKey(nan)}:{restored.getOr(nan, "missing")}:{entrySign(snap, "positive")}:{entrySign(restoredEntries, "positive")}:{entrySign(restoredEntries, "nan")}"
+}
+main()

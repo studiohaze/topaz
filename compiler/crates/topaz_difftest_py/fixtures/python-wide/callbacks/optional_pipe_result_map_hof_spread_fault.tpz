@@ -1,0 +1,12 @@
+
+function mark(label: string, xs: Array<int>) -> Array<int> {
+    print(label)
+    xs
+}
+function inc(x: int) -> int { x + 1 }
+function main() -> string {
+    let res: Option<Result<int, string>> = Some(Ok(1))
+    inc |> res?.map(...mark("pipe-result-map", [0]))
+    "unreachable"
+}
+main()

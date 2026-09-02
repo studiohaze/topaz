@@ -1,0 +1,8 @@
+function outer() {
+  let msg = "hi"
+  function inner() {
+    defer print(msg)
+  }
+  inner()
+}
+outer()

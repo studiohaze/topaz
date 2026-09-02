@@ -1,0 +1,7 @@
+let value = loop {
+    if true {
+        break 1
+    }
+    break "text"
+}
+value

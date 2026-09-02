@@ -1,0 +1,8 @@
+function pa() { print("A")
+  1 }
+function pb() { print("B")
+  2 }
+function f(x: int, y: int, a: int = 10, b: int = 20) -> int { x + y + a + b }
+let r = f(pa(), pb())
+print("{r}")
+0

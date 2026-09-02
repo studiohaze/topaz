@@ -1,0 +1,1 @@
+Map.ofEntries(entries: [{ key: "a", value: 7 }]).getOr("a", 0)

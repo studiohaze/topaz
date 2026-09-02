@@ -1,0 +1,5 @@
+let mut x = 0
+let bump = () => { x = x + 1
+x }
+bump()
+x

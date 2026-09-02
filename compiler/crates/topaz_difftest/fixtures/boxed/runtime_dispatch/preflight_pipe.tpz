@@ -1,0 +1,2 @@
+let g = 5
+0 |> g.get(print("x"))

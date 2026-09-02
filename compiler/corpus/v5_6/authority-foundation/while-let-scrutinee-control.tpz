@@ -1,0 +1,15 @@
+let mut attempts = 0
+let mut total = 0
+while let Some(n) = {
+    attempts = attempts + 1
+    if attempts == 1 {
+        continue
+    }
+    if attempts == 3 {
+        break
+    }
+    Some(attempts)
+} {
+    total = total + n
+}
+print("{attempts}:{total}")

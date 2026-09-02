@@ -1,0 +1,38 @@
+
+function optText(value: Option<string>) -> string {
+    match value {
+        case Some(text) => text
+        case None => "none"
+    }
+}
+function optIntText(value: Option<int>) -> string {
+    match value {
+        case Some(n) => "{n}"
+        case None => "none"
+    }
+}
+function optUnitText(value: Option<()>) -> string {
+    match value {
+        case Some(unit) => "{unit}"
+        case None => "none"
+    }
+}
+function joinInts(xs: Array<int>) -> string {
+    xs.join(",")
+}
+function main() -> string {
+    let mut some: Option<Array<int>> = Some([5, 6, 7])
+    let none: Option<Array<int>> = None
+    let sliced = match some?.slice(0, 2) {
+        case Some(xs) => joinInts(xs)
+        case None => "none"
+    }
+    let skippedJoin = optText("," |> none?.join())
+    let removed = optIntText(some?.removeAt(1))
+    let inserted = optUnitText(some?.insert(0, 9))
+    let pipedJoin = optText("," |> some?.join())
+    let popped = optIntText(some?.pop())
+    let cleared = optUnitText(some?.clear())
+    "{sliced}:{skippedJoin}:{removed}:{inserted}:{pipedJoin}:{popped}:{cleared}"
+}
+main()

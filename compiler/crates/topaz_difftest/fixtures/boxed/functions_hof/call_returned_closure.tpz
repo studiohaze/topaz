@@ -1,0 +1,2 @@
+let make = (a) => ((x) => x + a)
+make(10)(5)

@@ -1,0 +1,14 @@
+
+function combine(a: int, b: int) -> int {
+    print("combine {a}:{b}")
+    a + b
+}
+let r = combine(loop {
+    print("arg-a")
+    break 1
+}, loop {
+    print("arg-b")
+    break 2
+})
+print("r={r}")
+0

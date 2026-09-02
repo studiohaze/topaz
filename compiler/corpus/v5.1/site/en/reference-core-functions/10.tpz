@@ -1,0 +1,9 @@
+function loadPort(path: string) -> Result<int, string> {
+    let content = readText(path)?
+    parsePort(content)
+}
+
+match loadPort("app.port") {
+    case Ok(port) => print("Port: {port}")
+    case Err(error) => print("Config error: {error}")
+}

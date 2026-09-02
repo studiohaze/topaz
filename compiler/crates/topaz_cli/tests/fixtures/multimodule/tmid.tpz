@@ -1,0 +1,4 @@
+import tbase
+export function midVal() -> int {
+  return tbase.BASE + 5
+}

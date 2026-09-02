@@ -1,0 +1,14 @@
+
+record User { x: int }
+function main() -> int {
+    let a = match { x: 1 } {
+        case rec: { x: int } => 6
+        case _ => 0
+    }
+    let b = match (User { x: 1 }) {
+        case rec: { x: int } => 100
+        case _ => 7
+    }
+    a + b
+}
+main()

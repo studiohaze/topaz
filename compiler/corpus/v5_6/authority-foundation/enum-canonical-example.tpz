@@ -1,0 +1,14 @@
+enum Tree<T> {
+    Leaf(T),
+    Branch(Tree<T>, Tree<T>),
+}
+
+function size<T>(tree: Tree<T>) -> int {
+    match tree {
+        case Leaf(value) => 1
+        case Branch(left, right) => size(left) + size(right)
+    }
+}
+
+let tree: Tree<int> = Tree.Branch(Tree.Leaf(1), Tree.Leaf(2))
+print("{size(tree)}")

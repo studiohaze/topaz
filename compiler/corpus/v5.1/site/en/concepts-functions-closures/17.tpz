@@ -1,0 +1,19 @@
+// Good: Pure function
+function calculateTax(income: float, taxRate: float) -> float {
+    return income * taxRate
+}
+
+// Avoid: Function with side effects
+let mut globalCounter = 0
+function badFunction(value: int) -> int {
+    globalCounter += 1  // Side effect!
+    return value * 2
+}
+
+// Good alternative: Return state
+function goodFunction(value: int, currentCounter: int) -> { result: int, newCounter: int } {
+    return {
+        result: value * 2,
+        newCounter: currentCounter + 1
+    }
+}

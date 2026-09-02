@@ -1,0 +1,26 @@
+
+function boom() -> int {
+    let n = 0
+    1 / n
+}
+
+function six() -> int {
+    6
+}
+
+function choose(x: int) -> int {
+    let i = x - 2
+    let r = concurrent {
+        slow: {
+            let mut cbs = [six, six]
+            cbs[i] = boom
+            let values: Array<Option<Option<int>>> = [None, Some(Some(9))]
+            let out = values[1]?.okOrElse(cbs[i])
+            if out == null { -1 } else { 9 }
+        }
+        fast: 0
+    }
+    r.slow + r.fast
+}
+
+choose(3)

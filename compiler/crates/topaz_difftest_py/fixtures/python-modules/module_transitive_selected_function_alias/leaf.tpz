@@ -1,0 +1,4 @@
+
+export function inc(x: int) -> int {
+    x + 21
+}

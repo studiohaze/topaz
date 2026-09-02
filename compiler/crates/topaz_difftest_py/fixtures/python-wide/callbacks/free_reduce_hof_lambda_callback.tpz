@@ -1,0 +1,5 @@
+
+function main() -> int {
+    reduce([1, 2, 3], 0, (acc, x) => acc + x)
+}
+main()

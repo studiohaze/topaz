@@ -1,0 +1,18 @@
+
+function makeUser(flag: bool) -> Result<{ name: string, age: int }, string> {
+    if flag {
+        Ok({ name: "Ada", age: 37 })
+    } else {
+        Err("no")
+    }
+}
+function main() -> Result<string, string> {
+    let opt: Option<{ name: string, age: int }> = Some({ name: "Lin", age: 12 })
+    let user = makeUser(true)?
+    let first = match opt {
+        case Some(value) => value.name
+        case None => "none"
+    }
+    Ok("{first}:{user.name}:{user.age}")
+}
+main()

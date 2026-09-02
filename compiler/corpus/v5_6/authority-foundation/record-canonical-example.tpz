@@ -1,0 +1,11 @@
+record Point {
+    x: int,
+    y: int = 0,
+}
+
+function horizontal(x: int) -> Point {
+    Point { x: x }
+}
+
+let point: Point = horizontal(3)
+print("{point.x}:{point.y}")

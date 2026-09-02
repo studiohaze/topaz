@@ -1,0 +1,3 @@
+export record Item { name: string }
+impl Show<Item> { function show(value: Item) -> string { "L:{value.name}" } }
+export function run() -> string { Show.show(Item { name: "x" }) }

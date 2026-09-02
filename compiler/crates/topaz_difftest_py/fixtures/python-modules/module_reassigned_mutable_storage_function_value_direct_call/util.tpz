@@ -1,0 +1,11 @@
+
+function add(a: int, b: int = 2) -> int {
+    a + b
+}
+function mul(x: int, y: int) -> int {
+    x * y
+}
+export let oldCallbacks = [add]
+export let oldHandlers = { primary: add }
+export let callbacks = [add, mul]
+export let handlers = { primary: mul }

@@ -1,0 +1,5 @@
+let value: Result<int, int> = Ok(1)
+let found = match value {
+    case Ok(x) | Err(y) => x
+}
+print("{found}")

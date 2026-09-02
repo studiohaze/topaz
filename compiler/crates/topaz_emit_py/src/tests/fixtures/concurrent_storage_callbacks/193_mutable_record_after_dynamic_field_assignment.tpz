@@ -1,0 +1,17 @@
+
+function spin(x: int) -> int {
+    x
+}
+
+let mut callbacks = { primary: spin, secondary: spin }
+let field = "primary"
+callbacks[field] = spin
+
+concurrent {
+    slow: {
+        let xs = [1]
+        xs.map(callbacks.primary)
+    }
+    fast: 0
+}
+0

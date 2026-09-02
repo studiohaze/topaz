@@ -1,0 +1,5 @@
+
+newtype UserId = int
+let ordered = UserId(1) < UserId(2)
+print("{ordered}")
+if ordered { 1 } else { 0 }

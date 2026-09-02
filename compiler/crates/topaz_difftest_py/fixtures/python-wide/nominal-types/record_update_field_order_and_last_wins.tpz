@@ -1,0 +1,11 @@
+
+function mark(label: string, n: int) -> int {
+    print(label)
+    n
+}
+function f() -> int {
+    let r = { x: 0, y: 0 }
+    let updated = r { x: mark("first", 1), x: mark("second", 2), y: mark("third", 3) }
+    updated.x + updated.y
+}
+f()

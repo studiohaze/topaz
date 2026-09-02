@@ -1,0 +1,13 @@
+
+function main() -> int {
+    concurrent(timeout: 0ms) {
+        x: {
+            let xs = [5]
+            xs[1]
+        }
+    } else {
+        return 88
+    }
+    return 99
+}
+main()

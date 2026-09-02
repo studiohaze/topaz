@@ -1,0 +1,1692 @@
+// Core expression inference for literals, lambdas, aggregates, and members.
+// Control forms live beside it in expression_control, while call expressions
+// cross the explicit checker service rather than importing call leaves back.
+
+import types { SyntaxNode }
+import checker_types { TypeValue }
+import unicode { didYouMean }
+import checker.model {
+  CheckerService,
+  CheckerState,
+  constructor,
+  emptyType,
+  functionType,
+  inference,
+  literal,
+  nominal,
+  primitive,
+  rigid,
+  serviceInferExpression,
+  structural,
+}
+import checker.type_algebra {
+  hasHole,
+  joinedTypes,
+  typeText,
+  unionType,
+  widen,
+}
+import checker.syntax_index {
+  addDiagnostic,
+  addNode,
+  bindSymbol,
+  child,
+  children,
+  containsString,
+  protocolDefinition,
+  protocolMethodDefinition,
+  referenceFor,
+  symbolAt,
+  text,
+  unwrapExport,
+}
+import checker.nominals {
+  formType,
+  substitute,
+}
+import checker.protocols_methods {
+  receiverMethodType,
+  recordDefinitionForType,
+  referenceTargetType,
+}
+import checker.members_capabilities {
+  arraySpreadElement,
+  builtinNamespaceMemberType,
+  containsByteBuffer,
+  gateCollectionKey,
+  iterableElement,
+  memberType,
+  protocolStaticMemberType,
+  rigidUnionMissingConcreteMember,
+}
+import checker.call_facts {
+  builtinIdentifierType,
+  builtinMutator,
+  builtinNamespaceObject,
+  checkExpressionExpected,
+  currentExpectedExpression,
+  generatedLispexIntrinsic,
+  inferExpressionContext,
+  inferExpressionWithExpected,
+  isBuiltinNamespace,
+  unboundCalleeSuggestion,
+  unboundSuggestion,
+  userProtocolObject,
+}
+
+export function blockTerminates(block: SyntaxNode) -> bool {
+  let statements = children(block, "statements")
+  if statements.length == 0 {
+    return false
+  }
+  match statements.get(statements.length - 1) {
+    case Some(statement) => {
+      let item = unwrapExport(statement)
+      if item.kind == "statement/return" {
+        return true
+      }
+      if item.kind == "statement/expression" {
+        match item.children.get(0) {
+          case Some(expression) => return expressionTerminates(expression)
+          case None => ()
+        }
+      }
+    }
+    case None => ()
+  }
+  false
+}
+
+export function expressionTerminates(expression: SyntaxNode) -> bool {
+  if expression.kind == "expression/block" {
+    match child(expression, "block") {
+      case Some(block) => return blockTerminates(block)
+      case None => ()
+    }
+  }
+  if expression.kind == "expression/parenthesized" {
+    match child(expression, "operand") {
+      case Some(operand) => return expressionTerminates(operand)
+      case None => ()
+    }
+  }
+  if expression.kind == "expression/if" {
+    let thenTerminates = match child(expression, "then") {
+      case Some(found) => blockTerminates(found)
+      case None => false
+    }
+    let elseTerminates = match child(expression, "else") {
+      case Some(found) => expressionTerminates(found)
+      case None => false
+    }
+    return thenTerminates && elseTerminates
+  }
+  if expression.kind == "expression/match" {
+    let cases = children(expression, "cases")
+    if cases.length == 0 {
+      return false
+    }
+    for foundCase in cases {
+      match child(foundCase, "body") {
+        case Some(body) => if body.kind != "match-case-return" &&
+          !expressionTerminates(body) {
+          return false
+        }
+        case None => return false
+      }
+    }
+    return true
+  }
+  false
+}
+
+export function inferLambda(
+  service: CheckerService,
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  node: SyntaxNode,
+  expected: Option<TypeValue>,
+) -> TypeValue {
+  let parameterNodes = children(node, "parameters")
+  match expected {
+    case Some(functionValue) => if functionValue.kind == "function" &&
+      functionValue.variadic.length == 0 &&
+      functionValue.parameters.length != parameterNodes.length {
+      addDiagnostic(
+        state,
+        moduleIndex,
+        "TPZ5004",
+        "this lambda takes {parameterNodes.length} parameter(s), but a function taking {functionValue.parameters.length} is expected",
+        "",
+        node,
+      )
+    }
+    case None => ()
+  }
+  let expectedResult = match expected {
+    case Some(functionValue) => if functionValue.kind == "function" {
+      functionValue.result.get(0)
+    } else {
+      None
+    }
+    case None => None
+  }
+  let mut parameters: Array<TypeValue> = []
+  let mut parameterIndex = 0
+  for parameter in parameterNodes {
+    let typeValue = match child(parameter, "type") {
+      case Some(found) => formType(
+        service,
+        state,
+        moduleIndex,
+        source,
+        found,
+        [],
+        "lambda",
+      )
+      case None => match expected {
+        case Some(functionValue) => if functionValue.kind == "function" {
+          match functionValue.parameters.get(parameterIndex) {
+            case Some(found) => found
+            case None => inference(parameter.lo)
+          }
+        } else {
+          inference(parameter.lo)
+        }
+        case None => inference(parameter.lo)
+      }
+    }
+    let nameNode = match child(parameter, "name") {
+      case Some(found) => found
+      case None => parameter
+    }
+    bindSymbol(
+      state,
+      moduleIndex,
+      nameNode.lo,
+      nameNode.hi,
+      text(source, nameNode),
+      typeValue,
+      false,
+    )
+    addNode(state, moduleIndex, "binding", nameNode, typeValue)
+    parameters.push(typeValue)
+    parameterIndex += 1
+  }
+  let mut loopFloors = state.loopFloors
+  loopFloors.push(state.loopFrames.length)
+  let mut expectedReturns = state.expectedReturns
+  expectedReturns.push(match expectedResult {
+    case Some(found) => found
+    case None => emptyType("unknown")
+  })
+  let mut returnJoins = state.returnJoins
+  returnJoins.push([])
+  let bodyNode = child(node, "body")
+  let body = match bodyNode {
+    case Some(found) => match expectedResult {
+      case Some(result) => if hasHole(result) {
+        serviceInferExpression(service, state, moduleIndex, source, found)
+      } else {
+        inferExpressionWithExpected(
+          service,
+          state,
+          moduleIndex,
+          source,
+          found,
+          result,
+          true,
+        )
+      }
+      case None => serviceInferExpression(service, state, moduleIndex, source, found)
+    }
+    case None => emptyType("unknown")
+  }
+  let mut returns = match returnJoins.get(returnJoins.length - 1) {
+    case Some(found) => found
+    case None => []
+  }
+  returnJoins.pop()
+  expectedReturns.pop()
+  loopFloors.pop()
+  let result = if returns.length == 0 {
+    body
+  } else {
+    match bodyNode {
+      case Some(found) => if !expressionTerminates(found) {
+        returns.push(body)
+      }
+      case None => ()
+    }
+    let mut unresolved = false
+    for found in returns {
+      if hasHole(found) {
+        unresolved = true
+      }
+    }
+    if unresolved {
+      emptyType("unknown")
+    } else {
+      joinedTypes(state, returns, true)
+    }
+  }
+  functionType(parameters, [], result)
+}
+
+export function hasLiteralJoinContext(
+  state: CheckerState,
+  expression: SyntaxNode,
+) -> bool {
+  if state.literalJoinContexts.length == 0 {
+    return false
+  }
+  match state.literalJoinContexts.get(state.literalJoinContexts.length - 1) {
+    case Some(lo) => lo == expression.lo
+    case None => false
+  }
+}
+
+export function inferBranchExpression(
+  service: CheckerService,
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  expression: SyntaxNode,
+  contextual: bool,
+) -> TypeValue {
+  if contextual && expression.kind != "expression/block" {
+    inferExpressionContext(service, state, moduleIndex, source, expression)
+  } else {
+    serviceInferExpression(service, state, moduleIndex, source, expression)
+  }
+}
+
+export function checkedIterableElement(
+  state: CheckerState,
+  moduleIndex: int,
+  node: SyntaxNode,
+  iterator: TypeValue,
+) -> TypeValue {
+  let element = iterableElement(iterator)
+  if element.kind == "unknown" && !hasHole(iterator) {
+    addDiagnostic(
+      state,
+      moduleIndex,
+      "TPZ5001",
+      "`{typeText(iterator)}` is not iterable (§10)",
+      "",
+      node,
+    )
+  }
+  element
+}
+
+export function inferTextExpression(
+  service: CheckerService,
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  node: SyntaxNode,
+) -> TypeValue {
+  let mut value = ""
+  let mut interpolated = false
+  for part in node.children {
+    if part.kind == "string-part/text" {
+      value = "{value}{text(source, part)}"
+    }
+    match child(part, "value") {
+      case Some(expression) => {
+        interpolated = true
+        let inferred = serviceInferExpression(service, state, moduleIndex, source, expression)
+        if containsByteBuffer(state, moduleIndex, inferred, []) {
+          addDiagnostic(
+            state,
+            moduleIndex,
+            "TPZ5001",
+            "`ByteBuffer` values cannot be interpolated; snapshot to `Bytes` and encode explicitly",
+            "",
+            expression,
+          )
+        }
+      }
+      case None => ()
+    }
+  }
+  if node.kind == "expression/template" {
+    emptyType("template")
+  } else if interpolated {
+    primitive("string")
+  } else {
+    literal("string", value)
+  }
+}
+
+export function inferIdentifierExpression(
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  node: SyntaxNode,
+  callee: bool,
+) -> TypeValue {
+  match referenceTargetType(state, moduleIndex, node) {
+    case Some(found) => found
+    case None => {
+      let name = text(source, node)
+      if name == "None" {
+        match currentExpectedExpression(state, node) {
+          case Some(expected) => if expected.kind == "constructor" &&
+            expected.name == "Option" &&
+            expected.arguments.length == 1 {
+            expected
+          } else {
+            constructor("Option", [inference(node.lo)])
+          }
+          case None => constructor("Option", [inference(node.lo)])
+        }
+      } else if isBuiltinNamespace(name) {
+        addDiagnostic(
+          state,
+          moduleIndex,
+          "TPZ5002",
+          "`{name}` is not bound",
+          "",
+          node,
+        )
+        emptyType("unknown")
+      } else if generatedLispexIntrinsic(state, moduleIndex, name) {
+        emptyType("unknown")
+      } else {
+        match builtinIdentifierType(name) {
+          case Some(found) => found
+          case None => {
+            match referenceFor(state, moduleIndex, node.lo, node.hi) {
+              case Some(reference) => if reference.targetModuleIndex < 0 &&
+                reference.namespace == "value" && reference.role == "read" {
+                addDiagnostic(
+                  state,
+                  moduleIndex,
+                  "TPZ5002",
+                  "`{reference.name}` is not bound" + if callee {
+                    unboundCalleeSuggestion(state, reference)
+                  } else {
+                    unboundSuggestion(state, reference)
+                  },
+                  "",
+                  node,
+                )
+              }
+              case None => ()
+            }
+            emptyType("unknown")
+          }
+        }
+      }
+    }
+  }
+}
+
+export function inferSequenceLiteralExpression(
+  service: CheckerService,
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  node: SyntaxNode,
+) -> TypeValue {
+  let mut elementTypes: Array<TypeValue> = []
+  let mut opaque = false
+  for element in children(node, "elements") {
+    if element.kind == "array-element/spread" {
+      match child(element, "value") {
+        case Some(value) => {
+          let spreadType = serviceInferExpression(service, state, moduleIndex, source, value)
+          let spread = arraySpreadElement(spreadType)
+          if spread.status == "element" {
+            elementTypes.push(spread.element)
+          } else {
+            opaque = true
+            if spread.status == "invalid" {
+              addDiagnostic(
+                state,
+                moduleIndex,
+                "TPZ5001",
+                "array spread needs an `Array`, found `{typeText(spreadType)}`",
+                "",
+                value,
+              )
+            }
+          }
+        }
+        case None => ()
+      }
+    } else {
+      elementTypes.push(widen(serviceInferExpression(
+        service,
+        state,
+        moduleIndex,
+        source,
+        element,
+      )))
+    }
+  }
+  let element = if opaque {
+    emptyType("unknown")
+  } else if elementTypes.length == 0 &&
+    node.kind == "expression/array" {
+    inference(node.lo)
+  } else {
+    unionType(elementTypes)
+  }
+  if node.kind == "expression/array" {
+    constructor("Array", [element])
+  } else {
+    gateCollectionKey(service, state, moduleIndex, node, element)
+    constructor("Set", [element])
+  }
+}
+
+export function inferMapLiteralExpression(
+  service: CheckerService,
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  node: SyntaxNode,
+) -> TypeValue {
+  let mut keys: Array<TypeValue> = []
+  let mut values: Array<TypeValue> = []
+  let mut constantKeys: Array<string> = []
+  for entry in children(node, "entries") {
+    match child(entry, "key") {
+      case Some(found) => {
+        if found.kind == "expression/string" ||
+          found.kind == "expression/integer" ||
+          found.kind == "expression/bool" {
+          let key = "{found.kind}:{text(source, found)}"
+          if containsString(constantKeys, key) {
+            addDiagnostic(
+              state,
+              moduleIndex,
+              "TPZ5602",
+              "duplicate key in `map \{ … \}` literal",
+              "",
+              found,
+            )
+          } else {
+            constantKeys.push(key)
+          }
+        }
+        keys.push(widen(serviceInferExpression(
+          service,
+          state,
+          moduleIndex,
+          source,
+          found,
+        )))
+      }
+      case None => ()
+    }
+    match child(entry, "value") {
+      case Some(found) => values.push(widen(serviceInferExpression(
+        service,
+        state,
+        moduleIndex,
+        source,
+        found,
+      )))
+      case None => ()
+    }
+  }
+  let key = unionType(keys)
+  gateCollectionKey(service, state, moduleIndex, node, key)
+  constructor("Map", [key, unionType(values)])
+}
+
+export function inferRecordLiteralExpression(
+  service: CheckerService,
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  node: SyntaxNode,
+) -> TypeValue {
+  let mut names: Array<string> = []
+  let mut values: Array<TypeValue> = []
+  let expected = match currentExpectedExpression(state, node) {
+    case Some(found) => if found.kind == "record" { Some(found) } else { None }
+    case None => None
+  }
+  for field in children(node, "fields") {
+    let name = match child(field, "name") {
+      case Some(found) => text(source, found)
+      case None => ""
+    }
+    let value = match child(field, "value") {
+      case Some(found) => match expected {
+        case Some(record) => match structuralRecordFieldType(record, name) {
+          case Some(fieldType) => {
+            let _ = checkExpressionExpected(
+              service,
+              state,
+              moduleIndex,
+              source,
+              found,
+              fieldType,
+            )
+            fieldType
+          }
+          case None => widen(serviceInferExpression(
+            service,
+            state,
+            moduleIndex,
+            source,
+            found,
+          ))
+        }
+        case None => widen(serviceInferExpression(
+          service,
+          state,
+          moduleIndex,
+          source,
+          found,
+        ))
+      }
+      case None => emptyType("unknown")
+    }
+    if containsString(names, name) {
+      addDiagnostic(
+        state,
+        moduleIndex,
+        "TPZ5022",
+        "record literal declares field `{name}` twice",
+        "",
+        field,
+      )
+      continue
+    }
+    names.push(name)
+    values.push(value)
+  }
+  structural(names, values)
+}
+
+function inferMemberObjectType(
+  service: CheckerService,
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  object: SyntaxNode,
+  protocolCall: bool,
+) -> TypeValue {
+  if object.kind != "expression/identifier" {
+    return serviceInferExpression(service, state, moduleIndex, source, object)
+  }
+  if builtinNamespaceObject(service, state, moduleIndex, source, object) {
+    return emptyType("unknown")
+  }
+  if protocolCall {
+    match userProtocolObject(state, moduleIndex, source, object) {
+      case Some(_) => return emptyType("unknown")
+      case None => ()
+    }
+  }
+  let typeNamespace = match referenceFor(
+    state,
+    moduleIndex,
+    object.lo,
+    object.hi,
+  ) {
+    case Some(reference) => reference.targetNamespace == "type"
+    case None => false
+  }
+  if typeNamespace {
+    match referenceTargetType(state, moduleIndex, object) {
+      case Some(found) => found
+      case None => serviceInferExpression(service, state, moduleIndex, source, object)
+    }
+  } else {
+    serviceInferExpression(service, state, moduleIndex, source, object)
+  }
+}
+
+export function contextualMemberObjectType(
+  state: CheckerState,
+  expression: SyntaxNode,
+  objectType: TypeValue,
+) -> TypeValue {
+  match currentExpectedExpression(state, expression) {
+    case Some(expected) => if objectType.kind == "enum" &&
+      expected.kind == "enum" && objectType.identity == expected.identity {
+      expected
+    } else {
+      objectType
+    }
+    case None => objectType
+  }
+}
+
+record MemberAccessContext {
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  object: SyntaxNode,
+  objectType: TypeValue,
+  field: Option<SyntaxNode>,
+  fieldName: string,
+  builtinNamespace: bool,
+  protocolNamespace: string,
+}
+
+// Optional-access carrier retaining both the inner type and wrapper identity.
+export record OptionalReceiver {
+  innerType: TypeValue,
+  container: string,
+}
+
+export record OptionalMemberAccess {
+  rawType: TypeValue,
+  wrappedType: TypeValue,
+  receiverType: TypeValue,
+  container: string,
+}
+
+export function optionalReceiver(objectType: TypeValue) -> Option<OptionalReceiver> {
+  if objectType.kind == "constructor" && objectType.name == "Option" {
+    return match objectType.arguments.get(0) {
+      case Some(inner) => Some(OptionalReceiver {
+        innerType: inner,
+        container: "option",
+      })
+      case None => None
+    }
+  }
+  if objectType.kind != "union" {
+    return None
+  }
+  let mut nullable = false
+  let mut innerMembers: Array<TypeValue> = []
+  for member in objectType.members {
+    if member.kind == "literal" && member.name == "null" {
+      nullable = true
+    } else {
+      innerMembers.push(member)
+    }
+  }
+  if nullable && innerMembers.length > 0 {
+    Some(OptionalReceiver {
+      innerType: unionType(innerMembers),
+      container: "nullable",
+    })
+  } else {
+    None
+  }
+}
+
+export function wrapOptionalResult(rawType: TypeValue, container: string) -> TypeValue {
+  if hasHole(rawType) {
+    return emptyType("unknown")
+  }
+  if container == "nullable" {
+    return unionType([rawType, literal("null", "")])
+  }
+  if container == "option" {
+    if rawType.kind == "constructor" && rawType.name == "Option" {
+      return rawType
+    }
+    return constructor("Option", [rawType])
+  }
+  rawType
+}
+
+function memberObjectIsNamespace(
+  service: CheckerService,
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  object: SyntaxNode,
+) -> bool {
+  if builtinNamespaceObject(service, state, moduleIndex, source, object) {
+    return true
+  }
+  match userProtocolObject(state, moduleIndex, source, object) {
+    case Some(_) => return true
+    case None => ()
+  }
+  match referenceFor(state, moduleIndex, object.lo, object.hi) {
+    case Some(reference) => reference.targetNamespace == "type"
+    case None => false
+  }
+}
+
+function memberNameSuggestion(target: string, candidates: Array<string>) -> string {
+  didYouMean(target, candidates)
+}
+
+function reportMissingOptionalMember(
+  context: MemberAccessContext,
+  diagnosticNode: SyntaxNode,
+) -> () {
+  if context.fieldName == "" {
+    return ()
+  }
+  if context.objectType.kind == "record" {
+    let hint = memberNameSuggestion(
+      context.fieldName,
+      context.objectType.fieldNames,
+    )
+    addDiagnostic(
+      context.state,
+      context.moduleIndex,
+      "TPZ5006",
+      "`{typeText(widen(context.objectType))}` has no field `{context.fieldName}`{hint}",
+      "",
+      diagnosticNode,
+    )
+    return ()
+  }
+  match recordDefinitionForType(
+    context.state,
+    context.moduleIndex,
+    context.objectType,
+  ) {
+    case Some(definition) => {
+      let mut names: Array<string> = []
+      for field in definition.fields {
+        names.push(field.name)
+      }
+      let hint = memberNameSuggestion(context.fieldName, names)
+      addDiagnostic(
+        context.state,
+        context.moduleIndex,
+        "TPZ5006",
+        "record `{context.objectType.identity}` has no field `{context.fieldName}`{hint}",
+        "",
+        diagnosticNode,
+      )
+      return ()
+    }
+    case None => ()
+  }
+  addDiagnostic(
+    context.state,
+    context.moduleIndex,
+    "TPZ5006",
+    "`{typeText(widen(context.objectType))}` has no member named `{context.fieldName}`",
+    "",
+    diagnosticNode,
+  )
+}
+
+export function inferOptionalMemberAccess(
+  service: CheckerService,
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  node: SyntaxNode,
+  diagnosticNode: SyntaxNode,
+) -> OptionalMemberAccess {
+  let objectNode = match child(node, "object") {
+    case Some(found) => found
+    case None => node
+  }
+  let objectType = inferMemberObjectType(
+    service,
+    state,
+    moduleIndex,
+    source,
+    objectNode,
+    false,
+  )
+  let namespaceObject = memberObjectIsNamespace(
+    service,
+    state,
+    moduleIndex,
+    source,
+    objectNode,
+  )
+  let receiver = if namespaceObject {
+    addDiagnostic(
+      state,
+      moduleIndex,
+      "TPZ5001",
+      "`?.` needs an Option or nullable receiver, found `namespace`",
+      "",
+      diagnosticNode,
+    )
+    None
+  } else {
+    optionalReceiver(contextualMemberObjectType(
+      state,
+      node,
+      objectType,
+    ))
+  }
+  let unwrapped = match receiver {
+    case Some(found) => found
+    case None => {
+      if !hasHole(objectType) && !namespaceObject {
+        addDiagnostic(
+          state,
+          moduleIndex,
+          "TPZ5001",
+          "`?.` needs an Option or nullable receiver, found `{typeText(widen(objectType))}`",
+          "",
+          diagnosticNode,
+        )
+      }
+      return OptionalMemberAccess {
+        rawType: emptyType("unknown"),
+        wrappedType: emptyType("unknown"),
+        receiverType: emptyType("unknown"),
+        container: "",
+      }
+    }
+  }
+  let fieldNode = child(node, "field")
+  let fieldName = match fieldNode {
+    case Some(found) => text(source, found)
+    case None => ""
+  }
+  let context = MemberAccessContext {
+    state: state,
+    moduleIndex: moduleIndex,
+    source: source,
+    object: objectNode,
+    objectType: unwrapped.innerType,
+    field: fieldNode,
+    fieldName: fieldName,
+    builtinNamespace: false,
+    protocolNamespace: "",
+  }
+  let found = resolvedMemberAccessType(context)
+  if (found.kind == "unknown" && !hasHole(unwrapped.innerType) ||
+    rigidUnionMissingConcreteMember(
+      state,
+      moduleIndex,
+      unwrapped.innerType,
+      fieldName,
+    )) && fieldName != "" {
+    reportMissingOptionalMember(context, diagnosticNode)
+  }
+  OptionalMemberAccess {
+    rawType: found,
+    wrappedType: wrapOptionalResult(found, unwrapped.container),
+    receiverType: unwrapped.innerType,
+    container: unwrapped.container,
+  }
+}
+
+function fallbackMemberAccessType(context: MemberAccessContext) -> TypeValue {
+  if context.builtinNamespace {
+    let namespace = text(context.source, context.object)
+    match builtinNamespaceMemberType(namespace, context.fieldName) {
+      case Some(found) => return found
+      case None => ()
+    }
+    match protocolStaticMemberType(namespace, context.fieldName) {
+      case Some(found) => return found
+      case None => return emptyType("unknown")
+    }
+  }
+  if context.protocolNamespace != "" {
+    match protocolDefinition(
+      context.state,
+      context.moduleIndex,
+      context.protocolNamespace,
+    ) {
+      case Some(definition) => match protocolMethodDefinition(
+        definition,
+        context.fieldName,
+      ) {
+        case Some(method) => return method.typeValue
+        case None => return emptyType("unknown")
+      }
+      case None => return emptyType("unknown")
+    }
+  }
+  memberType(
+    context.state,
+    context.moduleIndex,
+    context.objectType,
+    context.fieldName,
+  )
+}
+
+function resolvedMemberAccessType(context: MemberAccessContext) -> TypeValue {
+  match context.field {
+    case Some(fieldNode) => match referenceTargetType(
+      context.state,
+      context.moduleIndex,
+      fieldNode,
+    ) {
+      case Some(resolved) => if resolved.kind != "unknown" {
+        resolved
+      } else {
+        fallbackMemberAccessType(context)
+      }
+      case None => fallbackMemberAccessType(context)
+    }
+    case None => memberType(
+      context.state,
+      context.moduleIndex,
+      context.objectType,
+      context.fieldName,
+    )
+  }
+}
+
+function reportMissingMember(context: MemberAccessContext) -> () {
+  if context.fieldName == "" {
+    return ()
+  }
+  if context.protocolNamespace != "" {
+    match context.field {
+      case Some(fieldNode) => addDiagnostic(
+        context.state,
+        context.moduleIndex,
+        "TPZ5522",
+        "protocol `{context.protocolNamespace}` has no method `{context.fieldName}`",
+        "",
+        fieldNode,
+      )
+      case None => ()
+    }
+    return ()
+  }
+  let receiverName = if context.builtinNamespace {
+    text(context.source, context.object)
+  } else {
+    typeText(widen(context.objectType))
+  }
+  match context.field {
+    case Some(fieldNode) => addDiagnostic(
+      context.state,
+      context.moduleIndex,
+      "TPZ5006",
+      "`{receiverName}` has no member named `{context.fieldName}`",
+      "",
+      fieldNode,
+    )
+    case None => ()
+  }
+}
+
+// Member lookup result before the caller records the expression observation.
+export record PlainMemberAccess {
+  memberType: TypeValue,
+  receiverType: TypeValue,
+}
+
+export function inferPlainMemberAccess(
+  service: CheckerService,
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  node: SyntaxNode,
+  protocolCall: bool,
+) -> PlainMemberAccess {
+  let objectNode = match child(node, "object") {
+    case Some(found) => found
+    case None => node
+  }
+  let objectType = inferMemberObjectType(
+    service,
+    state,
+    moduleIndex,
+    source,
+    objectNode,
+    protocolCall,
+  )
+  let fieldNode = child(node, "field")
+  let fieldName = match fieldNode {
+    case Some(found) => text(source, found)
+    case None => ""
+  }
+  let builtinNamespaceObjectValue = builtinNamespaceObject(
+    service,
+    state,
+    moduleIndex,
+    source,
+    objectNode,
+  )
+  let protocolNamespace = if protocolCall {
+    match userProtocolObject(state, moduleIndex, source, objectNode) {
+      case Some(definition) => definition.name
+      case None => ""
+    }
+  } else {
+    ""
+  }
+  let context = MemberAccessContext {
+    state: state,
+    moduleIndex: moduleIndex,
+    source: source,
+    object: objectNode,
+    objectType: contextualMemberObjectType(
+      state,
+      node,
+      objectType,
+    ),
+    field: fieldNode,
+    fieldName: fieldName,
+    builtinNamespace: builtinNamespaceObjectValue,
+    protocolNamespace: protocolNamespace,
+  }
+  if !builtinNamespaceObjectValue && builtinMutator(objectType, fieldName) &&
+    match fieldNode {
+      case Some(field) => match referenceTargetType(
+        state,
+        moduleIndex,
+        field,
+      ) {
+        case Some(_) => false
+        case None => true
+      }
+      case None => false
+  } {
+    checkAssignmentRootMutable(state, moduleIndex, source, objectNode, true)
+  }
+  let found = if protocolCall {
+    match receiverMethodType(
+      state,
+      moduleIndex,
+      context.objectType,
+      fieldName,
+    ) {
+      case Some(methodType) => methodType
+      case None => resolvedMemberAccessType(context)
+    }
+  } else {
+    resolvedMemberAccessType(context)
+  }
+  if (found.kind == "unknown" &&
+    (builtinNamespaceObjectValue || protocolNamespace != "" ||
+      !hasHole(objectType)) ||
+    rigidUnionMissingConcreteMember(
+      state,
+      moduleIndex,
+      objectType,
+      fieldName,
+    )) &&
+    fieldName != "" {
+    reportMissingMember(MemberAccessContext { ...context, objectType: objectType })
+  }
+  PlainMemberAccess {
+    memberType: found,
+    receiverType: context.objectType,
+  }
+}
+
+export function inferMemberAccessExpression(
+  service: CheckerService,
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  node: SyntaxNode,
+) -> TypeValue {
+  if node.kind == "expression/optional-access" {
+    return inferOptionalMemberAccess(
+      service,
+      state,
+      moduleIndex,
+      source,
+      node,
+      node,
+    ).wrappedType
+  }
+  inferPlainMemberAccess(service, state, moduleIndex, source, node, false).memberType
+}
+
+record RecordUpdateContext {
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  expression: SyntaxNode,
+  constructorName: string,
+}
+
+record RecordFieldExpectation {
+  shapeKnown: bool,
+  typeValue: Option<TypeValue>,
+}
+
+function inferRecordUpdateBase(
+  service: CheckerService,
+  context: RecordUpdateContext,
+  baseNode: SyntaxNode,
+) -> TypeValue {
+  if baseNode.kind != "expression/identifier" {
+    return serviceInferExpression(
+      service,
+      context.state,
+      context.moduleIndex,
+      context.source,
+      baseNode,
+    )
+  }
+  match referenceTargetType(context.state, context.moduleIndex, baseNode) {
+    case Some(typeValue) => {
+      match referenceFor(
+        context.state,
+        context.moduleIndex,
+        baseNode.lo,
+        baseNode.hi,
+      ) {
+        case Some(reference) => if reference.targetNamespace == "value" {
+          addNode(
+            context.state,
+            context.moduleIndex,
+            "expression",
+            baseNode,
+            typeValue,
+          )
+        } else {
+          ()
+        }
+        case None => ()
+      }
+      typeValue
+    }
+    case None => serviceInferExpression(
+      service,
+      context.state,
+      context.moduleIndex,
+      context.source,
+      baseNode,
+    )
+  }
+}
+
+function contextualRecordUpdateBase(
+  context: RecordUpdateContext,
+  baseNode: SyntaxNode,
+  baseType: TypeValue,
+) -> TypeValue {
+  let contextualExpected = currentExpectedExpression(
+    context.state,
+    context.expression,
+  )
+  match contextualExpected {
+    case Some(expected) => if baseType.kind == "nominal-record" &&
+    expected.kind == "nominal-record" &&
+    baseType.identity == expected.identity {
+      expected
+    } else {
+      baseType
+    }
+    case None => baseType
+  }
+}
+
+function recordUpdateConstructorName(
+  context: RecordUpdateContext,
+  baseNode: SyntaxNode,
+  baseType: TypeValue,
+) -> string {
+  if baseNode.kind != "expression/identifier" {
+    return ""
+  }
+  match referenceFor(
+    context.state,
+    context.moduleIndex,
+    baseNode.lo,
+    baseNode.hi,
+  ) {
+    case Some(reference) => if reference.targetNamespace == "type" {
+      match recordDefinitionForType(
+        context.state,
+        context.moduleIndex,
+        baseType,
+      ) {
+        case Some(_) => text(context.source, baseNode)
+        case None => ""
+      }
+    } else {
+      ""
+    }
+    case None => ""
+  }
+}
+
+function structuralRecordFieldType(
+  baseType: TypeValue,
+  fieldName: string,
+) -> Option<TypeValue> {
+  let mut index = 0
+  while index < baseType.fieldNames.length {
+    match baseType.fieldNames.get(index) {
+      case Some(name) => if name == fieldName {
+        return baseType.fields.get(index)
+      }
+      case None => ()
+    }
+    index += 1
+  }
+  None
+}
+
+function recordUpdateFieldExpectation(
+  context: RecordUpdateContext,
+  baseType: TypeValue,
+  fieldName: string,
+) -> RecordFieldExpectation {
+  match recordDefinitionForType(
+    context.state,
+    context.moduleIndex,
+    baseType,
+  ) {
+    case Some(definition) => for declared in definition.fields {
+      if declared.name == fieldName {
+        return RecordFieldExpectation {
+          shapeKnown: true,
+          typeValue: Some(substitute(
+            declared.typeValue,
+            definition.typeParameters,
+            baseType.arguments,
+          )),
+        }
+      }
+    }
+    case None => ()
+  }
+  if baseType.kind == "record" {
+    return RecordFieldExpectation {
+      shapeKnown: true,
+      typeValue: structuralRecordFieldType(baseType, fieldName),
+    }
+  }
+  let nominalShapeKnown = match recordDefinitionForType(
+    context.state,
+    context.moduleIndex,
+    baseType,
+  ) {
+    case Some(_) => true
+    case None => false
+  }
+  RecordFieldExpectation {
+    shapeKnown: nominalShapeKnown,
+    typeValue: None,
+  }
+}
+
+function inferRecordFieldValue(
+  service: CheckerService,
+  context: RecordUpdateContext,
+  value: SyntaxNode,
+  expected: Option<TypeValue>,
+  checkExpected: bool,
+) -> () {
+  match expected {
+    case Some(expectedType) => if checkExpected &&
+      value.kind == "expression/array" &&
+      value.children.length == 0 &&
+      expectedType.kind == "constructor" &&
+      expectedType.name == "Array" {
+      addNode(
+        context.state,
+        context.moduleIndex,
+        "expression",
+        value,
+        expectedType,
+      )
+    } else if checkExpected && !hasHole(expectedType) {
+      let _ = checkExpressionExpected(
+        service,
+        context.state,
+        context.moduleIndex,
+        context.source,
+        value,
+        expectedType,
+      )
+    } else {
+      let _ = serviceInferExpression(
+        service,
+        context.state,
+        context.moduleIndex,
+        context.source,
+        value,
+      )
+    }
+    case None => {
+      let _ = serviceInferExpression(
+        service,
+        context.state,
+        context.moduleIndex,
+        context.source,
+        value,
+      )
+    }
+  }
+}
+
+function recordFieldName(context: RecordUpdateContext, field: SyntaxNode) -> string {
+  match child(field, "name") {
+    case Some(found) => text(context.source, found)
+    case None => ""
+  }
+}
+
+function stringArrayContains(values: Array<string>, target: string) -> bool {
+  for value in values {
+    if value == target { return true }
+  }
+  false
+}
+
+function laterRecordFieldHasName(
+  context: RecordUpdateContext,
+  fields: Array<SyntaxNode>,
+  index: int,
+  fieldName: string,
+) -> bool {
+  let mut later = index + 1
+  while later < fields.length {
+    match fields.get(later) {
+      case Some(field) => if recordFieldName(context, field) == fieldName {
+        return true
+      }
+      case None => ()
+    }
+    later += 1
+  }
+  false
+}
+
+function reportMissingRecordField(
+  context: RecordUpdateContext,
+  baseType: TypeValue,
+  field: SyntaxNode,
+  fieldName: string,
+) -> () {
+  let owner = if context.constructorName != "" {
+    "record `{context.constructorName}`"
+  } else {
+    "`{typeText(widen(baseType))}`"
+  }
+  addDiagnostic(
+    context.state,
+    context.moduleIndex,
+    "TPZ5006",
+    "{owner} has no field `{fieldName}`",
+    "",
+    field,
+  )
+}
+
+function inferRecordUpdateField(
+  service: CheckerService,
+  context: RecordUpdateContext,
+  baseType: TypeValue,
+  field: SyntaxNode,
+  checkExpected: bool,
+  duplicate: bool,
+) -> () {
+  let fieldName = recordFieldName(context, field)
+  let expectation = recordUpdateFieldExpectation(context, baseType, fieldName)
+  if duplicate {
+    addDiagnostic(
+      context.state,
+      context.moduleIndex,
+      "TPZ5008",
+      "field `{fieldName}` is given twice in `{context.constructorName}`",
+      "",
+      field,
+    )
+  }
+  if expectation.shapeKnown && match expectation.typeValue {
+    case Some(_) => false
+    case None => true
+  } {
+    reportMissingRecordField(context, baseType, field, fieldName)
+  }
+  match child(field, "value") {
+    case Some(value) => inferRecordFieldValue(
+      service,
+      context,
+      value,
+      expectation.typeValue,
+      checkExpected && !duplicate,
+    )
+    case None => ()
+  }
+}
+
+function inferRecordUpdateFields(
+  service: CheckerService,
+  context: RecordUpdateContext,
+  baseType: TypeValue,
+  fields: Array<SyntaxNode>,
+) -> () {
+  let mut seen: Array<string> = []
+  let mut index = 0
+  for field in fields {
+    let fieldName = recordFieldName(context, field)
+    let duplicate = context.constructorName != "" &&
+      stringArrayContains(seen, fieldName)
+    let checkExpected = context.constructorName != "" ||
+      !laterRecordFieldHasName(context, fields, index, fieldName)
+    inferRecordUpdateField(
+      service,
+      context,
+      baseType,
+      field,
+      checkExpected,
+      duplicate,
+    )
+    seen.push(fieldName)
+    index += 1
+  }
+  ()
+}
+
+function inferRecordUpdateSpread(
+  service: CheckerService,
+  context: RecordUpdateContext,
+  baseNode: SyntaxNode,
+  baseType: TypeValue,
+  spread: Option<SyntaxNode>,
+) -> bool {
+  match spread {
+    case Some(value) => {
+      if context.constructorName != "" {
+        let _ = checkExpressionExpected(
+          service,
+          context.state,
+          context.moduleIndex,
+          context.source,
+          value,
+          baseType,
+        )
+      } else {
+        let _ = serviceInferExpression(
+          service,
+          context.state,
+          context.moduleIndex,
+          context.source,
+          value,
+        )
+        addDiagnostic(
+          context.state,
+          context.moduleIndex,
+          "TPZ5001",
+          "record spread `...` needs a declared record; `{text(context.source, baseNode)}` is not one",
+          "",
+          value,
+        )
+      }
+      true
+    }
+    case None => false
+  }
+}
+
+function reportMissingRecordConstructionFields(
+  context: RecordUpdateContext,
+  baseType: TypeValue,
+  fields: Array<SyntaxNode>,
+  hasSpread: bool,
+  node: SyntaxNode,
+) -> () {
+  if context.constructorName == "" || hasSpread {
+    return ()
+  }
+  let definition = match recordDefinitionForType(
+    context.state,
+    context.moduleIndex,
+    baseType,
+  ) {
+    case Some(found) => found
+    case None => return ()
+  }
+  let mut supplied: Array<string> = []
+  for field in fields {
+    supplied.push(recordFieldName(context, field))
+  }
+  let mut count = 0
+  let mut names = ""
+  for declared in definition.fields {
+    if !declared.hasDefault && !stringArrayContains(supplied, declared.name) {
+      if count > 0 { names += ", " }
+      names += "`{declared.name}`"
+      count += 1
+    }
+  }
+  if count > 0 {
+    let suffix = if count == 1 { "" } else { "s" }
+    addDiagnostic(
+      context.state,
+      context.moduleIndex,
+      "TPZ5004",
+      "record `{context.constructorName}` is missing field{suffix} {names}",
+      "",
+      node,
+    )
+  }
+}
+
+function checkedRecordUpdateResult(
+  context: RecordUpdateContext,
+  baseNode: SyntaxNode,
+  baseType: TypeValue,
+) -> TypeValue {
+  if context.constructorName != "" ||
+    baseType.kind == "record" ||
+    baseType.kind == "nominal-record" ||
+    baseType.kind == "rigid" ||
+    baseType.kind == "union" ||
+    hasHole(baseType) {
+    return baseType
+  }
+  addDiagnostic(
+    context.state,
+    context.moduleIndex,
+    "TPZ5001",
+    "record update needs a record, found `{typeText(widen(baseType))}`",
+    "",
+    baseNode,
+  )
+  emptyType("unknown")
+}
+
+export function inferRecordUpdateExpression(
+  service: CheckerService,
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  node: SyntaxNode,
+) -> TypeValue {
+  let baseContext = RecordUpdateContext {
+    state: state,
+    moduleIndex: moduleIndex,
+    source: source,
+    expression: node,
+    constructorName: "",
+  }
+  let baseNode = match child(node, "base") {
+    case Some(found) => found
+    case None => return emptyType("unknown")
+  }
+  let inferredBase = contextualRecordUpdateBase(
+    baseContext,
+    baseNode,
+    inferRecordUpdateBase(service, baseContext, baseNode),
+  )
+  let context = RecordUpdateContext {
+    ...baseContext,
+    constructorName: recordUpdateConstructorName(
+      baseContext,
+      baseNode,
+      inferredBase,
+    ),
+  }
+  let base = checkedRecordUpdateResult(context, baseNode, inferredBase)
+  let fields = children(node, "fields")
+  let hasSpread = inferRecordUpdateSpread(
+    service,
+    context,
+    baseNode,
+    base,
+    child(node, "spread"),
+  )
+  inferRecordUpdateFields(service, context, base, fields)
+  reportMissingRecordConstructionFields(
+    context,
+    base,
+    fields,
+    hasSpread,
+    node,
+  )
+  base
+}
+
+function assignmentRoot(node: SyntaxNode) -> Option<SyntaxNode> {
+  if node.kind == "expression/identifier" {
+    return Some(node)
+  }
+  match child(node, "object") {
+    case Some(object) => assignmentRoot(object)
+    case None => None
+  }
+}
+
+export function checkAssignmentRootMutable(
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  target: SyntaxNode,
+  collectionMutation: bool,
+) -> () {
+  match assignmentRoot(target) {
+    case Some(root) => match referenceFor(
+      state,
+      moduleIndex,
+      root.lo,
+      root.hi,
+    ) {
+      case Some(reference) => match symbolAt(
+        state,
+        reference.targetModuleIndex,
+        reference.targetLo,
+        reference.targetHi,
+      ) {
+        case Some(symbol) => if !symbol.mutable {
+          addDiagnostic(
+            state,
+            moduleIndex,
+            "TPZ5003",
+            if collectionMutation {
+              "`{text(source, root)}` is not `let mut`; in-place collection mutation requires a mutable binding (§9)"
+            } else {
+              "`{text(source, root)}` is immutable; declare it with `let mut`"
+            },
+            "",
+            root,
+          )
+        } else {
+          ()
+        }
+        case None => ()
+      }
+      case None => ()
+    }
+    case None => ()
+  }
+}

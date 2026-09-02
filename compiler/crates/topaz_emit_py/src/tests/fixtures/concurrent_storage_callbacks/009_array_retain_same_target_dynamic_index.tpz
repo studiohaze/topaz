@@ -1,0 +1,21 @@
+
+function keep(x: int) -> bool {
+    x > 2
+}
+
+function all(x: int) -> bool {
+    x > 0
+}
+
+let seeds = [0, 1]
+let i = seeds[1]
+let callbacks = [all, keep]
+
+concurrent {
+    slow: {
+        let mut xs = [1, 2, 3, 4]
+        xs.retain(callbacks[i])
+    }
+    fast: 0
+}
+0

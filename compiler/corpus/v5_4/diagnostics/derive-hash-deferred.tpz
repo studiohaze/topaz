@@ -1,0 +1,1 @@
+record Bad derives Hash { value: int }

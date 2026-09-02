@@ -1,0 +1,13 @@
+
+function add(a: int, b: int) -> int {
+    a + b
+}
+let result = loop {
+    print("lhs")
+    break 10
+} |> add(loop {
+    print("arg")
+    break 2
+})
+print("{result}")
+result

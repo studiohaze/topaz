@@ -1,0 +1,8 @@
+
+import model { User, setBase }
+function main() -> int {
+    setBase(41)
+    let user = User {}
+    user.age
+}
+main()

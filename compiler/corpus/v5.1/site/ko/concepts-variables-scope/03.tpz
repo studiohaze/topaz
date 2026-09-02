@@ -1,0 +1,11 @@
+// 컴파일 시점에 결정되는 상수
+const MAX_SIZE: int = 1000
+const APP_NAME: string = "Topaz Calculator"
+const PI: float = 3.141592653589793
+
+// 같은 파일 아래에서 사용 가능한 최상위 상수
+const 기본설정 = {
+    언어: "한국어",
+    테마: "다크",
+    자동저장: true
+}

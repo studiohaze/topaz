@@ -1,0 +1,13 @@
+function 부작용있는함수() -> bool {
+    print("함수가 호출되었습니다!")
+    return true
+}
+
+// AND 단축 평가 - 첫 번째가 false면 두 번째 실행 안함
+let 단축AND = false && 부작용있는함수()  // 함수 호출 안됨
+
+// OR 단축 평가 - 첫 번째가 true면 두 번째 실행 안함
+let 단축OR = true || 부작용있는함수()   // 함수 호출 안됨
+
+print("단축 AND: {단축AND}")
+print("단축 OR: {단축OR}")

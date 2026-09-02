@@ -1,0 +1,2 @@
+let lo = 2
+[1, 2, 3, 4].filter((x) => x > lo)

@@ -1,0 +1,23 @@
+[package]
+name = "topaz_lispex_embed"
+description = "Exact-artifact adapter for the bounded Lispex evaluator"
+version.workspace = true
+license.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[features]
+default = ["workspace-component", "full-profile-contract"]
+workspace-component = []
+managed-product-component = []
+full-profile-contract = []
+
+[dependencies]
+num-bigint = { workspace = true }
+num-integer = { workspace = true }
+sha2 = { workspace = true }
+topaz_value = { workspace = true }
+wasmtime = { workspace = true }
+
+[lints]
+workspace = true

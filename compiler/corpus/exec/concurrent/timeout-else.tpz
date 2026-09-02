@@ -1,0 +1,9 @@
+function spin() -> int {
+    let mut i = 0
+    while true { i += 1 }
+    return i
+}
+let r = concurrent(timeout: 5ms) {
+    stuck: spin()
+} else { { stuck: -1 } }
+print("{r.stuck}")

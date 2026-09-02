@@ -1,0 +1,1631 @@
+// Call-target selection and named, default, variadic, and spread planning.
+// Plans describe slot ownership only; call_complete performs inference and the
+// checker facade records the resulting typed call.
+
+import types { SyntaxNode }
+import checker_types { TypeValue }
+import checker.model {
+  CallArgumentPlan,
+  CallSignature,
+  CheckerService,
+  CheckerState,
+  FunctionDefinition,
+  TypeBinding,
+  UserProtocolCallTarget,
+  constructor,
+  emptyType,
+  literal,
+  primitive,
+  serviceInferExpression,
+}
+import checker.syntax_index {
+  addDiagnostic,
+  child,
+  children,
+  protocolMethodDefinition,
+  referenceFor,
+  text,
+}
+import checker.nominals { formType }
+import checker.protocols_methods {
+  enumDefinitionForType,
+  receiverMethodCallSignature,
+  referenceTargetType,
+}
+import checker.members_capabilities {
+  bindTypeVariable,
+  builtinNamespaceFamily,
+  typeArgument,
+}
+import checker.call_facts {
+  builtinCallTypeParameters,
+  builtinFunction,
+  defaultedCallSignature,
+  isBuiltinNamespace,
+  recordInferredExpression,
+  requiredCallSignature,
+  userProtocolObject,
+}
+import checker.expression_core {
+  contextualMemberObjectType,
+  inferIdentifierExpression,
+  inferOptionalMemberAccess,
+  inferPlainMemberAccess,
+  optionalReceiver,
+}
+
+export function nominalConstructorCallResult(
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  callee: SyntaxNode,
+) -> Option<TypeValue> {
+  if callee.kind == "expression/identifier" {
+    match referenceTargetType(state, moduleIndex, callee) {
+      case Some(found) => if found.kind == "newtype" {
+        return Some(found)
+      }
+      case None => ()
+    }
+  }
+  if callee.kind == "expression/member" {
+    let object = match child(callee, "object") {
+      case Some(found) => found
+      case None => return None
+    }
+    let field = match child(callee, "field") {
+      case Some(found) => text(source, found)
+      case None => return None
+    }
+    let enumType = match referenceTargetType(
+      state,
+      moduleIndex,
+      object,
+    ) {
+      case Some(found) => found
+      case None => return None
+    }
+    match enumDefinitionForType(state, moduleIndex, enumType) {
+      case Some(definition) => for variant in definition.variants {
+        if variant.name == field && variant.payloads.length > 0 {
+          return Some(enumType)
+        }
+      }
+      case None => ()
+    }
+  }
+  None
+}
+
+export function declaredCallSignature(
+  definition: FunctionDefinition,
+) -> CallSignature {
+  CallSignature {
+    parameterNames: definition.parameterNames,
+    parameterDefaults: definition.parameterDefaults,
+    parameterCount: definition.parameterTypes.length,
+    variadic: definition.variadic.length > 0,
+    positionalOnlyIdentity: "",
+  }
+}
+
+function positionalOnlyCallSignature(
+  identity: string,
+  parameterNames: Array<string>,
+) -> CallSignature {
+  CallSignature {
+    ...requiredCallSignature(parameterNames, false),
+    positionalOnlyIdentity: identity,
+  }
+}
+
+function collectionStaticCallSignature(
+  namespace: string,
+  name: string,
+) -> Option<CallSignature> {
+  if (namespace == "Array" || namespace == "Set") && name == "of" {
+    return Some(requiredCallSignature([], true))
+  }
+  if namespace == "Map" {
+    return match name {
+      case "new" => Some(requiredCallSignature([], false))
+      case "ofEntries" => Some(requiredCallSignature(["entries"], false))
+      case _ => None
+    }
+  }
+  if namespace == "Bytes" {
+    return match name {
+      case "empty" => Some(requiredCallSignature([], false))
+      case "encodeUtf8" | "fromHex" | "fromBase64" =>
+        Some(requiredCallSignature(["s"], false))
+      case "fromArray" => Some(requiredCallSignature(["values"], false))
+      case "concat" => Some(requiredCallSignature(["a", "b"], false))
+      case _ => None
+    }
+  }
+  if namespace == "ByteBuffer" {
+    return match name {
+      case "allocate" => Some(defaultedCallSignature(
+        ["length", "value"],
+        [false, true],
+      ))
+      case "fromBytes" => Some(requiredCallSignature(["value"], false))
+      case _ => None
+    }
+  }
+  None
+}
+
+function numericBinaryStaticCallSignature(
+  namespace: string,
+  name: string,
+) -> Option<CallSignature> {
+  if namespace == "Math" {
+    return match name {
+      case "sqrt" | "abs" | "floor" | "ceil" | "round" |
+        "sin" | "cos" | "tan" | "isNaN" | "isFinite" =>
+        Some(requiredCallSignature(["x"], false))
+      case "parseFloat" => Some(requiredCallSignature(["s"], false))
+      case "min" | "max" => Some(requiredCallSignature(["a", "b"], false))
+      case _ => None
+    }
+  }
+  if namespace == "Codec" {
+    return match name {
+      case "zstdCompress" => Some(defaultedCallSignature(
+        ["bytes", "level"],
+        [false, true],
+      ))
+      case "gzipCompress" | "gzipDecompress" | "deflateCompress" |
+        "deflateFixedCompress" | "zlibFixedCompress" |
+        "reedSolomon255223Protect" | "deflateDecompress" |
+        "zstdDecompress" => Some(requiredCallSignature(["bytes"], false))
+      case _ => None
+    }
+  }
+  if namespace == "Hash" {
+    return match name {
+      case "sha256" | "sha512" | "crc32" =>
+        Some(requiredCallSignature(["data"], false))
+      case "hmacSha256" => Some(requiredCallSignature(
+        ["key", "message"],
+        false,
+      ))
+      case _ => None
+    }
+  }
+  None
+}
+
+function hostStaticCallSignature(
+  namespace: string,
+  name: string,
+) -> Option<CallSignature> {
+  if namespace == "FS" {
+    return match name {
+      case "readText" | "readBytes" | "list" =>
+        Some(requiredCallSignature(["path"], false))
+      case "writeText" => Some(requiredCallSignature(
+        ["path", "text"],
+        false,
+      ))
+      case "writeBytes" => Some(requiredCallSignature(
+        ["path", "bytes"],
+        false,
+      ))
+      case _ => None
+    }
+  }
+  if namespace == "Encoding" {
+    return match name {
+      case "utf8Encode" | "hexDecode" | "base64Decode" =>
+        Some(requiredCallSignature(["text"], false))
+      case "utf8Decode" | "hexEncode" | "base64Encode" =>
+        Some(requiredCallSignature(["bytes"], false))
+      case _ => None
+    }
+  }
+  if namespace == "Cli" {
+    return match name {
+      case "hasFlag" | "option" | "options" =>
+        Some(requiredCallSignature(["args", "name"], false))
+      case "positionals" => Some(requiredCallSignature(["args"], false))
+      case _ => None
+    }
+  }
+  if namespace == "Path" &&
+    (name == "from" || name == "cwdRelative" || name == "project") {
+    return Some(requiredCallSignature(["text"], false))
+  }
+  if namespace == "Regex" && name == "compile" {
+    return Some(requiredCallSignature(["pattern"], false))
+  }
+  None
+}
+
+function structuredDataStaticCallSignature(
+  namespace: string,
+  name: string,
+) -> Option<CallSignature> {
+  if namespace == "CSV" {
+    return match name {
+      case "parse" | "parseWithHeader" =>
+        Some(requiredCallSignature(["text"], false))
+      case "stringify" => Some(requiredCallSignature(["rows"], false))
+      case "stringifyWithHeader" => Some(requiredCallSignature(
+        ["rows", "columns"],
+        false,
+      ))
+      case _ => None
+    }
+  }
+  if namespace == "TOML" {
+    return match name {
+      case "parse" => Some(requiredCallSignature(["text"], false))
+      case "stringify" | "toJson" | "fromJson" =>
+        Some(requiredCallSignature(["value"], false))
+      case _ => None
+    }
+  }
+  if namespace == "JSON" {
+    return match name {
+      case "parseAs" | "parse" =>
+        Some(requiredCallSignature(["text"], false))
+      case "decode" | "stringify" =>
+        Some(requiredCallSignature(["value"], false))
+      case _ => None
+    }
+  }
+  None
+}
+
+function scalarTestStaticCallSignature(
+  namespace: string,
+  name: string,
+) -> Option<CallSignature> {
+  if namespace == "URL" && name == "parse" {
+    return Some(requiredCallSignature(["text"], false))
+  }
+  if namespace == "Date" {
+    return match name {
+      case "fromYmd" => Some(requiredCallSignature(
+        ["year", "month", "day"],
+        false,
+      ))
+      case "parseIso" => Some(requiredCallSignature(["text"], false))
+      case _ => None
+    }
+  }
+  if namespace == "BigInt" {
+    return match name {
+      case "fromInt" => Some(requiredCallSignature(["n"], false))
+      case "parse" => Some(requiredCallSignature(["text", "radix"], false))
+      case _ => None
+    }
+  }
+  if namespace == "Decimal" {
+    return match name {
+      case "fromInt" => Some(requiredCallSignature(["n"], false))
+      case "parse" => Some(requiredCallSignature(["text"], false))
+      case _ => None
+    }
+  }
+  if namespace == "Test" {
+    return match name {
+      case "assert" => Some(defaultedCallSignature(
+        ["condition", "message"],
+        [false, true],
+      ))
+      case "assertEq" | "assertNe" => Some(requiredCallSignature(
+        ["actual", "expected"],
+        false,
+      ))
+      case "assertContains" => Some(requiredCallSignature(
+        ["text", "needle"],
+        false,
+      ))
+      case "assertOk" | "assertErr" | "assertSome" | "assertNone" =>
+        Some(requiredCallSignature(["value"], false))
+      case "assertGolden" => Some(requiredCallSignature(
+        ["path", "actual"],
+        false,
+      ))
+      case _ => None
+    }
+  }
+  None
+}
+
+function staticBuiltinCallSignature(
+  namespace: string,
+  name: string,
+) -> Option<CallSignature> {
+  match builtinNamespaceFamily(namespace) {
+    case "collection" => collectionStaticCallSignature(namespace, name)
+    case "numeric-binary" => numericBinaryStaticCallSignature(namespace, name)
+    case "host" => hostStaticCallSignature(namespace, name)
+    case "structured-data" => structuredDataStaticCallSignature(namespace, name)
+    case "scalar" => scalarTestStaticCallSignature(namespace, name)
+    case "protocol" => if namespace == "Show" && name == "show" {
+      Some(positionalOnlyCallSignature("Show.show", ["value"]))
+    } else if namespace == "Eq" && name == "equals" {
+      Some(positionalOnlyCallSignature("Eq.equals", ["a", "b"]))
+    } else if namespace == "Order" && name == "compare" {
+      Some(positionalOnlyCallSignature("Order.compare", ["a", "b"]))
+    } else {
+      None
+    }
+    case _ => None
+  }
+}
+
+export function userProtocolCallTarget(
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  callee: SyntaxNode,
+) -> Option<UserProtocolCallTarget> {
+  if callee.kind != "expression/member" {
+    return None
+  }
+  let object = match child(callee, "object") {
+    case Some(found) => found
+    case None => return None
+  }
+  let field = match child(callee, "field") {
+    case Some(found) => text(source, found)
+    case None => return None
+  }
+  match userProtocolObject(state, moduleIndex, source, object) {
+    case Some(definition) => match protocolMethodDefinition(definition, field) {
+      case Some(method) => Some(UserProtocolCallTarget {
+        protocolName: definition.name,
+        method: method,
+      })
+      case None => None
+    }
+    case None => None
+  }
+}
+
+export function userProtocolCallSignature(
+  target: UserProtocolCallTarget,
+) -> CallSignature {
+  positionalOnlyCallSignature(
+    "{target.protocolName}.{target.method.name}",
+    target.method.parameterNames,
+  )
+}
+
+function containerReceiverCallSignature(
+  receiver: TypeValue,
+  name: string,
+) -> Option<CallSignature> {
+  if receiver.kind != "constructor" {
+    return None
+  }
+  if receiver.name == "Option" {
+    return match name {
+      case "okOr" => Some(requiredCallSignature(["error"], false))
+      case "okOrElse" | "map" | "flatMap" =>
+        Some(requiredCallSignature(["f"], false))
+      case _ => None
+    }
+  }
+  if receiver.name == "Result" {
+    return match name {
+      case "map" | "flatMap" => Some(requiredCallSignature(["f"], false))
+      case _ => None
+    }
+  }
+  if receiver.name == "Array" {
+    return match name {
+      case "get" => Some(requiredCallSignature(["i"], false))
+      case "slice" => Some(requiredCallSignature(["start", "end"], false))
+      case "map" | "sortedBy" | "filter" | "sortBy" | "retain" =>
+        Some(requiredCallSignature(["f"], false))
+      case "join" => Some(requiredCallSignature(["sep"], false))
+      case "reduce" => Some(requiredCallSignature(["initial", "f"], false))
+      case "indexOf" | "push" => Some(requiredCallSignature(["x"], false))
+      case "insert" => Some(requiredCallSignature(
+        ["index", "value"],
+        false,
+      ))
+      case "removeAt" => Some(requiredCallSignature(["index"], false))
+      case "sorted" | "pop" | "clear" | "reverse" | "sort" =>
+        Some(requiredCallSignature([], false))
+      case _ => None
+    }
+  }
+  if receiver.name == "Map" {
+    return match name {
+      case "insert" => Some(requiredCallSignature(["k", "v"], false))
+      case "get" | "remove" | "containsKey" =>
+        Some(requiredCallSignature(["k"], false))
+      case "getOr" => Some(requiredCallSignature(["k", "default"], false))
+      case "isEmpty" | "clear" => Some(requiredCallSignature([], false))
+      case "update" => Some(requiredCallSignature(
+        ["k", "initial", "f"],
+        false,
+      ))
+      case "mapValues" | "filter" =>
+        Some(requiredCallSignature(["f"], false))
+      case _ => None
+    }
+  }
+  if receiver.name == "Set" {
+    return match name {
+      case "add" | "remove" | "contains" =>
+        Some(requiredCallSignature(["x"], false))
+      case "union" | "intersection" | "difference" =>
+        Some(requiredCallSignature(["other"], false))
+      case "isEmpty" | "toArray" | "clear" =>
+        Some(requiredCallSignature([], false))
+      case _ => None
+    }
+  }
+  None
+}
+
+function scalarReceiverCallSignature(
+  receiver: TypeValue,
+  name: string,
+) -> Option<CallSignature> {
+  if (receiver.kind == "primitive" || receiver.kind == "literal") &&
+    receiver.name == "int" {
+    return match name {
+      case "atLeast" => Some(requiredCallSignature(["min"], false))
+      case "atMost" => Some(requiredCallSignature(["max"], false))
+      case _ => None
+    }
+  }
+  if (receiver.kind == "primitive" || receiver.kind == "literal") &&
+    receiver.name == "string" {
+    return match name {
+      case "startsWith" => Some(requiredCallSignature(["prefix"], false))
+      case "endsWith" => Some(requiredCallSignature(["suffix"], false))
+      case "contains" | "indexOf" | "lastIndexOf" =>
+        Some(requiredCallSignature(["sub"], false))
+      case "codePointAt" => Some(requiredCallSignature(["i"], false))
+      case "split" => Some(requiredCallSignature(["sep"], false))
+      case "slice" => Some(requiredCallSignature(["start", "end"], false))
+      case "replace" => Some(requiredCallSignature(["old", "new"], false))
+      case "scalars" | "trim" | "trimStart" | "trimEnd" | "byteLength" =>
+        Some(requiredCallSignature([], false))
+      case _ => None
+    }
+  }
+  None
+}
+
+function runtimeReceiverCallSignature(
+  receiver: TypeValue,
+  name: string,
+) -> Option<CallSignature> {
+  if receiver.kind == "file" {
+    return match name {
+      case "write" => Some(requiredCallSignature(["s"], false))
+      case "read" | "close" => Some(requiredCallSignature([], false))
+      case _ => None
+    }
+  }
+  if receiver.kind == "json-value" {
+    return match name {
+      case "get" => Some(requiredCallSignature(["key"], false))
+      case "at" => Some(requiredCallSignature(["index"], false))
+      case "kind" | "isNull" | "asString" | "asBool" | "asInt" |
+        "numberText" | "length" | "asArray" | "keys" | "values" =>
+        Some(requiredCallSignature([], false))
+      case _ => None
+    }
+  }
+  if receiver.kind == "bytes" {
+    return match name {
+      case "get" => Some(requiredCallSignature(["index"], false))
+      case "slice" => Some(requiredCallSignature(["start", "end"], false))
+      case "decodeUtf8" | "toHex" | "toBase64" | "length" |
+        "isEmpty" | "toArray" => Some(requiredCallSignature([], false))
+      case _ => None
+    }
+  }
+  if receiver.kind == "byte-buffer" {
+    return match name {
+      case "get" => Some(requiredCallSignature(["index"], false))
+      case "set" => Some(requiredCallSignature(["index", "value"], false))
+      case "fill" => Some(requiredCallSignature(
+        ["start", "length", "value"],
+        false,
+      ))
+      case "copy" => Some(requiredCallSignature(
+        ["source", "sourceStart", "targetStart", "length"],
+        false,
+      ))
+      case "length" | "toBytes" => Some(requiredCallSignature([], false))
+      case _ => None
+    }
+  }
+  if receiver.kind == "path" {
+    return match name {
+      case "join" => Some(requiredCallSignature(["child"], false))
+      case "withExtension" => Some(requiredCallSignature(["ext"], false))
+      case "parent" | "fileName" | "extension" | "normalize" | "toString" =>
+        Some(requiredCallSignature([], false))
+      case _ => None
+    }
+  }
+  if receiver.kind == "regex" {
+    return match name {
+      case "isMatch" | "find" | "findAll" | "split" =>
+        Some(requiredCallSignature(["text"], false))
+      case "replaceAll" => Some(requiredCallSignature(
+        ["text", "replacement"],
+        false,
+      ))
+      case _ => None
+    }
+  }
+  if receiver.kind == "url" {
+    return match name {
+      case "scheme" | "path" | "toString" | "host" | "fragment" | "query" =>
+        Some(requiredCallSignature([], false))
+      case _ => None
+    }
+  }
+  if receiver.kind == "date" {
+    return match name {
+      case "addDays" => Some(requiredCallSignature(["days"], false))
+      case "toIso" | "year" | "month" | "day" =>
+        Some(requiredCallSignature([], false))
+      case _ => None
+    }
+  }
+  if receiver.kind == "big-int" {
+    return match name {
+      case "toString" => Some(requiredCallSignature(["radix"], false))
+      case "div" | "mod" => Some(requiredCallSignature(["other"], false))
+      case "toInt" => Some(requiredCallSignature([], false))
+      case _ => None
+    }
+  }
+  if receiver.kind == "decimal" {
+    return match name {
+      case "round" => Some(defaultedCallSignature(
+        ["scale", "mode"],
+        [false, true],
+      ))
+      case "div" => Some(defaultedCallSignature(
+        ["other", "scale", "mode"],
+        [false, false, true],
+      ))
+      case "toString" | "scale" | "toInt" =>
+        Some(requiredCallSignature([], false))
+      case _ => None
+    }
+  }
+  None
+}
+
+export function builtinReceiverCallSignature(
+  receiver: TypeValue,
+  name: string,
+) -> Option<CallSignature> {
+  if receiver.kind == "union" {
+    for member in receiver.members {
+      match builtinReceiverCallSignature(member, name) {
+        case Some(found) => return Some(found)
+        case None => ()
+      }
+    }
+    return None
+  }
+  match containerReceiverCallSignature(receiver, name) {
+    case Some(found) => return Some(found)
+    case None => ()
+  }
+  match scalarReceiverCallSignature(receiver, name) {
+    case Some(found) => return Some(found)
+    case None => ()
+  }
+  runtimeReceiverCallSignature(receiver, name)
+}
+
+export function builtinMemberCallSignature(
+  service: CheckerService,
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  call: SyntaxNode,
+  callee: SyntaxNode,
+) -> Option<CallSignature> {
+  if callee.kind != "expression/member" &&
+    callee.kind != "expression/optional-access" {
+    return None
+  }
+  let object = match child(callee, "object") {
+    case Some(found) => found
+    case None => return None
+  }
+  let field = match child(callee, "field") {
+    case Some(found) => found
+    case None => return None
+  }
+  match userProtocolObject(state, moduleIndex, source, object) {
+    case Some(_) => return None
+    case None => ()
+  }
+  if object.kind == "expression/identifier" &&
+    isBuiltinNamespace(text(source, object)) &&
+    match referenceFor(state, moduleIndex, object.lo, object.hi) {
+      case Some(reference) => reference.targetModuleIndex < 0
+      case None => true
+    } {
+    return staticBuiltinCallSignature(
+      text(source, object),
+      text(source, field),
+    )
+  }
+  let objectType = serviceInferExpression(service, state, moduleIndex, source, object)
+  let receiverType = if callee.kind == "expression/optional-access" {
+    match optionalReceiver(contextualMemberObjectType(
+      state,
+      call,
+      objectType,
+    )) {
+      case Some(receiver) => receiver.innerType
+      case None => emptyType("unknown")
+    }
+  } else {
+    objectType
+  }
+  match receiverMethodCallSignature(
+    state,
+    moduleIndex,
+    receiverType,
+    text(source, field),
+  ) {
+    case Some(signature) => Some(signature)
+    case None => builtinReceiverCallSignature(receiverType, text(source, field))
+  }
+}
+
+function callParameterIndex(
+  signature: CallSignature,
+  name: string,
+) -> int {
+  let mut index = 0
+  while index < signature.parameterCount {
+    match signature.parameterNames.get(index) {
+      case Some(parameterName) => if parameterName == name {
+        return index
+      }
+      case None => ()
+    }
+    index += 1
+  }
+  -1
+}
+
+function reportNamedCallArity(
+  state: CheckerState,
+  moduleIndex: int,
+  node: SyntaxNode,
+  signature: CallSignature,
+  filled: Array<bool>,
+  leadingSlot: int,
+  supplied: int,
+  overflow: int,
+) -> () {
+  let mut required = 0
+  let mut missing = false
+  let mut index = 0
+  while index < signature.parameterCount {
+    let defaulted = match signature.parameterDefaults.get(index) {
+      case Some(value) => value
+      case None => false
+    }
+    let present = match filled.get(index) {
+      case Some(value) => value
+      case None => false
+    }
+    if !defaulted {
+      required += 1
+      if !present {
+        missing = true
+      }
+    }
+    index += 1
+  }
+  if overflow > 0 || missing {
+    if signature.positionalOnlyIdentity != "" {
+      let noun = if required == 1 { "argument" } else { "arguments" }
+      addDiagnostic(
+        state,
+        moduleIndex,
+        "TPZ5004",
+        "`{signature.positionalOnlyIdentity}` takes {required} {noun}, found {supplied}",
+        "",
+        node,
+      )
+    } else if leadingSlot == -2 {
+      addDiagnostic(
+        state,
+        moduleIndex,
+        "TPZ5004",
+        "the pipeline inserts the piped value, but this function takes no parameters",
+        "",
+        node,
+      )
+    } else {
+      let optional = signature.variadic || signature.parameterCount > required
+      let suffix = if optional { "+" } else { "" }
+      let noun = if required == 1 { "argument" } else { "arguments" }
+      addDiagnostic(
+        state,
+        moduleIndex,
+        "TPZ5004",
+        "this call needs {required}{suffix} {noun}, found {supplied}",
+        "",
+        node,
+      )
+    }
+  }
+  ()
+}
+
+record NamedCallPlan {
+  slots: Array<int>,
+  filled: Array<bool>,
+  positional: int,
+  sawNamed: bool,
+  sawSpread: bool,
+  overflow: int,
+  leadingSlot: int,
+  invalid: bool,
+}
+
+function emptyNamedCallPlan(
+  signature: CallSignature,
+  hasLeading: bool,
+) -> NamedCallPlan {
+  let mut filled: Array<bool> = []
+  let mut index = 0
+  while index < signature.parameterCount {
+    filled.push(false)
+    index += 1
+  }
+  let mut positional = 0
+  let mut overflow = 0
+  let mut leadingSlot = -3
+  if hasLeading {
+    if signature.parameterCount > 0 {
+      filled[0] = true
+      positional = 1
+      leadingSlot = 0
+    } else if signature.variadic {
+      leadingSlot = -1
+    } else {
+      overflow = 1
+      leadingSlot = -2
+    }
+  }
+  NamedCallPlan {
+    slots: [],
+    filled: filled,
+    positional: positional,
+    sawNamed: false,
+    sawSpread: false,
+    overflow: overflow,
+    leadingSlot: leadingSlot,
+    invalid: overflow > 0,
+  }
+}
+
+function planNamedSignatureArgument(
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  signature: CallSignature,
+  plan: NamedCallPlan,
+  argument: SyntaxNode,
+) -> NamedCallPlan {
+  let nameNode = match child(argument, "name") {
+    case Some(found) => found
+    case None => argument
+  }
+  let parameterIndex = callParameterIndex(signature, text(source, nameNode))
+  let available = parameterIndex >= 0 && match plan.filled.get(parameterIndex) {
+    case Some(value) => !value
+    case None => false
+  }
+  let mut slots = plan.slots
+  if available {
+    let mut filled = plan.filled
+    filled[parameterIndex] = true
+    slots.push(parameterIndex)
+  } else {
+    let message = if parameterIndex == 0 && plan.leadingSlot == 0 {
+      "`{text(source, nameNode)}` is already supplied by the pipeline (§11)"
+    } else {
+      "no parameter named `{text(source, nameNode)}`"
+    }
+    addDiagnostic(
+      state,
+      moduleIndex,
+      "TPZ5004",
+      message,
+      "",
+      nameNode,
+    )
+    slots.push(-2)
+    return NamedCallPlan {
+      ...plan,
+      sawNamed: true,
+      invalid: true,
+    }
+  }
+  NamedCallPlan { ...plan, sawNamed: true }
+}
+
+function hasUnsatisfiedFixedParameter(
+  signature: CallSignature,
+  plan: NamedCallPlan,
+) -> bool {
+  let mut index = plan.positional
+  while index < signature.parameterCount {
+    let filled = match plan.filled.get(index) {
+      case Some(value) => value
+      case None => false
+    }
+    let defaulted = match signature.parameterDefaults.get(index) {
+      case Some(value) => value
+      case None => false
+    }
+    if !filled && !defaulted {
+      return true
+    }
+    index += 1
+  }
+  false
+}
+
+function planSpreadSignatureArgument(
+  state: CheckerState,
+  moduleIndex: int,
+  signature: CallSignature,
+  plan: NamedCallPlan,
+  argument: SyntaxNode,
+) -> NamedCallPlan {
+  let mut slots = plan.slots
+  let mut invalid = plan.invalid
+  if plan.sawNamed {
+    addDiagnostic(
+      state,
+      moduleIndex,
+      "TPZ5004",
+      "named arguments must follow spread arguments",
+      "",
+      argument,
+    )
+    invalid = true
+  }
+  if !plan.sawSpread && hasUnsatisfiedFixedParameter(signature, plan) {
+    addDiagnostic(
+      state,
+      moduleIndex,
+      "TPZ5004",
+      "a spread argument cannot skip an unsatisfied fixed parameter",
+      "",
+      argument,
+    )
+    invalid = true
+  }
+  slots.push(-1)
+  NamedCallPlan {
+    ...plan,
+    sawSpread: true,
+    invalid: invalid,
+  }
+}
+
+function stageEarlierCallArgumentForSlot(
+  slots: Array<int>,
+  target: int,
+) -> Array<int> {
+  let mut staged = slots
+  let mut index = 0
+  while index < staged.length {
+    match staged.get(index) {
+      case Some(slot) => if slot == target {
+        staged[index] = -2
+        return staged
+      }
+      case None => ()
+    }
+    index += 1
+  }
+  staged
+}
+
+function planPositionalSignatureArgument(
+  state: CheckerState,
+  moduleIndex: int,
+  signature: CallSignature,
+  plan: NamedCallPlan,
+  argument: SyntaxNode,
+) -> NamedCallPlan {
+  let mut invalid = plan.invalid
+  if plan.sawNamed {
+    addDiagnostic(
+      state,
+      moduleIndex,
+      "TPZ5004",
+      "positional arguments may not follow named arguments",
+      "",
+      argument,
+    )
+    invalid = true
+  }
+  if plan.sawSpread {
+    let mut slots = plan.slots
+    slots.push(-1)
+    return NamedCallPlan {
+      ...plan,
+      slots: slots,
+      invalid: invalid,
+    }
+  }
+  let mut positional = plan.positional
+  if !plan.sawNamed {
+    while positional < signature.parameterCount {
+      let alreadyFilled = match plan.filled.get(positional) {
+        case Some(value) => value
+        case None => false
+      }
+      if !alreadyFilled { break }
+      positional += 1
+    }
+  }
+  let mut slots = plan.slots
+  if positional < signature.parameterCount {
+    if plan.sawNamed {
+      slots = stageEarlierCallArgumentForSlot(slots, positional)
+    }
+    let mut filled = plan.filled
+    filled[positional] = true
+    slots.push(positional)
+    positional += 1
+    NamedCallPlan {
+      ...plan,
+      positional: positional,
+      invalid: invalid,
+    }
+  } else if signature.variadic {
+    slots.push(-1)
+    NamedCallPlan {
+      ...plan,
+      positional: positional,
+      invalid: invalid,
+    }
+  } else {
+    slots.push(-2)
+    NamedCallPlan {
+      ...plan,
+      positional: positional,
+      overflow: plan.overflow + 1,
+      invalid: true,
+    }
+  }
+}
+
+function namedCallPlanMissingRequired(
+  signature: CallSignature,
+  plan: NamedCallPlan,
+) -> bool {
+  let mut index = 0
+  while index < signature.parameterCount {
+    let defaulted = match signature.parameterDefaults.get(index) {
+      case Some(value) => value
+      case None => false
+    }
+    let present = match plan.filled.get(index) {
+      case Some(value) => value
+      case None => false
+    }
+    if !defaulted && !present {
+      return true
+    }
+    index += 1
+  }
+  false
+}
+
+function planSignatureArgument(
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  signature: CallSignature,
+  plan: NamedCallPlan,
+  argument: SyntaxNode,
+) -> NamedCallPlan {
+  match argument.kind {
+    case "call-argument/named" => planNamedSignatureArgument(
+      state,
+      moduleIndex,
+      source,
+      signature,
+      plan,
+      argument,
+    )
+    case "call-argument/spread" => planSpreadSignatureArgument(
+      state,
+      moduleIndex,
+      signature,
+      plan,
+      argument,
+    )
+    case _ => planPositionalSignatureArgument(
+      state,
+      moduleIndex,
+      signature,
+      plan,
+      argument,
+    )
+  }
+}
+
+function callHasSpreadArgument(node: SyntaxNode) -> bool {
+  for argument in children(node, "arguments") {
+    if argument.kind == "call-argument/spread" {
+      return true
+    }
+  }
+  false
+}
+
+export function unknownCallArgumentPlan(node: SyntaxNode) -> CallArgumentPlan {
+  let mut slots: Array<int> = []
+  for _ in children(node, "arguments") {
+    slots.push(-2)
+  }
+  CallArgumentPlan {
+    slots: slots,
+    leadingSlot: -3,
+    resultUnknown: true,
+  }
+}
+
+export function planSignatureArguments(
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  node: SyntaxNode,
+  diagnosticNode: SyntaxNode,
+  signature: CallSignature,
+  hasLeading: bool,
+  deferArity: bool,
+) -> CallArgumentPlan {
+  if signature.positionalOnlyIdentity != "" {
+    let mut invalid = false
+    for argument in children(node, "arguments") {
+      if argument.kind == "call-argument/named" ||
+        argument.kind == "call-argument/spread" {
+        invalid = true
+      }
+    }
+    if invalid {
+      addDiagnostic(
+        state,
+        moduleIndex,
+        "TPZ5004",
+        "a protocol call `{signature.positionalOnlyIdentity}(…)` takes positional arguments only",
+        "",
+        diagnosticNode,
+      )
+      return unknownCallArgumentPlan(node)
+    }
+  }
+  if !signature.variadic && callHasSpreadArgument(node) {
+    addDiagnostic(
+      state,
+      moduleIndex,
+      "TPZ5004",
+      "spread arguments require a variadic parameter",
+      "",
+      diagnosticNode,
+    )
+    return unknownCallArgumentPlan(node)
+  }
+  let mut plan = emptyNamedCallPlan(signature, hasLeading)
+  for argument in children(node, "arguments") {
+    plan = planSignatureArgument(
+      state,
+      moduleIndex,
+      source,
+      signature,
+      plan,
+      argument,
+    )
+  }
+  if !deferArity {
+    reportNamedCallArity(
+      state,
+      moduleIndex,
+      diagnosticNode,
+      signature,
+      plan.filled,
+      plan.leadingSlot,
+      children(node, "arguments").length + if hasLeading { 1 } else { 0 },
+      plan.overflow,
+    )
+  }
+  let missingRequired = namedCallPlanMissingRequired(signature, plan)
+  CallArgumentPlan {
+    slots: plan.slots,
+    leadingSlot: plan.leadingSlot,
+    resultUnknown: if deferArity {
+      false
+    } else {
+      plan.invalid || missingRequired
+    },
+  }
+}
+
+record TypedCallPlan {
+  slots: Array<int>,
+  nextFixed: int,
+  supplied: int,
+  overflow: bool,
+  leadingSlot: int,
+  sawNamed: bool,
+  sawSpread: bool,
+  invalid: bool,
+  staged: bool,
+}
+
+function emptyTypedCallPlan(
+  calleeType: TypeValue,
+  hasLeading: bool,
+) -> TypedCallPlan {
+  if !hasLeading {
+    return TypedCallPlan {
+      slots: [],
+      nextFixed: 0,
+      supplied: 0,
+      overflow: false,
+      leadingSlot: -3,
+      sawNamed: false,
+      sawSpread: false,
+      invalid: false,
+      staged: false,
+    }
+  }
+  if calleeType.parameters.length > 0 {
+    return TypedCallPlan {
+      slots: [],
+      nextFixed: 1,
+      supplied: 1,
+      overflow: false,
+      leadingSlot: 0,
+      sawNamed: false,
+      sawSpread: false,
+      invalid: false,
+      staged: false,
+    }
+  }
+  if calleeType.variadic.length > 0 {
+    return TypedCallPlan {
+      slots: [],
+      nextFixed: 0,
+      supplied: 1,
+      overflow: false,
+      leadingSlot: -1,
+      sawNamed: false,
+      sawSpread: false,
+      invalid: false,
+      staged: false,
+    }
+  }
+  TypedCallPlan {
+    slots: [],
+    nextFixed: 0,
+    supplied: 1,
+    overflow: true,
+    leadingSlot: -2,
+    sawNamed: false,
+    sawSpread: false,
+    invalid: true,
+    staged: false,
+  }
+}
+
+function planTypedCallArgument(
+  state: CheckerState,
+  moduleIndex: int,
+  calleeType: TypeValue,
+  plan: TypedCallPlan,
+  argument: SyntaxNode,
+) -> TypedCallPlan {
+  let mut slots = plan.slots
+  if argument.kind == "call-argument/named" {
+    slots.push(-2)
+    return TypedCallPlan {
+      ...plan,
+      slots: slots,
+      sawNamed: true,
+      staged: true,
+    }
+  }
+  if argument.kind == "call-argument/spread" {
+    let mut invalid = plan.invalid
+    if plan.sawNamed {
+      addDiagnostic(
+        state,
+        moduleIndex,
+        "TPZ5004",
+        "named arguments must follow spread arguments",
+        "",
+        argument,
+      )
+      invalid = true
+    }
+    if !plan.sawSpread && plan.nextFixed < calleeType.parameters.length {
+      addDiagnostic(
+        state,
+        moduleIndex,
+        "TPZ5004",
+        "a spread argument cannot skip an unsatisfied fixed parameter",
+        "",
+        argument,
+      )
+      invalid = true
+    }
+    slots.push(-1)
+    return TypedCallPlan {
+      ...plan,
+      slots: slots,
+      sawSpread: true,
+      invalid: invalid,
+    }
+  }
+  let mut invalid = plan.invalid
+  if plan.sawNamed {
+    addDiagnostic(
+      state,
+      moduleIndex,
+      "TPZ5004",
+      "positional arguments may not follow named arguments",
+      "",
+      argument,
+    )
+    invalid = true
+  }
+  if plan.sawSpread {
+    slots.push(-1)
+    return TypedCallPlan {
+      ...plan,
+      slots: slots,
+      supplied: plan.supplied + 1,
+      invalid: invalid,
+    }
+  }
+  if plan.nextFixed < calleeType.parameters.length {
+    slots.push(plan.nextFixed)
+    return TypedCallPlan {
+      ...plan,
+      nextFixed: plan.nextFixed + 1,
+      supplied: plan.supplied + 1,
+      invalid: invalid,
+    }
+  }
+  if calleeType.variadic.length > 0 {
+    slots.push(-1)
+    return TypedCallPlan {
+      ...plan,
+      slots: slots,
+      supplied: plan.supplied + 1,
+      invalid: invalid,
+    }
+  }
+  slots.push(-2)
+  TypedCallPlan {
+    ...plan,
+    nextFixed: plan.nextFixed + 1,
+    supplied: plan.supplied + 1,
+    overflow: true,
+    invalid: true,
+  }
+}
+
+function reportTypedCallArity(
+  state: CheckerState,
+  moduleIndex: int,
+  node: SyntaxNode,
+  calleeType: TypeValue,
+  required: int,
+  plan: TypedCallPlan,
+) -> () {
+  if calleeType.kind == "function" &&
+    (plan.supplied < required || plan.overflow) {
+    if plan.leadingSlot == -2 {
+      addDiagnostic(
+        state,
+        moduleIndex,
+        "TPZ5004",
+        "the pipeline inserts the piped value, but this function takes no parameters",
+        "",
+        node,
+      )
+    } else {
+      let noun = if required == 1 { "argument" } else { "arguments" }
+      addDiagnostic(
+        state,
+        moduleIndex,
+        "TPZ5004",
+        "this call needs {required} {noun}, found {plan.supplied}",
+        "",
+        node,
+      )
+    }
+  }
+}
+
+export function planTypedCallArguments(
+  state: CheckerState,
+  moduleIndex: int,
+  node: SyntaxNode,
+  diagnosticNode: SyntaxNode,
+  calleeType: TypeValue,
+  hasLeading: bool,
+) -> CallArgumentPlan {
+  if calleeType.kind == "function" &&
+    calleeType.variadic.length == 0 &&
+    callHasSpreadArgument(node) {
+    addDiagnostic(
+      state,
+      moduleIndex,
+      "TPZ5004",
+      "spread arguments require a variadic parameter",
+      "",
+      diagnosticNode,
+    )
+    return unknownCallArgumentPlan(node)
+  }
+  let mut plan = emptyTypedCallPlan(calleeType, hasLeading)
+  for argument in children(node, "arguments") {
+    plan = planTypedCallArgument(
+      state,
+      moduleIndex,
+      calleeType,
+      plan,
+      argument,
+    )
+  }
+  if plan.staged {
+    return unknownCallArgumentPlan(node)
+  }
+  reportTypedCallArity(
+    state,
+    moduleIndex,
+    diagnosticNode,
+    calleeType,
+    calleeType.parameters.length,
+    plan,
+  )
+  CallArgumentPlan {
+    slots: plan.slots,
+    leadingSlot: plan.leadingSlot,
+    resultUnknown: plan.invalid || plan.supplied < calleeType.parameters.length,
+  }
+}
+
+export function callSlotExpectedType(
+  calleeType: TypeValue,
+  slot: int,
+  spread: bool,
+) -> Option<TypeValue> {
+  if slot >= 0 {
+    return calleeType.parameters.get(slot)
+  }
+  if slot == -1 {
+    return match calleeType.variadic.get(0) {
+      case Some(found) => if spread {
+        Some(constructor("Array", [found]))
+      } else {
+        Some(found)
+      }
+      case None => None
+    }
+  }
+  None
+}
+
+export function callArgumentExpectedType(
+  calleeType: TypeValue,
+  argument: SyntaxNode,
+  slot: int,
+) -> Option<TypeValue> {
+  callSlotExpectedType(
+    calleeType,
+    slot,
+    argument.kind == "call-argument/spread",
+  )
+}
+
+export record InferredCallCallee {
+  declaredType: TypeValue,
+  receiverType: TypeValue,
+  optionalContainer: string,
+  builtinSignature: Option<CallSignature>,
+}
+
+export function inferCallCallee(
+  service: CheckerService,
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  node: SyntaxNode,
+  callee: SyntaxNode,
+) -> InferredCallCallee {
+  if callee.kind == "expression/identifier" &&
+    match referenceTargetType(state, moduleIndex, callee) {
+      case Some(_) => false
+      case None => true
+    } {
+    match builtinFunction(text(source, callee)) {
+      case Some(found) => {
+        recordInferredExpression(
+          state,
+          moduleIndex,
+          source,
+          callee,
+          found.typeValue,
+        )
+        return InferredCallCallee {
+          declaredType: found.typeValue,
+          receiverType: emptyType("unknown"),
+          optionalContainer: "",
+          builtinSignature: Some(found.callSignature),
+        }
+      }
+      case None => ()
+    }
+  }
+  if callee.kind == "expression/optional-access" {
+    let optional = inferOptionalMemberAccess(
+      service,
+      state,
+      moduleIndex,
+      source,
+      callee,
+      node,
+    )
+    recordInferredExpression(
+      state,
+      moduleIndex,
+      source,
+      callee,
+      optional.wrappedType,
+    )
+    return InferredCallCallee {
+      declaredType: optional.rawType,
+      receiverType: optional.receiverType,
+      optionalContainer: optional.container,
+      builtinSignature: None,
+    }
+  }
+  if callee.kind == "expression/member" {
+    let member = inferPlainMemberAccess(
+      service,
+      state,
+      moduleIndex,
+      source,
+      callee,
+      true,
+    )
+    recordInferredExpression(
+      state,
+      moduleIndex,
+      source,
+      callee,
+      member.memberType,
+    )
+    return InferredCallCallee {
+      declaredType: member.memberType,
+      receiverType: member.receiverType,
+      optionalContainer: "",
+      builtinSignature: None,
+    }
+  }
+  let calleeType = if callee.kind == "expression/identifier" {
+    let inferred = inferIdentifierExpression(
+      state,
+      moduleIndex,
+      source,
+      callee,
+      true,
+    )
+    recordInferredExpression(state, moduleIndex, source, callee, inferred)
+    inferred
+  } else {
+    serviceInferExpression(service, state, moduleIndex, source, callee)
+  }
+  InferredCallCallee {
+    declaredType: calleeType,
+    receiverType: emptyType("unknown"),
+    optionalContainer: "",
+    builtinSignature: None,
+  }
+}
+
+export function explicitCallBindings(
+  service: CheckerService,
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  node: SyntaxNode,
+  diagnosticNode: SyntaxNode,
+  callee: SyntaxNode,
+  referencedDefinition: Option<FunctionDefinition>,
+  allowTypeArguments: bool,
+  receiverType: TypeValue,
+) -> Array<TypeBinding> {
+  let mut bindings: Array<TypeBinding> = []
+  let mut parameterNames: Array<string> = []
+  if allowTypeArguments {
+    parameterNames = builtinCallTypeParameters(
+      service,
+      state,
+      moduleIndex,
+      source,
+      callee,
+      receiverType,
+    )
+    match referencedDefinition {
+      case Some(definition) => {
+        parameterNames = definition.typeParameters
+      }
+      case None => ()
+    }
+  }
+  let expectedCount = parameterNames.length
+  let suppliedCount = children(node, "typeArguments").length
+  if suppliedCount > 0 && expectedCount == 0 {
+    let argumentSuffix = if suppliedCount == 1 { "" } else { "s" }
+    let suppliedVerb = if suppliedCount == 1 { "was" } else { "were" }
+    addDiagnostic(
+      state,
+      moduleIndex,
+      "TPZ5512",
+      "this call is not generic, but {suppliedCount} type argument{argumentSuffix} {suppliedVerb} supplied",
+      "",
+      diagnosticNode,
+    )
+  } else if suppliedCount > 0 && suppliedCount != expectedCount {
+    let expectedSuffix = if expectedCount == 1 { "" } else { "s" }
+    let suppliedVerb = if suppliedCount == 1 { "was" } else { "were" }
+    addDiagnostic(
+      state,
+      moduleIndex,
+      "TPZ5510",
+      "this call expects {expectedCount} type argument{expectedSuffix}, but {suppliedCount} {suppliedVerb} supplied",
+      "",
+      diagnosticNode,
+    )
+  }
+  if suppliedCount > 0 && suppliedCount == expectedCount {
+    let mut index = 0
+    for typeArgument in children(node, "typeArguments") {
+      match parameterNames.get(index) {
+        case Some(parameterName) => bindTypeVariable(
+          bindings,
+          parameterName,
+          formType(service, state, moduleIndex, source, typeArgument, [], "call"),
+          false,
+        )
+        case None => ()
+      }
+      index += 1
+    }
+  }
+  bindings
+}

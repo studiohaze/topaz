@@ -1,0 +1,21 @@
+let score = 87
+
+let grade = match score {
+    case 90..100 => "A"
+    case 80..<90 => "B"
+    case 70..<80 => "C"
+    case 60..<70 => "D"
+    case _ => "F"
+}
+
+// Using guard conditions
+let evaluation = match score {
+    case x if x >= 95 => "Perfect score!"
+    case x if x >= 90 => "Excellent performance"
+    case x if x >= 80 => "Good result"
+    case x if x >= 70 => "Average level"
+    case x if x >= 60 => "Pass"
+    case _ => "Retake required"
+}
+
+print("Score: {score}, Grade: {grade}, Evaluation: {evaluation}")

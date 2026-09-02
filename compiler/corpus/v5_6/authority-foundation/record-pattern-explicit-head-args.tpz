@@ -1,0 +1,9 @@
+record Box<T> {
+    value: T,
+}
+
+let box: Box<int> = Box { value: 7 }
+let value = match box {
+    case Box<int> { value } => value
+}
+print("{value}")

@@ -1,0 +1,8 @@
+
+function f() -> int {
+    defer print("first")
+    defer print("last")
+    print("body")
+    1
+}
+f()

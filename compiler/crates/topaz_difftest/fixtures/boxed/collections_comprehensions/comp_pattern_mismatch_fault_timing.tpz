@@ -1,0 +1,8 @@
+function item(label: string, xs: Array<int>) -> Array<int> { print(label)
+  xs
+}
+function produce(a: int, b: int) -> int { print("body")
+  a + b
+}
+let xs = [item("i1", [1, 2]), item("i2", [3])]
+[ for [a, b] in xs => produce(a, b) ]

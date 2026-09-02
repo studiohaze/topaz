@@ -1,0 +1,5 @@
+
+function fail() -> int {
+    1 / 0
+}
+export let value = fail()

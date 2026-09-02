@@ -1,0 +1,15 @@
+
+function main() -> string {
+    let none: Option<Array<int>> = None
+    let some: Option<Array<int>> = Some([10])
+    let skipped = none?.get(...loop {
+        print("skip")
+        break [0]
+    })
+    let hit = some?.get(...loop {
+        print("hit")
+        break [0]
+    })
+    "{skipped}:{hit}"
+}
+main()

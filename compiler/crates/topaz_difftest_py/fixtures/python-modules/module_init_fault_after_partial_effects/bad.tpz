@@ -1,0 +1,6 @@
+
+function fail() -> int {
+    print("before")
+    1 / 0
+}
+export let value = fail()

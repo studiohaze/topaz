@@ -1,0 +1,3 @@
+record User { name: string, age: int }
+export function copy(user: User) -> User { User { ...user } }
+0

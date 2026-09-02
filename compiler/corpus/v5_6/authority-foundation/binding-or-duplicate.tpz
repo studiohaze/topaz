@@ -1,0 +1,5 @@
+let value = { left: 1, right: 2 }
+let found = match value {
+    case { left: x, right: x } | { left: x, right: x } => x
+}
+print("{found}")

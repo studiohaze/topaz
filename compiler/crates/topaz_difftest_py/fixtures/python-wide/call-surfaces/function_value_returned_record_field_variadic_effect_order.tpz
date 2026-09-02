@@ -1,0 +1,19 @@
+
+function sum(seed: int = 0, bonus: int = 0, ...xs: int) -> int {
+    let mut total = seed * 100 + bonus * 10
+    for x in xs {
+        total = total + x
+    }
+    total
+}
+function tick(label: string, n: int) -> int {
+    print(label)
+    n
+}
+function makeCallbacks(marker: int) {
+    { total: sum }
+}
+function main() -> int {
+    makeCallbacks(tick("receiver", 0)).total(tick("seed", 1), ...[tick("a", 2), tick("b", 3)], bonus: tick("bonus", 4))
+}
+main()

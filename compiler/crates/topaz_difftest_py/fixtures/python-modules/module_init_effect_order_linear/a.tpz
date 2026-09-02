@@ -1,0 +1,7 @@
+
+import b
+function mark(label: string, n: int) -> int {
+    print(label)
+    n
+}
+export let value = mark("a", b.value + 1)

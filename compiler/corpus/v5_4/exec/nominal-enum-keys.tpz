@@ -1,0 +1,27 @@
+enum Status {
+  Ready,
+  Code(int),
+}
+
+enum OtherStatus {
+  Ready,
+  Code(int),
+}
+
+let mut statuses = Map.new<Status, string>()
+statuses.insert(Status.Code(7), "hit")
+
+let same = statuses.getOr(Status.Code(7), "miss")
+let miss = statuses.getOr(Status.Code(8), "miss")
+
+let dedup = set {
+  Status.Code(7),
+  Status.Code(7),
+  Status.Ready,
+}
+let mixed = set {
+  Status.Ready,
+  OtherStatus.Ready,
+}
+
+print("{same}/{miss}/{dedup.length}/{mixed.length}")

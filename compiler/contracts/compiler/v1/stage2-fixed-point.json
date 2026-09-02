@@ -1,0 +1,50 @@
+{
+  "schema": "topaz.compiler.stage2-fixed-point-contract/v1",
+  "exchangeSchema": "topaz.compiler.stage1-exchange/v2",
+  "generatedPayloadSchema": "topaz.compiler.fixed-point-ir-payload/v1",
+  "runtimeTemplate": "compiler-ir-table/v2",
+  "productSchema": "topaz.compiler.stage2-product/v1",
+  "comparisonSchema": "topaz.compiler.stage2-fixed-point/v2",
+  "artifactManifestSchema": "topaz.compiler.generated-artifacts/v1",
+  "programImageSchema": "topaz.compiler.program-image/v1",
+  "producers": [
+    {
+      "identity": "rust-stage0-direct",
+      "derivation": "fresh-stage0-generation"
+    },
+    {
+      "identity": "checked-in-program-image",
+      "derivation": "checked-in-stage-neutral-program-image-execution"
+    }
+  ],
+  "generatedSource": {
+    "assessment": "not-established",
+    "stage0ManifestIdentity": "sha256-and-byte-length",
+    "crossRouteComparison": "raw-byte-equality",
+    "programImageReextractionComparison": "raw-byte-equality",
+    "normalization": "none",
+    "forbiddenFields": [
+      "producerStage",
+      "resultStage",
+      "productVersion",
+      "nativeTarget",
+      "nativeBinarySha256",
+      "wallTimeMs",
+      "peakRssBytes"
+    ]
+  },
+  "programImage": {
+    "stageIdentity": "none",
+    "formatMagic": "TPZIMAGE",
+    "formatVersion": 1,
+    "targetFactsDisposition": "checked-in-sidecar"
+  },
+  "semanticProjection": {
+    "disposition": "not-performed"
+  },
+  "fallback": {
+    "stage2ToStage1": false,
+    "stage2ToRustStage0": false,
+    "stage2ToPriorObservation": false
+  }
+}

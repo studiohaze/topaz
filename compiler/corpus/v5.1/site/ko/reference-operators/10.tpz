@@ -1,0 +1,3 @@
+let mut 이름: Option<string> = None
+이름 ??= Some("guest")      // 이름은 Some("guest")가 됨
+이름 ??= Some("override")   // 이미 Some 이므로 변화 없음

@@ -1,0 +1,8 @@
+let region = "EMEA"
+
+let report = sql"""
+    SELECT name, total
+    FROM orders
+    WHERE region = {region}
+    ORDER BY total DESC
+    """

@@ -1,0 +1,3 @@
+[policy]
+required_status = "ready"
+minimum_score = 85

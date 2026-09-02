@@ -1,0 +1,5 @@
+[[package]]
+name = "explicit_main_package"
+version = "0.1.0"
+source = "root"
+manifest_hash = "sha256:b8710a131d6fba78318370f7d812d011d18f7c98ee1e8e534623b3d0c1390bf3"

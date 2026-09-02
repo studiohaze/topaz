@@ -1,0 +1,2 @@
+enum Maybe<T> derives Eq { None, Some(T) }
+0

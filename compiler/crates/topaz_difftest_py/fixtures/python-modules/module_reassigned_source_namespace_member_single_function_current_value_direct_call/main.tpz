@@ -1,0 +1,10 @@
+
+import util
+function main() -> int {
+    let mut first = util.plus
+    let mut reserved = util.add
+    first = util.bump
+    reserved = util.grow
+    first(x: 5) + first(10, y: 3) + reserved(x: 7) + reserved(8, y: 4)
+}
+main()

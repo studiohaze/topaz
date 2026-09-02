@@ -1,0 +1,2 @@
+let xs: Option<Array<int>> = Some([1, 2, 3])
+xs?.map((x) => x * 2)

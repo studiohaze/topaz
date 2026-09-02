@@ -1,0 +1,12 @@
+let import = 1
+let export = 2
+let use = 3
+let arr = [import, export, use]
+let idx = arr[import]
+let r = { import: 1, export: 2, use: 3 }
+let m = r.import
+let o = r?.export
+let lambda = (export) => export
+let sum = import + export * use
+let neg = -import
+let piped = arr |> filter(x => x > import)

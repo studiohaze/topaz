@@ -1,0 +1,8 @@
+function main() -> int {
+function caller() -> int { first() }
+function first() -> int { second() }
+caller()
+function second() -> int { 1 }
+0
+}
+main()

@@ -1,0 +1,9 @@
+
+enum Color derives Eq, Order, Show { Red, Blue }
+function main() -> int {
+    match Color.Blue {
+        case Red => 1
+        case Blue => 2
+    }
+}
+main()

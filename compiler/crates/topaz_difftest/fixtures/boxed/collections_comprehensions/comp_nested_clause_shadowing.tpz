@@ -1,0 +1,3 @@
+let fs = [ for x in [1, 2] for x in [3] => (() => x) ]
+let values = [fs[0](), fs[1]()]
+values

@@ -1,0 +1,6 @@
+let desc = match numbers {
+  case [] => "empty"
+  case [single] => "single: {single}"
+  case [first, ..rest] if rest.length > 3 => "long run from {first}"
+  case [first, ..rest] => "first {first}, rest={rest.length}"
+}

@@ -1,0 +1,730 @@
+// Delivery transitions for values returning into machine continuations.
+// Evaluation selects the next value; this leaf applies continuation frames and
+// hands invocation or transfer work to their respective state machines.
+
+import lit.model {
+  GuestInt,
+  GuestRational,
+  ErrorObjectRow,
+  GuestValue,
+  ValuePacket,
+  MachineSignal,
+  NodeOp,
+  SpanRow,
+  OriginRow,
+  BinderRow,
+  GlobalRow,
+  NodeRow,
+  Kernel,
+  EnvironmentRow,
+  ContinuationFrame,
+  ContinuationRow,
+  GuardClauseRow,
+  DynamicFrame,
+  DynamicRow,
+  MachineMode,
+  KernelDeliverStep,
+}
+import lit.value_runtime {
+  packetValues,
+  appendGuest,
+  packetOne,
+  singleValueSignal,
+  callbackSingleValueSignal,
+  truthy,
+  writeCell,
+  allocateContinuation,
+  allocateDynamic,
+  higherOrderInvocationArguments,
+  completedHigherOrderPacket,
+}
+import lit.render {
+  renderGuest,
+  appendValuePacket,
+  machineNodeOrigin,
+  renderRootPackets,
+}
+
+function runKernelDeliverEvaluationFlowFrames(
+  packet: ValuePacket,
+  continuation: int,
+  kernel: Kernel,
+  cells: Array<GuestValue>,
+  environments: Array<EnvironmentRow>,
+  continuations: Array<ContinuationRow>,
+  dynamics: Array<DynamicRow>,
+  initialDynamicSuppressed: Array<bool>,
+  initialEscapeActive: Array<bool>,
+  guestIdentities: Array<int>,
+  initialAllocations: int,
+  initialMaxContinuationDepth: int,
+  initialTransfers: int,
+  initialDynamic: int,
+  initialActiveOrigin: int,
+  initialEmittedOutput: string,
+  initialFinalPacket: Option<ValuePacket>,
+  initialRootPackets: Array<ValuePacket>,
+  initialFinalStatus: string,
+  initialFinalExit: int,
+) -> Option<KernelDeliverStep> {
+  let mut dynamicSuppressed = initialDynamicSuppressed
+  let mut escapeActive = initialEscapeActive
+  let mut allocations = initialAllocations
+  let mut maxContinuationDepth = initialMaxContinuationDepth
+  let mut transfers = initialTransfers
+  let mut dynamic = initialDynamic
+  let mut activeOrigin = initialActiveOrigin
+  let mut emittedOutput = initialEmittedOutput
+  let mut finalPacket = initialFinalPacket
+  let mut rootPackets = initialRootPackets
+  let mut finalStatus = initialFinalStatus
+  let mut finalExit = initialFinalExit
+  let mut mode = MachineMode.HaltMode
+  let row = continuations[continuation]
+  match row.frame {
+    case HaltFrame => {
+      finalPacket = Some(packet)
+      finalStatus = "ok"
+      finalExit = 0
+      mode = MachineMode.HaltMode
+    }
+    case ProgramFrame(roots, nextIndex, environment, priorPackets) => {
+      emittedOutput += renderRootPackets([packet])
+      let completed = appendValuePacket(priorPackets, packet)
+      rootPackets = completed
+      if nextIndex < roots.length {
+        let frame = allocateContinuation(
+          continuations,
+          ContinuationFrame.ProgramFrame(roots, nextIndex + 1, environment, completed),
+          row.parent,
+        )
+        allocations += 1
+        if continuations[frame].depth > maxContinuationDepth { maxContinuationDepth = continuations[frame].depth }
+        mode = MachineMode.EvalMode(roots[nextIndex], environment, frame)
+      } else {
+        rootPackets = completed
+        finalPacket = Some(packet)
+        finalStatus = "ok"
+        finalExit = 0
+        mode = MachineMode.HaltMode
+      }
+    }
+    case IfFrame(thenNode, elseNode, environment, testOrigin) => {
+      activeOrigin = testOrigin
+      match packetOne(packet, "if test") {
+        case Ok(value) => {
+          mode = MachineMode.EvalMode(if truthy(value) { thenNode } else { elseNode }, environment, row.parent)
+        }
+        case Err(error) => {
+          transfers += 1
+          mode = MachineMode.TransferMode(singleValueSignal(error), row.parent)
+        }
+      }
+    }
+    case BeginFrame(children, nextIndex, environment) => {
+      if nextIndex + 1 >= children.length {
+        mode = MachineMode.EvalMode(children[nextIndex], environment, row.parent)
+      } else {
+        let frame = allocateContinuation(
+          continuations,
+          ContinuationFrame.BeginFrame(children, nextIndex + 1, environment),
+          row.parent,
+        )
+        allocations += 1
+        if continuations[frame].depth > maxContinuationDepth { maxContinuationDepth = continuations[frame].depth }
+        mode = MachineMode.EvalMode(children[nextIndex], environment, frame)
+      }
+    }
+    case OperatorFrame(operands, environment, origin, operatorOrigin) => {
+      activeOrigin = operatorOrigin
+      match packetOne(packet, "application operator") {
+        case Ok(procedure) => {
+          if operands.length == 0 {
+            mode = MachineMode.InvokeMode(procedure, [], row.parent, origin)
+          } else {
+            let frame = allocateContinuation(
+              continuations,
+              ContinuationFrame.OperandFrame(procedure, operands, 0, [], environment, origin),
+              row.parent,
+            )
+            allocations += 1
+            if continuations[frame].depth > maxContinuationDepth { maxContinuationDepth = continuations[frame].depth }
+            mode = MachineMode.EvalMode(operands[0], environment, frame)
+          }
+        }
+        case Err(error) => {
+          transfers += 1
+          mode = MachineMode.TransferMode(singleValueSignal(error), row.parent)
+        }
+      }
+    }
+    case OperandFrame(procedure, operands, operandIndex, priorValues, environment, origin) => {
+      activeOrigin = machineNodeOrigin(kernel, operands[operandIndex])
+      match packetOne(packet, "application operand") {
+        case Ok(value) => {
+          let values = appendGuest(priorValues, value)
+          let next = operandIndex + 1
+          if next >= operands.length {
+            mode = MachineMode.InvokeMode(procedure, values, row.parent, origin)
+          } else {
+            let frame = allocateContinuation(
+              continuations,
+              ContinuationFrame.OperandFrame(procedure, operands, next, values, environment, origin),
+              row.parent,
+            )
+            allocations += 1
+            if continuations[frame].depth > maxContinuationDepth { maxContinuationDepth = continuations[frame].depth }
+            mode = MachineMode.EvalMode(operands[next], environment, frame)
+          }
+        }
+        case Err(error) => {
+          transfers += 1
+          mode = MachineMode.TransferMode(singleValueSignal(error), row.parent)
+        }
+      }
+    }
+    case _ => { return None }
+  }
+  Some(KernelDeliverStep {
+    mode: mode,
+    allocations: allocations,
+    maxContinuationDepth: maxContinuationDepth,
+    transfers: transfers,
+    dynamic: dynamic,
+    activeOrigin: activeOrigin,
+    emittedOutput: emittedOutput,
+    finalPacket: finalPacket,
+    rootPackets: rootPackets,
+    finalStatus: finalStatus,
+    finalExit: finalExit,
+   })
+}
+
+function runKernelDeliverBindingFrames(
+  packet: ValuePacket,
+  continuation: int,
+  kernel: Kernel,
+  cells: Array<GuestValue>,
+  environments: Array<EnvironmentRow>,
+  continuations: Array<ContinuationRow>,
+  dynamics: Array<DynamicRow>,
+  initialDynamicSuppressed: Array<bool>,
+  initialEscapeActive: Array<bool>,
+  guestIdentities: Array<int>,
+  initialAllocations: int,
+  initialMaxContinuationDepth: int,
+  initialTransfers: int,
+  initialDynamic: int,
+  initialActiveOrigin: int,
+  initialEmittedOutput: string,
+  initialFinalPacket: Option<ValuePacket>,
+  initialRootPackets: Array<ValuePacket>,
+  initialFinalStatus: string,
+  initialFinalExit: int,
+) -> Option<KernelDeliverStep> {
+  let mut dynamicSuppressed = initialDynamicSuppressed
+  let mut escapeActive = initialEscapeActive
+  let mut allocations = initialAllocations
+  let mut maxContinuationDepth = initialMaxContinuationDepth
+  let mut transfers = initialTransfers
+  let mut dynamic = initialDynamic
+  let mut activeOrigin = initialActiveOrigin
+  let mut emittedOutput = initialEmittedOutput
+  let mut finalPacket = initialFinalPacket
+  let mut rootPackets = initialRootPackets
+  let mut finalStatus = initialFinalStatus
+  let mut finalExit = initialFinalExit
+  let mut mode = MachineMode.HaltMode
+  let row = continuations[continuation]
+  match row.frame {
+    case SetLocalFrame(cell, _, _, rhsOrigin) => {
+      activeOrigin = rhsOrigin
+      match packetOne(packet, "set! rhs") {
+        case Ok(value) => {
+          match writeCell(cells, cell, value) {
+            case Ok(_) => {
+              mode = MachineMode.DeliverMode(ValuePacket.Many([]), row.parent)
+            }
+            case Err(error) => {
+              transfers += 1
+              mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), row.parent)
+            }
+          }
+        }
+        case Err(error) => {
+          transfers += 1
+          mode = MachineMode.TransferMode(singleValueSignal(error), row.parent)
+        }
+      }
+    }
+    case SetGlobalFrame(cell, rhsOrigin) => {
+      activeOrigin = rhsOrigin
+      match packetOne(packet, "set! rhs") {
+        case Ok(value) => {
+          match writeCell(cells, cell, value) {
+            case Ok(_) => {
+              mode = MachineMode.DeliverMode(ValuePacket.Many([]), row.parent)
+            }
+            case Err(error) => {
+              transfers += 1
+              mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), row.parent)
+            }
+          }
+        }
+        case Err(error) => {
+          transfers += 1
+          mode = MachineMode.TransferMode(singleValueSignal(error), row.parent)
+        }
+      }
+    }
+    case LetrecFrame(_, initializers, initializerIndex, environment, body) => {
+      activeOrigin = machineNodeOrigin(kernel, initializers[initializerIndex])
+      match packetOne(packet, "letrec initializer") {
+        case Ok(value) => {
+          let cell = environments[environment].cells[initializerIndex]
+          match writeCell(cells, cell, value) {
+            case Err(error) => {
+              transfers += 1
+              mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), row.parent)
+            }
+            case Ok(_) => {
+              let next = initializerIndex + 1
+              if next >= initializers.length {
+                mode = MachineMode.EvalMode(body, environment, row.parent)
+              } else {
+                let frame = allocateContinuation(
+                  continuations,
+                  ContinuationFrame.LetrecFrame([], initializers, next, environment, body),
+                  row.parent,
+                )
+                allocations += 1
+                if continuations[frame].depth > maxContinuationDepth { maxContinuationDepth = continuations[frame].depth }
+                mode = MachineMode.EvalMode(initializers[next], environment, frame)
+              }
+            }
+          }
+        }
+        case Err(error) => {
+          transfers += 1
+          mode = MachineMode.TransferMode(singleValueSignal(error), row.parent)
+        }
+      }
+    }
+    case _ => { return None }
+  }
+  Some(KernelDeliverStep {
+    mode: mode,
+    allocations: allocations,
+    maxContinuationDepth: maxContinuationDepth,
+    transfers: transfers,
+    dynamic: dynamic,
+    activeOrigin: activeOrigin,
+    emittedOutput: emittedOutput,
+    finalPacket: finalPacket,
+    rootPackets: rootPackets,
+    finalStatus: finalStatus,
+    finalExit: finalExit,
+   })
+}
+
+function runKernelDeliverHigherOrderFrames(
+  packet: ValuePacket,
+  continuation: int,
+  kernel: Kernel,
+  cells: Array<GuestValue>,
+  environments: Array<EnvironmentRow>,
+  continuations: Array<ContinuationRow>,
+  dynamics: Array<DynamicRow>,
+  initialDynamicSuppressed: Array<bool>,
+  initialEscapeActive: Array<bool>,
+  guestIdentities: Array<int>,
+  initialAllocations: int,
+  initialMaxContinuationDepth: int,
+  initialTransfers: int,
+  initialDynamic: int,
+  initialActiveOrigin: int,
+  initialEmittedOutput: string,
+  initialFinalPacket: Option<ValuePacket>,
+  initialRootPackets: Array<ValuePacket>,
+  initialFinalStatus: string,
+  initialFinalExit: int,
+) -> Option<KernelDeliverStep> {
+  let mut dynamicSuppressed = initialDynamicSuppressed
+  let mut escapeActive = initialEscapeActive
+  let mut allocations = initialAllocations
+  let mut maxContinuationDepth = initialMaxContinuationDepth
+  let mut transfers = initialTransfers
+  let mut dynamic = initialDynamic
+  let mut activeOrigin = initialActiveOrigin
+  let mut emittedOutput = initialEmittedOutput
+  let mut finalPacket = initialFinalPacket
+  let mut rootPackets = initialRootPackets
+  let mut finalStatus = initialFinalStatus
+  let mut finalExit = initialFinalExit
+  let mut mode = MachineMode.HaltMode
+  let row = continuations[continuation]
+  match row.frame {
+    case ProducerFrame(consumer, origin) => {
+      mode = MachineMode.InvokeMode(consumer, packetValues(packet), row.parent, origin)
+    }
+    case HigherOrderFrame(name, procedure, elements, nextIndex, priorCollected, priorAccumulator, origin) => {
+      activeOrigin = origin
+      let discardResult = name == "for-each" || name == "string-for-each" || name == "vector-for-each"
+      let callbackResult: Result<GuestValue, string> = if discardResult {
+        Ok(GuestValue.VNil)
+      } else {
+        packetOne(packet, "{name} procedure result")
+      }
+      match callbackResult {
+        case Err(error) => {
+          transfers += 1
+          mode = MachineMode.TransferMode(callbackSingleValueSignal(error, guestIdentities), row.parent)
+        }
+        case Ok(value) => {
+          let currentIndex = nextIndex - 1
+          let mut collected: Array<GuestValue> = priorCollected
+          let mut accumulator: GuestValue = priorAccumulator
+          let mut stopped: bool = false
+          let mut failed: Option<string> = None
+          if name == "map" || name == "vector-map" {
+            collected.push(value)
+          } else if name == "string-map" {
+            match value {
+              case VChar(_) => { collected.push(value) }
+              case _ => {
+                failed = Some("E312 string-map: expected a character from the procedure, got {renderGuest(value)}")
+              }
+            }
+          } else if name == "filter" {
+            if truthy(value) { collected.push(elements[currentIndex]) }
+          } else if name == "reduce" || name == "fold-left" || name == "fold-right" {
+            accumulator = value
+          } else if name == "all?" || name == "any?" {
+            match value {
+              case VBool(answer) => {
+                if name == "all?" && !answer {
+                  stopped = true
+                  mode = MachineMode.DeliverMode(ValuePacket.One(GuestValue.VBool(false)), row.parent)
+                } else if name == "any?" && answer {
+                  stopped = true
+                  mode = MachineMode.DeliverMode(ValuePacket.One(GuestValue.VBool(true)), row.parent)
+                }
+              }
+              case _ => {
+                failed = Some("E312 {name}: expected a boolean predicate result, got {renderGuest(value)}")
+              }
+            }
+          }
+          match failed {
+            case Some(error) => {
+              transfers += 1
+              mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), row.parent)
+            }
+            case None => if !stopped {
+              if nextIndex >= elements.length {
+                mode = MachineMode.DeliverMode(
+                  completedHigherOrderPacket(name, collected, accumulator, guestIdentities),
+                  row.parent,
+                )
+              } else {
+                let frame = allocateContinuation(
+                  continuations,
+                  ContinuationFrame.HigherOrderFrame(
+                    name,
+                    procedure,
+                    elements,
+                    nextIndex + 1,
+                    collected,
+                    accumulator,
+                    origin,
+                  ),
+                  row.parent,
+                )
+                allocations += 1
+                if continuations[frame].depth > maxContinuationDepth { maxContinuationDepth = continuations[frame].depth }
+                mode = MachineMode.InvokeMode(
+                  procedure,
+                  higherOrderInvocationArguments(name, elements[nextIndex], accumulator),
+                  frame,
+                  origin,
+                )
+              }
+            }
+          }
+        }
+      }
+    }
+    case _ => { return None }
+  }
+  Some(KernelDeliverStep {
+    mode: mode,
+    allocations: allocations,
+    maxContinuationDepth: maxContinuationDepth,
+    transfers: transfers,
+    dynamic: dynamic,
+    activeOrigin: activeOrigin,
+    emittedOutput: emittedOutput,
+    finalPacket: finalPacket,
+    rootPackets: rootPackets,
+    finalStatus: finalStatus,
+    finalExit: finalExit,
+   })
+}
+
+function runKernelDeliverDynamicFrames(
+  packet: ValuePacket,
+  continuation: int,
+  kernel: Kernel,
+  cells: Array<GuestValue>,
+  environments: Array<EnvironmentRow>,
+  continuations: Array<ContinuationRow>,
+  dynamics: Array<DynamicRow>,
+  initialDynamicSuppressed: Array<bool>,
+  initialEscapeActive: Array<bool>,
+  guestIdentities: Array<int>,
+  initialAllocations: int,
+  initialMaxContinuationDepth: int,
+  initialTransfers: int,
+  initialDynamic: int,
+  initialActiveOrigin: int,
+  initialEmittedOutput: string,
+  initialFinalPacket: Option<ValuePacket>,
+  initialRootPackets: Array<ValuePacket>,
+  initialFinalStatus: string,
+  initialFinalExit: int,
+) -> Option<KernelDeliverStep> {
+  let mut dynamicSuppressed = initialDynamicSuppressed
+  let mut escapeActive = initialEscapeActive
+  let mut allocations = initialAllocations
+  let mut maxContinuationDepth = initialMaxContinuationDepth
+  let mut transfers = initialTransfers
+  let mut dynamic = initialDynamic
+  let mut activeOrigin = initialActiveOrigin
+  let mut emittedOutput = initialEmittedOutput
+  let mut finalPacket = initialFinalPacket
+  let mut rootPackets = initialRootPackets
+  let mut finalStatus = initialFinalStatus
+  let mut finalExit = initialFinalExit
+  let mut mode = MachineMode.HaltMode
+  let row = continuations[continuation]
+  match row.frame {
+    case EscapeScopeFrame(ownerDynamic) => {
+      match dynamics[ownerDynamic].frame {
+        case EscapeOwnerDynamic(escapeId, _) => {
+          escapeActive[escapeId] = false
+          dynamic = dynamics[ownerDynamic].parent
+          mode = MachineMode.DeliverMode(packet, row.parent)
+        }
+        case _ => {
+          transfers += 1
+          mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal("LIT200 invalid escape owner frame"), row.parent)
+        }
+      }
+    }
+    case HandlerScopeFrame(handlerDynamic) => {
+      dynamic = dynamics[handlerDynamic].parent
+      mode = MachineMode.DeliverMode(packet, row.parent)
+    }
+    case HandlerResultFrame(handlerDynamic, continuable, signalOrigin) => {
+      activeOrigin = signalOrigin
+      if continuable {
+        dynamicSuppressed[handlerDynamic] = false
+        mode = MachineMode.DeliverMode(packet, row.parent)
+      } else {
+        transfers += 1
+        mode = MachineMode.TransferMode(
+          MachineSignal.RuntimeSignal("E332 handler returned from a non-continuable raise"),
+          row.parent,
+        )
+      }
+    }
+    case WindBeforeFrame(thunk, after, origin) => {
+      let windDynamic = allocateDynamic(
+        dynamics,
+        dynamicSuppressed,
+        DynamicFrame.WindDynamic(after, origin),
+        dynamic,
+      )
+      allocations += 1
+      let frame = allocateContinuation(
+        continuations,
+        ContinuationFrame.WindThunkFrame(windDynamic, origin),
+        row.parent,
+      )
+      allocations += 1
+      if continuations[frame].depth > maxContinuationDepth { maxContinuationDepth = continuations[frame].depth }
+      dynamic = windDynamic
+      mode = MachineMode.InvokeMode(thunk, [], frame, origin)
+    }
+    case WindThunkFrame(windDynamic, origin) => {
+      match dynamics[windDynamic].frame {
+        case WindDynamic(after, _) => {
+          dynamic = dynamics[windDynamic].parent
+          let frame = allocateContinuation(
+            continuations,
+            ContinuationFrame.WindNormalAfterFrame(packet),
+            row.parent,
+          )
+          allocations += 1
+          if continuations[frame].depth > maxContinuationDepth { maxContinuationDepth = continuations[frame].depth }
+          mode = MachineMode.InvokeMode(after, [], frame, origin)
+        }
+        case _ => {
+          transfers += 1
+          mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal("LIT200 invalid wind frame"), row.parent)
+        }
+      }
+    }
+    case WindNormalAfterFrame(originalPacket) => {
+      mode = MachineMode.DeliverMode(originalPacket, row.parent)
+    }
+    case ResumeTransferFrame(signal, signalContinuation, signalOrigin) => {
+      activeOrigin = signalOrigin
+      transfers += 1
+      mode = MachineMode.TransferMode(signal, signalContinuation)
+    }
+    case GuardScopeFrame(guardDynamic) => {
+      dynamic = dynamics[guardDynamic].parent
+      mode = MachineMode.DeliverMode(packet, row.parent)
+    }
+    case GuardTestFrame(guardDynamic, clauseIndex, conditionEnvironment, originalSignal, signalContinuation, signalOrigin) => {
+      match dynamics[guardDynamic].frame {
+        case GuardDynamic(clauses, _, _, _) => {
+          activeOrigin = machineNodeOrigin(kernel, clauses[clauseIndex].test)
+        }
+        case _ => {}
+      }
+      match packetOne(packet, "guard test") {
+        case Err(error) => {
+          transfers += 1
+          mode = MachineMode.TransferMode(singleValueSignal(error), row.parent)
+        }
+        case Ok(value) => match dynamics[guardDynamic].frame {
+          case GuardDynamic(clauses, elseNode, _, _) => {
+            if truthy(value) {
+              mode = MachineMode.EvalMode(clauses[clauseIndex].body, conditionEnvironment, row.parent)
+            } else {
+              let next = clauseIndex + 1
+              if next < clauses.length {
+                let frame = allocateContinuation(
+                  continuations,
+                  ContinuationFrame.GuardTestFrame(
+                    guardDynamic,
+                    next,
+                    conditionEnvironment,
+                    originalSignal,
+                    signalContinuation,
+                    signalOrigin,
+                  ),
+                  row.parent,
+                )
+                allocations += 1
+                if continuations[frame].depth > maxContinuationDepth { maxContinuationDepth = continuations[frame].depth }
+                mode = MachineMode.EvalMode(clauses[next].test, conditionEnvironment, frame)
+              } else if elseNode >= 0 {
+                mode = MachineMode.EvalMode(elseNode, conditionEnvironment, row.parent)
+              } else {
+                activeOrigin = signalOrigin
+                transfers += 1
+                mode = MachineMode.TransferMode(originalSignal, signalContinuation)
+              }
+            }
+          }
+          case _ => {
+            transfers += 1
+            mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal("LIT200 invalid guard frame"), row.parent)
+          }
+        }
+      }
+    }
+    case _ => { return None }
+  }
+  Some(KernelDeliverStep {
+    mode: mode,
+    allocations: allocations,
+    maxContinuationDepth: maxContinuationDepth,
+    transfers: transfers,
+    dynamic: dynamic,
+    activeOrigin: activeOrigin,
+    emittedOutput: emittedOutput,
+    finalPacket: finalPacket,
+    rootPackets: rootPackets,
+    finalStatus: finalStatus,
+    finalExit: finalExit,
+   })
+}
+
+export function runKernelDeliver(
+
+  packet: ValuePacket,
+  continuation: int,
+  kernel: Kernel,
+  cells: Array<GuestValue>,
+  environments: Array<EnvironmentRow>,
+  continuations: Array<ContinuationRow>,
+  dynamics: Array<DynamicRow>,
+  initialDynamicSuppressed: Array<bool>,
+  initialEscapeActive: Array<bool>,
+  guestIdentities: Array<int>,
+  initialAllocations: int,
+  initialMaxContinuationDepth: int,
+  initialTransfers: int,
+  initialDynamic: int,
+  initialActiveOrigin: int,
+  initialEmittedOutput: string,
+  initialFinalPacket: Option<ValuePacket>,
+  initialRootPackets: Array<ValuePacket>,
+  initialFinalStatus: string,
+  initialFinalExit: int,
+) -> KernelDeliverStep {
+  let mut step = runKernelDeliverEvaluationFlowFrames(
+    packet, continuation, kernel, cells, environments, continuations, dynamics,
+    initialDynamicSuppressed, initialEscapeActive, guestIdentities,
+    initialAllocations, initialMaxContinuationDepth, initialTransfers,
+    initialDynamic, initialActiveOrigin, initialEmittedOutput, initialFinalPacket,
+    initialRootPackets, initialFinalStatus, initialFinalExit,
+  )
+  if step == None {
+    step = runKernelDeliverBindingFrames(
+      packet, continuation, kernel, cells, environments, continuations, dynamics,
+      initialDynamicSuppressed, initialEscapeActive, guestIdentities,
+      initialAllocations, initialMaxContinuationDepth, initialTransfers,
+      initialDynamic, initialActiveOrigin, initialEmittedOutput, initialFinalPacket,
+      initialRootPackets, initialFinalStatus, initialFinalExit,
+    )
+  }
+  if step == None {
+    step = runKernelDeliverHigherOrderFrames(
+      packet, continuation, kernel, cells, environments, continuations, dynamics,
+      initialDynamicSuppressed, initialEscapeActive, guestIdentities,
+      initialAllocations, initialMaxContinuationDepth, initialTransfers,
+      initialDynamic, initialActiveOrigin, initialEmittedOutput, initialFinalPacket,
+      initialRootPackets, initialFinalStatus, initialFinalExit,
+    )
+  }
+  if step == None {
+    step = runKernelDeliverDynamicFrames(
+      packet, continuation, kernel, cells, environments, continuations, dynamics,
+      initialDynamicSuppressed, initialEscapeActive, guestIdentities,
+      initialAllocations, initialMaxContinuationDepth, initialTransfers,
+      initialDynamic, initialActiveOrigin, initialEmittedOutput, initialFinalPacket,
+      initialRootPackets, initialFinalStatus, initialFinalExit,
+    )
+  }
+  match step {
+    case Some(result) => result
+    case None => KernelDeliverStep {
+      mode: MachineMode.TransferMode(MachineSignal.RuntimeSignal("LIT200 invalid continuation frame"), continuation),
+      allocations: initialAllocations,
+      maxContinuationDepth: initialMaxContinuationDepth,
+      transfers: initialTransfers + 1,
+      dynamic: initialDynamic,
+      activeOrigin: initialActiveOrigin,
+      emittedOutput: initialEmittedOutput,
+      finalPacket: initialFinalPacket,
+      rootPackets: initialRootPackets,
+      finalStatus: initialFinalStatus,
+      finalExit: initialFinalExit,
+    }
+  }
+}

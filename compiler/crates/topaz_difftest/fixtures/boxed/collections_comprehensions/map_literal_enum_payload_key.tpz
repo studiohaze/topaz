@@ -1,0 +1,3 @@
+enum Lookup { Hit(int), Miss }
+let m = map { Lookup.Hit(1): "hit" }
+m.getOr(Lookup.Hit(1), "miss")

@@ -1,0 +1,2 @@
+let opt: Option<int> = Some(1)
+if let Some(n) = opt { n } else { 0 }

@@ -1,0 +1,517 @@
+import types { LayoutResult, PreviewDiagnostic, PreviewToken }
+
+function token(kind: string, lo: int, hi: int, synthetic: bool) -> PreviewToken {
+  PreviewToken {
+    kind: kind,
+    lo: lo,
+    hi: hi,
+    stream: "layout",
+    synthetic: synthetic,
+  }
+}
+
+function copyToken(value: PreviewToken) -> PreviewToken {
+  token(value.kind, value.lo, value.hi, value.synthetic)
+}
+
+function diagnostic(code: string, message: string, lo: int, hi: int) -> PreviewDiagnostic {
+  PreviewDiagnostic { code: code, message: message, lo: lo, hi: hi, notes: [] }
+}
+
+function lastTokenKind(values: Array<PreviewToken>) -> string {
+  values[values.length - 1].kind
+}
+
+function text(bytes: Bytes, lo: int, hi: int) -> string {
+  match bytes.slice(lo, hi).decodeUtf8() {
+    case Ok(value) => value
+    case Err(_) => ""
+  }
+}
+
+function isCloser(kind: string) -> bool {
+  kind == "right-paren" ||
+    kind == "right-bracket" ||
+    kind == "right-brace" ||
+    kind == "interpolation-end"
+}
+
+function isKeyword(kind: string) -> bool {
+  kind.startsWith("keyword/")
+}
+
+enum LineContinuation {
+  Leading,
+  Trailing,
+  Both,
+}
+
+function lineContinuation(kind: string) -> Option<LineContinuation> {
+  if kind == "gt" || kind == "gt-gt" || kind == "keyword/else" {
+    Some(LineContinuation.Leading)
+  } else if kind == "plus" || kind == "minus" || kind == "bang" ||
+    kind == "tilde" || kind == "comma" || kind == "fat-arrow" ||
+    kind == "left-paren" || kind == "left-bracket" {
+    Some(LineContinuation.Trailing)
+  } else if kind == "star-star" || kind == "star" || kind == "slash" ||
+    kind == "percent" || kind == "dot-dot" || kind == "dot-dot-lt" ||
+    kind == "lt" || kind == "le" || kind == "ge" || kind == "eq-eq" ||
+    kind == "not-eq" || kind == "keyword/in" || kind == "and-and" ||
+    kind == "or-or" || kind == "question-question" || kind == "pipe-gt" ||
+    kind == "eq" || kind == "plus-eq" || kind == "minus-eq" ||
+    kind == "star-eq" || kind == "slash-eq" || kind == "percent-eq" ||
+    kind == "question-question-eq" || kind == "dot" ||
+    kind == "question-dot" || kind == "keyword/by" {
+    Some(LineContinuation.Both)
+  } else {
+    None
+  }
+}
+
+function isTrailing(kind: string) -> bool {
+  match lineContinuation(kind) {
+    case Some(Trailing) => true
+    case Some(Both) => true
+    case _ => false
+  }
+}
+
+function previousIs(previous: Option<string>, kind: string) -> bool {
+  match previous {
+    case Some(value) => value == kind
+    case None => false
+  }
+}
+
+function previousIsTrailing(previous: Option<string>) -> bool {
+  match previous {
+    case Some(kind) => isTrailing(kind)
+    case None => false
+  }
+}
+
+function isLeading(kind: string) -> bool {
+  match lineContinuation(kind) {
+    case Some(Leading) => true
+    case Some(Both) => true
+    case _ => false
+  }
+}
+
+function startsRecordField(tokens: Array<PreviewToken>, start: int) -> bool {
+  let mut index = start
+  let mut first: Option<string> = None
+  while index < tokens.length {
+    let kind = tokens[index].kind
+    index += 1
+    if kind == "newline" {
+      continue
+    }
+    match first {
+      case Some(head) => return (head == "identifier" || isKeyword(head)) &&
+        kind == "colon"
+      case None => {
+        first = Some(kind)
+      }
+    }
+  }
+  false
+}
+
+function keywordHasFieldRole(
+  state: LayoutState,
+  tokens: Array<PreviewToken>,
+  index: int,
+  current: PreviewToken,
+) -> bool {
+  if !isKeyword(current.kind) {
+    return false
+  }
+  if previousIs(state.previous, "dot") || previousIs(state.previous, "question-dot") {
+    return true
+  }
+  let mut next = index + 1
+  while next < tokens.length {
+    let kind = tokens[next].kind
+    next += 1
+    if kind != "newline" {
+      return kind == "colon"
+    }
+  }
+  false
+}
+
+enum LayoutPatternKind {
+  Binding,
+  Case,
+  For,
+}
+
+record LayoutPattern {
+  depth: int,
+  kind: LayoutPatternKind,
+}
+
+function patternIsActive(pattern: Option<LayoutPattern>) -> bool {
+  match pattern {
+    case Some(_) => true
+    case None => false
+  }
+}
+
+function patternContinuesAt(pattern: Option<LayoutPattern>, depth: int) -> bool {
+  match pattern {
+    case Some(value) => value.depth == depth
+    case None => false
+  }
+}
+
+enum LayoutMode {
+  Separator,
+  Continuation,
+}
+
+enum LayoutOpener {
+  Program,
+  Paren,
+  Bracket,
+  Brace,
+  Interpolation,
+}
+
+function classifyBrace(
+  state: LayoutState,
+  tokens: Array<PreviewToken>,
+  index: int,
+  frameDepth: int,
+) -> LayoutMode {
+  if state.moduleItem || patternIsActive(state.pattern) {
+    return LayoutMode.Continuation
+  }
+  let mut concurrentDepths = state.concurrentDepths
+  if concurrentDepths.length > 0 &&
+    concurrentDepths[concurrentDepths.length - 1] == frameDepth {
+    concurrentDepths.pop()
+    return LayoutMode.Separator
+  }
+  if startsRecordField(tokens, index + 1) {
+    LayoutMode.Continuation
+  } else {
+    LayoutMode.Separator
+  }
+}
+
+record LayoutFrame {
+  mode: LayoutMode,
+  opener: LayoutOpener,
+  hasItem: bool,
+}
+
+function topFrame(frames: Array<LayoutFrame>) -> LayoutFrame {
+  frames[frames.length - 1]
+}
+
+record LayoutState {
+  output: Array<PreviewToken>,
+  diagnostics: Array<PreviewDiagnostic>,
+  frames: Array<LayoutFrame>,
+  pending: Option<PreviewToken>,
+  previous: Option<string>,
+  pattern: Option<LayoutPattern>,
+  concurrentDepths: Array<int>,
+  moduleItem: bool,
+}
+
+function markFrameItem(state: LayoutState) -> () {
+  let mut frames = state.frames
+  let frame = topFrame(frames)
+  frames.pop()
+  frames.push(LayoutFrame { ...frame, hasItem: true })
+}
+
+function clearConcurrentAtDepth(state: LayoutState, depth: int) -> () {
+  let mut depths = state.concurrentDepths
+  while depths.length > 0 && depths[depths.length - 1] == depth {
+    depths.pop()
+  }
+  ()
+}
+
+function resetStatementContext(state: LayoutState, frameDepth: int) -> LayoutState {
+  clearConcurrentAtDepth(state, frameDepth)
+  LayoutState { ...state, moduleItem: false, pattern: None }
+}
+
+function observeNewline(
+  state: LayoutState,
+  current: PreviewToken,
+  frameDepth: int,
+) -> LayoutState {
+  let pipeContinues = previousIs(state.previous, "pipe") &&
+    patternContinuesAt(state.pattern, frameDepth)
+  let frame = topFrame(state.frames)
+  if frame.mode == LayoutMode.Separator && frame.hasItem &&
+    lastTokenKind(state.output) != "separator" && !previousIsTrailing(state.previous) &&
+    !pipeContinues {
+    match state.pending {
+      case Some(_) => ()
+      case None => return LayoutState {
+        ...state,
+        pending: Some(current),
+      }
+    }
+  }
+  state
+}
+
+function consumeSemicolon(
+  state: LayoutState,
+  current: PreviewToken,
+  frameDepth: int,
+) -> LayoutState {
+  if topFrame(state.frames).mode == LayoutMode.Continuation {
+    let mut diagnostics = state.diagnostics
+    diagnostics.push(diagnostic(
+      "TPZ1001",
+      "`;` does not separate items inside a delimiter list; use `,`",
+      current.lo,
+      current.hi,
+    ))
+    LayoutState { ...state, previous: Some("semicolon") }
+  } else {
+    let mut output = state.output
+    output.push(token("separator", current.lo, current.hi, false))
+    let next = resetStatementContext(
+      LayoutState { ...state, pending: None },
+      frameDepth,
+    )
+    LayoutState { ...next, previous: Some("semicolon") }
+  }
+}
+
+function flushPendingSeparator(
+  state: LayoutState,
+  current: PreviewToken,
+  frameDepth: int,
+) -> LayoutState {
+  let pending = match state.pending {
+    case Some(value) => value
+    case None => return state
+  }
+  let currentPipeContinues = current.kind == "pipe" &&
+    patternContinuesAt(state.pattern, frameDepth)
+  let mut next = state
+  if !isLeading(current.kind) && !currentPipeContinues &&
+    !isCloser(current.kind) && current.kind != "eof" {
+    let mut output = state.output
+    output.push(token(
+      "separator",
+      pending.lo,
+      pending.hi,
+      true,
+    ))
+    next = resetStatementContext(state, frameDepth)
+  }
+  LayoutState { ...next, pending: None }
+}
+
+function recognizeModuleItem(
+  state: LayoutState,
+  tokens: Array<PreviewToken>,
+  bytes: Bytes,
+  index: int,
+  current: PreviewToken,
+  frameDepth: int,
+) -> LayoutState {
+  if frameDepth != 1 || current.kind != "identifier" ||
+    (state.output.length > 0 && lastTokenKind(state.output) != "separator") ||
+    text(bytes, current.lo, current.hi) != "import" {
+    return state
+  }
+  if index + 1 < tokens.length && tokens[index + 1].kind == "identifier" {
+    LayoutState { ...state, moduleItem: true }
+  } else {
+    state
+  }
+}
+
+function closePatternIfTerminated(
+  state: LayoutState,
+  current: PreviewToken,
+  frameDepth: int,
+) -> LayoutState {
+  let pattern = match state.pattern {
+    case Some(value) => value
+    case None => return state
+  }
+  if pattern.depth != frameDepth { return state }
+  let terminates = match pattern.kind {
+    case Binding => current.kind == "eq" || current.kind == "colon"
+    case Case =>
+      current.kind == "fat-arrow" || current.kind == "keyword/if"
+    case For => current.kind == "keyword/in"
+  }
+  if terminates {
+    LayoutState { ...state, pattern: None }
+  } else {
+    state
+  }
+}
+
+function openerKind(kind: string) -> LayoutOpener {
+  if kind == "left-paren" || kind == "right-paren" {
+    LayoutOpener.Paren
+  } else if kind == "left-bracket" || kind == "right-bracket" {
+    LayoutOpener.Bracket
+  } else if kind == "left-brace" || kind == "right-brace" {
+    LayoutOpener.Brace
+  } else {
+    LayoutOpener.Interpolation
+  }
+}
+
+function openContinuationFrame(state: LayoutState, current: PreviewToken) -> () {
+  markFrameItem(state)
+  let mut frames = state.frames
+  frames.push(LayoutFrame {
+    mode: LayoutMode.Continuation,
+    opener: openerKind(current.kind),
+    hasItem: false,
+  })
+  ()
+}
+
+function openBraceFrame(
+  state: LayoutState,
+  tokens: Array<PreviewToken>,
+  index: int,
+  frameDepth: int,
+) -> () {
+  markFrameItem(state)
+  let mode = classifyBrace(
+    state,
+    tokens,
+    index,
+    frameDepth,
+  )
+  let mut frames = state.frames
+  frames.push(LayoutFrame { mode: mode, opener: LayoutOpener.Brace, hasItem: false })
+  ()
+}
+
+function closeFrame(state: LayoutState, current: PreviewToken) -> LayoutState {
+  let mut next = state
+  if topFrame(state.frames).opener == openerKind(current.kind) {
+    let mut frames = state.frames
+    let mut concurrentDepths = state.concurrentDepths
+    frames.pop()
+    let newDepth = frames.length
+    let mut trimming = true
+    while concurrentDepths.length > 0 && trimming {
+      if concurrentDepths[concurrentDepths.length - 1] > newDepth {
+        concurrentDepths.pop()
+      } else {
+        trimming = false
+      }
+    }
+    match state.pattern {
+      case Some(pattern) => {
+        if pattern.depth > newDepth {
+          next = LayoutState { ...state, pattern: None }
+        }
+      }
+      case None => ()
+    }
+  }
+  markFrameItem(next)
+  next
+}
+
+function beginPattern(
+  state: LayoutState,
+  kind: LayoutPatternKind,
+  frameDepth: int,
+) -> LayoutState {
+  markFrameItem(state)
+  LayoutState {
+    ...state,
+    pattern: Some(LayoutPattern { depth: frameDepth, kind: kind }),
+  }
+}
+
+function observeTokenStructure(
+  state: LayoutState,
+  tokens: Array<PreviewToken>,
+  index: int,
+  current: PreviewToken,
+  frameDepth: int,
+) -> LayoutState {
+  let keywordField = keywordHasFieldRole(state, tokens, index, current)
+  if current.kind == "left-paren" || current.kind == "left-bracket" ||
+    current.kind == "interpolation-start" {
+    openContinuationFrame(state, current)
+    state
+  } else if current.kind == "left-brace" {
+    openBraceFrame(state, tokens, index, frameDepth)
+    state
+  } else if isCloser(current.kind) {
+    closeFrame(state, current)
+  } else if current.kind == "keyword/concurrent" && !keywordField {
+    let mut concurrentDepths = state.concurrentDepths
+    concurrentDepths.push(frameDepth)
+    markFrameItem(state)
+    state
+  } else if (current.kind == "keyword/let" || current.kind == "keyword/const") &&
+    !keywordField {
+    beginPattern(state, LayoutPatternKind.Binding, frameDepth)
+  } else if current.kind == "keyword/case" && !keywordField {
+    beginPattern(state, LayoutPatternKind.Case, frameDepth)
+  } else if current.kind == "keyword/for" && !keywordField {
+    beginPattern(state, LayoutPatternKind.For, frameDepth)
+  } else {
+    markFrameItem(state)
+    state
+  }
+}
+
+export function normalize(tokens: Array<PreviewToken>, source: string) -> LayoutResult {
+  let bytes = Bytes.encodeUtf8(source)
+  let mut state = LayoutState {
+    output: [],
+    diagnostics: [],
+    frames: [LayoutFrame {
+      mode: LayoutMode.Separator,
+      opener: LayoutOpener.Program,
+      hasItem: false,
+    }],
+    pending: None,
+    previous: None,
+    pattern: None,
+    concurrentDepths: [],
+    moduleItem: false,
+  }
+  let mut index = 0
+  while index < tokens.length {
+    let current = tokens[index]
+    let frameDepth = state.frames.length
+    if current.kind == "newline" {
+      state = observeNewline(state, current, frameDepth)
+      index += 1
+      continue
+    }
+    if current.kind == "semicolon" {
+      state = consumeSemicolon(state, current, frameDepth)
+      index += 1
+      continue
+    }
+    state = flushPendingSeparator(state, current, frameDepth)
+    state = recognizeModuleItem(state, tokens, bytes, index, current, frameDepth)
+    state = closePatternIfTerminated(state, current, frameDepth)
+    state = observeTokenStructure(state, tokens, index, current, frameDepth)
+    let mut output = state.output
+    output.push(copyToken(current))
+    state = LayoutState { ...state, previous: Some(current.kind) }
+    index += 1
+  }
+  LayoutResult { tokens: state.output, diagnostics: state.diagnostics }
+}

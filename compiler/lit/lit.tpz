@@ -1,0 +1,48 @@
+// Installed Lispex protocol facade and command entry point.
+// Request decoding selects the source or kernel route; machine, rendering, and
+// protocol leaves own their respective work beneath this boundary.
+
+import lit.request_decode {
+  isV1HostFrameCandidate,
+  isV1ProtocolCandidate,
+  decodeRequest,
+}
+import lit.model { Request, FrontendRequest, SourceRequest, DecodedRequest }
+import lit.machine.eval {
+  runKernel,
+}
+import lit.render {
+  renderRunResult,
+  renderDecodeError,
+  renderRunnerResult,
+  renderFrontendRunnerResult,
+}
+import lit.protocol_v1 {
+  renderSourceBackendResult,
+  runLispexBackendProtocolV1,
+  runLispexBackendProtocolV1HostFrame,
+  isDiagnosticProjectionBatchCandidate,
+  runDiagnosticProjectionBatch,
+}
+
+// Dispatches one installed evaluator request from stdin to its protocol route.
+export function main(args: Array<string>, stdin: string) -> Result<int, string> {
+  let rendered = if isV1HostFrameCandidate(stdin) {
+    runLispexBackendProtocolV1HostFrame(stdin)
+  } else if isDiagnosticProjectionBatchCandidate(stdin) {
+    runDiagnosticProjectionBatch(stdin)?
+  } else if isV1ProtocolCandidate(stdin) {
+    runLispexBackendProtocolV1(stdin)
+  } else {
+    match decodeRequest(stdin) {
+      case Ok(decoded) => match decoded {
+        case KernelMode(request) => renderRunnerResult(request, renderRunResult(request.invocationId, runKernel(request)))
+        case FrontendMode(request) => renderFrontendRunnerResult(request)
+        case SourceMode(request) => renderSourceBackendResult(request)
+      }
+      case Err(error) => renderDecodeError(error)
+    }
+  }
+  print(rendered)
+  Ok(0)
+}

@@ -1,0 +1,2 @@
+export function f() -> int { 1 }
+let x = f()

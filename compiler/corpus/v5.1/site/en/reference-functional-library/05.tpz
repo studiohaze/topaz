@@ -1,0 +1,9 @@
+let user: Option<{ name: string }> = Some({ name: "Topaz" })
+let display = user?.name ?? "guest"
+
+print("Display: {display}")
+
+match user {
+    case Some(currentUser) => print("User: {currentUser.name}")
+    case None => print("No user")
+}

@@ -1,0 +1,4 @@
+match JSON.parse("\"hi\"") {
+  case Ok(j) => print("k={j.kind()} s={j.asString()} n={j.isNull()} i={j.asInt()}")
+  case Err(e) => print("e")
+}

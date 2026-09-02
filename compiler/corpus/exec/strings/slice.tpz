@@ -1,0 +1,8 @@
+let s = "hello"
+print(s.slice(1, 4))
+print(s.slice(0, 2))
+print(s.slice(3, 3))
+print(s.slice(0 - 5, 100))
+let k = "가나다라"
+print(k.slice(1, 3))
+print(k.slice(2, 99))

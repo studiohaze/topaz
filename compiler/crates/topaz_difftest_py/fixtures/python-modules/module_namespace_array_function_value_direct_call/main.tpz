@@ -1,0 +1,6 @@
+
+import util
+function main() -> int {
+    util.callbacks[0](a: 5) + util.callbacks[1](b: 3, a: 10)
+}
+main()

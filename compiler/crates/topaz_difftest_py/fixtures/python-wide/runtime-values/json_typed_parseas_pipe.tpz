@@ -1,0 +1,5 @@
+
+match ("[1,2]" |> JSON.parseAs<Array<int>>()) {
+    case Ok(values) => values[0] + values[1]
+    case Err(_) => 0
+}

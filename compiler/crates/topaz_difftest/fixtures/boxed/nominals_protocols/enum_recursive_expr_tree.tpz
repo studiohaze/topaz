@@ -1,0 +1,15 @@
+enum Op { Add, Mul }
+enum Expr { Num(int), Bin(Op, Expr, Expr) }
+function eval(e: Expr) -> int {
+  match e {
+    case Num(n) => n
+    case Bin(op, l, r) => match op {
+      case Add => eval(l) + eval(r)
+      case Mul => eval(l) * eval(r)
+    }
+  }
+}
+let tree: Expr = Expr.Bin(Op.Add, Expr.Num(3), Expr.Bin(Op.Mul, Expr.Num(4), Expr.Num(5)))
+print("{eval(tree)}")
+print("{tree}")
+0

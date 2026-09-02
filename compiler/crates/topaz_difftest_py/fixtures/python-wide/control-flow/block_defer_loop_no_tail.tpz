@@ -1,0 +1,6 @@
+
+for i in 0..2 {
+    defer print("d")
+}
+print("end")
+0

@@ -1,0 +1,477 @@
+// 마크다운 → HTML 렌더러 — 전부 토파즈로 작성 (방송대 출품 한글 식별자판).
+// 순수 함수: 같은 입력 → 인터프리터와 네이티브/wasm 빌드에서 동일한 HTML.
+// 문자열은 `.scalars()`로 글자 배열로 보고, 배열 stdlib(slice/join)로 깔끔하게.
+
+function 글자화(문자열: string) -> Array<string> { 문자열.scalars() }
+
+function 로시작함(글자들: Array<string>, 접두: string) -> bool {
+  let 접두글자 = 글자화(접두)
+  if 글자들.length < 접두글자.length { return false }
+  let mut 색인 = 0
+  while 색인 < 접두글자.length {
+    if 글자들[색인] != 접두글자[색인] { return false }
+    색인 = 색인 + 1
+  }
+  true
+}
+
+function 글자정리(글자: string) -> string {
+  if 글자 == "&" { "&amp;" }
+  else if 글자 == "<" { "&lt;" }
+  else if 글자 == ">" { "&gt;" }
+  else { 글자 }
+}
+
+function 전체정리(글자들: Array<string>) -> string {
+  let mut 출력 = ""
+  let mut 색인 = 0
+  while 색인 < 글자들.length {
+    출력 = 출력 + 글자정리(글자들[색인])
+    색인 = 색인 + 1
+  }
+  출력
+}
+
+function 닫기위치(글자들: Array<string>, 시작: int, 구분자: Array<string>) -> int {
+  let 구분길이 = 구분자.length
+  let mut 색인 = 시작
+  while 색인 + 구분길이 <= 글자들.length {
+    let mut 일치 = true
+    let mut 제이 = 0
+    while 제이 < 구분길이 {
+      if 글자들[색인 + 제이] != 구분자[제이] { 일치 = false }
+      제이 = 제이 + 1
+    }
+    if 일치 { return 색인 }
+    색인 = 색인 + 1
+  }
+  -1
+}
+
+// --- §안전한 링크: 기본-거부 URL 허용목록 + 속성 이스케이프 ---
+function 슬래시앞콜론(글자들: Array<string>) -> bool {
+  let mut 색인 = 0
+  while 색인 < 글자들.length {
+    if 글자들[색인] == ":" { return true }
+    if 글자들[색인] == "/" { return false }
+    색인 = 색인 + 1
+  }
+  false
+}
+
+function 안전한주소(주소: string) -> bool {
+  // 브라우저는 URL 앞 공백/제어문자를 제거하므로 다듬은 형태로 검사한다.
+  // (C3a 문자열 stdlib: `trimStart` + `로시작함` — 수작업 글자 스캔 없이.)
+  let 정리주소 = 주소.trimStart()
+  // 프로토콜-상대(`//host`, `/\host`, `\host`)는 외부 이동이라 거부 (아래
+  // `/` 분기는 동일-출처 루트-상대 전용).
+  if 정리주소.startsWith("//") { return false }
+  if 정리주소.startsWith("/\\") { return false }
+  if 정리주소.startsWith("\\") { return false }
+  if 정리주소.startsWith("http://") { return true }
+  if 정리주소.startsWith("https://") { return true }
+  if 정리주소.startsWith("mailto:") { return true }
+  if 정리주소.startsWith("/") { return true }
+  if 정리주소.startsWith("#") { return true }
+  if 정리주소.startsWith("./") { return true }
+  if 정리주소.startsWith("../") { return true }
+  // 스킴 없는 상대 경로(첫 '/' 앞 ':' 없음)는 안전; 그 외 스킴
+  // (javascript:/data:/vbscript:/…)은 거부되어 링크가 무력화된다.
+  !슬래시앞콜론(정리주소.scalars())
+}
+
+// 링크 `(url)`을 닫는 `)` — 안쪽 괄호를 균형 맞춰 `foo(1)`/`alert(1)` 같은
+// 주소를 통째로 잡는다 (첫 `)`에서 잘리지 않게).
+function 링크닫기(글자들: Array<string>, 시작: int) -> int {
+  let mut 깊이 = 0
+  let mut 색인 = 시작
+  while 색인 < 글자들.length {
+    if 글자들[색인] == "(" { 깊이 = 깊이 + 1 }
+    else if 글자들[색인] == ")" {
+      if 깊이 == 0 { return 색인 }
+      깊이 = 깊이 - 1
+    }
+    색인 = 색인 + 1
+  }
+  -1
+}
+
+function 속성정리(글자들: Array<string>) -> string {
+  let mut 출력 = ""
+  let mut 색인 = 0
+  while 색인 < 글자들.length {
+    let 글자 = 글자들[색인]
+    if 글자 == "&" { 출력 = 출력 + "&amp;" }
+    else if 글자 == "\"" { 출력 = 출력 + "&quot;" }
+    else if 글자 == "<" { 출력 = 출력 + "&lt;" }
+    else if 글자 == ">" { 출력 = 출력 + "&gt;" }
+    else { 출력 = 출력 + 글자 }
+    색인 = 색인 + 1
+  }
+  출력
+}
+
+// --- §인라인: 코드/굵게/기울임/링크 — 글자 슬라이스 위에서 ---
+function 인라인변환(글자들: Array<string>) -> string {
+  let mut 출력 = ""
+  let mut 색인 = 0
+  while 색인 < 글자들.length {
+    let 글자 = 글자들[색인]
+    if 글자 == "\\" && 색인 + 1 < 글자들.length {
+      // 백슬래시 이스케이프: 다음 글자는 리터럴 (HTML 이스케이프, 마크다운 의미 없음)
+      출력 = 출력 + 글자정리(글자들[색인 + 1])
+      색인 = 색인 + 2
+    } else if 글자 == "!" && 색인 + 1 < 글자들.length && 글자들[색인 + 1] == "[" {
+      // 이미지 ![대체텍스트](주소) — 링크와 동일한 기본-거부 URL 안전성
+      let 대괄호닫기 = 닫기위치(글자들, 색인 + 2, ["]"])
+      if 대괄호닫기 >= 0 && 대괄호닫기 + 1 < 글자들.length && 글자들[대괄호닫기 + 1] == "(" {
+        let 소괄호닫기 = 링크닫기(글자들, 대괄호닫기 + 2)
+        if 소괄호닫기 >= 0 {
+          let 대체글자 = 글자들.slice(색인 + 2, 대괄호닫기)
+          let 주소글자 = 글자들.slice(대괄호닫기 + 2, 소괄호닫기)
+          if 안전한주소(주소글자.join("")) {
+            출력 = 출력 + "<img src=\"" + 속성정리(주소글자) + "\" alt=\"" + 속성정리(대체글자) + "\">"
+          } else {
+            출력 = 출력 + 전체정리(대체글자)
+          }
+          색인 = 소괄호닫기 + 1
+        } else {
+          출력 = 출력 + 글자정리(글자)
+          색인 = 색인 + 1
+        }
+      } else {
+        출력 = 출력 + 글자정리(글자)
+        색인 = 색인 + 1
+      }
+    } else if 글자 == "`" {
+      let 닫기 = 닫기위치(글자들, 색인 + 1, ["`"])
+      if 닫기 >= 0 {
+        출력 = 출력 + "<code>" + 전체정리(글자들.slice(색인 + 1, 닫기)) + "</code>"
+        색인 = 닫기 + 1
+      } else {
+        출력 = 출력 + 글자정리(글자)
+        색인 = 색인 + 1
+      }
+    } else if 글자 == "*" && 색인 + 1 < 글자들.length && 글자들[색인 + 1] == "*" {
+      let 닫기 = 닫기위치(글자들, 색인 + 2, ["*", "*"])
+      if 닫기 >= 0 {
+        출력 = 출력 + "<strong>" + 인라인변환(글자들.slice(색인 + 2, 닫기)) + "</strong>"
+        색인 = 닫기 + 2
+      } else {
+        출력 = 출력 + 글자정리(글자)
+        색인 = 색인 + 1
+      }
+    } else if 글자 == "*" {
+      let 닫기 = 닫기위치(글자들, 색인 + 1, ["*"])
+      if 닫기 >= 0 {
+        출력 = 출력 + "<em>" + 인라인변환(글자들.slice(색인 + 1, 닫기)) + "</em>"
+        색인 = 닫기 + 1
+      } else {
+        출력 = 출력 + 글자정리(글자)
+        색인 = 색인 + 1
+      }
+    } else if 글자 == "~" && 색인 + 1 < 글자들.length && 글자들[색인 + 1] == "~" {
+      let 닫기 = 닫기위치(글자들, 색인 + 2, ["~", "~"])
+      if 닫기 >= 0 {
+        출력 = 출력 + "<del>" + 인라인변환(글자들.slice(색인 + 2, 닫기)) + "</del>"
+        색인 = 닫기 + 2
+      } else {
+        출력 = 출력 + 글자정리(글자)
+        색인 = 색인 + 1
+      }
+    } else if 글자 == "[" {
+      let 대괄호닫기 = 닫기위치(글자들, 색인 + 1, ["]"])
+      if 대괄호닫기 >= 0 && 대괄호닫기 + 1 < 글자들.length && 글자들[대괄호닫기 + 1] == "(" {
+        let 소괄호닫기 = 링크닫기(글자들, 대괄호닫기 + 2)
+        if 소괄호닫기 >= 0 {
+          let 텍스트글자 = 글자들.slice(색인 + 1, 대괄호닫기)
+          let 주소글자 = 글자들.slice(대괄호닫기 + 2, 소괄호닫기)
+          let 주소 = 주소글자.join("")
+          if 안전한주소(주소) {
+            출력 = 출력 + "<a href=\"" + 속성정리(주소글자) + "\">" + 인라인변환(텍스트글자) + "</a>"
+          } else {
+            출력 = 출력 + 인라인변환(텍스트글자)
+          }
+          색인 = 소괄호닫기 + 1
+        } else {
+          출력 = 출력 + 글자정리(글자)
+          색인 = 색인 + 1
+        }
+      } else {
+        출력 = 출력 + 글자정리(글자)
+        색인 = 색인 + 1
+      }
+    } else {
+      출력 = 출력 + 글자정리(글자)
+      색인 = 색인 + 1
+    }
+  }
+  출력
+}
+
+// 모든 CR 제거 — CRLF(및 떠도는 CR) 입력도 깨끗이 매칭 (`---\r\n` → <hr>)
+function 캐리지제거(글자들: Array<string>) -> Array<string> {
+  let mut 출력: Array<string> = []
+  for 글자 in 글자들 {
+    if 글자 != "\r" { 출력.push(글자) }
+  }
+  출력
+}
+
+function 줄로분리(문자열: string) -> Array<Array<string>> {
+  // C3a `str.split`로 줄바꿈 분리 후 줄마다 CR 제거 (split은 CRLF의 `\r`을
+  // 남기므로 — 옛 수작업 스캐너와 달리).
+  let mut 줄들: Array<Array<string>> = []
+  for 원시 in 문자열.split("\n") {
+    줄들.push(캐리지제거(원시.scalars()))
+  }
+  줄들
+}
+
+function 숫자인지(글자: string) -> bool {
+  글자 == "0" || 글자 == "1" || 글자 == "2" || 글자 == "3" || 글자 == "4"
+    || 글자 == "5" || 글자 == "6" || 글자 == "7" || 글자 == "8" || 글자 == "9"
+}
+
+// 순서 목록 마커 `N. ` → 마커의 글자 길이, 없으면 0
+function 순서표식(글자들: Array<string>) -> int {
+  let mut 색인 = 0
+  while 색인 < 글자들.length && 숫자인지(글자들[색인]) { 색인 = 색인 + 1 }
+  if 색인 > 0 && 색인 + 1 < 글자들.length && 글자들[색인] == "." && 글자들[색인 + 1] == " " { 색인 + 2 } else { 0 }
+}
+
+function 줄이같음(글자들: Array<string>, 문자열: string) -> bool {
+  let 비교글자 = 글자화(문자열)
+  if 글자들.length != 비교글자.length { return false }
+  let mut 색인 = 0
+  while 색인 < 비교글자.length {
+    if 글자들[색인] != 비교글자[색인] { return false }
+    색인 = 색인 + 1
+  }
+  true
+}
+
+// --- §블록: 제목/목록/인용/펜스코드/구분선/문단 ---
+
+function 양끝공백(글자들: Array<string>) -> Array<string> {
+  let mut 앞 = 0
+  while 앞 < 글자들.length && (글자들[앞] == " " || 글자들[앞] == "\t") { 앞 = 앞 + 1 }
+  let mut 뒤 = 글자들.length
+  while 뒤 > 앞 && (글자들[뒤 - 1] == " " || 글자들[뒤 - 1] == "\t") { 뒤 = 뒤 - 1 }
+  글자들.slice(앞, 뒤)
+}
+
+function 파이프있음(글자들: Array<string>) -> bool {
+  let mut 색인 = 0
+  while 색인 < 글자들.length {
+    if 글자들[색인] == "|" { return true }
+    색인 = 색인 + 1
+  }
+  false
+}
+
+// 표 행을 '|'로 나누고 칸을 다듬고 바깥 파이프가 만든 빈 칸은 버린다
+function 칸으로분리(글자들: Array<string>) -> Array<Array<string>> {
+  let mut 원시: Array<Array<string>> = []
+  let mut 현재: Array<string> = []
+  let mut 색인 = 0
+  while 색인 < 글자들.length {
+    if 글자들[색인] == "\\" && 색인 + 1 < 글자들.length {
+      // 이스케이프된 글자(특히 GFM `\|`)는 칸에 통째로 — 분리점이 아님;
+      // `인라인변환`이 칸을 렌더할 때 백슬래시 이스케이프를 처리한다.
+      현재.push(글자들[색인])
+      현재.push(글자들[색인 + 1])
+      색인 = 색인 + 2
+    } else if 글자들[색인] == "|" {
+      원시.push(양끝공백(현재))
+      현재 = []
+      색인 = 색인 + 1
+    } else {
+      현재.push(글자들[색인])
+      색인 = 색인 + 1
+    }
+  }
+  원시.push(양끝공백(현재))
+  let mut 칸들: Array<Array<string>> = []
+  let mut 케이 = 0
+  while 케이 < 원시.length {
+    let 끝인지 = 케이 == 0 || 케이 == 원시.length - 1
+    if !(끝인지 && 원시[케이].length == 0) { 칸들.push(원시[케이]) }
+    케이 = 케이 + 1
+  }
+  칸들
+}
+
+// 구분 칸: 앞 `:` 선택, `-` 한 개 이상, 뒤 `:` 선택 — 그 외엔 아무것도
+// 없음 (`:--`,`--:`,`:-:`,`---`는 통과; `:--:--`,`:`,`a-`는 불가).
+function 구분칸인지(칸: Array<string>) -> bool {
+  if 칸.length == 0 { return false }
+  let mut 제이 = 0
+  if 칸[제이] == ":" { 제이 = 제이 + 1 }
+  let mut 대시수 = 0
+  while 제이 < 칸.length && 칸[제이] == "-" {
+    대시수 = 대시수 + 1
+    제이 = 제이 + 1
+  }
+  if 대시수 == 0 { return false }
+  if 제이 < 칸.length && 칸[제이] == ":" { 제이 = 제이 + 1 }
+  제이 == 칸.length
+}
+
+// 구분 행: 파이프가 있고 모든 칸이 유효한 구분 칸.
+function 구분행인지(글자들: Array<string>) -> bool {
+  if !파이프있음(글자들) { return false }
+  let 칸들 = 칸으로분리(글자들)
+  if 칸들.length == 0 { return false }
+  let mut 케이 = 0
+  while 케이 < 칸들.length {
+    if !구분칸인지(칸들[케이]) { return false }
+    케이 = 케이 + 1
+  }
+  true
+}
+
+function 행html로(칸들: Array<Array<string>>, 태그: string) -> string {
+  let mut 출력 = "<tr>"
+  let mut 케이 = 0
+  while 케이 < 칸들.length {
+    출력 = 출력 + "<" + 태그 + ">" + 인라인변환(칸들[케이]) + "</" + 태그 + ">"
+    케이 = 케이 + 1
+  }
+  출력 + "</tr>\n"
+}
+
+// 이 줄이 (표가 아닌) 블록의 시작인가? 표 본문은 그런 줄에서 멈춘다
+// (GFM: 표는 빈 줄이나 다른 블록 구조의 시작에서 끝난다).
+function 블록시작인지(글자들: Array<string>) -> bool {
+  글자들.length == 0
+    || 로시작함(글자들, "# ")
+    || 로시작함(글자들, "## ")
+    || 로시작함(글자들, "### ")
+    || 로시작함(글자들, "- ")
+    || 순서표식(글자들) > 0
+    || 로시작함(글자들, "> ")
+    || 로시작함(글자들, "```")
+    || 줄이같음(글자들, "---")
+}
+
+// --- §중첩 목록 (A4): 엄격 — 공백만, 레벨당 2칸; ul/ol; loose 목록 없음 ---
+function 들여쓰기(글자들: Array<string>) -> int {
+  let mut 색인 = 0
+  while 색인 < 글자들.length && 글자들[색인] == " " { 색인 = 색인 + 1 }
+  색인
+}
+
+function 목록종류(글자들: Array<string>) -> string {
+  let 엔 = 들여쓰기(글자들)
+  let 나머지 = 글자들.slice(엔, 글자들.length)
+  if 로시작함(나머지, "- ") { "ul" }
+  else if 순서표식(나머지) > 0 { "ol" }
+  else { "" }
+}
+
+function 목록글시작(글자들: Array<string>) -> int {
+  let 엔 = 들여쓰기(글자들)
+  let 나머지 = 글자들.slice(엔, 글자들.length)
+  if 로시작함(나머지, "- ") { 엔 + 2 } else { 엔 + 순서표식(나머지) }
+}
+
+// 목록과 그 중첩 자식을 렌더: 정확히 `들여깊이`칸·같은 종류의 항목;
+// 더 깊은 항목(들여깊이+2)은 이전 <li> 안에 중첩. html과 다음 줄을 반환.
+function 목록렌더(줄들: Array<Array<string>>, 시작점: int, 들여깊이: int) -> { 결과: string, 다음: int } {
+  let 종류 = 목록종류(줄들[시작점])
+  let mut 결과 = "<" + 종류 + ">\n"
+  let mut 색인 = 시작점
+  while 색인 < 줄들.length {
+    let 들여수 = 들여쓰기(줄들[색인])
+    let 케이 = 목록종류(줄들[색인])
+    if 케이 == "" || 들여수 != 들여깊이 || 케이 != 종류 { break }
+    let 글시작 = 목록글시작(줄들[색인])
+    결과 = 결과 + "<li>" + 인라인변환(줄들[색인].slice(글시작, 줄들[색인].length))
+    색인 = 색인 + 1
+    if 색인 < 줄들.length && 목록종류(줄들[색인]) != "" && 들여쓰기(줄들[색인]) == 들여깊이 + 2 {
+      let 자식 = 목록렌더(줄들, 색인, 들여깊이 + 2)
+      결과 = 결과 + "\n" + 자식.결과 + "</li>\n"
+      색인 = 자식.다음
+    } else {
+      결과 = 결과 + "</li>\n"
+    }
+  }
+  결과 = 결과 + "</" + 종류 + ">\n"
+  { 결과: 결과, 다음: 색인 }
+}
+
+function 마크다운변환(소스: string) -> string {
+  let 줄들 = 줄로분리(소스)
+  let mut 결과 = ""
+  let mut 색인 = 0
+  let mut 블록번호 = 0
+  while 색인 < 줄들.length {
+    let 줄 = 줄들[색인]
+    if 로시작함(줄, "```") {
+      // ```topaz 펜스는 순번 계산 플레이스홀더가 된다; JS 셸이 블록 소스를
+      // (문서 순서대로) 추출해 실행 결과를 주입한다. 그 외 펜스는
+      // 정적인 HTML-이스케이프 코드 블록으로 남는다.
+      let 토파즈인지 = 줄이같음(줄, "```topaz")
+      색인 = 색인 + 1
+      let mut 코드 = ""
+      while 색인 < 줄들.length && !로시작함(줄들[색인], "```") {
+        코드 = 코드 + 전체정리(줄들[색인]) + "\n"
+        색인 = 색인 + 1
+      }
+      if 색인 < 줄들.length { 색인 = 색인 + 1 }
+      if 토파즈인지 {
+        결과 = 결과 + "<div class=\"topaz-block\" data-topaz-block=\"{블록번호}\"></div>\n"
+        블록번호 = 블록번호 + 1
+      } else {
+        결과 = 결과 + "<pre><code>" + 코드 + "</code></pre>\n"
+      }
+    } else if 목록종류(줄) != "" && 들여쓰기(줄) == 0 {
+      let 결과값 = 목록렌더(줄들, 색인, 0)
+      결과 = 결과 + 결과값.결과
+      색인 = 결과값.다음
+    } else if 로시작함(줄, "> ") {
+      결과 = 결과 + "<blockquote>"
+      let mut 처음 = true
+      while 색인 < 줄들.length && 로시작함(줄들[색인], "> ") {
+        if !처음 { 결과 = 결과 + " " }
+        결과 = 결과 + 인라인변환(줄들[색인].slice(2, 줄들[색인].length))
+        처음 = false
+        색인 = 색인 + 1
+      }
+      결과 = 결과 + "</blockquote>\n"
+    } else if 줄이같음(줄, "---") {
+      결과 = 결과 + "<hr>\n"
+      색인 = 색인 + 1
+    } else if 로시작함(줄, "### ") {
+      결과 = 결과 + "<h3>" + 인라인변환(줄.slice(4, 줄.length)) + "</h3>\n"
+      색인 = 색인 + 1
+    } else if 로시작함(줄, "## ") {
+      결과 = 결과 + "<h2>" + 인라인변환(줄.slice(3, 줄.length)) + "</h2>\n"
+      색인 = 색인 + 1
+    } else if 로시작함(줄, "# ") {
+      결과 = 결과 + "<h1>" + 인라인변환(줄.slice(2, 줄.length)) + "</h1>\n"
+      색인 = 색인 + 1
+    } else if 색인 + 1 < 줄들.length && 파이프있음(줄) && 구분행인지(줄들[색인 + 1])
+      && 칸으로분리(줄).length == 칸으로분리(줄들[색인 + 1]).length {
+      // GFM 표 — 제목/목록/인용/hr 다음에 검사하므로 `#`/`-`/`>` 줄이 헤더로
+      // 도둑맞지 않는다; 구분 행은 헤더와 칸 수가 같아야 한다.
+      결과 = 결과 + "<table>\n<thead>\n" + 행html로(칸으로분리(줄), "th") + "</thead>\n<tbody>\n"
+      색인 = 색인 + 2
+      while 색인 < 줄들.length && 파이프있음(줄들[색인]) && !블록시작인지(줄들[색인]) {
+        결과 = 결과 + 행html로(칸으로분리(줄들[색인]), "td")
+        색인 = 색인 + 1
+      }
+      결과 = 결과 + "</tbody>\n</table>\n"
+    } else if 줄.length == 0 {
+      색인 = 색인 + 1
+    } else {
+      결과 = 결과 + "<p>" + 인라인변환(줄) + "</p>\n"
+      색인 = 색인 + 1
+    }
+  }
+  결과
+}
+
+// §22 진입점: 호스트의 텍스트 페이로드(에디터 textarea / 파이프 stdin)를 렌더.
+print(마크다운변환(input()))

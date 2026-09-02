@@ -1,0 +1,32 @@
+
+function codeSix() -> int {
+    6
+}
+
+function codeFour() -> int {
+    4
+}
+
+function codeZero() -> int {
+    0
+}
+
+function choose(x: int) -> int {
+    let i = x - 2
+    concurrent {
+        slow: {
+            let mut cbs = [codeZero, codeFour]
+            cbs[i] = codeSix
+            let value: Option<int> = None
+            let out = value.okOrElse(cbs[i])
+            match out {
+                case Ok(_) => -1
+                case Err(code) => code
+            }
+        }
+        fast: 0
+    }
+    0
+}
+
+choose(3)

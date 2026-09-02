@@ -1,0 +1,8 @@
+function f(a: int, ...xs: int) -> int {
+  let mut t = a
+  for x in xs {
+    t = t + x
+  }
+  t
+}
+f(10, ...[1, 2])

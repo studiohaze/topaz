@@ -1,0 +1,7 @@
+function main() -> int {
+function first() -> int { second() }
+if true { first() }
+function second() -> int { 1 }
+0
+}
+main()

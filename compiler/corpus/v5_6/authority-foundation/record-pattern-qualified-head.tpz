@@ -1,0 +1,8 @@
+import record_model
+
+let user: record_model.User = record_model.make()
+let name = match user {
+    case record_model.User { name } => name
+    case _ => "none"
+}
+print(name)

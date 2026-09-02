@@ -1,0 +1,5 @@
+[[package]]
+name = "topaz_bootstrap_workload"
+version = "0.1.0"
+source = "root"
+manifest_hash = "sha256:fdcc83917f610c16b99987b21ba385a21b47414e1d0b7be5f254f5da91e92cb4"

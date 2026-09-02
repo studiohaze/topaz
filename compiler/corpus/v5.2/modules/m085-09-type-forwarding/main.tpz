@@ -1,0 +1,2 @@
+import facade
+let u: facade.User = make()

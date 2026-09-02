@@ -1,0 +1,4 @@
+// sum collects into Array<int>; spread refills it from an array
+let parts = [10, 20]
+let total3 = sum(...parts)             // 30
+let total4 = sum(1, ...parts, 4)       // 35

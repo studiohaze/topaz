@@ -1,0 +1,2 @@
+let er: Result<int, string> = Err("bad")
+er.flatMap((x) => Ok(x / 0))

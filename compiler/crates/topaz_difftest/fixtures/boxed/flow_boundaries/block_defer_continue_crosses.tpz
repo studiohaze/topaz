@@ -1,0 +1,7 @@
+for i in 0..2 {
+  {
+    defer print("c")
+    continue
+  }
+}
+print("end")

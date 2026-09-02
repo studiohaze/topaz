@@ -1,0 +1,6 @@
+function mk() {
+  print("M")
+  (x) => x + 1
+}
+let xs: Option<Array<int>> = None
+xs?.map(mk())

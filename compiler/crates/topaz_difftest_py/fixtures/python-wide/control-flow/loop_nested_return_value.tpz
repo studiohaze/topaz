@@ -1,0 +1,7 @@
+
+function f() -> int {
+    return 1 + loop {
+        break 2
+    }
+}
+f()

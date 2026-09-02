@@ -1,0 +1,6 @@
+
+function main() -> int {
+    let inc = (x) => x + 1
+    inc(4)
+}
+main()

@@ -1,0 +1,4 @@
+export function f() -> int { 1 }
+export type T = int
+export let v = 1
+export const K = 2

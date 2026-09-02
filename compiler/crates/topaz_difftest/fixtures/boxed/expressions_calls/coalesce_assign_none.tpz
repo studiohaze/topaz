@@ -1,0 +1,3 @@
+let mut x = toInt("nope")
+x ??= 9
+x

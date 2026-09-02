@@ -1,0 +1,7 @@
+
+import model { Box as ForeignBox, makeBox }
+function main() -> string {
+    let bad: ForeignBox<string> = makeBox(7)
+    bad.value
+}
+main()

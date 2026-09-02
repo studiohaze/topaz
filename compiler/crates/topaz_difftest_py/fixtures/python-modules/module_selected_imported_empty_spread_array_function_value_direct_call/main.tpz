@@ -1,0 +1,15 @@
+
+import util { base }
+function add(a: int, b: int = 2) -> int {
+    a + b
+}
+
+function mul(a: int, b: int) -> int {
+    a * b
+}
+
+function main() -> int {
+    let callbacks = [...base, add, mul]
+    callbacks[0](a: 5) + callbacks[1](b: 3, a: 10)
+}
+main()

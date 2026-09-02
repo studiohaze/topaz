@@ -1,0 +1,11 @@
+function greet(name: string, language: string) -> string {
+    return match language {
+        case "한국어" => "안녕하세요, {name}님!"
+        case "Русский" => "Привет, {name}!"
+        case _ => "Hello, {name}!"
+    }
+}
+
+let 사용자 = "김토파즈"
+print(greet(사용자, "한국어"))
+print(greet("Topaz", "Русский"))

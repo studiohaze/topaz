@@ -1,0 +1,9 @@
+type TrafficLight = "red" | "yellow" | "green"
+
+function describe(color: TrafficLight) -> string {
+    match color {
+        case "red" => "stop"
+        case "yellow" => "slow"
+        case "green" => "go"
+    }
+}

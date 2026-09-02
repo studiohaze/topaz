@@ -1,0 +1,7 @@
+let 문자숫자 = "123"
+
+// toInt는 Option<int>를 반환합니다 — None 경우를 명시적으로 처리하세요
+let 파싱됨 = match toInt(문자숫자) {
+    case Some(값) => 값
+    case None => 0
+}

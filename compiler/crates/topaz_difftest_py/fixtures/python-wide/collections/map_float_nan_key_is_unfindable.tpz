@@ -1,0 +1,16 @@
+
+function main() -> string {
+    let n = 0.0 / 0.0
+    let mut m = Map.new<float, string>()
+    m.insert(n, "nan")
+    let found = match m.get(n) {
+        case Some(_) => "hit"
+        case None => "miss"
+    }
+    let removed = match m.remove(n) {
+        case Some(_) => "removed"
+        case None => "kept"
+    }
+    "{m.length}:{found}:{m.containsKey(n)}:{removed}:{m.length}"
+}
+main()

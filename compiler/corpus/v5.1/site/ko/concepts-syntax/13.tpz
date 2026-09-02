@@ -1,0 +1,9 @@
+type 사용자입력 = string | int | null
+
+function 처리(입력: 사용자입력) -> string {
+    match 입력 {
+        case 텍스트: string => "문자열: {텍스트}"
+        case 숫자: int => "숫자: {숫자}"
+        case null => "입력 없음"
+    }
+}

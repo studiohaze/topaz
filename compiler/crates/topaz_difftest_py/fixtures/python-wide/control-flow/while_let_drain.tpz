@@ -1,0 +1,7 @@
+let mut opt: Option<int> = Some(3)
+let mut sum = 0
+while let Some(n) = opt {
+  sum = sum + n
+  if n > 0 { opt = Some(n - 1) } else { opt = None }
+}
+sum

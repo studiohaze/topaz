@@ -1,0 +1,3 @@
+record R derives Show {}
+impl Show<R> { function show(value: R) -> string { "r" } }
+0

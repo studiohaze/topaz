@@ -1,0 +1,15 @@
+
+function addDefault(a: int, b: int = 2) -> int {
+    a + b
+}
+function subDefault(a: int, b: int = 2) -> int {
+    a - b
+}
+function main() -> int {
+    let mut callbacks = { plus: addDefault }
+    let before = callbacks.plus(a: 5)
+    callbacks.plus = subDefault
+    let after = callbacks.plus(a: 5)
+    before * 10 + after
+}
+main()

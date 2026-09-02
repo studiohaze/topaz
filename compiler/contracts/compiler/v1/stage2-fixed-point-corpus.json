@@ -1,0 +1,48 @@
+{
+  "schema": "topaz.compiler.stage2-fixed-point-corpus/v1",
+  "cases": [
+    {
+      "id": "exact-k",
+      "input": "embedded-compiler-source-set",
+      "layers": [
+        "semantic-program-projection",
+        "generated-source",
+        "provenance"
+      ],
+      "expected": {
+        "semantic": "equal",
+        "generatedSource": "equal",
+        "provenance": "expected-different"
+      }
+    },
+    {
+      "id": "ordinary-positive",
+      "input": "compiler/fixtures/self-hosting/stage2-canary.tpz",
+      "layers": [
+        "semantic",
+        "provenance"
+      ],
+      "expected": {
+        "semantic": "equal",
+        "generatedSource": "not-produced",
+        "provenance": "expected-different"
+      }
+    },
+    {
+      "id": "deterministic-diagnostic",
+      "input": "compiler/fixtures/self-hosting/stage2-diagnostic.tpz",
+      "layers": [
+        "semantic",
+        "generated-source",
+        "provenance"
+      ],
+      "expected": {
+        "semantic": "equal",
+        "generatedSource": "equal",
+        "provenance": "expected-different"
+      }
+    }
+  ],
+  "nativeBinary": "not-compared",
+  "normalization": false
+}

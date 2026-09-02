@@ -1,0 +1,4 @@
+let n = 100
+let opt: Option<int> = Some(5)
+let inner = if let Some(n) = opt { n } else { -1 }
+n * 1000 + inner

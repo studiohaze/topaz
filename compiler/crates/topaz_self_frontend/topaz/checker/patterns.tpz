@@ -1,0 +1,1795 @@
+// Pattern typing, bindings, narrowing, coverage, and exhaustiveness.
+// Nominal catalogs enter as checker state; match control and diagnostics consume
+// the coverage result without duplicating pattern traversal.
+
+import types { SyntaxNode }
+import checker_types { TypeValue }
+import unicode { didYouMean }
+import checker.model {
+  CheckerService,
+  CheckerState,
+  CoverageGap,
+  EnumDefinition,
+  EnumVariant,
+  PatternCoverage,
+  RecordDefinition,
+  constructor,
+  emptyType,
+  inference,
+  literal,
+  nominal,
+  primitive,
+  rigid,
+  serviceInferExpression,
+}
+import checker.type_algebra {
+  assignable,
+  hasHole,
+  stringJoin,
+  typeText,
+  unionType,
+}
+import checker.syntax_index {
+  addDiagnostic,
+  addNode,
+  bindSymbol,
+  child,
+  children,
+  containsString,
+  moduleIdentityAt,
+  newtypeDefinitionIndex,
+  recordDefinitionIndex,
+  symbolTypeAt,
+  text,
+}
+import checker.nominals {
+  formType,
+  substitute,
+  targetType,
+}
+import checker.protocols_methods {
+  enumDefinitionForType,
+  newtypeDefinitionForType,
+}
+import checker.members_capabilities { typeArgument }
+
+export function patternBindingNodes(pattern: SyntaxNode) -> Array<SyntaxNode> {
+  let mut output: Array<SyntaxNode> = []
+  if pattern.kind == "pattern/binding" || pattern.kind == "pattern/typed" {
+    match child(pattern, "name") {
+      case Some(found) => output.push(found)
+      case None => ()
+    }
+    return output
+  }
+  for nested in pattern.children {
+    for found in patternBindingNodes(nested) {
+      output.push(found)
+    }
+  }
+  output
+}
+
+function patternAlternativeBindingNodes(
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  pattern: SyntaxNode,
+  expected: TypeValue,
+) -> Array<SyntaxNode> {
+  if pattern.kind == "pattern/binding" {
+    let nameNode = match child(pattern, "name") {
+      case Some(found) => found
+      case None => pattern
+    }
+    let name = text(source, nameNode)
+    match enumDefinitionForType(state, moduleIndex, expected) {
+      case Some(definition) => for variant in definition.variants {
+        if variant.name == name && variant.payloads.length == 0 {
+          let empty: Array<SyntaxNode> = []
+          return empty
+        }
+      }
+      case None => ()
+    }
+  }
+  patternBindingNodes(pattern)
+}
+
+function patternAlternativeHasBinding(
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  pattern: SyntaxNode,
+  expected: TypeValue,
+  name: string,
+) -> bool {
+  for found in patternAlternativeBindingNodes(
+    state,
+    moduleIndex,
+    source,
+    pattern,
+    expected,
+  ) {
+    if text(source, found) == name {
+      return true
+    }
+  }
+  false
+}
+
+export function patternIsIrrefutable(pattern: SyntaxNode) -> bool {
+  if pattern.kind == "pattern/binding" || pattern.kind == "pattern/wildcard" {
+    return true
+  }
+  if pattern.kind == "pattern/typed" {
+    return match child(pattern, "name") {
+      case Some(_) => true
+      case None => match child(pattern, "pattern") {
+        case Some(found) => patternIsIrrefutable(found)
+        case None => false
+      }
+    }
+  }
+  if pattern.kind == "pattern/tuple" ||
+    pattern.kind == "pattern/record" ||
+    pattern.kind == "pattern/nominal-record" {
+    for nested in pattern.children {
+      if nested.kind.startsWith("pattern/") && !patternIsIrrefutable(nested) {
+        return false
+      }
+    }
+    return true
+  }
+  false
+}
+
+export function emptyPatternCoverage() -> PatternCoverage {
+  PatternCoverage { irrefutable: false, keys: [] }
+}
+
+function irrefutablePatternCoverage() -> PatternCoverage {
+  PatternCoverage { irrefutable: true, keys: [] }
+}
+
+function coverageHasKey(coverage: PatternCoverage, key: string) -> bool {
+  containsString(coverage.keys, key)
+}
+
+function coverageWithKey(key: string) -> PatternCoverage {
+  PatternCoverage { irrefutable: false, keys: [key] }
+}
+
+export function mergePatternCoverage(
+  left: PatternCoverage,
+  right: PatternCoverage,
+) -> PatternCoverage {
+  let mut keys = left.keys
+  for key in right.keys {
+    if !containsString(keys, key) {
+      keys.push(key)
+    }
+  }
+  PatternCoverage {
+    irrefutable: left.irrefutable || right.irrefutable,
+    keys: keys,
+  }
+}
+
+function coveragePath(prefix: string, part: string) -> string {
+  if prefix == "" { part } else { "{prefix}/{part}" }
+}
+
+function prefixPatternCoverage(
+  prefix: string,
+  nested: PatternCoverage,
+) -> PatternCoverage {
+  let mut keys: Array<string> = []
+  if nested.irrefutable {
+    keys.push("{prefix}/*")
+  }
+  for key in nested.keys {
+    keys.push("{prefix}/{key}")
+  }
+  PatternCoverage { irrefutable: false, keys: keys }
+}
+
+function patternTypeOpaque(value: TypeValue) -> bool {
+  value.kind == "unknown" || value.kind == "inference-variable" ||
+    value.kind == "rigid" || value.kind == "foreign"
+}
+
+function patternTypeDecidable(value: TypeValue) -> bool {
+  if value.kind == "primitive" || value.kind == "literal" {
+    return true
+  }
+  if value.kind == "union" {
+    for member in value.members {
+      if !patternTypeDecidable(member) { return false }
+    }
+    return true
+  }
+  if value.kind == "constructor" {
+    for argument in value.arguments {
+      if !patternTypeDecidable(argument) { return false }
+    }
+    return true
+  }
+  if value.kind == "record" {
+    for field in value.fields {
+      if !patternTypeDecidable(field) { return false }
+    }
+    return true
+  }
+  false
+}
+
+function patternTypesOverlap(left: TypeValue, right: TypeValue) -> bool {
+  if hasHole(left) || hasHole(right) ||
+    assignable(left, right) || assignable(right, left) {
+    return true
+  }
+  if left.kind == "union" {
+    for member in left.members {
+      if patternTypesOverlap(member, right) { return true }
+    }
+    return false
+  }
+  if right.kind == "union" {
+    for member in right.members {
+      if patternTypesOverlap(left, member) { return true }
+    }
+    return false
+  }
+  if left.kind == "constructor" && right.kind == "constructor" {
+    return left.name == right.name
+  }
+  if left.kind == "enum" && right.kind == "enum" ||
+    left.kind == "nominal-record" && right.kind == "nominal-record" ||
+    left.kind == "newtype" && right.kind == "newtype" {
+    return left.kind == right.kind && left.identity == right.identity
+  }
+  if left.kind == "record" && right.kind == "record" &&
+    left.fieldNames.length == right.fieldNames.length {
+    let mut index = 0
+    while index < left.fieldNames.length {
+      let leftName = match left.fieldNames.get(index) {
+        case Some(found) => found
+        case None => return false
+      }
+      let rightName = match right.fieldNames.get(index) {
+        case Some(found) => found
+        case None => return false
+      }
+      let leftType = match left.fields.get(index) {
+        case Some(found) => found
+        case None => return false
+      }
+      let rightType = match right.fields.get(index) {
+        case Some(found) => found
+        case None => return false
+      }
+      if leftName != rightName ||
+        !patternTypesOverlap(leftType, rightType) {
+        return false
+      }
+      index += 1
+    }
+    return true
+  }
+  false
+}
+
+function narrowPatternType(
+  scrutinee: TypeValue,
+  formed: TypeValue,
+) -> TypeValue {
+  if hasHole(scrutinee) { return formed }
+  if assignable(formed, scrutinee) { return scrutinee }
+  if assignable(scrutinee, formed) { return formed }
+  if scrutinee.kind == "union" {
+    let mut kept: Array<TypeValue> = []
+    for member in scrutinee.members {
+      if patternTypesOverlap(member, formed) {
+        kept.push(narrowPatternType(member, formed))
+      }
+    }
+    if kept.length > 0 { return unionType(kept) }
+  }
+  formed
+}
+
+function patternNameSuggestion(
+  target: string,
+  candidates: Array<string>,
+) -> string {
+  didYouMean(target, candidates)
+}
+
+function recordPatternHeadSuggestion(
+  state: CheckerState,
+  moduleIndex: int,
+  target: string,
+) -> string {
+  let mut candidates: Array<string> = []
+  for definition in state.records {
+    if definition.moduleIndex == moduleIndex {
+      candidates.push(definition.name)
+    }
+  }
+  patternNameSuggestion(target, candidates)
+}
+
+function recordFieldSuggestion(
+  definition: RecordDefinition,
+  target: string,
+) -> string {
+  let mut candidates: Array<string> = []
+  for field in definition.fields { candidates.push(field.name) }
+  patternNameSuggestion(target, candidates)
+}
+
+function structuralFieldSuggestion(
+  value: TypeValue,
+  target: string,
+) -> string {
+  patternNameSuggestion(target, value.fieldNames)
+}
+
+function enumVariantSuggestion(
+  definition: EnumDefinition,
+  target: string,
+) -> string {
+  let mut candidates: Array<string> = []
+  for variant in definition.variants { candidates.push(variant.name) }
+  patternNameSuggestion(target, candidates)
+}
+
+function nominalPatternIdentityFor(identity: string, origin: string) -> string {
+  if origin == "" { identity }
+  else { "{origin}::{identity}" }
+}
+
+function nominalPatternIdentity(value: TypeValue) -> string {
+  nominalPatternIdentityFor(value.identity, value.origin)
+}
+
+function coverageCoversAt(
+  state: CheckerState,
+  moduleIndex: int,
+  coverage: PatternCoverage,
+  value: TypeValue,
+  prefix: string,
+) -> bool {
+  if prefix == "" && coverage.irrefutable {
+    return true
+  }
+  if prefix != "" && coverageHasKey(coverage, "{prefix}/*") {
+    return true
+  }
+  if value.kind == "primitive" && value.name == "bool" {
+    return coverageHasKey(
+      coverage,
+      coveragePath(prefix, "literal:true"),
+    ) && coverageHasKey(
+      coverage,
+      coveragePath(prefix, "literal:false"),
+    )
+  }
+  if value.kind == "literal" {
+    return coverageHasKey(
+      coverage,
+      coveragePath(prefix, "literal:{typeText(value)}"),
+    )
+  }
+  if value.kind == "union" {
+    if value.members.length == 0 { return false }
+    for member in value.members {
+      if !coverageCoversAt(state, moduleIndex, coverage, member, prefix) {
+        return false
+      }
+    }
+    return true
+  }
+  if value.kind == "constructor" && value.name == "Option" {
+    return coverageCoversAt(
+      state,
+      moduleIndex,
+      coverage,
+      typeArgument(value, 0),
+      coveragePath(prefix, "constructor:Some"),
+    ) && coverageHasKey(
+      coverage,
+      coveragePath(prefix, "constructor:None/*"),
+    )
+  }
+  if value.kind == "constructor" && value.name == "Result" {
+    return coverageCoversAt(
+      state,
+      moduleIndex,
+      coverage,
+      typeArgument(value, 0),
+      coveragePath(prefix, "constructor:Ok"),
+    ) && coverageCoversAt(
+      state,
+      moduleIndex,
+      coverage,
+      typeArgument(value, 1),
+      coveragePath(prefix, "constructor:Err"),
+    )
+  }
+  if value.kind == "enum" {
+    return match enumDefinitionForType(state, moduleIndex, value) {
+      case Some(definition) => {
+        for variant in definition.variants {
+          let variantPrefix = coveragePath(
+            prefix,
+            "constructor:{variant.name}",
+          )
+          if variant.payloads.length == 0 {
+            if !coverageHasKey(coverage, "{variantPrefix}/*") {
+              return false
+            }
+          } else if variant.payloads.length == 1 {
+            let payload = match variant.payloads.get(0) {
+              case Some(found) => substitute(
+                found,
+                definition.typeParameters,
+                value.arguments,
+              )
+              case None => emptyType("unknown")
+            }
+            if !coverageCoversAt(
+              state,
+              definition.moduleIndex,
+              coverage,
+              payload,
+              variantPrefix,
+            ) {
+              return false
+            }
+          } else if !coverageHasKey(coverage, "{variantPrefix}/*") {
+            return false
+          }
+        }
+        true
+      }
+      case None => false
+    }
+  }
+  if value.kind == "nominal-record" {
+    return coverageHasKey(
+      coverage,
+      coveragePath(prefix, "record:{nominalPatternIdentity(value)}"),
+    )
+  }
+  false
+}
+
+export function coverageGap(
+  state: CheckerState,
+  moduleIndex: int,
+  coverage: PatternCoverage,
+  value: TypeValue,
+) -> CoverageGap {
+  if coverage.irrefutable {
+    return CoverageGap { decidable: true, missing: [] }
+  }
+  let mut missing: Array<string> = []
+  if value.kind == "primitive" && value.name == "bool" {
+    for spelling in ["true", "false"] {
+      if !coverageHasKey(coverage, "literal:{spelling}") {
+        missing.push("`{spelling}`")
+      }
+    }
+    return CoverageGap { decidable: true, missing: missing }
+  }
+  if value.kind == "newtype" {
+    missing.push("`{typeText(value)}(_)`")
+    return CoverageGap { decidable: true, missing: missing }
+  }
+  if value.kind == "union" {
+    let mut decidable = true
+    for member in value.members {
+      if member.kind == "literal" {
+        if !coverageHasKey(coverage, "literal:{typeText(member)}") {
+          missing.push("`{typeText(member)}`")
+        }
+      } else if member.kind == "nominal-record" {
+        if !coverageHasKey(
+          coverage,
+          "record:{nominalPatternIdentity(member)}",
+        ) {
+          missing.push("`{typeText(member)} \{ … \}`")
+        }
+      } else {
+        decidable = false
+      }
+    }
+    return CoverageGap {
+      decidable: decidable,
+      missing: if decidable { missing } else { [] },
+    }
+  }
+  if value.kind == "constructor" && value.name == "Option" {
+    if !coverageCoversAt(
+      state,
+      moduleIndex,
+      coverage,
+      typeArgument(value, 0),
+      "constructor:Some",
+    ) {
+      missing.push("`Some`")
+    }
+    if !coverageHasKey(coverage, "constructor:None/*") {
+      missing.push("`None`")
+    }
+    return CoverageGap { decidable: true, missing: missing }
+  }
+  if value.kind == "constructor" && value.name == "Result" {
+    if !coverageCoversAt(
+      state,
+      moduleIndex,
+      coverage,
+      typeArgument(value, 0),
+      "constructor:Ok",
+    ) {
+      missing.push("`Ok`")
+    }
+    if !coverageCoversAt(
+      state,
+      moduleIndex,
+      coverage,
+      typeArgument(value, 1),
+      "constructor:Err",
+    ) {
+      missing.push("`Err`")
+    }
+    return CoverageGap { decidable: true, missing: missing }
+  }
+  if value.kind == "enum" {
+    return match enumDefinitionForType(state, moduleIndex, value) {
+      case Some(definition) => {
+        for variant in definition.variants {
+          let prefix = "constructor:{variant.name}"
+          let mut covered = false
+          if variant.payloads.length == 0 || variant.payloads.length > 1 {
+            covered = coverageHasKey(coverage, "{prefix}/*")
+          } else {
+            let payload = match variant.payloads.get(0) {
+              case Some(found) => substitute(
+                found,
+                definition.typeParameters,
+                value.arguments,
+              )
+              case None => emptyType("unknown")
+            }
+            covered = coverageCoversAt(
+              state,
+              definition.moduleIndex,
+              coverage,
+              payload,
+              prefix,
+            )
+          }
+          if !covered {
+            missing.push("`{typeText(value)}.{variant.name}`")
+          }
+        }
+        CoverageGap { decidable: true, missing: missing }
+      }
+      case None => CoverageGap { decidable: false, missing: [] }
+    }
+  }
+  if value.kind == "nominal-record" {
+    if !coverageHasKey(
+      coverage,
+      "record:{nominalPatternIdentity(value)}",
+    ) {
+      missing.push("`{typeText(value)} \{ … \}`")
+    }
+    return CoverageGap { decidable: true, missing: missing }
+  }
+  CoverageGap { decidable: false, missing: [] }
+}
+
+function checkLiteralPattern(
+  service: CheckerService,
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  pattern: SyntaxNode,
+  expected: TypeValue,
+) -> PatternCoverage {
+  let mut coverage = emptyPatternCoverage()
+  for fieldName in ["value", "low", "high"] {
+    match child(pattern, fieldName) {
+      case Some(value) => {
+        let inferred = serviceInferExpression(service, state, moduleIndex, source, value)
+        if pattern.kind == "pattern/literal" && fieldName == "value" {
+          coverage = coverageWithKey("literal:{typeText(inferred)}")
+          if patternTypeDecidable(expected) && !hasHole(inferred) &&
+            !patternTypesOverlap(inferred, expected) {
+            addDiagnostic(
+              state,
+              moduleIndex,
+              "TPZ5001",
+              "this pattern can never match `{typeText(expected)}`",
+              "",
+              value,
+            )
+          }
+        }
+      }
+      case None => ()
+    }
+  }
+  addNode(state, moduleIndex, "pattern", pattern, expected)
+  coverage
+}
+
+export function bindNamedPatternType(
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  pattern: SyntaxNode,
+  expected: TypeValue,
+  typeValue: TypeValue,
+  mutable: bool,
+) -> () {
+  let nameNode = match child(pattern, "name") {
+    case Some(found) => found
+    case None => pattern
+  }
+  let name = text(source, nameNode)
+  if pattern.kind == "pattern/binding" {
+    match enumDefinitionForType(state, moduleIndex, expected) {
+      case Some(definition) => for variant in definition.variants {
+        if variant.name == name && variant.payloads.length == 0 {
+          addNode(state, moduleIndex, "pattern", pattern, expected)
+          return ()
+        }
+      }
+      case None => ()
+    }
+  }
+  bindSymbol(
+    state,
+    moduleIndex,
+    nameNode.lo,
+    nameNode.hi,
+    name,
+    typeValue,
+    mutable,
+  )
+  addNode(
+    state,
+    moduleIndex,
+    "pattern",
+    pattern,
+    if pattern.kind == "pattern/typed" { expected } else { typeValue },
+  )
+  addNode(state, moduleIndex, "binding", nameNode, typeValue)
+}
+
+function bindNamedPattern(
+  service: CheckerService,
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  pattern: SyntaxNode,
+  expected: TypeValue,
+  mutable: bool,
+) -> PatternCoverage {
+  let typeValue = if pattern.kind == "pattern/typed" {
+    match child(pattern, "type") {
+      case Some(found) => formType(
+        service,
+        state,
+        moduleIndex,
+        source,
+        found,
+        [],
+        "pattern",
+      )
+      case None => expected
+    }
+  } else {
+    expected
+  }
+  let mut coverage = irrefutablePatternCoverage()
+  let mut bound = typeValue
+  if pattern.kind == "pattern/typed" {
+    if !hasHole(expected) && !hasHole(typeValue) &&
+      assignable(typeValue, expected) {
+      coverage = irrefutablePatternCoverage()
+    } else {
+      coverage = emptyPatternCoverage()
+      if patternTypeDecidable(expected) && patternTypeDecidable(typeValue) &&
+        !patternTypesOverlap(expected, typeValue) {
+        addDiagnostic(
+          state,
+          moduleIndex,
+          "TPZ5001",
+          "this pattern can never match `{typeText(expected)}`",
+          "",
+          pattern,
+        )
+      }
+    }
+    bound = narrowPatternType(expected, typeValue)
+  }
+  bindNamedPatternType(
+    state,
+    moduleIndex,
+    source,
+    pattern,
+    expected,
+    bound,
+    mutable,
+  )
+  coverage
+}
+
+function recordFieldType(value: TypeValue, name: string) -> Option<TypeValue> {
+  if value.kind != "record" { return None }
+  let mut index = 0
+  for fieldName in value.fieldNames {
+    if fieldName == name {
+      return value.fields.get(index)
+    }
+    index += 1
+  }
+  None
+}
+
+function literalPatternType(
+  service: CheckerService,
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  pattern: SyntaxNode,
+) -> Option<TypeValue> {
+  if pattern.kind != "pattern/literal" { return None }
+  match child(pattern, "value") {
+    case Some(value) => Some(serviceInferExpression(service, state, moduleIndex, source, value))
+    case None => None
+  }
+}
+
+function structuralRecordCandidate(
+  service: CheckerService,
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  pattern: SyntaxNode,
+  value: TypeValue,
+) -> bool {
+  if value.kind != "record" { return false }
+  for field in children(pattern, "fields") {
+    let nameNode = match child(field, "name") {
+      case Some(found) => found
+      case None => field
+    }
+    let fieldType = match recordFieldType(value, text(source, nameNode)) {
+      case Some(found) => found
+      case None => return false
+    }
+    match child(field, "pattern") {
+      case Some(nested) => match literalPatternType(
+        service,
+        state,
+        moduleIndex,
+        source,
+        nested,
+      ) {
+        case Some(literalType) => if patternTypeDecidable(fieldType) &&
+          !patternTypesOverlap(literalType, fieldType) {
+          return false
+        }
+        case None => ()
+      }
+      case None => ()
+    }
+  }
+  true
+}
+
+function bindRecordPattern(
+  service: CheckerService,
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  pattern: SyntaxNode,
+  expected: TypeValue,
+  mutable: bool,
+) -> PatternCoverage {
+  if pattern.kind == "pattern/nominal-record" {
+    let nameNode = match child(pattern, "name") {
+      case Some(found) => found
+      case None => pattern
+    }
+    let recordName = text(source, nameNode)
+    let target = targetType(state, moduleIndex, nameNode)
+    let targetModule = target.moduleIndex
+    let targetName = target.name
+    let targetOrigin = moduleIdentityAt(state, targetModule)
+    let mut definition: Option<RecordDefinition> = None
+    let index = recordDefinitionIndex(state, targetModule, targetName)
+    if index >= 0 {
+      definition = state.records.get(index)
+    }
+    let mut candidates: Array<TypeValue> = []
+    let mut members: Array<TypeValue> = if expected.kind == "union" {
+      expected.members
+    } else {
+      [expected]
+    }
+    let mut hasRigid = false
+    let mut hasGradual = false
+    let mut allMatch = members.length > 0
+    for member in members {
+      if member.kind == "nominal-record" &&
+        member.identity == targetName && member.origin == targetOrigin {
+        candidates.push(member)
+      } else {
+        allMatch = false
+        if member.kind == "rigid" || member.kind == "foreign" {
+          hasRigid = true
+        }
+        if hasHole(member) { hasGradual = true }
+      }
+    }
+    match definition {
+      case Some(recordDefinition) => {
+        if hasRigid {
+          addDiagnostic(
+            state,
+            moduleIndex,
+            "TPZ5001",
+            "a `{recordName}` pattern cannot establish nominal identity for rigid scrutinee type `{typeText(expected)}`",
+            "",
+            pattern,
+          )
+        } else if candidates.length == 0 && !hasGradual {
+          addDiagnostic(
+            state,
+            moduleIndex,
+            "TPZ5001",
+            "this `{recordName}` pattern can never match `{typeText(expected)}`",
+            "",
+            pattern,
+          )
+        }
+        let mut allIrrefutable = true
+        let mut seenFields: Array<string> = []
+        for field in children(pattern, "fields") {
+          let fieldNameNode = match child(field, "name") {
+            case Some(found) => found
+            case None => field
+          }
+          let fieldName = text(source, fieldNameNode)
+          let duplicate = containsString(seenFields, fieldName)
+          seenFields.push(fieldName)
+          if duplicate {
+            addDiagnostic(
+              state,
+              moduleIndex,
+              "TPZ5008",
+              "nominal record pattern field `{fieldName}` is specified more than once",
+              "",
+              field,
+            )
+          }
+          let mut knownField = false
+          for declared in recordDefinition.fields {
+            if declared.name == fieldName { knownField = true }
+          }
+          if !knownField {
+            addDiagnostic(
+              state,
+              moduleIndex,
+              "TPZ5006",
+              "record `{recordName}` has no field `{fieldName}`" +
+                recordFieldSuggestion(recordDefinition, fieldName),
+              "",
+              field,
+            )
+          }
+          let mut fieldTypes: Array<TypeValue> = []
+          for candidate in candidates {
+            for declared in recordDefinition.fields {
+              if declared.name == fieldName {
+                fieldTypes.push(substitute(
+                  declared.typeValue,
+                  recordDefinition.typeParameters,
+                  candidate.arguments,
+                ))
+              }
+            }
+          }
+          if hasGradual { fieldTypes.push(emptyType("unknown")) }
+          let fieldType = if fieldTypes.length == 0 {
+            let mut fallback = emptyType("unknown")
+            for declared in recordDefinition.fields {
+              if declared.name == fieldName { fallback = declared.typeValue }
+            }
+            fallback
+          } else {
+            unionType(fieldTypes)
+          }
+          match child(field, "pattern") {
+            case Some(nested) => {
+              let nestedCoverage = patternBindingTypeAt(
+                service,
+                state,
+                moduleIndex,
+                source,
+                nested,
+                fieldType,
+                mutable,
+                false,
+              )
+              allIrrefutable = allIrrefutable && nestedCoverage.irrefutable
+            }
+            case None => bindSymbol(
+              state,
+              moduleIndex,
+              fieldNameNode.lo,
+              fieldNameNode.hi,
+              fieldName,
+              fieldType,
+              mutable,
+            )
+          }
+        }
+        addNode(state, moduleIndex, "pattern", pattern, expected)
+        if allIrrefutable {
+          let targetIdentity = nominalPatternIdentityFor(
+            targetName,
+            targetOrigin,
+          )
+          let keyed = coverageWithKey("record:{targetIdentity}")
+          return if allMatch {
+            PatternCoverage { irrefutable: true, keys: keyed.keys }
+          } else {
+            keyed
+          }
+        }
+        return emptyPatternCoverage()
+      }
+      case None => {
+        addDiagnostic(
+          state,
+          moduleIndex,
+          "TPZ5002",
+          "unbound nominal record pattern head `{recordName}`" +
+            recordPatternHeadSuggestion(state, moduleIndex, recordName),
+          "",
+          nameNode,
+        )
+        addNode(state, moduleIndex, "pattern", pattern, expected)
+        return emptyPatternCoverage()
+      }
+    }
+  }
+
+  let mut members: Array<TypeValue> = if expected.kind == "union" {
+    expected.members
+  } else {
+    [expected]
+  }
+  let mut candidates: Array<TypeValue> = []
+  let mut rigids: Array<TypeValue> = []
+  let mut hasGradual = false
+  for member in members {
+    if structuralRecordCandidate(
+      service,
+      state,
+      moduleIndex,
+      source,
+      pattern,
+      member,
+    ) {
+      candidates.push(member)
+    } else if member.kind == "rigid" || member.kind == "foreign" {
+      rigids.push(member)
+    } else if hasHole(member) {
+      hasGradual = true
+    }
+  }
+  if expected.kind != "record" && candidates.length == 0 &&
+    rigids.length == 0 && !hasGradual &&
+    patternTypeDecidable(expected) {
+    addDiagnostic(
+      state,
+      moduleIndex,
+      "TPZ5001",
+      "this pattern can never match `{typeText(expected)}`",
+      "",
+      pattern,
+    )
+  }
+  let mut allIrrefutable = expected.kind == "record"
+  for field in children(pattern, "fields") {
+    let nameNode = match child(field, "name") {
+      case Some(found) => found
+      case None => field
+    }
+    let fieldName = text(source, nameNode)
+    let mut fieldTypes: Array<TypeValue> = []
+    for candidate in candidates {
+      match recordFieldType(candidate, fieldName) {
+        case Some(found) => fieldTypes.push(found)
+        case None => ()
+      }
+    }
+    for rigidMember in rigids {
+      fieldTypes.push(rigid(
+        "FieldOf<{typeText(rigidMember)}, {fieldName}>",
+        "builtin::record-pattern",
+      ))
+    }
+    if hasGradual { fieldTypes.push(emptyType("unknown")) }
+    if expected.kind == "record" &&
+      recordFieldType(expected, fieldName) == None {
+      addDiagnostic(
+        state,
+        moduleIndex,
+        "TPZ5006",
+        "`{typeText(expected)}` has no field `{fieldName}`" +
+          structuralFieldSuggestion(expected, fieldName),
+        "",
+        field,
+      )
+    }
+    let fieldType = if fieldTypes.length == 0 {
+      emptyType("unknown")
+    } else {
+      unionType(fieldTypes)
+    }
+    match child(field, "pattern") {
+      case Some(found) => {
+        let nested = patternBindingTypeAt(
+          service,
+          state,
+          moduleIndex,
+          source,
+          found,
+          fieldType,
+          mutable,
+          false,
+        )
+        allIrrefutable = allIrrefutable && nested.irrefutable
+      }
+      case None => bindSymbol(
+        state,
+        moduleIndex,
+        nameNode.lo,
+        nameNode.hi,
+        text(source, nameNode),
+        fieldType,
+        mutable,
+      )
+    }
+  }
+  addNode(state, moduleIndex, "pattern", pattern, expected)
+  if allIrrefutable { irrefutablePatternCoverage() } else { emptyPatternCoverage() }
+}
+
+function bindConstructorPattern(
+  service: CheckerService,
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  pattern: SyntaxNode,
+  expected: TypeValue,
+  mutable: bool,
+) -> PatternCoverage {
+  let nameNode = match child(pattern, "name") {
+    case Some(found) => found
+    case None => pattern
+  }
+  let name = text(source, nameNode)
+  let target = targetType(state, moduleIndex, nameNode)
+  let targetModule = target.moduleIndex
+  let targetName = target.name
+  let targetOrigin = moduleIdentityAt(state, targetModule)
+  let arguments = children(pattern, "arguments")
+
+  if expected.kind == "newtype" {
+    let mut coverage = emptyPatternCoverage()
+    match newtypeDefinitionForType(state, moduleIndex, expected) {
+      case Some(definition) => {
+        let base = substitute(
+          definition.base,
+          definition.typeParameters,
+          expected.arguments,
+        )
+        if targetName != expected.identity || targetOrigin != expected.origin ||
+          newtypeDefinitionIndex(state, targetModule, targetName) < 0 {
+          for argument in arguments {
+            let _ = patternBindingTypeAt(
+              service,
+              state,
+              moduleIndex,
+              source,
+              argument,
+              emptyType("unknown"),
+              mutable,
+              false,
+            )
+          }
+          addDiagnostic(
+            state,
+            moduleIndex,
+            "TPZ5001",
+            "this `{name}` pattern can never match `{typeText(expected)}`",
+            "",
+            pattern,
+          )
+        } else if arguments.length != 1 {
+          addDiagnostic(
+            state,
+            moduleIndex,
+            "TPZ5004",
+            "newtype `{typeText(expected)}` pattern takes 1 subpattern (the wrapped `{typeText(base)}`), found {arguments.length}",
+            "",
+            pattern,
+          )
+        } else {
+          let nested = match arguments.get(0) {
+            case Some(argument) => patternBindingTypeAt(
+              service,
+              state,
+              moduleIndex,
+              source,
+              argument,
+              base,
+              mutable,
+              false,
+            )
+            case None => emptyPatternCoverage()
+          }
+          coverage = if nested.irrefutable {
+            irrefutablePatternCoverage()
+          } else {
+            emptyPatternCoverage()
+          }
+        }
+      }
+      case None => ()
+    }
+    addNode(state, moduleIndex, "pattern", pattern, expected)
+    return coverage
+  }
+
+  if expected.kind == "enum" {
+    let mut coverage = emptyPatternCoverage()
+    match enumDefinitionForType(state, moduleIndex, expected) {
+      case Some(definition) => {
+        let mut selected: Option<EnumVariant> = None
+        for variant in definition.variants {
+          if variant.name == name { selected = Some(variant) }
+        }
+        match selected {
+          case Some(variant) => {
+            if arguments.length != variant.payloads.length {
+              for argument in arguments {
+                let _ = patternBindingTypeAt(
+                  service,
+                  state,
+                  moduleIndex,
+                  source,
+                  argument,
+                  emptyType("unknown"),
+                  mutable,
+                  false,
+                )
+              }
+              let wanted = if variant.payloads.length == 0 {
+                "no subpattern"
+              } else {
+                "{variant.payloads.length} subpattern" +
+                  if variant.payloads.length == 1 { "" } else { "s" }
+              }
+              addDiagnostic(
+                state,
+                moduleIndex,
+                "TPZ5004",
+                "enum variant `{typeText(expected)}.{name}` takes {wanted}, found {arguments.length}",
+                "",
+                pattern,
+              )
+            } else if arguments.length == 0 {
+              coverage = coverageWithKey("constructor:{name}/*")
+            } else if arguments.length == 1 {
+              let payload = match variant.payloads.get(0) {
+                case Some(found) => substitute(
+                  found,
+                  definition.typeParameters,
+                  expected.arguments,
+                )
+                case None => emptyType("unknown")
+              }
+              let nested = match arguments.get(0) {
+                case Some(argument) => patternBindingTypeAt(
+                  service,
+                  state,
+                  moduleIndex,
+                  source,
+                  argument,
+                  payload,
+                  mutable,
+                  false,
+                )
+                case None => emptyPatternCoverage()
+              }
+              coverage = prefixPatternCoverage("constructor:{name}", nested)
+            } else {
+              let mut allIrrefutable = true
+              let mut index = 0
+              for argument in arguments {
+                let payload = match variant.payloads.get(index) {
+                  case Some(found) => substitute(
+                    found,
+                    definition.typeParameters,
+                    expected.arguments,
+                  )
+                  case None => emptyType("unknown")
+                }
+                let nested = patternBindingTypeAt(
+                  service,
+                  state,
+                  moduleIndex,
+                  source,
+                  argument,
+                  payload,
+                  mutable,
+                  false,
+                )
+                allIrrefutable = allIrrefutable && nested.irrefutable
+                index += 1
+              }
+              if allIrrefutable {
+                coverage = coverageWithKey("constructor:{name}/*")
+              }
+            }
+          }
+          case None => addDiagnostic(
+            state,
+            moduleIndex,
+            "TPZ5001",
+            "enum `{typeText(expected)}` has no variant `{name}`" +
+              enumVariantSuggestion(definition, name),
+            "",
+            pattern,
+          )
+        }
+      }
+      case None => ()
+    }
+    addNode(state, moduleIndex, "pattern", pattern, expected)
+    return coverage
+  }
+
+  let known = name == "Some" || name == "None" ||
+    name == "Ok" || name == "Err"
+  let correctArity = if name == "None" {
+    arguments.length == 0
+  } else if known {
+    arguments.length == 1
+  } else {
+    true
+  }
+  let mut members: Array<TypeValue> = if expected.kind == "union" {
+    expected.members
+  } else {
+    [expected]
+  }
+  let mut payloads: Array<TypeValue> = []
+  let mut matchable = false
+  for member in members {
+    if name == "Some" && member.kind == "constructor" &&
+      member.name == "Option" && correctArity {
+      matchable = true
+      payloads.push(typeArgument(member, 0))
+    } else if name == "None" && member.kind == "constructor" &&
+      member.name == "Option" && correctArity {
+      matchable = true
+    } else if name == "Ok" && member.kind == "constructor" &&
+      member.name == "Result" && correctArity {
+      matchable = true
+      payloads.push(typeArgument(member, 0))
+    } else if name == "Err" && member.kind == "constructor" &&
+      member.name == "Result" && correctArity {
+      matchable = true
+      payloads.push(typeArgument(member, 1))
+    } else if (member.kind == "rigid" || member.kind == "foreign") &&
+      (!known || correctArity) {
+      matchable = true
+      if arguments.length > 0 {
+        payloads.push(rigid(
+          "PayloadOf<{typeText(member)}, {name}>",
+          "builtin::constructor-pattern",
+        ))
+      }
+    } else if hasHole(member) && (!known || correctArity) {
+      matchable = true
+      if arguments.length > 0 { payloads.push(emptyType("unknown")) }
+    }
+  }
+  if known && !correctArity {
+    addDiagnostic(
+      state,
+      moduleIndex,
+      "TPZ5004",
+      if name == "None" {
+        "`None` pattern takes no subpattern"
+      } else {
+        "`{name}` pattern takes one subpattern"
+      },
+      "",
+      pattern,
+    )
+  } else if known && !matchable {
+    addDiagnostic(
+      state,
+      moduleIndex,
+      "TPZ5001",
+      "this pattern can never match `{typeText(expected)}`",
+      "",
+      pattern,
+    )
+  }
+  let payload = if payloads.length == 0 {
+    emptyType("unknown")
+  } else {
+    unionType(payloads)
+  }
+  let mut nested = irrefutablePatternCoverage()
+  for argument in arguments {
+    nested = patternBindingTypeAt(
+      service,
+      state,
+      moduleIndex,
+      source,
+      argument,
+      payload,
+      mutable,
+      false,
+    )
+  }
+  addNode(state, moduleIndex, "pattern", pattern, expected)
+  if matchable && known {
+    prefixPatternCoverage("constructor:{name}", nested)
+  } else {
+    emptyPatternCoverage()
+  }
+}
+
+function bindListPattern(
+  service: CheckerService,
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  pattern: SyntaxNode,
+  expected: TypeValue,
+  mutable: bool,
+) -> PatternCoverage {
+  let mut members: Array<TypeValue> = if expected.kind == "union" {
+    expected.members
+  } else {
+    [expected]
+  }
+  let mut itemTypes: Array<TypeValue> = []
+  let mut restTypes: Array<TypeValue> = []
+  let mut opaque = false
+  for member in members {
+    if member.kind == "constructor" && member.name == "Array" {
+      itemTypes.push(typeArgument(member, 0))
+      restTypes.push(member)
+    } else if member.kind == "rigid" || member.kind == "foreign" {
+      let projected = rigid(
+        "ElemOf<{typeText(member)}>",
+        "builtin::list-pattern",
+      )
+      itemTypes.push(projected)
+      restTypes.push(constructor("Array", [projected]))
+      opaque = true
+    } else if hasHole(member) {
+      itemTypes.push(emptyType("unknown"))
+      restTypes.push(emptyType("unknown"))
+      opaque = true
+    }
+  }
+  if itemTypes.length == 0 && !opaque && patternTypeDecidable(expected) {
+    addDiagnostic(
+      state,
+      moduleIndex,
+      "TPZ5001",
+      "this pattern can never match `{typeText(expected)}`",
+      "",
+      pattern,
+    )
+  }
+  let item = if itemTypes.length == 0 {
+    emptyType("unknown")
+  } else {
+    unionType(itemTypes)
+  }
+  let rest = if restTypes.length == 0 {
+    emptyType("unknown")
+  } else {
+    unionType(restTypes)
+  }
+  let mut elementCount = 0
+  let mut onlyRestIrrefutable = false
+  for element in children(pattern, "elements") {
+    if element.kind == "list-pattern/rest" {
+      match child(element, "binding") {
+        case Some(found) => {
+          let nested = patternBindingTypeAt(
+            service,
+            state,
+            moduleIndex,
+            source,
+            found,
+            rest,
+            mutable,
+            false,
+          )
+          onlyRestIrrefutable = nested.irrefutable
+        }
+        case None => { onlyRestIrrefutable = true }
+      }
+    } else {
+      elementCount += 1
+      let _ = patternBindingTypeAt(
+        service,
+        state,
+        moduleIndex,
+        source,
+        element,
+        item,
+        mutable,
+        false,
+      )
+    }
+  }
+  addNode(state, moduleIndex, "pattern", pattern, expected)
+  if expected.kind == "constructor" && expected.name == "Array" &&
+    elementCount == 0 && children(pattern, "elements").length == 1 &&
+    onlyRestIrrefutable {
+    irrefutablePatternCoverage()
+  } else {
+    emptyPatternCoverage()
+  }
+}
+
+function disconnectedPatternTypes(values: Array<TypeValue>) -> bool {
+  if values.length < 2 { return false }
+  let mut reached: Array<bool> = []
+  let mut index = 0
+  while index < values.length {
+    reached.push(index == 0)
+    index += 1
+  }
+  let mut stack: Array<int> = [0]
+  while stack.length > 0 {
+    let current = match stack.pop() {
+      case Some(found) => found
+      case None => 0
+    }
+    let currentType = match values.get(current) {
+      case Some(found) => found
+      case None => emptyType("unknown")
+    }
+    index = 0
+    while index < values.length {
+      let seen = match reached.get(index) {
+        case Some(found) => found
+        case None => false
+      }
+      let candidate = match values.get(index) {
+        case Some(found) => found
+        case None => emptyType("unknown")
+      }
+      if !seen && (hasHole(currentType) || hasHole(candidate) ||
+        patternTypesOverlap(currentType, candidate)) {
+        reached[index] = true
+        stack.push(index)
+      }
+      index += 1
+    }
+  }
+  for seen in reached {
+    if !seen { return true }
+  }
+  false
+}
+
+function bindOrPattern(
+  service: CheckerService,
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  pattern: SyntaxNode,
+  expected: TypeValue,
+  mutable: bool,
+  topLevel: bool,
+) -> PatternCoverage {
+  let alternatives = children(pattern, "alternatives")
+  let mut coverage = emptyPatternCoverage()
+  for alternative in alternatives {
+    for binding in patternAlternativeBindingNodes(
+      state,
+      moduleIndex,
+      source,
+      alternative,
+      expected,
+    ) {
+      let name = text(source, binding)
+      let mut presentEverywhere = true
+      for other in alternatives {
+        if !patternAlternativeHasBinding(
+          state,
+          moduleIndex,
+          source,
+          other,
+          expected,
+          name,
+        ) {
+          presentEverywhere = false
+        }
+      }
+      if !presentEverywhere {
+        addDiagnostic(
+          state,
+          moduleIndex,
+          "TPZ5710",
+          "or-pattern alternatives must bind the same names — `{name}` is bound in one alternative but not another",
+          "",
+          alternative,
+        )
+      }
+    }
+    let nested = patternBindingTypeAt(
+      service,
+      state,
+      moduleIndex,
+      source,
+      alternative,
+      expected,
+      mutable,
+      topLevel,
+    )
+    coverage = mergePatternCoverage(coverage, nested)
+  }
+  let mut names: Array<string> = []
+  for alternative in alternatives {
+    for binding in patternAlternativeBindingNodes(
+      state,
+      moduleIndex,
+      source,
+      alternative,
+      expected,
+    ) {
+      let name = text(source, binding)
+      if !containsString(names, name) { names.push(name) }
+    }
+  }
+  for name in names {
+    let mut types: Array<TypeValue> = []
+    let mut bindings: Array<SyntaxNode> = []
+    for alternative in alternatives {
+      for binding in patternAlternativeBindingNodes(
+        state,
+        moduleIndex,
+        source,
+        alternative,
+        expected,
+      ) {
+        if text(source, binding) == name {
+          bindings.push(binding)
+          match symbolTypeAt(
+            state,
+            moduleIndex,
+            binding.lo,
+            binding.hi,
+          ) {
+            case Some(found) => types.push(found)
+            case None => ()
+          }
+        }
+      }
+    }
+    if types.length == alternatives.length && disconnectedPatternTypes(types) {
+      let first = match types.get(0) {
+        case Some(found) => found
+        case None => emptyType("unknown")
+      }
+      let mut conflicting = first
+      for candidate in types {
+        if !patternTypesOverlap(first, candidate) {
+          conflicting = candidate
+        }
+      }
+      let diagnosticNode = match alternatives.get(0) {
+        case Some(found) => found
+        case None => pattern
+      }
+      addDiagnostic(
+        state,
+        moduleIndex,
+        "TPZ5711",
+        "binding `{name}` has type `{typeText(first)}` in one or-pattern alternative and `{typeText(conflicting)}` in another",
+        "",
+        diagnosticNode,
+      )
+    }
+    if types.length > 0 {
+      let unified = unionType(types)
+      for binding in bindings {
+        bindSymbol(
+          state,
+          moduleIndex,
+          binding.lo,
+          binding.hi,
+          name,
+          unified,
+          mutable,
+        )
+      }
+    }
+  }
+  addNode(state, moduleIndex, "pattern", pattern, expected)
+  coverage
+}
+
+export function patternBindingTypeAt(
+  service: CheckerService,
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  pattern: SyntaxNode,
+  expected: TypeValue,
+  mutable: bool,
+  topLevel: bool,
+) -> PatternCoverage {
+  match pattern.kind {
+    case "pattern/literal" | "pattern/range" =>
+      checkLiteralPattern(service, state, moduleIndex, source, pattern, expected)
+    case "pattern/binding" => {
+      let nameNode = match child(pattern, "name") {
+        case Some(found) => found
+        case None => pattern
+      }
+      let name = text(source, nameNode)
+      match enumDefinitionForType(state, moduleIndex, expected) {
+        case Some(definition) => {
+          let mut variant: Option<EnumVariant> = None
+          for found in definition.variants {
+            if found.name == name { variant = Some(found) }
+          }
+          match variant {
+            case Some(found) => {
+              if found.payloads.length > 0 {
+                let underscores: Array<string> = []
+                let mut parts = underscores
+                let mut index = 0
+                while index < found.payloads.length {
+                  parts.push("_")
+                  index += 1
+                }
+                addDiagnostic(
+                  state,
+                  moduleIndex,
+                  "TPZ5004",
+                  "enum variant `{typeText(expected)}.{name}` carries {found.payloads.length} payload" +
+                    if found.payloads.length == 1 { "" } else { "s" } +
+                    " — write `case {name}(" + stringJoin(parts, ", ") + ")` to match it",
+                  "",
+                  nameNode,
+                )
+              }
+              addNode(state, moduleIndex, "pattern", pattern, expected)
+              return coverageWithKey("constructor:{name}/*")
+            }
+            case None => if topLevel {
+              addDiagnostic(
+                state,
+                moduleIndex,
+                "TPZ5001",
+                "`{name}` is not a variant of enum `{typeText(expected)}`" +
+                  enumVariantSuggestion(definition, name) +
+                  " (use `_` for a catch-all)",
+                "",
+                nameNode,
+              )
+              addNode(state, moduleIndex, "pattern", pattern, expected)
+              return irrefutablePatternCoverage()
+            }
+          }
+        }
+        case None => ()
+      }
+      bindNamedPattern(service, state, moduleIndex, source, pattern, expected, mutable)
+    }
+    case "pattern/typed" => bindNamedPattern(
+      service,
+      state,
+      moduleIndex,
+      source,
+      pattern,
+      expected,
+      mutable,
+    )
+    case "pattern/record" | "pattern/nominal-record" => bindRecordPattern(
+      service,
+      state,
+      moduleIndex,
+      source,
+      pattern,
+      expected,
+      mutable,
+    )
+    case "pattern/constructor" => bindConstructorPattern(
+      service,
+      state,
+      moduleIndex,
+      source,
+      pattern,
+      expected,
+      mutable,
+    )
+    case "pattern/list" => bindListPattern(
+      service,
+      state,
+      moduleIndex,
+      source,
+      pattern,
+      expected,
+      mutable,
+    )
+    case "pattern/or" => bindOrPattern(
+      service,
+      state,
+      moduleIndex,
+      source,
+      pattern,
+      expected,
+      mutable,
+      topLevel,
+    )
+    case "pattern/wildcard" => {
+      addNode(state, moduleIndex, "pattern", pattern, expected)
+      irrefutablePatternCoverage()
+    }
+    case _ => {
+      addNode(state, moduleIndex, "pattern", pattern, expected)
+      emptyPatternCoverage()
+    }
+  }
+}
+
+export function patternBindingType(
+  service: CheckerService,
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  pattern: SyntaxNode,
+  expected: TypeValue,
+  mutable: bool,
+) -> PatternCoverage {
+  patternBindingTypeAt(
+    service,
+    state,
+    moduleIndex,
+    source,
+    pattern,
+    expected,
+    mutable,
+    false,
+  )
+}

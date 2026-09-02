@@ -1,0 +1,11 @@
+
+function f() -> Set<int> {
+    let a = Set.of(2, 1, 2)
+    let b = Set.of(1, 3)
+    let u = a.union(b)
+    let i = a.intersection(b)
+    let d = a.difference(b)
+    print("{a.length}:{a.contains(2)}:{a.contains(9)}:{u.toArray()}:{i.toArray()}:{d.toArray()}")
+    u
+}
+f()

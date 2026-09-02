@@ -1,0 +1,9 @@
+function 포트로드(경로: string) -> Result<int, string> {
+    let 내용 = 텍스트읽기(경로)?
+    포트파싱(내용)
+}
+
+match 포트로드("app.port") {
+    case Ok(포트) => print("포트: {포트}")
+    case Err(오류) => print("설정 오류: {오류}")
+}

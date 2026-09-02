@@ -1,0 +1,38 @@
+import std.bytes
+import std.codec
+
+function bytesErr(value: Result<Bytes, string>) -> string {
+  match value {
+    case Ok(_) => "ok"
+    case Err(error) => error
+  }
+}
+
+function demo() -> Result<string, string> {
+  let emptyGzip = codec.gzipCompress(bytes.encodeUtf8(""))?
+  let helloGzip = codec.gzipCompress(bytes.encodeUtf8("hello"))?
+  let gzipPlain = codec.gzipDecompress(helloGzip)?
+  let gzipRound = gzipPlain.decodeUtf8()?
+
+  let emptyDeflate = codec.deflateCompress(bytes.encodeUtf8(""))?
+  let helloDeflate = codec.deflateCompress(bytes.encodeUtf8("hello"))?
+  let deflatePlain = codec.deflateDecompress(helloDeflate)?
+  let deflateRound = deflatePlain.decodeUtf8()?
+
+  let emptyZstd = codec.zstdCompress(bytes.encodeUtf8(""))?
+  let helloZstd = codec.zstdCompress(bytes.encodeUtf8("hello"))?
+  let zstdPlain = codec.zstdDecompress(helloZstd)?
+  let zstdRound = zstdPlain.decodeUtf8()?
+
+  let badGzip = bytesErr(codec.gzipDecompress(bytes.fromHex("00")?))
+  let badDeflate = bytesErr(codec.deflateDecompress(bytes.fromHex("000200fdff746f010300fcff70617a")?))
+  let badZstd = bytesErr(codec.zstdDecompress(bytes.fromHex("28b52ffd200510000068651900006c6c6f")?))
+  let badLevel = bytesErr(codec.zstdCompress(bytes.encodeUtf8("x"), 0))
+
+  Ok("{emptyGzip.toHex()}|{helloGzip.toHex()}|{gzipRound}|{emptyDeflate.toHex()}|{helloDeflate.toHex()}|{deflateRound}|{emptyZstd.toHex()}|{helloZstd.toHex()}|{zstdRound}|{badGzip}|{badDeflate}|{badZstd}|{badLevel}")
+}
+
+match demo() {
+  case Ok(line) => print(line)
+  case Err(error) => print("error: {error}")
+}

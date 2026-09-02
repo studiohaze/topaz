@@ -1,0 +1,6 @@
+
+import util
+function main() -> int {
+    util.handlers.primary(a: 5) + util.handlers.second(b: 3, a: 10)
+}
+main()

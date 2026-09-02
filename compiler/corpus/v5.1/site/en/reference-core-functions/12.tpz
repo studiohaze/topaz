@@ -1,0 +1,8 @@
+let appName = "topaz"
+let userId = 42
+let dir = p"/var/{appName}"
+
+let configPath = p"/etc/{appName}/config.toml"
+let digits = r"^[0-9]+$"
+let listCommand = sh"ls {dir}"
+let lookup = sql"select * from users where id = {userId}"

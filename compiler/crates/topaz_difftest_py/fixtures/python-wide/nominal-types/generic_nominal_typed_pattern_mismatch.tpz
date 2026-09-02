@@ -1,0 +1,10 @@
+
+record Box<T> { value: T }
+function main() -> string {
+    let b = Box { value: "x" }
+    match b {
+        case found: Box<int> => "bad"
+        case _ => "ok"
+    }
+}
+main()

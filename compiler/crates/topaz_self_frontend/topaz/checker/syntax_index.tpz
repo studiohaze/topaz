@@ -1,0 +1,873 @@
+// Syntax lookup and module indexes shared by checker phases.
+// It translates resolved preview rows into stable node and source views without
+// making type decisions or emitting diagnostics on its own.
+
+import types {
+  PreviewAstAttribute,
+  PreviewCheckDiagnostic,
+  PreviewModuleResult,
+  PreviewResolvedDeclaration,
+  PreviewResolvedReference,
+  PreviewResolvedScope,
+  PreviewTypedNode,
+  ResolveResult,
+  SyntaxNode,
+}
+import checker_types { TypeValue }
+import checker.model {
+  CheckerState,
+  EnumDefinition,
+  FunctionBound,
+  FunctionDefinition,
+  ModuleSyntax,
+  NamedNominalTarget,
+  NewtypeDefinition,
+  ProtocolDefinition,
+  ProtocolMethodDefinition,
+  RecordDefinition,
+  SymbolType,
+  TYPE_BOUND_INDEX_STRIDE,
+  TypeParameterFact,
+  nominal,
+  rigid,
+}
+import checker.type_algebra {
+  flattenType,
+  hasHole,
+}
+
+export function text(source: Bytes, node: SyntaxNode) -> string {
+  match source.slice(node.lo, node.hi).decodeUtf8() {
+    case Ok(value) => value
+    case Err(_) => ""
+  }
+}
+
+export function child(value: SyntaxNode, field: string) -> Option<SyntaxNode> {
+  for found in value.children {
+    if found.field == field {
+      return Some(found)
+    }
+  }
+  None
+}
+
+export function children(value: SyntaxNode, field: string) -> Array<SyntaxNode> {
+  let mut output: Array<SyntaxNode> = []
+  for found in value.children {
+    if found.field == field {
+      output.push(found)
+    }
+  }
+  output
+}
+
+export function attribute(value: SyntaxNode, name: string) -> string {
+  for found in value.attributes {
+    if found.name == name {
+      return found.value
+    }
+  }
+  ""
+}
+
+export function boolAttribute(value: SyntaxNode, name: string) -> bool {
+  attribute(value, name) == "true"
+}
+
+export function unwrapExport(value: SyntaxNode) -> SyntaxNode {
+  if value.kind == "statement/export" {
+    match child(value, "item") {
+      case Some(item) => item
+      case None => value
+    }
+  } else {
+    value
+  }
+}
+
+export function spanKey(moduleIndex: int, lo: int, hi: int) -> string {
+  "{moduleIndex}:{lo}:{hi}"
+}
+
+function nodeKey(moduleIndex: int, kind: string, lo: int, hi: int) -> string {
+  "{moduleIndex}:{kind}:{lo}:{hi}"
+}
+
+export function typedNodeIndex(
+  state: CheckerState,
+  moduleIndex: int,
+  kind: string,
+  lo: int,
+  hi: int,
+) -> int {
+  match state.nodeIndexes.get(nodeKey(moduleIndex, kind, lo, hi)) {
+    case Some(index) => index
+    case None => -1
+  }
+}
+
+export function scopeKey(moduleIndex: int, ordinal: int) -> string {
+  "{moduleIndex}:{ordinal}"
+}
+
+export function definitionNameKey(moduleIndex: int, name: string) -> string {
+  "{moduleIndex}:{name}"
+}
+
+export function emptyStringIntMap() -> Map<string, int> {
+  let mut value = map { "": 0 }
+  value.remove("")
+  value
+}
+
+export function declarationFor(
+  state: CheckerState,
+  moduleIndex: int,
+  lo: int,
+  hi: int,
+) -> Option<PreviewResolvedDeclaration> {
+  match state.declarationIndexes.get(spanKey(moduleIndex, lo, hi)) {
+    case Some(index) => match state.resolved.declarations.get(index) {
+      case Some(declaration) => Some(declaration)
+      case None => None
+    }
+    case None => None
+  }
+}
+
+export function referenceFor(
+  state: CheckerState,
+  moduleIndex: int,
+  lo: int,
+  hi: int,
+) -> Option<PreviewResolvedReference> {
+  match state.referenceIndexes.get(spanKey(moduleIndex, lo, hi)) {
+    case Some(index) => match state.resolved.references.get(index) {
+      case Some(reference) => Some(reference)
+      case None => None
+    }
+    case None => None
+  }
+}
+
+export function symbolAt(
+  state: CheckerState,
+  moduleIndex: int,
+  lo: int,
+  hi: int,
+) -> Option<SymbolType> {
+  match state.symbolIndexes.get(spanKey(moduleIndex, lo, hi)) {
+    case Some(index) => match state.symbols.get(index) {
+      case Some(symbol) => Some(symbol)
+      case None => None
+    }
+    case None => None
+  }
+}
+
+export function symbolTypeAt(
+  state: CheckerState,
+  moduleIndex: int,
+  lo: int,
+  hi: int,
+) -> Option<TypeValue> {
+  match symbolAt(state, moduleIndex, lo, hi) {
+    case Some(symbol) => Some(symbol.typeValue)
+    case None => None
+  }
+}
+
+export function moduleIndexByIdentity(
+  state: CheckerState,
+  identity: string,
+) -> int {
+  for module in state.modules {
+    if module.identity == identity {
+      return module.moduleIndex
+    }
+  }
+  -1
+}
+
+export function symbolTypeByName(
+  state: CheckerState,
+  moduleIndex: int,
+  name: string,
+  namespace: string,
+) -> Option<TypeValue> {
+  for declaration in state.resolved.declarations {
+    if declaration.moduleIndex == moduleIndex &&
+      declaration.name == name &&
+      declaration.namespace == namespace {
+      match symbolTypeAt(
+        state,
+        moduleIndex,
+        declaration.lo,
+        declaration.hi,
+      ) {
+        case Some(found) => return Some(found)
+        case None => ()
+      }
+    }
+  }
+  None
+}
+
+export function bindSymbol(
+  state: CheckerState,
+  moduleIndex: int,
+  lo: int,
+  hi: int,
+  name: string,
+  typeValue: TypeValue,
+  mutable: bool,
+) -> () {
+  let mut target = state.symbols
+  let key = spanKey(moduleIndex, lo, hi)
+  match state.symbolIndexes.get(key) {
+    case Some(index) => match target.get(index) {
+      case Some(symbol) => {
+        target[index] = SymbolType {
+          moduleIndex: symbol.moduleIndex,
+          lo: symbol.lo,
+          hi: symbol.hi,
+          name: symbol.name,
+          typeValue: typeValue,
+          mutable: mutable,
+        }
+      }
+      case None => ()
+    }
+    case None => {
+      let mut indexes = state.symbolIndexes
+      indexes.insert(key, target.length)
+      target.push(SymbolType {
+        moduleIndex: moduleIndex,
+        lo: lo,
+        hi: hi,
+        name: name,
+        typeValue: typeValue,
+        mutable: mutable,
+      })
+    }
+  }
+}
+
+export function resolvedTypeOfReference(
+  state: CheckerState,
+  moduleIndex: int,
+  node: SyntaxNode,
+) -> Option<TypeValue> {
+  match referenceFor(state, moduleIndex, node.lo, node.hi) {
+    case Some(reference) => resolvedTypeFromFact(state, reference)
+    case None => None
+  }
+}
+
+export function resolvedTypeFromFact(
+  state: CheckerState,
+  reference: PreviewResolvedReference,
+) -> Option<TypeValue> {
+  if reference.targetModuleIndex < 0 {
+    return None
+  }
+  match symbolTypeAt(
+    state,
+    reference.targetModuleIndex,
+    reference.targetLo,
+    reference.targetHi,
+  ) {
+    case Some(found) => return Some(found)
+    case None => ()
+  }
+  match declarationFor(
+    state,
+    reference.targetModuleIndex,
+    reference.targetLo,
+    reference.targetHi,
+  ) {
+    case Some(declaration) => {
+      if declaration.targetModule == "" {
+        return None
+      }
+      let targetModule = moduleIndexByIdentity(
+        state,
+        declaration.targetModule,
+      )
+      symbolTypeByName(
+        state,
+        targetModule,
+        declaration.targetName,
+        reference.targetNamespace,
+      )
+    }
+    case None => None
+  }
+}
+
+export function addNode(
+  state: CheckerState,
+  moduleIndex: int,
+  kind: string,
+  node: SyntaxNode,
+  typeValue: TypeValue,
+) -> () {
+  let mut target = state.nodes
+  let key = nodeKey(moduleIndex, kind, node.lo, node.hi)
+  match state.nodeIndexes.get(key) {
+    case Some(_) => return ()
+    case None => ()
+  }
+  let mut indexes = state.nodeIndexes
+  indexes.insert(key, target.length)
+  target.push(PreviewTypedNode {
+    moduleIndex: moduleIndex,
+    nodeKind: kind,
+    lo: node.lo,
+    hi: node.hi,
+    typeValue: flattenType(typeValue),
+    ambient: hasHole(typeValue),
+  })
+}
+
+export function replaceNodeType(
+  state: CheckerState,
+  moduleIndex: int,
+  kind: string,
+  node: SyntaxNode,
+  typeValue: TypeValue,
+) -> () {
+  if typeValue.kind == "unknown" {
+    return ()
+  }
+  let mut target = state.nodes
+  let key = nodeKey(moduleIndex, kind, node.lo, node.hi)
+  match state.nodeIndexes.get(key) {
+    case Some(index) => {
+      match target.get(index) {
+        case Some(_) => {
+          target[index] = PreviewTypedNode {
+            moduleIndex: moduleIndex,
+            nodeKind: kind,
+            lo: node.lo,
+            hi: node.hi,
+            typeValue: flattenType(typeValue),
+            ambient: hasHole(typeValue),
+          }
+          return ()
+        }
+        case None => ()
+      }
+    }
+    case None => ()
+  }
+  addNode(state, moduleIndex, kind, node, typeValue)
+}
+
+export function addDiagnostic(
+  state: CheckerState,
+  moduleIndex: int,
+  code: string,
+  message: string,
+  primaryMessage: string,
+  node: SyntaxNode,
+) -> () {
+  let mut target = state.diagnostics
+  target.push(PreviewCheckDiagnostic {
+    moduleIndex: moduleIndex,
+    code: code,
+    message: message,
+    primaryMessage: primaryMessage,
+    lo: node.lo,
+    hi: node.hi,
+    secondary: [],
+    notes: [],
+    profileRule: "",
+  })
+}
+
+function syntaxFromFlat(
+  module: PreviewModuleResult,
+  maxAstNodes: int,
+  maxAstDepth: int,
+) -> Result<SyntaxNode, string> {
+  if module.ast.length == 0 {
+    return Err("checker received a module without an AST")
+  }
+  if module.ast.length > maxAstNodes {
+    return Err("front-end preview AST node count exceeds {maxAstNodes}")
+  }
+  let mut rows: Array<SyntaxNode> = []
+  let mut depths: Array<int> = []
+  let mut ordinal = 0
+  for flat in module.ast {
+    let mut attributes: Array<PreviewAstAttribute> = []
+    if flat.attributeNames.length != flat.attributeKinds.length ||
+      flat.attributeNames.length != flat.attributeValues.length {
+      return Err("checker received malformed AST attributes")
+    }
+    let mut attributeIndex = 0
+    while attributeIndex < flat.attributeNames.length {
+      attributes.push(PreviewAstAttribute {
+        name: match flat.attributeNames.get(attributeIndex) {
+          case Some(value) => value
+          case None => ""
+        },
+        kind: match flat.attributeKinds.get(attributeIndex) {
+          case Some(value) => value
+          case None => ""
+        },
+        value: match flat.attributeValues.get(attributeIndex) {
+          case Some(value) => value
+          case None => ""
+        },
+      })
+      attributeIndex += 1
+    }
+    let depth = if ordinal == 0 {
+      if flat.parent != -1 {
+        return Err("checker received an AST root with a parent")
+      }
+      0
+    } else {
+      if flat.parent < 0 || flat.parent >= ordinal {
+        return Err("checker received a non-preorder AST parent")
+      }
+      match depths.get(flat.parent) {
+        case Some(parentDepth) => parentDepth + 1
+        case None => return Err("checker received a missing AST parent")
+      }
+    }
+    if depth > maxAstDepth {
+      return Err("front-end preview AST depth exceeds {maxAstDepth}")
+    }
+    let rebuilt = SyntaxNode {
+      kind: flat.kind,
+      lo: flat.lo,
+      hi: flat.hi,
+      field: flat.field,
+      index: flat.index,
+      attributes: attributes,
+      children: [],
+    }
+    rows.push(rebuilt)
+    depths.push(depth)
+    if flat.parent >= 0 {
+      match rows.get(flat.parent) {
+        case Some(parent) => {
+          let mut children = parent.children
+          children.push(rebuilt)
+        }
+        case None => return Err("checker received a missing AST parent")
+      }
+    }
+    ordinal += 1
+  }
+  match rows.get(0) {
+    case Some(root) => Ok(root)
+    case None => Err("checker received a module without an AST")
+  }
+}
+
+export function moduleSyntax(
+  resolved: ResolveResult,
+  maxAstNodes: int,
+  maxAstDepth: int,
+) -> Result<Array<ModuleSyntax>, string> {
+  let mut modules: Array<ModuleSyntax> = []
+  let mut index = 0
+  for module in resolved.modules {
+    let source = Bytes.encodeUtf8(module.source)
+    modules.push(ModuleSyntax {
+      moduleIndex: index,
+      sourceOrdinal: module.sourceOrdinal,
+      identity: module.identity,
+      source: source,
+      root: syntaxFromFlat(module, maxAstNodes, maxAstDepth)?,
+      generatedStd: module.generatedStd,
+    })
+    index += 1
+  }
+  Ok(modules)
+}
+
+export function moduleAt(state: CheckerState, moduleIndex: int) -> Option<ModuleSyntax> {
+  state.modules.get(moduleIndex)
+}
+
+export function typeParameterNames(source: Bytes, node: SyntaxNode) -> Array<string> {
+  let mut output: Array<string> = []
+  for parameter in children(node, "typeParameters") {
+    output.push(text(source, parameter))
+  }
+  output
+}
+
+export function functionBounds(source: Bytes, node: SyntaxNode) -> Array<FunctionBound> {
+  let parameters = typeParameterNames(source, node)
+  let mut output: Array<FunctionBound> = []
+  for bound in children(node, "typeParameterBounds") {
+    let mut parameterIndex = 0
+    let mut encoded = bound.index
+    while encoded >= TYPE_BOUND_INDEX_STRIDE {
+      encoded -= TYPE_BOUND_INDEX_STRIDE
+      parameterIndex += 1
+    }
+    match parameters.get(parameterIndex) {
+      case Some(parameterName) => output.push(FunctionBound {
+        parameterName: parameterName,
+        protocol: text(source, bound),
+      })
+      case None => ()
+    }
+  }
+  output
+}
+
+export function registerTypeParameters(
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  node: SyntaxNode,
+) -> () {
+  let mut facts = state.typeParameters
+  let sourceOrdinal = match moduleAt(state, moduleIndex) {
+    case Some(found) => found.sourceOrdinal
+    case None => moduleIndex
+  }
+  let owner = "source:{sourceOrdinal}:{node.lo}:{node.hi}"
+  for parameter in children(node, "typeParameters") {
+    facts.push(TypeParameterFact {
+      moduleIndex: moduleIndex,
+      owner: owner,
+      name: text(source, parameter),
+      origin: "source:{sourceOrdinal}:{parameter.lo}:{parameter.hi}",
+    })
+  }
+  ()
+}
+
+export function typeParameterOrigin(
+  state: CheckerState,
+  moduleIndex: int,
+  name: string,
+  fallback: string,
+) -> string {
+  let mut result = fallback
+  for fact in state.typeParameters {
+    if fact.moduleIndex == moduleIndex && fact.owner == fallback &&
+      fact.name == name {
+      result = fact.origin
+    }
+  }
+  result
+}
+
+export function activeTypeParameter(
+  state: CheckerState,
+  moduleIndex: int,
+  name: string,
+) -> Option<TypeValue> {
+  let mut activeIndex = state.activeFunctions.length
+  while activeIndex > 0 {
+    activeIndex -= 1
+    match state.activeFunctions.get(activeIndex) {
+      case Some(functionIndex) => match state.functions.get(functionIndex) {
+        case Some(definition) => if definition.moduleIndex == moduleIndex {
+          let mut parameterIndex = 0
+          for parameterName in definition.typeParameters {
+            if parameterName == name {
+              return match definition.typeParameterOrigins.get(parameterIndex) {
+                case Some(origin) => Some(rigid(name, origin))
+                case None => None
+              }
+            }
+            parameterIndex += 1
+          }
+        }
+        case None => ()
+      }
+      case None => ()
+    }
+  }
+  None
+}
+
+export function containsString(values: Array<string>, needle: string) -> bool {
+  for value in values {
+    if value == needle {
+      return true
+    }
+  }
+  false
+}
+
+export function recordDefinitionIndex(
+  state: CheckerState,
+  moduleIndex: int,
+  name: string,
+) -> int {
+  match state.recordIndexes.get(definitionNameKey(moduleIndex, name)) {
+    case Some(index) => index
+    case None => -1
+  }
+}
+
+export function enumDefinitionIndex(
+  state: CheckerState,
+  moduleIndex: int,
+  name: string,
+) -> int {
+  match state.enumIndexes.get(definitionNameKey(moduleIndex, name)) {
+    case Some(index) => index
+    case None => -1
+  }
+}
+
+export function newtypeDefinitionIndex(
+  state: CheckerState,
+  moduleIndex: int,
+  name: string,
+) -> int {
+  match state.newtypeIndexes.get(definitionNameKey(moduleIndex, name)) {
+    case Some(index) => index
+    case None => -1
+  }
+}
+
+export function aliasDefinitionIndex(
+  state: CheckerState,
+  moduleIndex: int,
+  name: string,
+) -> int {
+  match state.aliasIndexes.get(definitionNameKey(moduleIndex, name)) {
+    case Some(index) => index
+    case None => -1
+  }
+}
+
+export function namedNominalTarget(
+  state: CheckerState,
+  moduleIndex: int,
+  name: string,
+) -> Option<NamedNominalTarget> {
+  let recordIndex = recordDefinitionIndex(state, moduleIndex, name)
+  if recordIndex >= 0 {
+    return match state.records.get(recordIndex) {
+      case Some(definition) => Some(NamedNominalTarget {
+        semanticKind: "nominal-record",
+        diagnosticKind: "record",
+        typeArgumentCount: definition.typeParameters.length,
+      })
+      case None => None
+    }
+  }
+  let enumIndex = enumDefinitionIndex(state, moduleIndex, name)
+  if enumIndex >= 0 {
+    return match state.enums.get(enumIndex) {
+      case Some(definition) => Some(NamedNominalTarget {
+        semanticKind: "enum",
+        diagnosticKind: "enum",
+        typeArgumentCount: definition.typeParameters.length,
+      })
+      case None => None
+    }
+  }
+  let newtypeIndex = newtypeDefinitionIndex(state, moduleIndex, name)
+  if newtypeIndex >= 0 {
+    return match state.newtypes.get(newtypeIndex) {
+      case Some(definition) => Some(NamedNominalTarget {
+        semanticKind: "newtype",
+        diagnosticKind: "newtype",
+        typeArgumentCount: definition.typeParameters.length,
+      })
+      case None => None
+    }
+  }
+  None
+}
+
+export function protocolDefinitionIndex(
+  state: CheckerState,
+  moduleIndex: int,
+  name: string,
+) -> int {
+  match state.protocolIndexes.get(definitionNameKey(moduleIndex, name)) {
+    case Some(index) => index
+    case None => -1
+  }
+}
+
+export function protocolDefinition(
+  state: CheckerState,
+  moduleIndex: int,
+  name: string,
+) -> Option<ProtocolDefinition> {
+  state.protocols.get(protocolDefinitionIndex(state, moduleIndex, name))
+}
+
+export function protocolMethodDefinition(
+  definition: ProtocolDefinition,
+  name: string,
+) -> Option<ProtocolMethodDefinition> {
+  for method in definition.methods {
+    if method.name == name {
+      return Some(method)
+    }
+  }
+  None
+}
+
+export function functionDefinitionForReference(
+  state: CheckerState,
+  reference: PreviewResolvedReference,
+) -> Option<FunctionDefinition> {
+  let key = spanKey(
+    reference.targetModuleIndex,
+    reference.targetLo,
+    reference.targetHi,
+  )
+  match state.functionIndexes.get(key) {
+    case Some(index) => return state.functions.get(index)
+    case None => ()
+  }
+  match state.functionAliases.get(key) {
+    case Some(index) => return state.functions.get(index)
+    case None => ()
+  }
+  let declaration = match declarationFor(
+    state,
+    reference.targetModuleIndex,
+    reference.targetLo,
+    reference.targetHi,
+  ) {
+    case Some(found) => found
+    case None => return None
+  }
+  if declaration.targetModule == "" {
+    return None
+  }
+  let targetModule = moduleIndexByIdentity(state, declaration.targetModule)
+  match state.functionNameIndexes.get(definitionNameKey(
+    targetModule,
+    declaration.targetName,
+  )) {
+    case Some(index) => state.functions.get(index)
+    case None => None
+  }
+}
+
+export function functionIndexForReference(
+  state: CheckerState,
+  reference: PreviewResolvedReference,
+) -> int {
+  let key = spanKey(
+    reference.targetModuleIndex,
+    reference.targetLo,
+    reference.targetHi,
+  )
+  match state.functionIndexes.get(key) {
+    case Some(index) => return index
+    case None => ()
+  }
+  match state.functionAliases.get(key) {
+    case Some(index) => return index
+    case None => ()
+  }
+  match functionDefinitionForReference(state, reference) {
+    case Some(definition) => match state.functionNameIndexes.get(
+      definitionNameKey(definition.moduleIndex, definition.name),
+    ) {
+      case Some(index) => index
+      case None => -1
+    }
+    case None => -1
+  }
+}
+
+export function referenceTargetsPendingFunction(
+  state: CheckerState,
+  reference: PreviewResolvedReference,
+) -> bool {
+  let index = functionIndexForReference(state, reference)
+  if index < 0 {
+    return false
+  }
+  match state.pendingFunctions.get(index) {
+    case Some(found) => found
+    case None => false
+  }
+}
+
+export function replaceRecordDefinition(
+  state: CheckerState,
+  index: int,
+  value: RecordDefinition,
+) -> () {
+  let mut target = state.records
+  target[index] = value
+  ()
+}
+
+export function replaceEnumDefinition(
+  state: CheckerState,
+  index: int,
+  value: EnumDefinition,
+) -> () {
+  let mut target = state.enums
+  target[index] = value
+  ()
+}
+
+export function replaceNewtypeDefinition(
+  state: CheckerState,
+  index: int,
+  value: NewtypeDefinition,
+) -> () {
+  let mut target = state.newtypes
+  target[index] = value
+  ()
+}
+
+export function scopeFor(
+  state: CheckerState,
+  moduleIndex: int,
+  ordinal: int,
+) -> Option<PreviewResolvedScope> {
+  match state.scopeIndexes.get(scopeKey(moduleIndex, ordinal)) {
+    case Some(index) => match state.resolved.scopes.get(index) {
+      case Some(scope) => Some(scope)
+      case None => None
+    }
+    case None => None
+  }
+}
+
+export function scopeIsWithin(
+  state: CheckerState,
+  moduleIndex: int,
+  candidateOrdinal: int,
+  ancestorOrdinal: int,
+) -> bool {
+  let mut current = candidateOrdinal
+  while current >= 0 {
+    if current == ancestorOrdinal {
+      return true
+    }
+    match scopeFor(state, moduleIndex, current) {
+      case Some(scope) => {
+        current = scope.parentOrdinal
+      }
+      case None => return false
+    }
+  }
+  false
+}
+
+export function moduleIdentityAt(state: CheckerState, moduleIndex: int) -> string {
+  match moduleAt(state, moduleIndex) {
+    case Some(module) => module.identity
+    case None => "<unknown>"
+  }
+}

@@ -1,0 +1,17 @@
+function scenario(path: string) -> Result<string, string> {
+  let mut afterClose: () -> string = () => "unset"
+  using file = open(path)? {
+    let before = file.read()?
+    file.write("{before}->new")?
+    afterClose = () => match file.read() {
+      case Ok(text) => text
+      case Err(e) => e
+    }
+  }
+  Ok(afterClose())
+}
+
+match scenario("data.txt") {
+  case Ok(text) => print(text)
+  case Err(error) => print("error: {error}")
+}

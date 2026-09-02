@@ -1,0 +1,16 @@
+
+import util
+let mut callbacks = util.callbacks
+let mut handlers = util.handlers
+concurrent {
+    arraySlot: {
+        let xs = [1]
+        xs.map(callbacks[1])
+    }
+    recordField: {
+        let ys = [1]
+        ys.map(handlers.primary)
+    }
+    fast: 0
+}
+0

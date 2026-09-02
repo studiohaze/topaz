@@ -1,0 +1,9 @@
+function shippingLabel(status: OrderStatus) -> string {
+    match status {
+        case "created" => "Awaiting payment"
+        case "payment_complete" => "Preparing shipment"
+        case "shipping" => "On the way"
+        case "delivered" => "Delivered"
+        case "cancelled" => "Cancelled"
+    }
+}

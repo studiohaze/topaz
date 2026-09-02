@@ -1,0 +1,44 @@
+# corpus/v5.2/compat/non-module-diagnostic manifest (CDR-002 §3). Phase A: every
+# fixture is parse-phase and runnable; resolve-phase fixtures
+# (corpus/v5.2/modules/) land separately and are counted as
+# pending until the resolver ships.
+
+[totals]
+recorded = 5
+runnable = 5
+pending = 0
+
+[[fixture]]
+file = "export-decl-51.tpz"
+phase = "parse"
+versions = "5.1"
+result = "error"
+code = "TPZ2001"
+
+[[fixture]]
+file = "export-list-51.tpz"
+phase = "parse"
+versions = "5.1"
+result = "error"
+code = "TPZ2001"
+
+[[fixture]]
+file = "import-namespace-51.tpz"
+phase = "parse"
+versions = "5.1"
+result = "error"
+code = "TPZ2001"
+
+[[fixture]]
+file = "import-selected-51.tpz"
+phase = "parse"
+versions = "5.1"
+result = "error"
+code = "TPZ2001"
+
+[[fixture]]
+file = "wildcard-export-52.tpz"
+phase = "parse"
+versions = "5.2"
+result = "error"
+code = "TPZ2001"

@@ -1,0 +1,4 @@
+let mut x = 99
+let f = () => { let x: int = 5
+x }
+f()

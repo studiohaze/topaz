@@ -1,0 +1,15 @@
+[package]
+name = "topaz_lispex_product"
+description = "Package and conditional-payload layer for bounded Lispex rules"
+version.workspace = true
+license.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+sha2 = { workspace = true }
+topaz_lispex_embed = { workspace = true }
+topaz_package = { workspace = true }
+
+[lints]
+workspace = true

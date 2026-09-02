@@ -1,0 +1,12 @@
+Topaz generated application output
+
+Studio Haze Inc. does not claim ownership of user-authored Topaz source, input
+data, or application output. To the extent this generated application code
+contains Studio Haze-owned application-specific material, Studio Haze Inc.
+grants the recipient a worldwide, royalty-free right to use, reproduce,
+modify, sublicense, distribute, and commercialize that material without a
+requirement to publish the user's Topaz source.
+
+Vendored Topaz runtime components are licensed separately under Apache License
+2.0. Third-party components retain their own licenses. Topaz and Studio Haze
+marks are not licensed by this output grant.

@@ -1,0 +1,19 @@
+# corpus/v5_4/parse -- v5.4-only parser surface
+
+[totals]
+recorded = 2
+runnable = 2
+pending = 0
+
+[[fixture]]
+file = "collections-and-patterns.tpz"
+phase = "parse"
+versions = "5.4"
+result = "ok"
+
+[[fixture]]
+file = "if-let-v53.tpz"
+phase = "parse"
+versions = "5.3"
+result = "error"
+code = "TPZ2001"

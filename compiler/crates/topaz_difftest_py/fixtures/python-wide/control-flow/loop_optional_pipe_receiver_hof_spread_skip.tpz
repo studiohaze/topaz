@@ -1,0 +1,15 @@
+
+function mark(label: string, xs: Array<int>) -> Array<int> {
+    print(label)
+    xs
+}
+let xs: Option<Array<int>> = None
+let skipped = loop {
+    print("pipe-none")
+    break (x) => x + 1
+} |> xs?.map(...loop {
+    print("skip-spread")
+    break mark("skip", [0])
+})
+print("after-skip")
+"done"

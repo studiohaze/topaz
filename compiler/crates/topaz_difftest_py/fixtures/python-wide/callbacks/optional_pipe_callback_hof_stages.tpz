@@ -1,0 +1,44 @@
+
+function add(a: int, b: int) -> int {
+    a + b
+}
+function inc(x: int) -> int {
+    x + 1
+}
+function isBig(x: int) -> bool {
+    x > 1
+}
+function keep(k: string, v: int) -> bool {
+    v > 1
+}
+function maybeInc(x: int) -> Option<int> {
+    Some(x + 1)
+}
+function main() {
+    let xs: Option<Array<int>> = Some([1, 2, 3])
+    let noneXs: Option<Array<int>> = None
+    let opt: Option<Option<int>> = Some(Some(3))
+    let res: Option<Result<int, string>> = Some(Ok(4))
+    let m: Option<Map<string, int>> = Some(map { "a": 1, "b": 2 })
+    let mapped = ((x) => x + 1) |> xs?.map()
+    let skipped = ((x) => x / 0) |> noneXs?.map()
+    let filtered = isBig |> xs?.filter()
+    let reduced = 0 |> xs?.reduce(add)
+    let sorted = ((x) => 0 - x) |> xs?.sortedBy()
+    let flat = maybeInc |> opt?.flatMap()
+    let out = inc |> res?.map()
+    let values = inc |> m?.mapValues()
+    let kept = keep |> m?.filter()
+    {
+        mapped: mapped,
+        skipped: skipped,
+        filtered: filtered,
+        reduced: reduced,
+        sorted: sorted,
+        flat: flat,
+        out: out,
+        values: values,
+        kept: kept,
+    }
+}
+main()

@@ -1,0 +1,4 @@
+match JSON.parseAs<Map<string, int>>("\{\"a\":1,\"b\":2\}") {
+  case Ok(m) => m.getOr("a", 0) + m.getOr("b", 0)
+  case Err(e) => 0
+}

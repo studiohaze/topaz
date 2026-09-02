@@ -1,0 +1,4 @@
+Some<T>(value: T) -> Option<T>
+None: Option<T>
+Ok<T, E>(value: T) -> Result<T, E>
+Err<T, E>(error: E) -> Result<T, E>

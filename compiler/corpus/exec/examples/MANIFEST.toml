@@ -1,0 +1,56 @@
+# corpus/exec/examples — EXAMPLES.md complete programs that print
+# (CDR-003 §11). Each transcript directly exercises the canonical
+# corpus/v5.1/examples/<n>.tpz source.
+
+[totals]
+recorded = 8
+runnable = 8
+pending = 0
+
+[[fixture]]
+file = "002.tpz"
+phase = "exec"
+versions = "5.2"
+result = "ok"
+
+[[fixture]]
+file = "017.tpz"
+phase = "exec"
+versions = "5.2"
+result = "ok"
+
+[[fixture]]
+file = "028.tpz"
+phase = "exec"
+versions = "5.2"
+result = "ok"
+
+[[fixture]]
+file = "040.tpz"
+phase = "exec"
+versions = "5.2"
+result = "ok"
+
+[[fixture]]
+file = "044.tpz"
+phase = "exec"
+versions = "5.2"
+result = "ok"
+
+[[fixture]]
+file = "045.tpz"
+phase = "exec"
+versions = "5.2"
+result = "ok"
+
+[[fixture]]
+file = "050.tpz"
+phase = "exec"
+versions = "5.2"
+result = "ok"
+
+[[fixture]]
+file = "052.tpz"
+phase = "exec"
+versions = "5.2"
+result = "ok"

@@ -1,0 +1,5 @@
+
+function f() -> Map<float, string> {
+    map { 0.0: "positive", -0.0: "negative" }
+}
+f()

@@ -1,0 +1,4 @@
+enum Shape { Circle(int), Square(int), Dot }
+let xs = [Shape.Square(2), Shape.Circle(9), Shape.Circle(3), Shape.Dot]
+print("{xs.sorted()}")
+0

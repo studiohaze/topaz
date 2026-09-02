@@ -1,0 +1,41 @@
+
+function boom(x: int) -> Result<int, string> {
+    let n = 0
+    Ok(x / n)
+}
+
+function okFour(x: int) -> Result<int, string> {
+    Ok(4)
+}
+
+function okZero(x: int) -> Result<int, string> {
+    Ok(0)
+}
+
+function main() -> int {
+    let mut order = 0
+
+    function tick(label: int, value: int) -> int {
+        order = order * 10 + label
+        value
+    }
+
+    let r = concurrent {
+        slow: {
+            let mut cbs = [okZero, okFour]
+            let i = 1
+            cbs[tick(1, i)] = boom
+            let value: Result<int, string> = Err("bad")
+            let out = value.flatMap(cbs[tick(2, i)])
+            let payload = match out {
+                case Ok(_) => -1
+                case Err(_) => 7
+            }
+            order * 100 + payload
+        }
+        fast: 0
+    }
+    r.slow + r.fast
+}
+
+main()

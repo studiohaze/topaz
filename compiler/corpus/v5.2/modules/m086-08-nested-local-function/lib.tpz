@@ -1,0 +1,6 @@
+function outer() -> int {
+    function inner() -> int { later }
+    inner()
+}
+export let a = outer()
+export let later = 1

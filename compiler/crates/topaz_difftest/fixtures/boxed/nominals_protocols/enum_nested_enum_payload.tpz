@@ -1,0 +1,11 @@
+enum Color { Red, Blue }
+enum Box { Wrap(Color) }
+function tag(b: Box) -> int {
+  match b {
+    case Wrap(Red) => 1
+    case Wrap(Blue) => 2
+  }
+}
+print("{tag(Box.Wrap(Color.Red))}/{tag(Box.Wrap(Color.Blue))}")
+print("{Box.Wrap(Color.Red)}")
+0

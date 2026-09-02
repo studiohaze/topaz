@@ -1,0 +1,3 @@
+record P derives Show { a: int, b: int }
+print(Show.show(P { a: 1, b: 2 }))
+0

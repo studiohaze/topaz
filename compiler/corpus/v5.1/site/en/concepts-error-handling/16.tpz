@@ -1,0 +1,21 @@
+// Prevent deep nesting with early returns
+function registerUser(data: { name: string, email: string, age: int }) -> Result<string, string> {
+    // Early validation
+    if data.name == "" {
+        return Err("Name is required")
+    }
+    
+    if !data.email.contains("@") {
+        return Err("Valid email is required")
+    }
+    
+    if data.age < 0 {
+        return Err("Valid age is required")
+    }
+    
+    // Process only after all validations pass
+    let user = createUser(data)?
+    let id = saveToDatabase(user)?
+    
+    return Ok("User registration complete: {id}")
+}

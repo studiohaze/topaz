@@ -1,0 +1,30 @@
+
+function keep(x: int) -> bool {
+    x > 2
+}
+
+function moreThanOne(x: int) -> bool {
+    x > 1
+}
+
+function all(x: int) -> bool {
+    x > 0
+}
+
+function choose(i: int) -> int {
+    concurrent {
+        slow: {
+            let mut cbs = [all, moreThanOne]
+            loop {
+                cbs[i] = keep
+                let mut xs = [1, 2, 3, 4]
+                xs.retain(f: cbs[i])
+                break xs.length * 100 + xs[0]
+            }
+        }
+        fast: 0
+    }
+    0
+}
+
+choose(1)

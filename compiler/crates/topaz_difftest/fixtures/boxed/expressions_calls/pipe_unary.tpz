@@ -1,0 +1,2 @@
+let inc = (x) => x + 1
+5 |> inc

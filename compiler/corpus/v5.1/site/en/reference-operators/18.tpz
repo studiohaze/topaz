@@ -1,0 +1,12 @@
+function safeDivide(numerator: float, denominator: float) -> Result<float, string> {
+    if denominator == 0.0 {
+        return Err("Cannot divide by zero")
+    }
+    return Ok(numerator / denominator)
+}
+
+// Usage example
+match safeDivide(10.0, 0.0) {
+    case Ok(result) => print("Division result: {result}")
+    case Err(error) => print("Error: {error}")
+}

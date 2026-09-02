@@ -1,0 +1,14 @@
+
+let bytes = Bytes.encodeUtf8(s: loop {
+    print("encode")
+    break "az"
+})
+let joined = Bytes.concat(b: loop {
+    print("b")
+    break Encoding.utf8Encode(text: "b")
+}, a: loop {
+    print("a")
+    break bytes
+})
+print("{Encoding.hexEncode(bytes: joined)}")
+0

@@ -1,0 +1,7 @@
+let mut i = 0
+let x = loop {
+  i = i + 1
+  while i < 10 { break }
+  break i * 2
+}
+x

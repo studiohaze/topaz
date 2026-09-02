@@ -1,0 +1,431 @@
+// Markdown → HTML renderer (A1), written in Topaz.
+// Pure: the same input yields the same HTML on the interpreter and the native/wasm build.
+// Strings are inspected via `.scalars()`; the array stdlib (slice/join) keeps it clean.
+
+function chars(s: string) -> Array<string> { s.scalars() }
+
+function startsWith(cs: Array<string>, p: string) -> bool {
+  let pc = chars(p)
+  if cs.length < pc.length { return false }
+  let mut i = 0
+  while i < pc.length {
+    if cs[i] != pc[i] { return false }
+    i = i + 1
+  }
+  true
+}
+
+function escapeChar(c: string) -> string {
+  if c == "&" { "&amp;" }
+  else if c == "<" { "&lt;" }
+  else if c == ">" { "&gt;" }
+  else { c }
+}
+
+function escapeAll(cs: Array<string>) -> string {
+  let mut out = ""
+  let mut i = 0
+  while i < cs.length {
+    out = out + escapeChar(cs[i])
+    i = i + 1
+  }
+  out
+}
+
+function findClose(cs: Array<string>, from: int, delim: Array<string>) -> int {
+  let dl = delim.length
+  let mut i = from
+  while i + dl <= cs.length {
+    let mut ok = true
+    let mut j = 0
+    while j < dl {
+      if cs[i + j] != delim[j] { ok = false }
+      j = j + 1
+    }
+    if ok { return i }
+    i = i + 1
+  }
+  -1
+}
+
+// --- §safe links: a DEFAULT-DENY URL allowlist + attribute escaping --------------
+function hasColonBeforeSlash(cs: Array<string>) -> bool {
+  let mut i = 0
+  while i < cs.length {
+    if cs[i] == ":" { return true }
+    if cs[i] == "/" { return false }
+    i = i + 1
+  }
+  false
+}
+
+function safeUrl(url: string) -> bool {
+  // browsers strip leading whitespace/controls from a URL, so check the TRIMMED form.
+  // (C3a string stdlib: `trimStart` + `startsWith` — no hand-rolled char scan.)
+  let u = url.trimStart()
+  // protocol-relative (`//host`, `/\host`, `\host`) is external navigation — reject (the
+  // `/` branch below is for SAME-ORIGIN root-relative only).
+  if u.startsWith("//") { return false }
+  if u.startsWith("/\\") { return false }
+  if u.startsWith("\\") { return false }
+  if u.startsWith("http://") { return true }
+  if u.startsWith("https://") { return true }
+  if u.startsWith("mailto:") { return true }
+  if u.startsWith("/") { return true }
+  if u.startsWith("#") { return true }
+  if u.startsWith("./") { return true }
+  if u.startsWith("../") { return true }
+  // a relative path with no scheme (no ':' before the first '/') is safe; any other
+  // scheme (javascript:/data:/vbscript:/…) is rejected and the link renders inert.
+  !hasColonBeforeSlash(u.scalars())
+}
+
+// the `)` that closes a link's `(url)`, BALANCING inner parens so a URL like
+// `foo(1)` or `alert(1)` is captured whole (not cut at the first `)`).
+function linkUrlEnd(cs: Array<string>, from: int) -> int {
+  let mut depth = 0
+  let mut i = from
+  while i < cs.length {
+    if cs[i] == "(" { depth = depth + 1 }
+    else if cs[i] == ")" {
+      if depth == 0 { return i }
+      depth = depth - 1
+    }
+    i = i + 1
+  }
+  -1
+}
+
+function escapeAttr(cs: Array<string>) -> string {
+  let mut out = ""
+  let mut i = 0
+  while i < cs.length {
+    let c = cs[i]
+    if c == "&" { out = out + "&amp;" }
+    else if c == "\"" { out = out + "&quot;" }
+    else if c == "<" { out = out + "&lt;" }
+    else if c == ">" { out = out + "&gt;" }
+    else { out = out + c }
+    i = i + 1
+  }
+  out
+}
+
+// --- §inline: code / bold / italic / links, over a scalar slice ------------------
+function inline(cs: Array<string>) -> string {
+  let mut out = ""
+  let mut i = 0
+  while i < cs.length {
+    let c = cs[i]
+    if c == "\\" && i + 1 < cs.length {
+      // backslash escape: the next char is literal (HTML-escaped, no markdown meaning)
+      out = out + escapeChar(cs[i + 1])
+      i = i + 2
+    } else if c == "!" && i + 1 < cs.length && cs[i + 1] == "[" {
+      // image ![alt](url) — the SAME default-deny URL safety as links
+      let closeBr = findClose(cs, i + 2, ["]"])
+      if closeBr >= 0 && closeBr + 1 < cs.length && cs[closeBr + 1] == "(" {
+        let closeParen = linkUrlEnd(cs, closeBr + 2)
+        if closeParen >= 0 {
+          let altCs = cs.slice(i + 2, closeBr)
+          let urlCs = cs.slice(closeBr + 2, closeParen)
+          if safeUrl(urlCs.join("")) {
+            out = out + "<img src=\"" + escapeAttr(urlCs) + "\" alt=\"" + escapeAttr(altCs) + "\">"
+          } else {
+            out = out + escapeAll(altCs)
+          }
+          i = closeParen + 1
+        } else {
+          out = out + escapeChar(c)
+          i = i + 1
+        }
+      } else {
+        out = out + escapeChar(c)
+        i = i + 1
+      }
+    } else if c == "`" {
+      let close = findClose(cs, i + 1, ["`"])
+      if close >= 0 {
+        out = out + "<code>" + escapeAll(cs.slice(i + 1, close)) + "</code>"
+        i = close + 1
+      } else {
+        out = out + escapeChar(c)
+        i = i + 1
+      }
+    } else if c == "*" && i + 1 < cs.length && cs[i + 1] == "*" {
+      let close = findClose(cs, i + 2, ["*", "*"])
+      if close >= 0 {
+        out = out + "<strong>" + inline(cs.slice(i + 2, close)) + "</strong>"
+        i = close + 2
+      } else {
+        out = out + escapeChar(c)
+        i = i + 1
+      }
+    } else if c == "*" {
+      let close = findClose(cs, i + 1, ["*"])
+      if close >= 0 {
+        out = out + "<em>" + inline(cs.slice(i + 1, close)) + "</em>"
+        i = close + 1
+      } else {
+        out = out + escapeChar(c)
+        i = i + 1
+      }
+    } else if c == "~" && i + 1 < cs.length && cs[i + 1] == "~" {
+      let close = findClose(cs, i + 2, ["~", "~"])
+      if close >= 0 {
+        out = out + "<del>" + inline(cs.slice(i + 2, close)) + "</del>"
+        i = close + 2
+      } else {
+        out = out + escapeChar(c)
+        i = i + 1
+      }
+    } else if c == "[" {
+      let closeBr = findClose(cs, i + 1, ["]"])
+      if closeBr >= 0 && closeBr + 1 < cs.length && cs[closeBr + 1] == "(" {
+        let closeParen = linkUrlEnd(cs, closeBr + 2)
+        if closeParen >= 0 {
+          let textCs = cs.slice(i + 1, closeBr)
+          let urlCs = cs.slice(closeBr + 2, closeParen)
+          let url = urlCs.join("")
+          if safeUrl(url) {
+            out = out + "<a href=\"" + escapeAttr(urlCs) + "\">" + inline(textCs) + "</a>"
+          } else {
+            out = out + inline(textCs)
+          }
+          i = closeParen + 1
+        } else {
+          out = out + escapeChar(c)
+          i = i + 1
+        }
+      } else {
+        out = out + escapeChar(c)
+        i = i + 1
+      }
+    } else {
+      out = out + escapeChar(c)
+      i = i + 1
+    }
+  }
+  out
+}
+
+// drop every CR so CRLF (and stray CR) input matches cleanly (`---\r\n` → <hr>)
+function dropCr(cs: Array<string>) -> Array<string> {
+  let mut out: Array<string> = []
+  for c in cs {
+    if c != "\r" { out.push(c) }
+  }
+  out
+}
+
+function splitLines(s: string) -> Array<Array<string>> {
+  // C3a `str.split` on the newline, then drop CR per line (split keeps the `\r`
+  // from a CRLF, unlike the old hand-rolled scanner).
+  let mut lines: Array<Array<string>> = []
+  for raw in s.split("\n") {
+    lines.push(dropCr(raw.scalars()))
+  }
+  lines
+}
+
+function isDigit(c: string) -> bool {
+  c == "0" || c == "1" || c == "2" || c == "3" || c == "4"
+    || c == "5" || c == "6" || c == "7" || c == "8" || c == "9"
+}
+
+// an ordered-list marker `N. ` → the char length of the marker, or 0
+function olMarker(cs: Array<string>) -> int {
+  let mut i = 0
+  while i < cs.length && isDigit(cs[i]) { i = i + 1 }
+  if i > 0 && i + 1 < cs.length && cs[i] == "." && cs[i + 1] == " " { i + 2 } else { 0 }
+}
+
+function eqLine(cs: Array<string>, s: string) -> bool {
+  let t = chars(s)
+  if cs.length != t.length { return false }
+  let mut i = 0
+  while i < t.length {
+    if cs[i] != t[i] { return false }
+    i = i + 1
+  }
+  true
+}
+
+// --- §blocks: headings / lists / blockquote / fenced code / rule / paragraph -----
+
+function trimWs(cs: Array<string>) -> Array<string> {
+  let mut a = 0
+  while a < cs.length && (cs[a] == " " || cs[a] == "\t") { a = a + 1 }
+  let mut b = cs.length
+  while b > a && (cs[b - 1] == " " || cs[b - 1] == "\t") { b = b - 1 }
+  cs.slice(a, b)
+}
+
+function hasPipe(cs: Array<string>) -> bool {
+  let mut i = 0
+  while i < cs.length {
+    if cs[i] == "|" { return true }
+    i = i + 1
+  }
+  false
+}
+
+// split a table row on '|', trim cells, drop the empty cells the OUTER pipes create
+function splitCells(cs: Array<string>) -> Array<Array<string>> {
+  let mut raw: Array<Array<string>> = []
+  let mut cur: Array<string> = []
+  let mut i = 0
+  while i < cs.length {
+    if cs[i] == "\\" && i + 1 < cs.length {
+      // an escaped char (esp. GFM `\|`) is kept WHOLE in the cell, not a split
+      // point; `inline` resolves the backslash escape when it renders the cell.
+      cur.push(cs[i])
+      cur.push(cs[i + 1])
+      i = i + 2
+    } else if cs[i] == "|" {
+      raw.push(trimWs(cur))
+      cur = []
+      i = i + 1
+    } else {
+      cur.push(cs[i])
+      i = i + 1
+    }
+  }
+  raw.push(trimWs(cur))
+  let mut cells: Array<Array<string>> = []
+  let mut k = 0
+  while k < raw.length {
+    let isEnd = k == 0 || k == raw.length - 1
+    if !(isEnd && raw[k].length == 0) { cells.push(raw[k]) }
+    k = k + 1
+  }
+  cells
+}
+
+// a separator CELL: optional leading `:`, one+ `-`, optional trailing `:` — and nothing
+// else (so `:--`, `--:`, `:-:`, `---` pass; `:--:--`, `:`, `a-` do not).
+function isSeparatorCell(cell: Array<string>) -> bool {
+  if cell.length == 0 { return false }
+  let mut j = 0
+  if cell[j] == ":" { j = j + 1 }
+  let mut dashes = 0
+  while j < cell.length && cell[j] == "-" {
+    dashes = dashes + 1
+    j = j + 1
+  }
+  if dashes == 0 { return false }
+  if j < cell.length && cell[j] == ":" { j = j + 1 }
+  j == cell.length
+}
+
+// a separator row: has a pipe and every cell is a valid separator cell.
+function isSeparatorRow(cs: Array<string>) -> bool {
+  if !hasPipe(cs) { return false }
+  let cells = splitCells(cs)
+  if cells.length == 0 { return false }
+  let mut k = 0
+  while k < cells.length {
+    if !isSeparatorCell(cells[k]) { return false }
+    k = k + 1
+  }
+  true
+}
+
+function rowHtml(cells: Array<Array<string>>, tag: string) -> string {
+  let mut out = "<tr>"
+  let mut k = 0
+  while k < cells.length {
+    out = out + "<" + tag + ">" + inline(cells[k]) + "</" + tag + ">"
+    k = k + 1
+  }
+  out + "</tr>\n"
+}
+
+// does this line begin a (non-table) block? a table body stops at any such line
+// (GFM: a table ends at a blank line or the start of another block structure).
+function isBlockStart(cs: Array<string>) -> bool {
+  cs.length == 0
+    || startsWith(cs, "# ")
+    || startsWith(cs, "## ")
+    || startsWith(cs, "### ")
+    || startsWith(cs, "- ")
+    || olMarker(cs) > 0
+    || startsWith(cs, "> ")
+    || startsWith(cs, "```")
+    || eqLine(cs, "---")
+}
+
+function mdToHtml(src: string) -> string {
+  let lines = splitLines(src)
+  let mut html = ""
+  let mut i = 0
+  while i < lines.length {
+    let line = lines[i]
+    if startsWith(line, "```") {
+      i = i + 1
+      let mut code = ""
+      while i < lines.length && !startsWith(lines[i], "```") {
+        code = code + escapeAll(lines[i]) + "\n"
+        i = i + 1
+      }
+      if i < lines.length { i = i + 1 }
+      html = html + "<pre><code>" + code + "</code></pre>\n"
+    } else if startsWith(line, "- ") {
+      html = html + "<ul>\n"
+      while i < lines.length && startsWith(lines[i], "- ") {
+        html = html + "<li>" + inline(lines[i].slice(2, lines[i].length)) + "</li>\n"
+        i = i + 1
+      }
+      html = html + "</ul>\n"
+    } else if olMarker(line) > 0 {
+      html = html + "<ol>\n"
+      while i < lines.length && olMarker(lines[i]) > 0 {
+        html = html + "<li>" + inline(lines[i].slice(olMarker(lines[i]), lines[i].length)) + "</li>\n"
+        i = i + 1
+      }
+      html = html + "</ol>\n"
+    } else if startsWith(line, "> ") {
+      html = html + "<blockquote>"
+      let mut first = true
+      while i < lines.length && startsWith(lines[i], "> ") {
+        if !first { html = html + " " }
+        html = html + inline(lines[i].slice(2, lines[i].length))
+        first = false
+        i = i + 1
+      }
+      html = html + "</blockquote>\n"
+    } else if eqLine(line, "---") {
+      html = html + "<hr>\n"
+      i = i + 1
+    } else if startsWith(line, "### ") {
+      html = html + "<h3>" + inline(line.slice(4, line.length)) + "</h3>\n"
+      i = i + 1
+    } else if startsWith(line, "## ") {
+      html = html + "<h2>" + inline(line.slice(3, line.length)) + "</h2>\n"
+      i = i + 1
+    } else if startsWith(line, "# ") {
+      html = html + "<h1>" + inline(line.slice(2, line.length)) + "</h1>\n"
+      i = i + 1
+    } else if i + 1 < lines.length && hasPipe(line) && isSeparatorRow(lines[i + 1])
+      && splitCells(line).length == splitCells(lines[i + 1]).length {
+      // a GFM table — checked AFTER headings/lists/quotes/hr so a `#`/`-`/`>` line is never
+      // stolen as a header; the delimiter row must have the SAME cell count as the header.
+      html = html + "<table>\n<thead>\n" + rowHtml(splitCells(line), "th") + "</thead>\n<tbody>\n"
+      i = i + 2
+      while i < lines.length && hasPipe(lines[i]) && !isBlockStart(lines[i]) {
+        html = html + rowHtml(splitCells(lines[i]), "td")
+        i = i + 1
+      }
+      html = html + "</tbody>\n</table>\n"
+    } else if line.length == 0 {
+      i = i + 1
+    } else {
+      html = html + "<p>" + inline(line) + "</p>\n"
+      i = i + 1
+    }
+  }
+  html
+}
+
+// §22 entry: render the host's text payload (the editor textarea / piped stdin).
+print(mdToHtml(input()))

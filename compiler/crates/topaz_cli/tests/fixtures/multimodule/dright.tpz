@@ -1,0 +1,4 @@
+import tbase
+export function right() -> int {
+  return tbase.BASE * 2
+}

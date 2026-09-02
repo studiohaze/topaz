@@ -1,0 +1,5 @@
+let xs = [ for x in [1, 2, 3, 4] if x > 2 => x * 2 ]
+let s = set { for x in [1, 1, 2, 3] => x }.toArray()
+let m = map { for x in [1, 2, 3] => x: x * 10 }
+let first = if let Some(n) = xs.get(0) { n } else { -1 }
+print("{xs} {s} {m.keys} {m.getOr(2, -1)} {first}")

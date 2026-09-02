@@ -1,0 +1,3 @@
+function f() -> int { later }
+export let a = f()
+export let later = 1

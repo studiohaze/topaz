@@ -1,0 +1,1000 @@
+---
+title: 'Создание первого interop-проекта'
+description: 'Соберите проект интеграции Topaz с Rust/Actix. Это руководство посвящено interop-сценарию, а не чистому синтаксису Topaz.'
+---
+
+**Платформа/Rust интеграция**  
+Это руководство сочетает Топаз с экосистемой Rust/Actix и показывает, как встроить логику Топаз в существующие Rust‑сервисы.
+
+<Tip tone="warning" content="Эта страница описывает interop-сценарий, а не канонический синтаксис Topaz. Здесь используются Rust-макросы, traits, derive, crate imports и API Actix. За эталонной грамматикой Topaz обращайтесь к разделам Concepts и Reference.">Interop</Tip>
+
+Создайте ваш **первый interop-проект** на Топазе! Мы соберём API для управления задачами и посмотрим, как логика Topaz встраивается в Rust‑сервис.
+
+##  Обзор проекта
+
+**Что мы создаем**  
+REST API для управления личными задачами
+
+**Используемые технологии**  
+Топаз веб-сервер, обработка JSON, файловое хранилище, обработка ошибок
+
+**Что вы изучите**  
+Структура проекта, маршрутизация, моделирование данных, тестирование
+
+##  Настройка проекта
+
+### 1. Создание нового проекта
+
+```bash
+# Создание нового проекта Топаз
+topaz new ЗадачиAPI --template=web-api
+cd ЗадачиAPI
+
+# Проверка структуры проекта
+tree .
+```
+
+Созданная структура:
+```text
+ src/
+   ├─ main.tpz           # Главная точка входа
+   ├─ models/            # Модели данных
+   ├─ handlers/          # Обработчики запросов
+   └─ utils/             # Утилиты
+ tests/                 # Тестовые файлы
+ data/                  # Хранилище данных
+ topaz.toml            # Конфигурация проекта
+ README.md
+```
+
+### 2. Добавление зависимостей
+
+```toml
+# topaz.toml
+[package]
+name = "ЗадачиAPI"
+version = "0.1.0"
+description = "REST API для управления личными задачами"
+
+[dependencies]
+web = "2.0"           # Веб-сервер фреймворк
+json = "1.5"          # Обработка JSON
+uuid = "1.0"          # Генерация уникальных ID
+chrono = "0.9"        # Работа с датой/временем
+serde = "2.1"         # Сериализация/десериализация
+
+[dev-dependencies]
+test-framework = "1.0"
+http-client = "0.8"
+```
+
+##  Моделирование данных
+
+### Определение модели задачи
+
+```rust
+// src/models/todo.tpz
+use chrono::{DateTime, Utc}
+use uuid::Uuid
+use serde::{Serialize, Deserialize}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+struct Задача {
+    id: Uuid,
+    заголовок: string,
+    описание: Option<string>,
+    выполнена: bool,
+    приоритет: Приоритет,
+    датаСоздания: DateTime<Utc>,
+    датаВыполнения: Option<DateTime<Utc>>,
+    теги: Array<string>
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+enum Приоритет {
+    Низкий,
+    Обычный,
+    Высокий,
+    Срочный
+}
+
+impl Задача {
+    // Создание новой задачи
+    function новая(
+        заголовок: string,
+        описание: Option<string> = None,
+        приоритет: Приоритет = Приоритет::Обычный
+    ) -> Задача {
+        return Задача {
+            id: Uuid::new_v4(),
+            заголовок,
+            описание,
+            выполнена: false,
+            приоритет,
+            датаСоздания: Utc::now(),
+            датаВыполнения: None,
+            теги: []
+        }
+    }
+
+    // Отметить задачу как выполненную
+    function выполнить(&mut self) {
+        self.выполнена = true
+        self.датаВыполнения = Some(Utc::now())
+    }
+
+    // Добавить тег
+    function добавитьТег(&mut self, новыйТег: string) {
+        if !self.теги.contains(&новыйТег) {
+            self.теги.push(новыйТег)
+        }
+    }
+
+    // Получить балл приоритета для сортировки
+    function баллПриоритета(&self) -> int {
+        match self.приоритет {
+            case Приоритет::Срочный => 4
+            case Приоритет::Высокий => 3
+            case Приоритет::Обычный => 2
+            case Приоритет::Низкий => 1
+        }
+    }
+} test {
+    // Тест создания задачи
+    let задача = Задача::новая("Изучить Топаз".to_string(), None, Приоритет::Высокий)
+    assert задача.заголовок == "Изучить Топаз"
+    assert задача.выполнена == false
+    assert задача.приоритет == Приоритет::Высокий
+
+    // Тест выполнения
+    let mut задача = Задача::новая("Тест".to_string(), None, Приоритет::Обычный)
+    задача.выполнить()
+    assert задача.выполнена == true
+    assert задача.датаВыполнения.is_some() == true
+
+    // Тест добавления тегов
+    let mut задача = Задача::новая("Проект".to_string(), None, Приоритет::Обычный)
+    задача.добавитьТег("разработка".to_string())
+    задача.добавитьТег("изучение".to_string())
+    задача.добавитьТег("разработка".to_string())  // Попытка дублирования
+    assert задача.теги.len() == 2
+    assert задача.теги.contains(&"разработка".to_string())
+    assert задача.теги.contains(&"изучение".to_string())
+}
+```
+
+### Модели запросов/ответов
+
+```rust
+// src/models/dto.tpz
+use serde::{Serialize, Deserialize}
+use uuid::Uuid
+
+#[derive(Deserialize)]
+struct ЗапросСозданияЗадачи {
+    заголовок: string,
+    описание: Option<string>,
+    приоритет: Option<Приоритет>,
+    теги: Option<Array<string>>
+}
+
+#[derive(Deserialize)]
+struct ЗапросОбновленияЗадачи {
+    заголовок: Option<string>,
+    описание: Option<string>,
+    приоритет: Option<Приоритет>,
+    теги: Option<Array<string>>
+}
+
+#[derive(Serialize)]
+struct ОтветЗадача {
+    id: Uuid,
+    заголовок: string,
+    описание: Option<string>,
+    выполнена: bool,
+    приоритет: Приоритет,
+    датаСоздания: string,
+    датаВыполнения: Option<string>,
+    теги: Array<string>
+}
+
+impl From<Задача> for ОтветЗадача {
+    function from(задача: Задача) -> ОтветЗадача {
+        return ОтветЗадача {
+            id: задача.id,
+            заголовок: задача.заголовок,
+            описание: задача.описание,
+            выполнена: задача.выполнена,
+            приоритет: задача.приоритет,
+            датаСоздания: задача.датаСоздания.format("%Y-%m-%d %H:%M:%S").to_string(),
+            датаВыполнения: задача.датаВыполнения.map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string()),
+            теги: задача.теги
+        }
+    }
+}
+
+#[derive(Serialize)]
+struct ОтветAPI<T> {
+    успех: bool,
+    данные: Option<T>,
+    сообщение: string
+}
+
+impl<T> ОтветAPI<T> {
+    function успех(данные: T) -> ОтветAPI<T> {
+        return ОтветAPI {
+            успех: true,
+            данные: Some(данные),
+            сообщение: "Успех".to_string()
+        }
+    }
+
+    function ошибка(сообщение: string) -> ОтветAPI<T> {
+        return ОтветAPI {
+            успех: false,
+            данные: None,
+            сообщение
+        }
+    }
+}
+```
+
+##  Хранилище данных
+
+### Простое файловое хранилище
+
+```rust
+// src/storage/file_store.tpz
+use std::fs
+use std::path::Path
+use uuid::Uuid
+use crate::models::Задача
+
+struct ФайловоеХранилище {
+    путьДанных: string
+}
+
+impl ФайловоеХранилище {
+    function new(путьДанных: string) -> Result<ФайловоеХранилище, string> {
+        // Создание директории данных
+        if !Path::new(&путьДанных).exists() {
+            fs::create_dir_all(&путьДанных)
+                .map_err(|e| "Не удалось создать директорию данных: {e}".to_string())?
+        }
+
+        return Ok(ФайловоеХранилище { путьДанных })
+    }
+
+    function путьФайла(&self) -> string {
+        return format!("{}/todos.json", self.путьДанных)
+    }
+
+    // Загрузить все задачи
+    function получитьВсе(&self) -> Result<Array<Задача>, string> {
+        let путь = self.путьФайла()
+        
+        if !Path::new(&путь).exists() {
+            return Ok([])
+        }
+
+        let содержимое = fs::read_to_string(&путь)
+            .map_err(|e| "Не удалось прочитать файл: {e}".to_string())?
+
+        let задачи: Array<Задача> = serde_json::from_str(&содержимое)
+            .map_err(|e| "Не удалось разобрать JSON: {e}".to_string())?
+
+        return Ok(задачи)
+    }
+
+    // Сохранить все задачи
+    function сохранитьВсе(&self, задачи: &Array<Задача>) -> Result<(), string> {
+        let jsonСтрока = serde_json::to_string_pretty(задачи)
+            .map_err(|e| "Не удалось сериализовать JSON: {e}".to_string())?
+
+        fs::write(self.путьФайла(), jsonСтрока)
+            .map_err(|e| "Не удалось записать файл: {e}".to_string())?
+
+        return Ok(())
+    }
+
+    // Добавить задачу
+    function добавить(&self, задача: Задача) -> Result<Задача, string> {
+        let mut задачи = self.получитьВсе()?
+        задачи.push(задача.clone())
+        self.сохранитьВсе(&задачи)?
+        return Ok(задача)
+    }
+
+    // Найти задачу по ID
+    function найтиПоID(&self, id: Uuid) -> Result<Option<Задача>, string> {
+        let задачи = self.получитьВсе()?
+        let найденнаяЗадача = задачи.iter().find(|задача| задача.id == id).cloned()
+        return Ok(найденнаяЗадача)
+    }
+
+    // Обновить задачу
+    function обновить(&self, id: Uuid, обновленнаяЗадача: Задача) -> Result<Option<Задача>, string> {
+        let mut задачи = self.получитьВсе()?
+        
+        return match задачи.iter().position(|задача| задача.id == id) {
+            case Some(индекс) => {
+                задачи[индекс] = обновленнаяЗадача.clone()
+                self.сохранитьВсе(&задачи)?
+                Ok(Some(обновленнаяЗадача))
+            }
+            case None => Ok(None)
+        }
+    }
+
+    // Удалить задачу
+    function удалить(&self, id: Uuid) -> Result<bool, string> {
+        let mut задачи = self.получитьВсе()?
+        
+        return match задачи.iter().position(|задача| задача.id == id) {
+            case Some(индекс) => {
+                задачи.remove(индекс)
+                self.сохранитьВсе(&задачи)?
+                Ok(true)
+            }
+            case None => Ok(false)
+        }
+    }
+
+    // Поиск задач с фильтром
+    function поиск<F>(&self, фильтр: F) -> Result<Array<Задача>, string>
+    where
+        F: Fn(&Задача) -> bool
+    {
+        let задачи = self.получитьВсе()?
+        let результат = задачи.into_iter().filter(фильтр).collect()
+        return Ok(результат)
+    }
+} test {
+    use tempfile::tempdir
+
+    // Тест во временной директории
+    let временнаяДиректория = tempdir().unwrap()
+    let хранилище = ФайловоеХранилище::new(временнаяДиректория.path().to_str().unwrap().to_string()).unwrap()
+
+    // Тест добавления задачи
+    let новаяЗадача = Задача::новая("Тестовая задача".to_string(), None, Приоритет::Обычный)
+    let добавленнаяЗадача = хранилище.добавить(новаяЗадача.clone()).unwrap()
+    assert добавленнаяЗадача.id == новаяЗадача.id
+
+    // Тест поиска задачи
+    let найденнаяЗадача = хранилище.найтиПоID(новаяЗадача.id).unwrap()
+    assert найденнаяЗадача.is_some()
+    assert найденнаяЗадача.unwrap().заголовок == "Тестовая задача"
+
+    // Тест получения всех задач
+    let всеЗадачи = хранилище.получитьВсе().unwrap()
+    assert всеЗадачи.len() == 1
+}
+```
+
+##  Веб-сервер и маршрутизация
+
+### Настройка главного сервера
+
+```rust
+// src/main.tpz
+mod models
+mod storage
+mod handlers
+
+use web::{App, HttpServer, middleware}
+use storage::ФайловоеХранилище
+use handlers::*
+
+#[tokio::main]
+function main() -> Result<(), Box<dyn std::error::Error>> {
+    // Настройка логирования
+    env_logger::init()
+
+    // Инициализация хранилища данных
+    let хранилище = ФайловоеХранилище::new("./data".to_string())?
+
+    println!(" Запуск сервера API управления задачами...")
+    println!(" Адрес сервера: http://localhost:8080")
+    println!(" Документация API: http://localhost:8080/docs")
+
+    // Запуск HTTP сервера
+    HttpServer::new(move || {
+        App::new()
+            .app_data(web::Data::new(хранилище.clone()))
+            .wrap(middleware::Logger::default())
+            .wrap(middleware::DefaultHeaders::new()
+                .header("Content-Type", "application/json; charset=utf-8"))
+            .service(
+                web::scope("/api/v1")
+                    .route("/todos", web::get().to(получитьВсеЗадачи))
+                    .route("/todos", web::post().to(создатьЗадачу))
+                    .route("/todos/{id}", web::get().to(получитьЗадачу))
+                    .route("/todos/{id}", web::put().to(обновитьЗадачу))
+                    .route("/todos/{id}", web::delete().to(удалитьЗадачу))
+                    .route("/todos/{id}/complete", web::patch().to(выполнитьЗадачу))
+                    .route("/todos/search", web::get().to(поискЗадач))
+            )
+            .route("/health", web::get().to(проверкаЗдоровья))
+            .route("/docs", web::get().to(документацияAPI))
+    })
+    .bind("127.0.0.1:8080")?
+    .run()?
+
+    Ok(())
+}
+```
+
+### Обработчики запросов
+
+```rust
+// src/handlers/todo_handlers.tpz
+use web::{web, HttpRequest, HttpResponse, Result as WebResult}
+use uuid::Uuid
+use crate::models::{Задача, ЗапросСозданияЗадачи, ЗапросОбновленияЗадачи, ОтветЗадача, ОтветAPI}
+use crate::storage::ФайловоеХранилище
+
+// Получить все задачи
+function получитьВсеЗадачи(
+    хранилище: web::Data<ФайловоеХранилище>
+) -> WebResult<HttpResponse> {
+    match хранилище.получитьВсе() {
+        case Ok(задачи) => {
+            let ответыЗадач: Array<ОтветЗадача> = задачи
+                .into_iter()
+                .map(|задача| ОтветЗадача::from(задача))
+                .collect()
+            
+            return Ok(HttpResponse::Ok()
+                .json(ОтветAPI::успех(ответыЗадач)))
+        }
+        case Err(ошибка) => {
+            return Ok(HttpResponse::InternalServerError()
+                .json(ОтветAPI::<()>::ошибка(ошибка)))
+        }
+    }
+}
+
+// Создать новую задачу
+function создатьЗадачу(
+    запрос: web::Json<ЗапросСозданияЗадачи>,
+    хранилище: web::Data<ФайловоеХранилище>
+) -> WebResult<HttpResponse> {
+    let mut новаяЗадача = Задача::новая(
+        запрос.заголовок.clone(),
+        запрос.описание.clone(),
+        запрос.приоритет.unwrap_or(Приоритет::Обычный)
+    )
+
+    // Добавить теги если предоставлены
+    match &запрос.теги {
+        case Some(списокТегов) => {
+            for тег in списокТегов {
+                новаяЗадача.добавитьТег(тег.clone())
+            }
+        }
+        case None => {}
+    }
+
+    match хранилище.добавить(новаяЗадача) {
+        case Ok(созданнаяЗадача) => {
+            return Ok(HttpResponse::Created()
+                .json(ОтветAPI::успех(ОтветЗадача::from(созданнаяЗадача))))
+        }
+        case Err(ошибка) => {
+            return Ok(HttpResponse::InternalServerError()
+                .json(ОтветAPI::<()>::ошибка(ошибка)))
+        }
+    }
+}
+
+// Получить конкретную задачу
+function получитьЗадачу(
+    путь: web::Path<Uuid>,
+    хранилище: web::Data<ФайловоеХранилище>
+) -> WebResult<HttpResponse> {
+    let id = путь.into_inner()
+
+    match хранилище.найтиПоID(id) {
+        case Ok(Some(задача)) => {
+            return Ok(HttpResponse::Ok()
+                .json(ОтветAPI::успех(ОтветЗадача::from(задача))))
+        }
+        case Ok(None) => {
+            return Ok(HttpResponse::NotFound()
+                .json(ОтветAPI::<()>::ошибка("Задача не найдена".to_string())))
+        }
+        case Err(ошибка) => {
+            return Ok(HttpResponse::InternalServerError()
+                .json(ОтветAPI::<()>::ошибка(ошибка)))
+        }
+    }
+}
+
+// Обновить задачу
+function обновитьЗадачу(
+    путь: web::Path<Uuid>,
+    запрос: web::Json<ЗапросОбновленияЗадачи>,
+    хранилище: web::Data<ФайловоеХранилище>
+) -> WebResult<HttpResponse> {
+    let id = путь.into_inner()
+
+    match хранилище.найтиПоID(id) {
+        case Ok(Some(mut существующаяЗадача)) => {
+            // Обновить только запрашиваемые поля
+            match &запрос.заголовок {
+                case Some(заголовок) => {
+                    существующаяЗадача.заголовок = заголовок.clone()
+                }
+                case None => {}
+            }
+            match &запрос.описание {
+                case Some(описание) => {
+                    существующаяЗадача.описание = Some(описание.clone())
+                }
+                case None => {}
+            }
+            match &запрос.приоритет {
+                case Some(приоритет) => {
+                    существующаяЗадача.приоритет = приоритет.clone()
+                }
+                case None => {}
+            }
+            match &запрос.теги {
+                case Some(списокТегов) => {
+                    существующаяЗадача.теги = списокТегов.clone()
+                }
+                case None => {}
+            }
+
+            match хранилище.обновить(id, существующаяЗадача) {
+                case Ok(Some(обновленнаяЗадача)) => {
+                    return Ok(HttpResponse::Ok()
+                        .json(ОтветAPI::успех(ОтветЗадача::from(обновленнаяЗадача))))
+                }
+                case Ok(None) => {
+                    return Ok(HttpResponse::NotFound()
+                        .json(ОтветAPI::<()>::ошибка("Задача не найдена".to_string())))
+                }
+                case Err(ошибка) => {
+                    return Ok(HttpResponse::InternalServerError()
+                        .json(ОтветAPI::<()>::ошибка(ошибка)))
+                }
+            }
+        }
+        case Ok(None) => {
+            return Ok(HttpResponse::NotFound()
+                .json(ОтветAPI::<()>::ошибка("Задача не найдена".to_string())))
+        }
+        case Err(ошибка) => {
+            return Ok(HttpResponse::InternalServerError()
+                .json(ОтветAPI::<()>::ошибка(ошибка)))
+        }
+    }
+}
+
+// Удалить задачу
+function удалитьЗадачу(
+    путь: web::Path<Uuid>,
+    хранилище: web::Data<ФайловоеХранилище>
+) -> WebResult<HttpResponse> {
+    let id = путь.into_inner()
+
+    match хранилище.удалить(id) {
+        case Ok(true) => {
+            return Ok(HttpResponse::Ok()
+                .json(ОтветAPI::успех("Задача успешно удалена".to_string())))
+        }
+        case Ok(false) => {
+            return Ok(HttpResponse::NotFound()
+                .json(ОтветAPI::<()>::ошибка("Задача не найдена".to_string())))
+        }
+        case Err(ошибка) => {
+            return Ok(HttpResponse::InternalServerError()
+                .json(ОтветAPI::<()>::ошибка(ошибка)))
+        }
+    }
+}
+
+// Выполнить задачу
+function выполнитьЗадачу(
+    путь: web::Path<Uuid>,
+    хранилище: web::Data<ФайловоеХранилище>
+) -> WebResult<HttpResponse> {
+    let id = путь.into_inner()
+
+    match хранилище.найтиПоID(id) {
+        case Ok(Some(mut задача)) => {
+            задача.выполнить()
+            
+            match хранилище.обновить(id, задача) {
+                case Ok(Some(выполненнаяЗадача)) => {
+                    return Ok(HttpResponse::Ok()
+                        .json(ОтветAPI::успех(ОтветЗадача::from(выполненнаяЗадача))))
+                }
+                case Err(ошибка) => {
+                    return Ok(HttpResponse::InternalServerError()
+                        .json(ОтветAPI::<()>::ошибка(ошибка)))
+                }
+                case _ => {
+                    return Ok(HttpResponse::InternalServerError()
+                        .json(ОтветAPI::<()>::ошибка("Не удалось выполнить задачу".to_string())))
+                }
+            }
+        }
+        case Ok(None) => {
+            return Ok(HttpResponse::NotFound()
+                .json(ОтветAPI::<()>::ошибка("Задача не найдена".to_string())))
+        }
+        case Err(ошибка) => {
+            return Ok(HttpResponse::InternalServerError()
+                .json(ОтветAPI::<()>::ошибка(ошибка)))
+        }
+    }
+}
+
+// Поиск задач (используя параметры запроса)
+function поискЗадач(
+    запрос: HttpRequest,
+    хранилище: web::Data<ФайловоеХранилище>
+) -> WebResult<HttpResponse> {
+    let запрос = web::Query::<HashMap<String, String>>::from_query(запрос.query_string())
+        .map_err(|_| HttpResponse::BadRequest().json(ОтветAPI::<()>::ошибка("Неверные параметры запроса".to_string())))?
+
+    let задачи = match хранилище.получитьВсе() {
+        case Ok(список) => список
+        case Err(ошибка) => {
+            return Ok(HttpResponse::InternalServerError()
+                .json(ОтветAPI::<()>::ошибка(ошибка)))
+        }
+    }
+
+    let mut отфильтрованныеЗадачи = задачи
+
+    // Фильтр по статусу выполнения
+    match запрос.get("completed") {
+        case Some(выполненаСтрока) => {
+            let статусВыполнения = выполненаСтрока.parse::<bool>().unwrap_or(false)
+            отфильтрованныеЗадачи = отфильтрованныеЗадачи.into_iter()
+                .filter(|задача| задача.выполнена == статусВыполнения)
+                .collect()
+        }
+        case None => {}
+    }
+
+    // Фильтр по приоритету
+    match запрос.get("priority") {
+        case Some(приоритетСтрока) => {
+            match приоритетСтрока.parse::<Приоритет>() {
+                case Ok(приоритет) => {
+                    отфильтрованныеЗадачи = отфильтрованныеЗадачи.into_iter()
+                        .filter(|задача| задача.приоритет == приоритет)
+                        .collect()
+                }
+                case Err(_) => {}
+            }
+        }
+        case None => {}
+    }
+
+    // Фильтр по тегу
+    match запрос.get("tag") {
+        case Some(тег) => {
+            отфильтрованныеЗадачи = отфильтрованныеЗадачи.into_iter()
+                .filter(|задача| задача.теги.contains(тег))
+                .collect()
+        }
+        case None => {}
+    }
+
+    // Поиск в заголовке
+    match запрос.get("search") {
+        case Some(поисковыйТермин) => {
+            let поискВНижнемРегистре = поисковыйТермин.to_lowercase()
+            отфильтрованныеЗадачи = отфильтрованныеЗадачи.into_iter()
+                .filter(|задача| задача.заголовок.to_lowercase().contains(&поискВНижнемРегистре))
+                .collect()
+        }
+        case None => {}
+    }
+
+    // Сортировка по приоритету
+    отфильтрованныеЗадачи.sort_by(|a, b| b.баллПриоритета().cmp(&a.баллПриоритета()))
+
+    let ответыЗадач: Array<ОтветЗадача> = отфильтрованныеЗадачи
+        .into_iter()
+        .map(|задача| ОтветЗадача::from(задача))
+        .collect()
+
+    return Ok(HttpResponse::Ok()
+        .json(ОтветAPI::успех(ответыЗадач)))
+}
+
+// Проверка здоровья
+function проверкаЗдоровья() -> WebResult<HttpResponse> {
+    return Ok(HttpResponse::Ok()
+        .json(json!({
+            "статус": "здоров",
+            "время": chrono::Utc::now().to_rfc3339(),
+            "версия": "0.1.0"
+        })))
+}
+
+// Документация API
+function документацияAPI() -> WebResult<HttpResponse> {
+    let документы = r#"
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Документация API управления задачами</title>
+        <meta charset="utf-8">
+        <style>
+            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 40px; }
+            .endpoint { background: #f8f9fa; padding: 15px; margin: 10px 0; border-radius: 5px; }
+            .method { font-weight: bold; padding: 3px 8px; border-radius: 3px; color: white; }
+            .get { background: #28a745; }
+            .post { background: #007bff; }
+            .put { background: #ffc107; color: black; }
+            .delete { background: #dc3545; }
+            .patch { background: #6f42c1; }
+        </style>
+    </head>
+    <body>
+        <h1> Документация API управления задачами</h1>
+        
+        <div class="endpoint">
+            <span class="method get">GET</span>
+            <strong>/api/v1/todos</strong>
+            <p>Получить все задачи.</p>
+        </div>
+        
+        <div class="endpoint">
+            <span class="method post">POST</span>
+            <strong>/api/v1/todos</strong>
+            <p>Создать новую задачу.</p>
+            <pre>{ "заголовок": "string", "описание": "string?", "приоритет": "enum?", "теги": "string[]?" }</pre>
+        </div>
+        
+        <div class="endpoint">
+            <span class="method get">GET</span>
+            <strong>/api/v1/todos/{id}</strong>
+            <p>Получить конкретную задачу.</p>
+        </div>
+        
+        <div class="endpoint">
+            <span class="method put">PUT</span>
+            <strong>/api/v1/todos/{id}</strong>
+            <p>Обновить задачу.</p>
+        </div>
+        
+        <div class="endpoint">
+            <span class="method delete">DELETE</span>
+            <strong>/api/v1/todos/{id}</strong>
+            <p>Удалить задачу.</p>
+        </div>
+        
+        <div class="endpoint">
+            <span class="method patch">PATCH</span>
+            <strong>/api/v1/todos/{id}/complete</strong>
+            <p>Отметить задачу как выполненную.</p>
+        </div>
+        
+        <div class="endpoint">
+            <span class="method get">GET</span>
+            <strong>/api/v1/todos/search</strong>
+            <p>Поиск задач. Параметры запроса: completed, priority, tag, search</p>
+        </div>
+        
+        <h2> Проверка здоровья</h2>
+        <div class="endpoint">
+            <span class="method get">GET</span>
+            <strong>/health</strong>
+            <p>Проверить состояние сервера.</p>
+        </div>
+    </body>
+    </html>
+    "#;
+
+    return Ok(HttpResponse::Ok()
+        .content_type("text/html; charset=utf-8")
+        .body(документы))
+}
+```
+
+##  Написание тестов
+
+### Интеграционные тесты
+
+```rust
+// tests/integration_test.tpz
+use actix_web::{test, App}
+use serde_json::json
+use tempfile::tempdir
+use ЗадачиAPI::*
+
+#[actix_rt::test]
+function тест_crud_задач() -> Result<(), Box<dyn std::error::Error>> {
+    // Настройка временного хранилища
+    let временнаяДиректория = tempdir().unwrap()
+    let хранилище = ФайловоеХранилище::new(временнаяДиректория.path().to_str().unwrap().to_string()).unwrap()
+
+    let mut приложение = test::init_service(
+        App::new()
+            .app_data(web::Data::new(хранилище))
+            .service(
+                web::scope("/api/v1")
+                    .route("/todos", web::get().to(получитьВсеЗадачи))
+                    .route("/todos", web::post().to(создатьЗадачу))
+                    .route("/todos/{id}", web::get().to(получитьЗадачу))
+                    .route("/todos/{id}", web::put().to(обновитьЗадачу))
+                    .route("/todos/{id}", web::delete().to(удалитьЗадачу))
+            )
+    )?
+
+    // 1. Тест создания задачи
+    let запросНовойЗадачи = json!({
+        "заголовок": "Завершить проект Топаз",
+        "описание": "Закончить первый проект на Топазе",
+        "приоритет": "Высокий",
+        "теги": ["разработка", "изучение"]
+    })
+
+    let запрос = test::TestRequest::post()
+        .uri("/api/v1/todos")
+        .set_json(&запросНовойЗадачи)
+        .to_request()
+
+    let ответ = test::call_service(&mut приложение, запрос)?
+    assert!(ответ.status().is_success())
+
+    let телоОтвета: serde_json::Value = test::read_body_json(ответ)?
+    assert!(телоОтвета["успех"].as_bool().unwrap())
+    
+    let созданнаяЗадача = &телоОтвета["данные"]
+    let idЗадачи = созданнаяЗадача["id"].as_str().unwrap()
+
+    // 2. Тест получения задачи
+    let запрос = test::TestRequest::get()
+        .uri(&format!("/api/v1/todos/{}", idЗадачи))
+        .to_request()
+
+    let ответ = test::call_service(&mut приложение, запрос)?
+    assert!(ответ.status().is_success())
+
+    let телоОтвета: serde_json::Value = test::read_body_json(ответ)?
+    let полученнаяЗадача = &телоОтвета["данные"]
+    assert_eq!(полученнаяЗадача["заголовок"], "Завершить проект Топаз")
+
+    // 3. Тест получения всех задач
+    let запрос = test::TestRequest::get()
+        .uri("/api/v1/todos")
+        .to_request()
+
+    let ответ = test::call_service(&mut приложение, запрос)?
+    assert!(ответ.status().is_success())
+
+    let телоОтвета: serde_json::Value = test::read_body_json(ответ)?
+    let списокЗадач = телоОтвета["данные"].as_array().unwrap()
+    assert_eq!(списокЗадач.len(), 1)
+
+    // 4. Тест обновления задачи
+    let запросОбновления = json!({
+        "заголовок": "Завершить проект Топаз (Обновлено)",
+        "приоритет": "Срочный"
+    })
+
+    let запрос = test::TestRequest::put()
+        .uri(&format!("/api/v1/todos/{}", idЗадачи))
+        .set_json(&запросОбновления)
+        .to_request()
+
+    let ответ = test::call_service(&mut приложение, запрос)?
+    assert!(ответ.status().is_success())
+
+    // 5. Тест удаления задачи
+    let запрос = test::TestRequest::delete()
+        .uri(&format!("/api/v1/todos/{}", idЗадачи))
+        .to_request()
+
+    let ответ = test::call_service(&mut приложение, запрос)?
+    assert!(ответ.status().is_success())
+
+    // 6. Проверка удаления
+    let запрос = test::TestRequest::get()
+        .uri(&format!("/api/v1/todos/{}", idЗадачи))
+        .to_request()
+
+    let ответ = test::call_service(&mut приложение, запрос)?
+    assert_eq!(ответ.status(), 404)
+
+    Ok(())
+}
+
+#[actix_rt::test]
+function тест_поиска_задач() -> Result<(), Box<dyn std::error::Error>> {
+    // Настройка тестовых данных и тестирование функции поиска
+    // ... (код тестов поиска)
+
+    Ok(())
+}
+```
+
+##  Запуск и тестирование
+
+### Запуск проекта
+
+```bash
+# Установка зависимостей
+topaz build
+
+# Запуск сервера разработки
+topaz run
+
+# Или запуск в режиме релиза
+topaz run --release
+```
+
+### Тестирование API
+
+```bash
+# Проверка здоровья
+curl http://localhost:8080/health
+
+# Создание новой задачи
+curl -X POST http://localhost:8080/api/v1/todos \
+  -H "Content-Type: application/json" \
+  -d '{
+    "заголовок": "Изучить Топаз",
+    "описание": "Изучить все возможности языка Топаза",
+    "приоритет": "Высокий",
+    "теги": ["изучение", "программирование"]
+  }'
+
+# Получение всех задач
+curl http://localhost:8080/api/v1/todos
+
+# Поиск незавершенных задач
+curl "http://localhost:8080/api/v1/todos/search?completed=false"
+
+# Поиск задач с высоким приоритетом
+curl "http://localhost:8080/api/v1/todos/search?priority=Высокий"
+```
+
+### Запуск тестов
+
+```bash
+# Запуск всех тестов
+topaz test
+
+# Запуск конкретного теста
+topaz test integration_test
+
+# Проверка покрытия тестами
+topaz test --coverage
+```
+
+##  Следующие шаги
+
+Поздравляем! Вы завершили свой первый полный проект на Топазе! 
+
+### Дополнительные функции для реализации:
+
+1. **Интеграция с базой данных**: PostgreSQL, MongoDB и др.
+2. **Аутентификация пользователей**: Аутентификация на основе JWT токенов
+3. **Обновления в реальном времени**: Синхронизация задач в реальном времени через WebSocket
+4. **Загрузка файлов**: Функция прикрепления файлов к задачам
+5. **Email уведомления**: Уведомления о приближении дедлайнов
+6. **Docker развертывание**: Контейнеризация и облачное развертывание
+
+### Основные концепции Топаз, которые вы изучили:
+
+-  Проектирование структуры проекта
+-  Моделирование данных и система типов
+-  Обработка ошибок (типы Result/Option)
+-  Построение веб-сервера и REST API
+-  Файловое хранение данных
+-  Использование сопоставления с образцом
+-  Разработка через тестирование
+-  Многоязычные идентификаторы и естественное написание кода
+
+Теперь вы готовы браться за более сложные проекты на Топазе! 

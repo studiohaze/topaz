@@ -1,0 +1,12 @@
+// Run multiple tasks in parallel
+let dashboard = concurrent(timeout: 3s) {
+    weather: WeatherAPI.current("NYC")
+    rate: CurrencyAPI.usdRate()
+    news: NewsAPI.headlines(5)
+} else {
+    {
+        weather: None,
+        rate: None,
+        news: []
+    }
+}

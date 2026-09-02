@@ -1,0 +1,1 @@
+export function shout(s: string) -> () { print(s) }

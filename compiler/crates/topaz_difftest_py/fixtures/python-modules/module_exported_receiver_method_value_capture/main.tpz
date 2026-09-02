@@ -1,0 +1,3 @@
+import model
+let p: model.Point = model.make()
+p.shifted() * 10 + model.offset

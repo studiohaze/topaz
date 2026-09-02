@@ -1,0 +1,2 @@
+match { items: [1, 2] } { case { items: [a, b] } => a + b
+case _ => 0 }

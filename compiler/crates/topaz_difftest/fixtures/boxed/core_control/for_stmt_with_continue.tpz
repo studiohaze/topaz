@@ -1,0 +1,4 @@
+let mut s = 0
+for x in [1, 2, 3, 4] { if x == 2 { continue }
+s = s + x }
+s

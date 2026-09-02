@@ -1,0 +1,2 @@
+newtype Email = string
+JSON.stringify(Email("a@b.c"))

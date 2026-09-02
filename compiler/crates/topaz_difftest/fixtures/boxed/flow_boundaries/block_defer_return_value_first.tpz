@@ -1,0 +1,7 @@
+function f() {
+  {
+    defer print("d")
+    return print("v")
+  }
+}
+f()

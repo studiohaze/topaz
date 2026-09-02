@@ -1,0 +1,4 @@
+match [1, 2, 3] {
+  case [..[a, b, c]] => a + b + c
+  case _ => 0
+}

@@ -1,0 +1,12 @@
+let 숫자들 = [1, 2, 3]
+
+let 안전값 = 숫자들.get(10)        // None — 폴트 없는 읽기
+// 숫자들[10]은 폴트: 직접 인덱싱은 범위를 벗어나면 중단됩니다
+
+// 폴트 가능성이 있는 형식 대신 복구 가능한 실패는 Result에 담으세요
+function 안전한인덱스(xs: Array<int>, i: int) -> Result<int, string> {
+    match xs.get(i) {
+        case Some(값) => Ok(값)
+        case None => Err("인덱스 {i}가 범위를 벗어났습니다")
+    }
+}

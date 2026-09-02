@@ -1,0 +1,7 @@
+newtype Id = int
+
+impl Id {
+    function value(self) -> int { 0 }
+}
+
+0

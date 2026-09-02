@@ -1,0 +1,14 @@
+function readText(path: string) -> Result<string, string> {
+    let file = open(path)?
+    defer { file.close() }
+
+    let content = file.read()?
+    Ok(content)
+}
+
+function writeText(path: string, content: string) -> Result<(), string> {
+    let file = open(path)?
+    defer { file.close() }
+
+    file.write(content)
+}

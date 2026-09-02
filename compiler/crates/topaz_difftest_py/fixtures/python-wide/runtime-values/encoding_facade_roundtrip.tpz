@@ -1,0 +1,22 @@
+
+function textResult(value: Result<string, string>) -> string {
+    match value {
+        case Ok(s) => s
+        case Err(e) => e
+    }
+}
+
+function f() -> Result<int, string> {
+    let decoded = match Encoding.base64Decode(Encoding.base64Encode(Encoding.utf8Encode("hé"))) {
+        case Ok(b) => textResult(Encoding.utf8Decode(b))
+        case Err(e) => e
+    }
+    let hexed = Encoding.hexEncode(Encoding.utf8Encode("topaz"))
+    let fromHex = match Encoding.hexDecode("6869") {
+        case Ok(b) => Encoding.base64Encode(b)
+        case Err(e) => e
+    }
+    print("{hexed}:{fromHex}:{decoded}")
+    Ok(0)
+}
+f()

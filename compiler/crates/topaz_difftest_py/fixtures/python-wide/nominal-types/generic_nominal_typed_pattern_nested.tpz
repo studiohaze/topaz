@@ -1,0 +1,22 @@
+
+record Box<T> { value: T }
+function main() -> int {
+    let inner = Box { value: 7 }
+    let outer = Box { value: inner }
+    let arrays = Box { value: [1, 2] }
+    let optional = Box { value: Some(3) }
+    let a = match outer {
+        case found: Box<Box<int>> => found.value.value
+        case _ => 0
+    }
+    let b = match arrays {
+        case found: Box<Array<int>> => found.value.length
+        case _ => 0
+    }
+    let c = match optional {
+        case found: Box<Option<int>> => 3
+        case _ => 0
+    }
+    a + b + c
+}
+main()

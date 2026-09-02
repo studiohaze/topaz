@@ -1,0 +1,4 @@
+import mathlib
+const X = mathlib.ANSWER
+print("X is {X}")
+X

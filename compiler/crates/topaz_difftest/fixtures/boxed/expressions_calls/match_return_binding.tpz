@@ -1,0 +1,2 @@
+let f = (x) => { match x { case n => return n * 2 } }
+f(7)

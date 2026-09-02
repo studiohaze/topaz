@@ -1,0 +1,2 @@
+match 5 { case 5 if 1 > 2 => 10
+case _ => 20 }

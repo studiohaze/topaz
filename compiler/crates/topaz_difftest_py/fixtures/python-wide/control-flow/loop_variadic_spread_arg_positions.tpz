@@ -1,0 +1,27 @@
+
+function sum(seed: int, ...xs: int) -> int {
+    let mut total = seed
+    for x in xs {
+        total = total + x
+    }
+    total
+}
+let direct = sum(loop {
+    print("seed-b")
+    break 4
+}, ...loop {
+    print("spread-b")
+    break [5, 6]
+}, loop {
+    print("tail-c")
+    break 7
+})
+let named = sum(...loop {
+    print("spread-c")
+    break [8, 9]
+}, seed: loop {
+    print("seed-c")
+    break 10
+})
+print("{direct}:{named}")
+direct + named

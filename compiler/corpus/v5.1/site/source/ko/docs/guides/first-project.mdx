@@ -1,0 +1,1000 @@
+---
+title: '첫 번째 인터롭 프로젝트 만들기'
+description: '토파즈와 Rust/Actix를 함께 사용하는 인터롭 프로젝트를 만들어봅니다. 이 문서는 순수 Topaz 문법보다 플랫폼 연동에 초점을 둡니다.'
+---
+
+**플랫폼/러스트 연동**  
+이 가이드는 토파즈 코드를 Rust/Actix 생태계와 결합하는 예제를 포함합니다. 기존 Rust 서비스 안에서 토파즈 로직을 배치하는 흐름을 보여줍니다.
+
+<Tip tone="warning" content="이 페이지는 순수 Topaz 문법 레퍼런스가 아니라 interop 워크스루입니다. Rust 매크로, trait, derive, crate import, Actix API가 함께 등장합니다. 정식 Topaz 문법은 Concepts와 Reference 섹션을 기준으로 보세요.">Interop</Tip>
+
+토파즈로 **첫 번째 인터롭 프로젝트**를 만들어보세요! 할 일 관리 API를 만들면서 Topaz 로직이 Rust 서비스 안에 어떻게 들어가는지 살펴보겠습니다.
+
+##  프로젝트 개요
+
+**만들 것**  
+개인 할 일 관리 REST API
+
+**사용할 기술**  
+토파즈 웹서버, JSON 처리, 파일 저장소, 에러 처리
+
+**학습할 내용**  
+프로젝트 구조, 라우팅, 데이터 모델링, 테스팅
+
+##  프로젝트 설정
+
+### 1. 새 프로젝트 생성
+
+```bash
+# 새 Topaz 프로젝트 생성
+topaz new 할일관리API --template=web-api
+cd 할일관리API
+
+# 프로젝트 구조 확인
+tree .
+```
+
+생성된 구조:
+```text
+ src/
+   ├─ main.tpz           # 메인 진입점
+   ├─ models/            # 데이터 모델
+   ├─ handlers/          # 요청 처리기
+   └─ utils/             # 유틸리티 함수
+ tests/                 # 테스트 파일
+ data/                  # 데이터 저장소
+ topaz.toml            # 프로젝트 설정
+ README.md
+```
+
+### 2. 종속성 추가
+
+```toml
+# topaz.toml
+[package]
+name = "할일관리API"
+version = "0.1.0"
+description = "개인 할 일 관리를 위한 REST API"
+
+[dependencies]
+web = "2.0"           # 웹서버 프레임워크
+json = "1.5"          # JSON 처리
+uuid = "1.0"          # 고유 ID 생성
+chrono = "0.9"        # 날짜/시간 처리
+serde = "2.1"         # 직렬화/역직렬화
+
+[dev-dependencies]
+test-framework = "1.0"
+http-client = "0.8"
+```
+
+##  데이터 모델링
+
+### 할 일 모델 정의
+
+```rust
+// src/models/todo.tpz
+use chrono::{DateTime, Utc}
+use uuid::Uuid
+use serde::{Serialize, Deserialize}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+struct 할일 {
+    id: Uuid,
+    제목: string,
+    설명: Option<string>,
+    완료여부: bool,
+    우선순위: 우선순위,
+    생성일: DateTime<Utc>,
+    완료일: Option<DateTime<Utc>>,
+    태그: Array<string>
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+enum 우선순위 {
+    낮음,
+    보통,
+    높음,
+    긴급
+}
+
+impl 할일 {
+    // 새 할 일 생성
+    function 새로만들기(
+        제목: string,
+        설명: Option<string> = None,
+        우선순위: 우선순위 = 우선순위::보통
+    ) -> 할일 {
+        return 할일 {
+            id: Uuid::new_v4(),
+            제목,
+            설명,
+            완료여부: false,
+            우선순위,
+            생성일: Utc::now(),
+            완료일: None,
+            태그: []
+        }
+    }
+
+    // 할 일 완료 처리
+    function 완료하기(&mut self) {
+        self.완료여부 = true
+        self.완료일 = Some(Utc::now())
+    }
+
+    // 태그 추가
+    function 태그추가(&mut self, 새태그: string) {
+        if !self.태그.contains(&새태그) {
+            self.태그.push(새태그)
+        }
+    }
+
+    // 우선순위별 정렬을 위한 점수
+    function 우선순위점수(&self) -> int {
+        match self.우선순위 {
+            case 우선순위::긴급 => 4
+            case 우선순위::높음 => 3
+            case 우선순위::보통 => 2
+            case 우선순위::낮음 => 1
+        }
+    }
+} test {
+    // 할 일 생성 테스트
+    let 할일 = 할일::새로만들기("Topaz 학습하기".to_string(), None, 우선순위::높음)
+    assert할일.제목 == "Topaz 학습하기"
+    assert할일.완료여부 == false
+    assert할일.우선순위 == 우선순위::높음
+
+    // 완료 처리 테스트
+    let mut 할일 = 할일::새로만들기("테스트".to_string(), None, 우선순위::보통)
+    할일.완료하기()
+    assert할일.완료여부 == true
+    assert할일.완료일.is_some() == true
+
+    // 태그 추가 테스트
+    let mut 할일 = 할일::새로만들기("프로젝트".to_string(), None, 우선순위::보통)
+    할일.태그추가("개발".to_string())
+    할일.태그추가("학습".to_string())
+    할일.태그추가("개발".to_string())  // 중복 추가 시도
+    assert할일.태그.len() == 2
+    assert할일.태그.contains(&"개발".to_string())
+    assert할일.태그.contains(&"학습".to_string())
+}
+```
+
+### 요청/응답 모델
+
+```rust
+// src/models/dto.tpz
+use serde::{Serialize, Deserialize}
+use uuid::Uuid
+
+#[derive(Deserialize)]
+struct 할일생성요청 {
+    제목: string,
+    설명: Option<string>,
+    우선순위: Option<우선순위>,
+    태그: Option<Array<string>>
+}
+
+#[derive(Deserialize)]
+struct 할일수정요청 {
+    제목: Option<string>,
+    설명: Option<string>,
+    우선순위: Option<우선순위>,
+    태그: Option<Array<string>>
+}
+
+#[derive(Serialize)]
+struct 할일응답 {
+    id: Uuid,
+    제목: string,
+    설명: Option<string>,
+    완료여부: bool,
+    우선순위: 우선순위,
+    생성일: string,
+    완료일: Option<string>,
+    태그: Array<string>
+}
+
+impl From<할일> for 할일응답 {
+    function from(할일: 할일) -> 할일응답 {
+        return 할일응답 {
+            id: 할일.id,
+            제목: 할일.제목,
+            설명: 할일.설명,
+            완료여부: 할일.완료여부,
+            우선순위: 할일.우선순위,
+            생성일: 할일.생성일.format("%Y-%m-%d %H:%M:%S").to_string(),
+            완료일: 할일.완료일.map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string()),
+            태그: 할일.태그
+        }
+    }
+}
+
+#[derive(Serialize)]
+struct 응답래퍼<T> {
+    성공: bool,
+    데이터: Option<T>,
+    메시지: string
+}
+
+impl<T> 응답래퍼<T> {
+    function 성공(데이터: T) -> 응답래퍼<T> {
+        return 응답래퍼 {
+            성공: true,
+            데이터: Some(데이터),
+            메시지: "성공".to_string()
+        }
+    }
+
+    function 실패(메시지: string) -> 응답래퍼<T> {
+        return 응답래퍼 {
+            성공: false,
+            데이터: None,
+            메시지
+        }
+    }
+}
+```
+
+##  데이터 저장소
+
+### 간단한 파일 기반 저장소
+
+```rust
+// src/storage/file_store.tpz
+use std::fs
+use std::path::Path
+use uuid::Uuid
+use crate::models::할일
+
+struct 파일저장소 {
+    데이터경로: string
+}
+
+impl 파일저장소 {
+    function new(데이터경로: string) -> Result<파일저장소, string> {
+        // 데이터 디렉토리 생성
+        if !Path::new(&데이터경로).exists() {
+            fs::create_dir_all(&데이터경로)
+                .map_err(|e| "데이터 디렉토리 생성 실패: {e}".to_string())?
+        }
+
+        return Ok(파일저장소 { 데이터경로 })
+    }
+
+    function 파일경로(&self) -> string {
+        return format!("{}/todos.json", self.데이터경로)
+    }
+
+    // 모든 할 일 로드
+    function 모두가져오기(&self) -> Result<Array<할일>, string> {
+        let 경로 = self.파일경로()
+        
+        if !Path::new(&경로).exists() {
+            return Ok([])
+        }
+
+        let 내용 = fs::read_to_string(&경로)
+            .map_err(|e| "파일 읽기 실패: {e}".to_string())?
+
+        let 할일목록: Array<할일> = serde_json::from_str(&내용)
+            .map_err(|e| "JSON 파싱 실패: {e}".to_string())?
+
+        return Ok(할일목록)
+    }
+
+    // 모든 할 일 저장
+    function 모두저장하기(&self, 할일목록: &Array<할일>) -> Result<(), string> {
+        let json문자열 = serde_json::to_string_pretty(할일목록)
+            .map_err(|e| "JSON 직렬화 실패: {e}".to_string())?
+
+        fs::write(self.파일경로(), json문자열)
+            .map_err(|e| "파일 쓰기 실패: {e}".to_string())?
+
+        return Ok(())
+    }
+
+    // 할 일 추가
+    function 추가하기(&self, 할일: 할일) -> Result<할일, string> {
+        let mut 할일목록 = self.모두가져오기()?
+        할일목록.push(할일.clone())
+        self.모두저장하기(&할일목록)?
+        return Ok(할일)
+    }
+
+    // ID로 할 일 찾기
+    function 찾기(&self, id: Uuid) -> Result<Option<할일>, string> {
+        let 할일목록 = self.모두가져오기()?
+        let 찾은할일 = 할일목록.iter().find(|todo| todo.id == id).cloned()
+        return Ok(찾은할일)
+    }
+
+    // 할 일 수정
+    function 수정하기(&self, id: Uuid, 수정된할일: 할일) -> Result<Option<할일>, string> {
+        let mut 할일목록 = self.모두가져오기()?
+        
+        return match 할일목록.iter().position(|todo| todo.id == id) {
+            case Some(인덱스) => {
+                할일목록[인덱스] = 수정된할일.clone()
+                self.모두저장하기(&할일목록)?
+                Ok(Some(수정된할일))
+            }
+            case None => Ok(None)
+        }
+    }
+
+    // 할 일 삭제
+    function 삭제하기(&self, id: Uuid) -> Result<bool, string> {
+        let mut 할일목록 = self.모두가져오기()?
+        
+        return match 할일목록.iter().position(|todo| todo.id == id) {
+            case Some(인덱스) => {
+                할일목록.remove(인덱스)
+                self.모두저장하기(&할일목록)?
+                Ok(true)
+            }
+            case None => Ok(false)
+        }
+    }
+
+    // 필터링된 할 일 검색
+    function 검색하기<F>(&self, 필터: F) -> Result<Array<할일>, string>
+    where
+        F: Fn(&할일) -> bool
+    {
+        let 할일목록 = self.모두가져오기()?
+        let 결과 = 할일목록.into_iter().filter(필터).collect()
+        return Ok(결과)
+    }
+} test {
+    use tempfile::tempdir
+
+    // 임시 디렉토리에서 테스트
+    let 임시디렉토리 = tempdir().unwrap()
+    let 저장소 = 파일저장소::new(임시디렉토리.path().to_str().unwrap().to_string()).unwrap()
+
+    // 할 일 추가 테스트
+    let 새할일 = 할일::새로만들기("테스트 할 일".to_string(), None, 우선순위::보통)
+    let 추가된할일 = 저장소.추가하기(새할일.clone()).unwrap()
+    assert추가된할일.id == 새할일.id
+
+    // 할 일 찾기 테스트
+    let 찾은할일 = 저장소.찾기(새할일.id).unwrap()
+    assert찾은할일.is_some()
+    assert찾은할일.unwrap().제목 == "테스트 할 일"
+
+    // 모든 할 일 가져오기 테스트
+    let 모든할일 = 저장소.모두가져오기().unwrap()
+    assert모든할일.len() == 1
+}
+```
+
+##  웹 서버 및 라우팅
+
+### 메인 서버 설정
+
+```rust
+// src/main.tpz
+mod models
+mod storage
+mod handlers
+
+use web::{App, HttpServer, middleware}
+use storage::파일저장소
+use handlers::*
+
+#[tokio::main]
+function main() -> Result<(), Box<dyn std::error::Error>> {
+    // 로깅 설정
+    env_logger::init()
+
+    // 데이터 저장소 초기화
+    let 저장소 = 파일저장소::new("./data".to_string())?
+
+    println!(" 할 일 관리 API 서버를 시작합니다...")
+    println!(" 서버 주소: http://localhost:8080")
+    println!(" API 문서: http://localhost:8080/docs")
+
+    // HTTP 서버 시작
+    HttpServer::new(move || {
+        App::new()
+            .app_data(web::Data::new(저장소.clone()))
+            .wrap(middleware::Logger::default())
+            .wrap(middleware::DefaultHeaders::new()
+                .header("Content-Type", "application/json; charset=utf-8"))
+            .service(
+                web::scope("/api/v1")
+                    .route("/todos", web::get().to(모든할일가져오기))
+                    .route("/todos", web::post().to(할일생성하기))
+                    .route("/todos/{id}", web::get().to(할일가져오기))
+                    .route("/todos/{id}", web::put().to(할일수정하기))
+                    .route("/todos/{id}", web::delete().to(할일삭제하기))
+                    .route("/todos/{id}/complete", web::patch().to(할일완료하기))
+                    .route("/todos/search", web::get().to(할일검색하기))
+            )
+            .route("/health", web::get().to(상태확인))
+            .route("/docs", web::get().to(API문서))
+    })
+    .bind("127.0.0.1:8080")?
+    .run()?
+
+    Ok(())
+}
+```
+
+### 요청 처리기
+
+```rust
+// src/handlers/todo_handlers.tpz
+use web::{web, HttpRequest, HttpResponse, Result as WebResult}
+use uuid::Uuid
+use crate::models::{할일, 할일생성요청, 할일수정요청, 할일응답, 응답래퍼}
+use crate::storage::파일저장소
+
+// 모든 할 일 가져오기
+function 모든할일가져오기(
+    저장소: web::Data<파일저장소>
+) -> WebResult<HttpResponse> {
+    match 저장소.모두가져오기() {
+        case Ok(할일목록) => {
+            let 응답목록: Array<할일응답> = 할일목록
+                .into_iter()
+                .map(|todo| 할일응답::from(todo))
+                .collect()
+            
+            return Ok(HttpResponse::Ok()
+                .json(응답래퍼::성공(응답목록)))
+        }
+        case Err(에러) => {
+            return Ok(HttpResponse::InternalServerError()
+                .json(응답래퍼::<()>::실패(에러)))
+        }
+    }
+}
+
+// 새 할 일 생성
+function 할일생성하기(
+    요청: web::Json<할일생성요청>,
+    저장소: web::Data<파일저장소>
+) -> WebResult<HttpResponse> {
+    let mut 새할일 = 할일::새로만들기(
+        요청.제목.clone(),
+        요청.설명.clone(),
+        요청.우선순위.unwrap_or(우선순위::보통)
+    )
+
+    // 태그가 있으면 추가
+    match &요청.태그 {
+        case Some(태그목록) => {
+            for 태그 in 태그목록 {
+                새할일.태그추가(태그.clone())
+            }
+        }
+        case None => {}
+    }
+
+    match 저장소.추가하기(새할일) {
+        case Ok(생성된할일) => {
+            return Ok(HttpResponse::Created()
+                .json(응답래퍼::성공(할일응답::from(생성된할일))))
+        }
+        case Err(에러) => {
+            return Ok(HttpResponse::InternalServerError()
+                .json(응답래퍼::<()>::실패(에러)))
+        }
+    }
+}
+
+// 특정 할 일 가져오기
+function 할일가져오기(
+    경로: web::Path<Uuid>,
+    저장소: web::Data<파일저장소>
+) -> WebResult<HttpResponse> {
+    let id = 경로.into_inner()
+
+    match 저장소.찾기(id) {
+        case Ok(Some(할일)) => {
+            return Ok(HttpResponse::Ok()
+                .json(응답래퍼::성공(할일응답::from(할일))))
+        }
+        case Ok(None) => {
+            return Ok(HttpResponse::NotFound()
+                .json(응답래퍼::<()>::실패("할 일을 찾을 수 없습니다".to_string())))
+        }
+        case Err(에러) => {
+            return Ok(HttpResponse::InternalServerError()
+                .json(응답래퍼::<()>::실패(에러)))
+        }
+    }
+}
+
+// 할 일 수정
+function 할일수정하기(
+    경로: web::Path<Uuid>,
+    요청: web::Json<할일수정요청>,
+    저장소: web::Data<파일저장소>
+) -> WebResult<HttpResponse> {
+    let id = 경로.into_inner()
+
+    match 저장소.찾기(id) {
+        case Ok(Some(mut 기존할일)) => {
+            // 요청된 필드들만 업데이트
+            match &요청.제목 {
+                case Some(제목) => {
+                    기존할일.제목 = 제목.clone()
+                }
+                case None => {}
+            }
+            match &요청.설명 {
+                case Some(설명) => {
+                    기존할일.설명 = Some(설명.clone())
+                }
+                case None => {}
+            }
+            match &요청.우선순위 {
+                case Some(우선순위) => {
+                    기존할일.우선순위 = 우선순위.클론()
+                }
+                case None => {}
+            }
+            match &요청.태그 {
+                case Some(태그목록) => {
+                    기존할일.태그 = 태그목록.clone()
+                }
+                case None => {}
+            }
+
+            match 저장소.수정하기(id, 기존할일) {
+                case Ok(Some(수정된할일)) => {
+                    return Ok(HttpResponse::Ok()
+                        .json(응답래퍼::성공(할일응답::from(수정된할일))))
+                }
+                case Ok(None) => {
+                    return Ok(HttpResponse::NotFound()
+                        .json(응답래퍼::<()>::실패("할 일을 찾을 수 없습니다".to_string())))
+                }
+                case Err(에러) => {
+                    return Ok(HttpResponse::InternalServerError()
+                        .json(응답래퍼::<()>::실패(에러)))
+                }
+            }
+        }
+        case Ok(None) => {
+            return Ok(HttpResponse::NotFound()
+                .json(응답래퍼::<()>::실패("할 일을 찾을 수 없습니다".to_string())))
+        }
+        case Err(에러) => {
+            return Ok(HttpResponse::InternalServerError()
+                .json(응답래퍼::<()>::실패(에러)))
+        }
+    }
+}
+
+// 할 일 삭제
+function 할일삭제하기(
+    경로: web::Path<Uuid>,
+    저장소: web::Data<파일저장소>
+) -> WebResult<HttpResponse> {
+    let id = 경로.into_inner()
+
+    match 저장소.삭제하기(id) {
+        case Ok(true) => {
+            return Ok(HttpResponse::Ok()
+                .json(응답래퍼::성공("할 일이 삭제되었습니다".to_string())))
+        }
+        case Ok(false) => {
+            return Ok(HttpResponse::NotFound()
+                .json(응답래퍼::<()>::실패("할 일을 찾을 수 없습니다".to_string())))
+        }
+        case Err(에러) => {
+            return Ok(HttpResponse::InternalServerError()
+                .json(응답래퍼::<()>::실패(에러)))
+        }
+    }
+}
+
+// 할 일 완료 처리
+function 할일완료하기(
+    경로: web::Path<Uuid>,
+    저장소: web::Data<파일저장소>
+) -> WebResult<HttpResponse> {
+    let id = 경로.into_inner()
+
+    match 저장소.찾기(id) {
+        case Ok(Some(mut 할일)) => {
+            할일.완료하기()
+            
+            match 저장소.수정하기(id, 할일) {
+                case Ok(Some(완료된할일)) => {
+                    return Ok(HttpResponse::Ok()
+                        .json(응답래퍼::성공(할일응답::from(완료된할일))))
+                }
+                case Err(에러) => {
+                    return Ok(HttpResponse::InternalServerError()
+                        .json(응답래퍼::<()>::실패(에러)))
+                }
+                case _ => {
+                    return Ok(HttpResponse::InternalServerError()
+                        .json(응답래퍼::<()>::실패("할 일 완료 처리 실패".to_string())))
+                }
+            }
+        }
+        case Ok(None) => {
+            return Ok(HttpResponse::NotFound()
+                .json(응답래퍼::<()>::실패("할 일을 찾을 수 없습니다".to_string())))
+        }
+        case Err(에러) => {
+            return Ok(HttpResponse::InternalServerError()
+                .json(응답래퍼::<()>::실패(에러)))
+        }
+    }
+}
+
+// 할 일 검색 (쿼리 매개변수 사용)
+function 할일검색하기(
+    요청: HttpRequest,
+    저장소: web::Data<파일저장소>
+) -> WebResult<HttpResponse> {
+    let 쿼리 = web::Query::<HashMap<String, String>>::from_query(요청.query_string())
+        .map_err(|_| HttpResponse::BadRequest().json(응답래퍼::<()>::실패("잘못된 쿼리 매개변수".to_string())))?
+
+    let 할일목록 = match 저장소.모두가져오기() {
+        case Ok(목록) => 목록
+        case Err(에러) => {
+            return Ok(HttpResponse::InternalServerError()
+                .json(응답래퍼::<()>::실패(에러)))
+        }
+    }
+
+    let mut 필터링된목록 = 할일목록
+
+    // 완료 상태로 필터링
+    match 쿼리.get("completed") {
+        case Some(완료여부) => {
+            let 완료상태 = 완료여부.parse::<bool>().unwrap_or(false)
+            필터링된목록 = 필터링된목록.into_iter()
+                .filter(|todo| todo.완료여부 == 완료상태)
+                .collect()
+        }
+        case None => {}
+    }
+
+    // 우선순위로 필터링
+    match 쿼리.get("priority") {
+        case Some(우선순위문자열) => {
+            match 우선순위문자열.parse::<우선순위>() {
+                case Ok(우선순위) => {
+                    필터링된목록 = 필터링된목록.into_iter()
+                        .filter(|todo| todo.우선순위 == 우선순위)
+                        .collect()
+                }
+                case Err(_) => {}
+            }
+        }
+        case None => {}
+    }
+
+    // 태그로 필터링
+    match 쿼리.get("tag") {
+        case Some(태그) => {
+            필터링된목록 = 필터링된목록.into_iter()
+                .filter(|todo| todo.태그.contains(태그))
+                .collect()
+        }
+        case None => {}
+    }
+
+    // 제목으로 검색
+    match 쿼리.get("search") {
+        case Some(검색어) => {
+            let 소문자검색어 = 검색어.to_lowercase()
+            필터링된목록 = 필터링된목록.into_iter()
+                .filter(|todo| todo.제목.to_lowercase().contains(&소문자검색어))
+                .collect()
+        }
+        case None => {}
+    }
+
+    // 우선순위별로 정렬
+    필터링된목록.sort_by(|a, b| b.우선순위점수().cmp(&a.우선순위점수()))
+
+    let 응답목록: Array<할일응답> = 필터링된목록
+        .into_iter()
+        .map(|todo| 할일응답::from(todo))
+        .collect()
+
+    return Ok(HttpResponse::Ok()
+        .json(응답래퍼::성공(응답목록)))
+}
+
+// 헬스체크
+function 상태확인() -> WebResult<HttpResponse> {
+    return Ok(HttpResponse::Ok()
+        .json(json!({
+            "상태": "정상",
+            "시간": chrono::Utc::now().to_rfc3339(),
+            "버전": "0.1.0"
+        })))
+}
+
+// API 문서
+function API문서() -> WebResult<HttpResponse> {
+    let 문서 = r#"
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>할 일 관리 API 문서</title>
+        <meta charset="utf-8">
+        <style>
+            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 40px; }
+            .endpoint { background: #f8f9fa; padding: 15px; margin: 10px 0; border-radius: 5px; }
+            .method { font-weight: bold; padding: 3px 8px; border-radius: 3px; color: white; }
+            .get { background: #28a745; }
+            .post { background: #007bff; }
+            .put { background: #ffc107; color: black; }
+            .delete { background: #dc3545; }
+            .patch { background: #6f42c1; }
+        </style>
+    </head>
+    <body>
+        <h1> 할 일 관리 API 문서</h1>
+        
+        <div class="endpoint">
+            <span class="method get">GET</span>
+            <strong>/api/v1/todos</strong>
+            <p>모든 할 일 목록을 가져옵니다.</p>
+        </div>
+        
+        <div class="endpoint">
+            <span class="method post">POST</span>
+            <strong>/api/v1/todos</strong>
+            <p>새로운 할 일을 생성합니다.</p>
+            <pre>{ "제목": "string", "설명": "string?", "우선순위": "enum?", "태그": "string[]?" }</pre>
+        </div>
+        
+        <div class="endpoint">
+            <span class="method get">GET</span>
+            <strong>/api/v1/todos/{id}</strong>
+            <p>특정 할 일을 가져옵니다.</p>
+        </div>
+        
+        <div class="endpoint">
+            <span class="method put">PUT</span>
+            <strong>/api/v1/todos/{id}</strong>
+            <p>할 일을 수정합니다.</p>
+        </div>
+        
+        <div class="endpoint">
+            <span class="method delete">DELETE</span>
+            <strong>/api/v1/todos/{id}</strong>
+            <p>할 일을 삭제합니다.</p>
+        </div>
+        
+        <div class="endpoint">
+            <span class="method patch">PATCH</span>
+            <strong>/api/v1/todos/{id}/complete</strong>
+            <p>할 일을 완료 처리합니다.</p>
+        </div>
+        
+        <div class="endpoint">
+            <span class="method get">GET</span>
+            <strong>/api/v1/todos/search</strong>
+            <p>할 일을 검색합니다. 쿼리 매개변수: completed, priority, tag, search</p>
+        </div>
+        
+        <h2> 헬스체크</h2>
+        <div class="endpoint">
+            <span class="method get">GET</span>
+            <strong>/health</strong>
+            <p>서버 상태를 확인합니다.</p>
+        </div>
+    </body>
+    </html>
+    "#;
+
+    return Ok(HttpResponse::Ok()
+        .content_type("text/html; charset=utf-8")
+        .body(문서))
+}
+```
+
+##  테스트 작성
+
+### 통합 테스트
+
+```rust
+// tests/integration_test.tpz
+use actix_web::{test, App}
+use serde_json::json
+use tempfile::tempdir
+use 할일관리API::*
+
+#[actix_rt::test]
+function 할일_CRUD_테스트() -> Result<(), Box<dyn std::error::Error>> {
+    // 임시 저장소 설정
+    let 임시디렉토리 = tempdir().unwrap()
+    let 저장소 = 파일저장소::new(임시디렉토리.path().to_str().unwrap().to_string()).unwrap()
+
+    let mut 앱 = test::init_service(
+        App::new()
+            .app_data(web::Data::new(저장소))
+            .service(
+                web::scope("/api/v1")
+                    .route("/todos", web::get().to(모든할일가져오기))
+                    .route("/todos", web::post().to(할일생성하기))
+                    .route("/todos/{id}", web::get().to(할일가져오기))
+                    .route("/todos/{id}", web::put().to(할일수정하기))
+                    .route("/todos/{id}", web::delete().to(할일삭제하기))
+            )
+    )?
+
+    // 1. 할 일 생성 테스트
+    let 새할일요청 = json!({
+        "제목": "Topaz 프로젝트 완성하기",
+        "설명": "첫 번째 Topaz 프로젝트를 완성합니다",
+        "우선순위": "높음",
+        "태그": ["개발", "학습"]
+    })
+
+    let 요청 = test::TestRequest::post()
+        .uri("/api/v1/todos")
+        .set_json(&새할일요청)
+        .to_request()
+
+    let 응답 = test::call_service(&mut 앱, 요청)?
+    assert!(응답.status().is_success())
+
+    let 응답바디: serde_json::Value = test::read_body_json(응답)?
+    assert!(응답바디["성공"].as_bool().unwrap())
+    
+    let 생성된할일 = &응답바디["데이터"]
+    let 할일ID = 생성된할일["id"].as_str().unwrap()
+
+    // 2. 할 일 조회 테스트
+    let 요청 = test::TestRequest::get()
+        .uri(&format!("/api/v1/todos/{}", 할일ID))
+        .to_request()
+
+    let 응답 = test::call_service(&mut 앱, 요청)?
+    assert!(응답.status().is_success())
+
+    let 응답바디: serde_json::Value = test::read_body_json(응답)?
+    let 조회된할일 = &응답바디["데이터"]
+    assert_eq!(조회된할일["제목"], "Topaz 프로젝트 완성하기")
+
+    // 3. 모든 할 일 조회 테스트
+    let 요청 = test::TestRequest::get()
+        .uri("/api/v1/todos")
+        .to_request()
+
+    let 응답 = test::call_service(&mut 앱, 요청)?
+    assert!(응답.status().is_success())
+
+    let 응답바디: serde_json::Value = test::read_body_json(응답)?
+    let 할일목록 = 응답바디["데이터"].as_array().unwrap()
+    assert_eq!(할일목록.len(), 1)
+
+    // 4. 할 일 수정 테스트
+    let 수정요청 = json!({
+        "제목": "Topaz 프로젝트 완성하기 (수정됨)",
+        "우선순위": "긴급"
+    })
+
+    let 요청 = test::TestRequest::put()
+        .uri(&format!("/api/v1/todos/{}", 할일ID))
+        .set_json(&수정요청)
+        .to_request()
+
+    let 응답 = test::call_service(&mut 앱, 요청)?
+    assert!(응답.status().is_success())
+
+    // 5. 할 일 삭제 테스트
+    let 요청 = test::TestRequest::delete()
+        .uri(&format!("/api/v1/todos/{}", 할일ID))
+        .to_request()
+
+    let 응답 = test::call_service(&mut 앱, 요청)?
+    assert!(응답.status().is_success())
+
+    // 6. 삭제 확인
+    let 요청 = test::TestRequest::get()
+        .uri(&format!("/api/v1/todos/{}", 할일ID))
+        .to_request()
+
+    let 응답 = test::call_service(&mut 앱, 요청)?
+    assert_eq!(응답.status(), 404)
+
+    Ok(())
+}
+
+#[actix_rt::test]
+function 할일_검색_테스트() -> Result<(), Box<dyn std::error::Error>> {
+    // 테스트 데이터 설정 및 검색 기능 테스트
+    // ... (검색 관련 테스트 코드)
+
+    Ok(())
+}
+```
+
+##  실행 및 테스트
+
+### 프로젝트 실행
+
+```bash
+# 의존성 설치
+topaz build
+
+# 개발 서버 실행
+topaz run
+
+# 또는 릴리즈 모드로 실행
+topaz run --release
+```
+
+### API 테스트
+
+```bash
+# 헬스체크
+curl http://localhost:8080/health
+
+# 새 할 일 생성
+curl -X POST http://localhost:8080/api/v1/todos \
+  -H "Content-Type: application/json" \
+  -d '{
+    "제목": "Topaz 공부하기",
+    "설명": "Topaz 언어의 모든 기능을 학습합니다",
+    "우선순위": "높음",
+    "태그": ["학습", "프로그래밍"]
+  }'
+
+# 모든 할 일 조회
+curl http://localhost:8080/api/v1/todos
+
+# 완료되지 않은 할 일 검색
+curl "http://localhost:8080/api/v1/todos/search?completed=false"
+
+# 높은 우선순위 할 일 검색
+curl "http://localhost:8080/api/v1/todos/search?priority=높음"
+```
+
+### 테스트 실행
+
+```bash
+# 모든 테스트 실행
+topaz test
+
+# 특정 테스트만 실행
+topaz test integration_test
+
+# 테스트 커버리지 확인
+topaz test --coverage
+```
+
+##  다음 단계
+
+축하합니다! 첫 번째 완전한 토파즈 프로젝트를 완성했습니다! 
+
+### 추가로 구현해볼 기능들:
+
+1. **데이터베이스 연동**: PostgreSQL, MongoDB 등
+2. **사용자 인증**: JWT 토큰 기반 인증
+3. **실시간 업데이트**: WebSocket을 통한 실시간 할 일 동기화
+4. **파일 업로드**: 할 일에 첨부 파일 기능
+5. **이메일 알림**: 마감일 임박 알림 기능
+6. **Docker 배포**: 컨테이너화 및 클라우드 배포
+
+### 학습한 토파즈 핵심 개념:
+
+-  프로젝트 구조 설계
+-  데이터 모델링 및 타입 시스템
+-  에러 처리 (Result/Option 타입)
+-  웹 서버 및 REST API 구축
+-  파일 기반 데이터 저장
+-  패턴 매칭 활용
+-  테스트 주도 개발
+-  한글 식별자와 자연스러운 코드 작성
+
+이제 더 복잡한 토파즈 프로젝트에 도전할 준비가 되었습니다! 

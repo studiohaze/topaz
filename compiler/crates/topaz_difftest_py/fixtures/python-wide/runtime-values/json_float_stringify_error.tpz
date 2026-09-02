@@ -1,0 +1,9 @@
+
+function f() -> Result<int, string> {
+    match JSON.stringify(1.5) {
+        case Err(e) => print(e)
+        case Ok(value) => print(value)
+    }
+    Ok(0)
+}
+f()

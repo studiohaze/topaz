@@ -1,0 +1,3 @@
+let x = 5
+let q = sql"a {x} b"
+"{q.tag}/{q.parts.length}/{q.parts[0]}"

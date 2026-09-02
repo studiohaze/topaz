@@ -1,0 +1,41 @@
+let user = {
+    name: "TopazDev",
+    age: 25,
+    job: "developer",
+    location: "Seoul"
+}
+
+// Record destructuring
+match user {
+    case { name: "TopazDev", age, job: "developer" } => {
+        print("Topaz developer, age: {age}")
+    }
+    case { age: userAge, location: "Seoul" } if userAge < 30 => {
+        print("Young user in Seoul")
+    }
+    case { job: "developer", location } => {
+        print("Developer in {location}")
+    }
+    case _ => {
+        print("Regular user")
+    }
+}
+
+// Nested record matching
+let order = {
+    customer: { name: "TopazUser", vip: true },
+    items: ["laptop", "mouse"],
+    total: 1500000
+}
+
+match order {
+    case { customer: { vip: true }, total: amount } if amount > 1000000 => {
+        print("VIP customer large order: {amount}")
+    }
+    case { customer: { name }, items } if items.length > 1 => {
+        print("{name}'s multi-item order")
+    }
+    case _ => {
+        print("Regular order")
+    }
+}

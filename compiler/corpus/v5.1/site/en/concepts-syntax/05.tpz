@@ -1,0 +1,23 @@
+// Basic matching
+let result = match value {
+    case 1 => "One"
+    case 2 => "Two"
+    case 3 => "Three"
+    case _ => "Other"
+}
+
+// Range matching
+let grade = match score {
+    case 90..100 => "A"
+    case 80..<90 => "B"
+    case 70..<80 => "C"
+    case _ => "F"
+}
+
+// Structural matching
+let discount = match customer {
+    case { tier: "VIP", amount } if amount > 1000000 => 0.3
+    case { tier: "VIP" } => 0.2
+    case { loyaltyYears } if loyaltyYears > 1 => 0.1
+    case _ => 0.0
+}

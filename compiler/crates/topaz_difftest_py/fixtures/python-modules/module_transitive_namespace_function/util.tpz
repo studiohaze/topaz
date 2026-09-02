@@ -1,0 +1,5 @@
+
+import leaf
+export function answer(x: int) -> int {
+    leaf.inc(x) + leaf.base
+}

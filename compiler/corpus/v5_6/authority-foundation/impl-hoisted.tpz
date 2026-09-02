@@ -1,0 +1,8 @@
+impl Point {
+    function shifted(self) -> Point { Point { x: self.x + offset } }
+}
+
+record Point { x: int }
+let offset = 2
+let point: Point = Point { x: 1 }.shifted()
+print("{point.x}")

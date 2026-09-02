@@ -1,0 +1,9 @@
+record Box<T> { value: T }
+record Wrap<T> { inner: Option<Array<Box<T>>> }
+match JSON.parseAs<Wrap<int>>("\{\"inner\":[\{\"value\":7\}]\}") {
+  case Ok(wrapped) => match wrapped.inner {
+    case Some(boxes) => boxes[0].value
+    case None => 0
+  }
+  case Err(e) => 0
+}

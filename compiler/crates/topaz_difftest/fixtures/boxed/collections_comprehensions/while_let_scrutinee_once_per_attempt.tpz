@@ -1,0 +1,12 @@
+let mut attempts = 0
+let mut opt: Option<int> = Some(2)
+let mut sum = 0
+while let Some(n) = {
+  attempts = attempts + 1
+  let out = opt
+  opt = if let Some(value) = opt { if value > 0 { Some(value - 1) } else { None } } else { None }
+  out
+} {
+  sum = sum + n
+}
+attempts * 100 + sum

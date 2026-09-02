@@ -1,0 +1,12 @@
+let dashboard = concurrent(timeout: 3s) {
+    user: loadUser(1)
+    posts: loadPosts(1)
+}
+else {
+    { user: None, posts: [] }
+}
+
+let pair = concurrent {
+    left: f()
+    right: g()
+}

@@ -1,0 +1,18 @@
+// 꼬리 재귀 팩토리얼
+function 꼬리팩토리얼(n: int, 누적: int = 1) -> int {
+    if n <= 1 {
+        return 누적
+    }
+    return 꼬리팩토리얼(n - 1, 누적 * n)  // 꼬리 호출
+}
+
+// 꼬리 재귀 피보나치
+function 꼬리피보나치(n: int, a: int = 0, b: int = 1) -> int {
+    if n == 0 {
+        return a
+    }
+    return 꼬리피보나치(n - 1, b, a + b)  // 꼬리 호출
+}
+
+print("{꼬리팩토리얼(10)}")  // 3628800
+print("{꼬리피보나치(10)}")  // 55

@@ -1,0 +1,3 @@
+
+let base: int = 36
+export const marker = 0

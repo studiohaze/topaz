@@ -1,0 +1,9 @@
+
+let r = concurrent(timeout: 1m) {
+    x: 1 + 1
+    y: 2 * 3
+} else {
+    -1
+}
+print("{r.x} {r.y}")
+0

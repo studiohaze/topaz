@@ -1,0 +1,12 @@
+
+function cleanup() -> int {
+    let z = 0
+    1 / z
+}
+function f() -> int {
+    defer cleanup()
+    print("body")
+    let z = 0
+    1 / z
+}
+f()

@@ -1,0 +1,3 @@
+import tmid
+print("transitive {tmid.midVal()}")
+0

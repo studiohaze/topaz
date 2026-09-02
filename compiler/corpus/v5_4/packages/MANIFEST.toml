@@ -1,0 +1,161 @@
+# corpus/v5_4/packages -- package-mode fixtures
+
+[totals]
+recorded = 23
+runnable = 23
+pending = 0
+
+[[fixture]]
+dir = "basic-package"
+phase = "package-check"
+versions = "5.4"
+result = "ok"
+
+[[fixture]]
+dir = "basic-package"
+phase = "package-emit"
+versions = "5.4"
+result = "ok"
+
+[[fixture]]
+dir = "basic-package"
+phase = "package-native-emit"
+versions = "5.4"
+result = "ok"
+
+[[fixture]]
+dir = "test-package"
+phase = "package-test"
+versions = "5.4"
+result = "ok"
+
+[[fixture]]
+dir = "local-dep-package"
+phase = "package-check"
+versions = "5.4"
+result = "ok"
+status = "locked"
+
+[[fixture]]
+dir = "local-dep-package"
+phase = "package-emit"
+versions = "5.4"
+result = "ok"
+status = "locked"
+
+[[fixture]]
+dir = "local-dep-package"
+phase = "package-native-emit"
+versions = "5.4"
+result = "ok"
+status = "locked"
+
+[[fixture]]
+dir = "local-dep-package"
+phase = "package-test"
+versions = "5.4"
+result = "ok"
+status = "locked"
+
+[[fixture]]
+dir = "registry-dep-package"
+phase = "package-check"
+versions = "5.4"
+result = "ok"
+status = "locked"
+
+[[fixture]]
+dir = "registry-dep-package"
+phase = "package-emit"
+versions = "5.4"
+result = "ok"
+status = "locked"
+
+[[fixture]]
+dir = "registry-dep-package"
+phase = "package-native-emit"
+versions = "5.4"
+result = "ok"
+status = "locked"
+
+[[fixture]]
+dir = "registry-dep-package"
+phase = "package-test"
+versions = "5.4"
+result = "ok"
+status = "locked"
+
+[[fixture]]
+dir = "doc-package"
+phase = "package-doc"
+versions = "5.4"
+result = "ok"
+status = "locked"
+
+[[fixture]]
+dir = "explicit-main-package"
+phase = "package-check"
+versions = "5.4"
+result = "ok"
+status = "locked"
+
+[[fixture]]
+dir = "explicit-main-package"
+phase = "package-emit"
+versions = "5.4"
+result = "ok"
+status = "locked"
+
+[[fixture]]
+dir = "explicit-main-package"
+phase = "package-native-emit"
+versions = "5.4"
+result = "ok"
+status = "locked"
+
+[[fixture]]
+dir = "explicit-main-package"
+phase = "package-test"
+versions = "5.4"
+result = "ok"
+status = "locked"
+
+[[fixture]]
+dir = "nominal-generics-package"
+phase = "package-check"
+versions = "5.4"
+result = "ok"
+
+[[fixture]]
+dir = "nominal-generics-package"
+phase = "package-emit"
+versions = "5.4"
+result = "ok"
+
+[[fixture]]
+dir = "nominal-generics-package"
+phase = "package-native-emit"
+versions = "5.4"
+result = "ok"
+
+[[fixture]]
+dir = "nominal-generics-package"
+phase = "package-test"
+versions = "5.4"
+result = "ok"
+
+[[fixture]]
+dir = "runtime-error-package"
+phase = "package-run"
+versions = "5.4"
+result = "error"
+code = "TPZ4002"
+message = "integer division by zero"
+
+[[fixture]]
+dir = "runtime-error-package"
+phase = "package-test"
+versions = "5.4"
+result = "error"
+code = "TPZ4002"
+message = "integer division by zero"

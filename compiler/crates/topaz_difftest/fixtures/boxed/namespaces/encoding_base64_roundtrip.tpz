@@ -1,0 +1,1 @@
+Encoding.base64Decode(Encoding.base64Encode(Encoding.utf8Encode("foobar"))).flatMap((b) => Encoding.utf8Decode(b))

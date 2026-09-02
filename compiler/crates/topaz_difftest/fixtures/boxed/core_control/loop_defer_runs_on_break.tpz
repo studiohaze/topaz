@@ -1,0 +1,9 @@
+function f() -> int {
+  let v = loop {
+    defer { print("cleanup") }
+    break 42
+  }
+  v
+}
+print("f={f()}")
+0

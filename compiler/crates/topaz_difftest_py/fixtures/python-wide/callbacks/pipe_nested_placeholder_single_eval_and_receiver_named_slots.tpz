@@ -1,0 +1,22 @@
+
+function add(a: int, b: int) -> int {
+    a + b
+}
+function plusOne(x: int) -> int {
+    x + 1
+}
+function mark(label: string, n: int) -> int {
+    print(label)
+    n
+}
+function main() -> string {
+    let repeated = mark("lhs", 3) |> add(_, _ + 4)
+    let nestedCall = mark("call-lhs", 4) |> add(_, plusOne(_))
+    let xs = [1, 2]
+    let reduced = mark("pipe", 10) |> xs.reduce(initial: mark("initial", 1) + _, f: {
+        print("f")
+        add
+    })
+    "{repeated}:{nestedCall}:{reduced}"
+}
+main()

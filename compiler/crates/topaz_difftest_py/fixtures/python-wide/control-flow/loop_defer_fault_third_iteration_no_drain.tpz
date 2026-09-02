@@ -1,0 +1,11 @@
+
+for i in 0..3 {
+    defer print("defer {i}")
+    print("body {i}")
+    if i == 2 {
+        let z = 0
+        let x = 1 / z
+        print("{x}")
+    }
+}
+0

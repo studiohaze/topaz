@@ -1,0 +1,4 @@
+match JSON.parse("1e10") {
+  case Ok(j) => print("k={j.kind()} i={j.asInt()} t={j.numberText()}")
+  case Err(e) => print("e")
+}

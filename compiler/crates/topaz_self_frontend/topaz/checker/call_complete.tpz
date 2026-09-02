@@ -1,0 +1,1529 @@
+// Argument inference and completion of checker call preparations.
+// call_plan selects signatures; this leaf binds actuals and resolves remaining
+// type variables through the shared expression callbacks.
+
+import types { SyntaxNode }
+import checker_types { TypeValue }
+import checker.model {
+  CallArgumentPlan,
+  CallPreparation,
+  CallResultCandidates,
+  CallSignature,
+  CheckerService,
+  CheckerState,
+  CompletedCall,
+  InferredCallArguments,
+  LeadingCallArgument,
+  TypeBinding,
+  constructor,
+  emptyType,
+  literal,
+  nominal,
+  rigid,
+  serviceInferExpression,
+}
+import checker.type_algebra {
+  hasHole,
+  transformTypeComponents,
+  typeEqual,
+  typeText,
+  unionType,
+  widen,
+}
+import checker.syntax_index {
+  addDiagnostic,
+  addNode,
+  child,
+  children,
+  containsString,
+  functionDefinitionForReference,
+  replaceNodeType,
+  text,
+}
+import checker.nominals { substitute }
+import checker.protocols_methods {
+  receiverMethodCallSignature,
+  receiverMethodType,
+}
+import checker.members_capabilities {
+  applyBindings,
+  bindingIndex,
+  checkFunctionBounds,
+  collectTypeBindings,
+  comparableType,
+  gateCollectionKey,
+  iterableElement,
+  jsonCapability,
+  memberType,
+  orderCapability,
+  protocolCallResult,
+  rigidOrUnionRigid,
+  rigidProtocolBound,
+  typeConforms,
+}
+import checker.call_facts {
+  addCall,
+  argumentValue,
+  builtinCallTypeParameters,
+  builtinNamespaceObject,
+  contextualBuiltinArgumentType,
+  contextualBuiltinCall,
+  contextualGeneratedLispexCall,
+  contextualStandardWrapperCall,
+  currentExpectedExpression,
+  inferExpressionWithExpected,
+  lastReferenceInNode,
+  refineExpressionToExpected,
+  reportExpectedType,
+  unshadowedIdentifier,
+}
+import checker.expression_core {
+  inferLambda,
+  wrapOptionalResult,
+}
+import checker.call_plan {
+  builtinMemberCallSignature,
+  builtinReceiverCallSignature,
+  callArgumentExpectedType,
+  callSlotExpectedType,
+  declaredCallSignature,
+  explicitCallBindings,
+  inferCallCallee,
+  nominalConstructorCallResult,
+  planSignatureArguments,
+  planTypedCallArguments,
+  unknownCallArgumentPlan,
+  userProtocolCallSignature,
+  userProtocolCallTarget,
+}
+
+export function inferCallArguments(
+  service: CheckerService,
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  node: SyntaxNode,
+  callee: SyntaxNode,
+  calleeType: TypeValue,
+  argumentSlots: Array<int>,
+  initialActuals: Array<TypeValue>,
+) -> InferredCallArguments {
+  let mut inferredTypes: Array<TypeValue> = []
+  let mut inferredNodes: Array<SyntaxNode> = []
+  let mut contextualActuals: Array<TypeValue> = []
+  for actual in initialActuals {
+    contextualActuals.push(actual)
+  }
+  let mut index = 0
+  for argument in children(node, "arguments") {
+    let valueNode = argumentValue(argument)
+    inferredNodes.push(valueNode)
+    let slot = match argumentSlots.get(index) {
+      case Some(found) => found
+      case None => -2
+    }
+    let expected = contextualBuiltinArgumentType(
+      state,
+      moduleIndex,
+      source,
+      callee,
+      contextualActuals.length,
+      contextualActuals,
+      callArgumentExpectedType(calleeType, argument, slot),
+    )
+    let inferred = match expected {
+      case Some(expectedType) => if valueNode.kind == "expression/lambda" &&
+        expectedType.kind == "function" {
+        let inferred = inferLambda(
+          service,
+          state,
+          moduleIndex,
+          source,
+          valueNode,
+          Some(expectedType),
+        )
+        addNode(state, moduleIndex, "expression", valueNode, inferred)
+        inferred
+      } else {
+        inferExpressionWithExpected(
+          service,
+          state,
+          moduleIndex,
+          source,
+          valueNode,
+          expectedType,
+          true,
+        )
+      }
+      case None => serviceInferExpression(service, state, moduleIndex, source, valueNode)
+    }
+    inferredTypes.push(inferred)
+    contextualActuals.push(inferred)
+    index += 1
+  }
+  InferredCallArguments {
+    types: inferredTypes,
+    nodes: inferredNodes,
+  }
+}
+
+export function leadingCallActuals(
+  leading: Option<LeadingCallArgument>,
+) -> Array<TypeValue> {
+  match leading {
+    case Some(argument) => [argument.typeValue]
+    case None => []
+  }
+}
+
+function completeCallActuals(
+  leading: Option<LeadingCallArgument>,
+  explicit: Array<TypeValue>,
+) -> Array<TypeValue> {
+  let mut actuals = leadingCallActuals(leading)
+  for actual in explicit {
+    actuals.push(actual)
+  }
+  actuals
+}
+
+function collectCallTypeBindings(
+  state: CheckerState,
+  node: SyntaxNode,
+  calleeType: TypeValue,
+  argumentPlan: CallArgumentPlan,
+  actuals: Array<TypeValue>,
+  leading: Option<LeadingCallArgument>,
+  bindings: Array<TypeBinding>,
+) -> () {
+  let mut inferredBindings = bindings
+  match currentExpectedExpression(state, node) {
+    case Some(expectedResult) => match calleeType.result.get(0) {
+      case Some(declaredResult) => collectTypeBindings(
+        declaredResult,
+        expectedResult,
+        inferredBindings,
+        false,
+      )
+      case None => ()
+    }
+    case None => ()
+  }
+  collectCallInputTypeBindings(
+    node,
+    calleeType,
+    argumentPlan,
+    actuals,
+    leading,
+    inferredBindings,
+  )
+}
+
+function collectCallInputTypeBindings(
+  node: SyntaxNode,
+  calleeType: TypeValue,
+  argumentPlan: CallArgumentPlan,
+  actuals: Array<TypeValue>,
+  leading: Option<LeadingCallArgument>,
+  bindings: Array<TypeBinding>,
+) -> () {
+  let mut inferredBindings = bindings
+  match leading {
+    case Some(argument) => match callSlotExpectedType(
+      calleeType,
+      argumentPlan.leadingSlot,
+      false,
+    ) {
+      case Some(expected) => collectTypeBindings(
+        expected,
+        argument.typeValue,
+        inferredBindings,
+        true,
+      )
+      case None => ()
+    }
+    case None => ()
+  }
+  let mut index = 0
+  for argument in children(node, "arguments") {
+    let slot = match argumentPlan.slots.get(index) {
+      case Some(found) => found
+      case None => -2
+    }
+    match callArgumentExpectedType(calleeType, argument, slot) {
+      case Some(expected) => match actuals.get(index) {
+        case Some(actual) => collectTypeBindings(
+          expected,
+          actual,
+          inferredBindings,
+          true,
+        )
+        case None => ()
+      }
+      case None => ()
+    }
+    index += 1
+  }
+  ()
+}
+
+function projectedCallMember(
+  source: Bytes,
+  callee: SyntaxNode,
+  receiverType: TypeValue,
+) -> string {
+  if !rigidOrUnionRigid(receiverType) ||
+    (callee.kind != "expression/member" &&
+      callee.kind != "expression/optional-access") {
+    return ""
+  }
+  match child(callee, "field") {
+    case Some(field) => text(source, field)
+    case None => ""
+  }
+}
+
+function specializeCallCallee(
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  node: SyntaxNode,
+  callee: SyntaxNode,
+  calleeType: TypeValue,
+  actuals: Array<TypeValue>,
+  bindings: Array<TypeBinding>,
+) -> TypeValue {
+  match contextualStandardWrapperCall(
+    state,
+    moduleIndex,
+    node,
+    callee,
+    calleeType,
+    actuals,
+  ) {
+    case Some(found) => found
+    case None => match contextualGeneratedLispexCall(
+      state,
+      moduleIndex,
+      source,
+      node,
+      callee,
+      actuals,
+    ) {
+      case Some(found) => found
+      case None => match contextualBuiltinCall(
+        state,
+        moduleIndex,
+        source,
+        node,
+        callee,
+        calleeType,
+      ) {
+        case Some(found) => found
+        case None => applyBindings(calleeType, bindings)
+      }
+    }
+  }
+}
+
+function eraseUnboundBuiltinCallTypeParameter(
+  value: TypeValue,
+  parameters: Array<string>,
+  bindings: Array<TypeBinding>,
+) -> Option<TypeValue> {
+  if value.kind == "rigid" && containsString(parameters, value.name) &&
+    bindingIndex(bindings, value.name) < 0 {
+    return Some(emptyType("unknown"))
+  }
+  None
+}
+
+function eraseUnboundBuiltinCallTypeParameters(
+  service: CheckerService,
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  callee: SyntaxNode,
+  receiverType: TypeValue,
+  bindings: Array<TypeBinding>,
+  specialized: TypeValue,
+) -> TypeValue {
+  let parameters = builtinCallTypeParameters(
+    service,
+    state,
+    moduleIndex,
+    source,
+    callee,
+    receiverType,
+  )
+  if parameters.length == 0 {
+    return specialized
+  }
+  transformTypeComponents(
+    specialized,
+    (component: TypeValue) => eraseUnboundBuiltinCallTypeParameter(
+      component,
+      parameters,
+      bindings,
+    ),
+  )
+}
+
+function refineCallArguments(
+  state: CheckerState,
+  moduleIndex: int,
+  node: SyntaxNode,
+  calleeType: TypeValue,
+  argumentSlots: Array<int>,
+  skipFirstSlot: bool,
+  actuals: Array<TypeValue>,
+  actualNodes: Array<SyntaxNode>,
+  bindings: Array<TypeBinding>,
+) -> () {
+  let arguments = children(node, "arguments")
+  let mut index = 0
+  while index < actuals.length {
+    let expected = match arguments.get(index) {
+      case Some(argument) => match argumentSlots.get(index) {
+        case Some(slot) => if skipFirstSlot && slot == 0 {
+          None
+        } else {
+          callArgumentExpectedType(calleeType, argument, slot)
+        }
+        case None => None
+      }
+      case None => None
+    }
+    match expected {
+      case Some(expectedType) => match actualNodes.get(index) {
+        case Some(actualNode) => match actuals.get(index) {
+          case Some(actualType) => {
+            let specializedActual = applyBindings(actualType, bindings)
+            if !typeEqual(specializedActual, actualType) {
+              replaceNodeType(
+                state,
+                moduleIndex,
+                "expression",
+                actualNode,
+                specializedActual,
+              )
+            }
+            let refined = refineExpressionToExpected(
+              state,
+              moduleIndex,
+              actualNode,
+              specializedActual,
+              expectedType,
+            )
+            reportExpectedType(
+              state,
+              moduleIndex,
+              actualNode,
+              expectedType,
+              refined,
+            )
+          }
+          case None => ()
+        }
+        case None => ()
+      }
+      case None => ()
+    }
+    index += 1
+  }
+  ()
+}
+
+function refineLeadingCallArgument(
+  state: CheckerState,
+  moduleIndex: int,
+  calleeType: TypeValue,
+  argumentPlan: CallArgumentPlan,
+  leading: Option<LeadingCallArgument>,
+  diagnosticNode: SyntaxNode,
+) -> () {
+  match leading {
+    case Some(argument) => match callSlotExpectedType(
+      calleeType,
+      argumentPlan.leadingSlot,
+      false,
+    ) {
+      case Some(expected) => {
+        let refined = refineExpressionToExpected(
+          state,
+          moduleIndex,
+          argument.node,
+          argument.typeValue,
+          expected,
+        )
+        reportExpectedType(
+          state,
+          moduleIndex,
+          diagnosticNode,
+          expected,
+          refined,
+        )
+      }
+      case None => ()
+    }
+    case None => ()
+  }
+}
+
+function callResultType(
+  specializedCallee: TypeValue,
+  calleeType: TypeValue,
+  constructorResult: Option<TypeValue>,
+  protocolResult: Option<TypeValue>,
+  bindings: Array<TypeBinding>,
+) -> TypeValue {
+  match specializedCallee.result.get(0) {
+    case Some(found) => found
+    case None => match constructorResult {
+      case Some(found) => found
+      case None => match protocolResult {
+        case Some(found) => found
+        case None => match calleeType.result.get(0) {
+          case Some(found) => applyBindings(found, bindings)
+          case None => if calleeType.kind == "nominal-record" {
+            calleeType
+          } else {
+            emptyType("unknown")
+          }
+        }
+      }
+    }
+  }
+}
+
+record BuiltinCallTarget {
+  namespace: string,
+  member: string,
+}
+
+function builtinCallTarget(
+  service: CheckerService,
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  callee: SyntaxNode,
+) -> BuiltinCallTarget {
+  if callee.kind != "expression/member" &&
+    callee.kind != "expression/optional-access" {
+    return BuiltinCallTarget { namespace: "", member: "" }
+  }
+  let object = match child(callee, "object") {
+    case Some(found) => found
+    case None => return BuiltinCallTarget { namespace: "", member: "" }
+  }
+  BuiltinCallTarget {
+    namespace: if builtinNamespaceObject(
+      service,
+      state,
+      moduleIndex,
+      source,
+      object,
+    ) {
+      text(source, object)
+    } else {
+      ""
+    },
+    member: match child(callee, "field") {
+      case Some(found) => text(source, found)
+      case None => ""
+    },
+  }
+}
+
+function preparedCallActual(
+  preparation: CallPreparation,
+  inferred: InferredCallArguments,
+  slot: int,
+) -> Option<TypeValue> {
+  match preparation.leading {
+    case Some(argument) => if preparation.argumentPlan.leadingSlot == slot {
+      return Some(argument.typeValue)
+    }
+    case None => ()
+  }
+  let mut index = 0
+  for actual in inferred.types {
+    match preparation.argumentPlan.slots.get(index) {
+      case Some(actualSlot) => if actualSlot == slot {
+        return Some(actual)
+      }
+      case None => ()
+    }
+    index += 1
+  }
+  None
+}
+
+function preparedCallActualNode(
+  preparation: CallPreparation,
+  inferred: InferredCallArguments,
+  slot: int,
+) -> Option<SyntaxNode> {
+  match preparation.leading {
+    case Some(argument) => if preparation.argumentPlan.leadingSlot == slot {
+      return Some(preparation.diagnosticNode)
+    }
+    case None => ()
+  }
+  let mut index = 0
+  for actualNode in inferred.nodes {
+    match preparation.argumentPlan.slots.get(index) {
+      case Some(actualSlot) => if actualSlot == slot {
+        return Some(actualNode)
+      }
+      case None => ()
+    }
+    index += 1
+  }
+  None
+}
+
+function userProtocolCallConformance(
+  state: CheckerState,
+  moduleIndex: int,
+  preparation: CallPreparation,
+  inferred: InferredCallArguments,
+) -> string {
+  let target = match preparation.userProtocolTarget {
+    case Some(found) => found
+    case None => return "not-protocol"
+  }
+  match preparedCallActual(preparation, inferred, 0) {
+    case Some(actual) => {
+      let value = widen(actual)
+      if hasHole(value) {
+        "defer"
+      } else if typeConforms(
+        state,
+        moduleIndex,
+        value,
+        target.protocolName,
+      ) {
+        "accept"
+      } else {
+        "reject"
+      }
+    }
+    case None => "defer"
+  }
+}
+
+function gateUserProtocolCall(
+  state: CheckerState,
+  moduleIndex: int,
+  preparation: CallPreparation,
+  inferred: InferredCallArguments,
+  conformance: string,
+) -> () {
+  let target = match preparation.userProtocolTarget {
+    case Some(found) => found
+    case None => return ()
+  }
+  let actualCount = inferred.types.length + match preparation.leading {
+    case Some(_) => 1
+    case None => 0
+  }
+  if conformance == "accept" ||
+    (conformance == "defer" && actualCount == 0) {
+    let expectedCount = target.method.typeValue.parameters.length
+    if actualCount != expectedCount {
+      addDiagnostic(
+        state,
+        moduleIndex,
+        "TPZ5004",
+        "`{target.protocolName}.{target.method.name}` takes {expectedCount} argument" +
+          if expectedCount == 1 { "" } else { "s" } +
+          ", found {actualCount}",
+        "",
+        preparation.diagnosticNode,
+      )
+    }
+  }
+  if conformance != "reject" {
+    return ()
+  }
+  match preparedCallActual(preparation, inferred, 0) {
+    case Some(actual) => {
+      let value = widen(actual)
+      let nominal = value.kind == "nominal-record" ||
+        value.kind == "enum" || value.kind == "newtype" ||
+        value.kind == "foreign" || value.kind == "rigid"
+      addDiagnostic(
+        state,
+        moduleIndex,
+        "TPZ5522",
+        if nominal {
+          "`{typeText(value)}` does not conform to `{target.protocolName}`"
+        } else {
+          "`{typeText(value)}` does not conform to `{target.protocolName}`: a protocol receiver must be a record/enum/newtype"
+        },
+        "",
+        match preparedCallActualNode(preparation, inferred, 0) {
+          case Some(found) => found
+          case None => preparation.diagnosticNode
+        },
+      )
+    }
+    case None => ()
+  }
+  ()
+}
+
+function gatePreparedCallCapabilities(
+  service: CheckerService,
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  node: SyntaxNode,
+  preparation: CallPreparation,
+  inferred: InferredCallArguments,
+  bindings: Array<TypeBinding>,
+  rawResult: TypeValue,
+) -> () {
+  let target = builtinCallTarget(
+    service,
+    state,
+    moduleIndex,
+    source,
+    preparation.callee,
+  )
+  let bareCallContext = match currentExpectedExpression(state, node) {
+    case Some(_) => false
+    case None => true
+  }
+  if preparation.callee.kind == "expression/identifier" &&
+    unshadowedIdentifier(state, moduleIndex, preparation.callee) &&
+    (text(source, preparation.callee) == "map" ||
+      text(source, preparation.callee) == "filter" ||
+      text(source, preparation.callee) == "reduce") {
+    match preparedCallActual(preparation, inferred, 0) {
+      case Some(iterable) => if iterableElement(iterable).kind == "unknown" &&
+        !hasHole(iterable) {
+        addDiagnostic(
+          state,
+          moduleIndex,
+          "TPZ5001",
+          "`{typeText(iterable)}` is not iterable (§10)",
+          "",
+          match preparedCallActualNode(preparation, inferred, 0) {
+            case Some(actualNode) => actualNode
+            case None => preparation.diagnosticNode
+          },
+        )
+      }
+      case None => ()
+    }
+    if bareCallContext && hasHole(rawResult) {
+      addDiagnostic(
+        state,
+        moduleIndex,
+        "TPZ5020",
+        "this expression needs a contextual type (§22.1): annotate the binding or surrounding expectation",
+        "",
+        preparation.diagnosticNode,
+      )
+    }
+  }
+  if bareCallContext &&
+    ((target.namespace == "Set" && target.member == "of") ||
+      (target.namespace == "Map" &&
+        (target.member == "new" || target.member == "ofEntries"))) &&
+    rawResult.kind == "constructor" {
+    match rawResult.arguments.get(0) {
+      case Some(key) => gateCollectionKey(
+        service,
+        state,
+        moduleIndex,
+        preparation.diagnosticNode,
+        key,
+      )
+      case None => ()
+    }
+  }
+  if target.namespace == "" &&
+    (target.member == "sorted" || target.member == "sort") &&
+    preparation.receiverType.kind == "constructor" &&
+    preparation.receiverType.name == "Array" {
+    match preparation.receiverType.arguments.get(0) {
+      case Some(element) => {
+        let specialized = applyBindings(element, bindings)
+        if orderCapability(
+          state,
+          moduleIndex,
+          specialized,
+          [],
+        ) == "reject" {
+          addDiagnostic(
+            state,
+            moduleIndex,
+            "TPZ5007",
+            "`{typeText(specialized)}` is not ordered comparable, so `.{target.member}()` cannot sort it",
+            "",
+            preparation.diagnosticNode,
+          )
+        }
+      }
+      case None => ()
+    }
+  }
+  if target.namespace == "" &&
+    (target.member == "sortedBy" || target.member == "sortBy") {
+    match preparedCallActual(preparation, inferred, 0) {
+      case Some(callback) => if callback.kind == "function" {
+        match callback.result.get(0) {
+          case Some(result) => {
+            let key = applyBindings(result, bindings)
+            if orderCapability(state, moduleIndex, key, []) == "reject" {
+              addDiagnostic(
+                state,
+                moduleIndex,
+                "TPZ5007",
+                "the `{target.member}` key type `{typeText(key)}` is not ordered comparable, so `.{target.member}()` cannot sort it",
+                "",
+                preparation.diagnosticNode,
+              )
+            }
+          }
+          case None => ()
+        }
+      }
+      case None => ()
+    }
+  }
+  if target.namespace == "JSON" && target.member == "stringify" {
+    match preparedCallActual(preparation, inferred, 0) {
+      case Some(actual) => {
+        let value = applyBindings(actual, bindings)
+        if jsonCapability(state, moduleIndex, value, [], false) == "reject" &&
+          !rigidProtocolBound(state, value, "JSON") {
+          addDiagnostic(
+            state,
+            moduleIndex,
+            "TPZ5533",
+            "`{typeText(value)}` is not JSON-encodable, so `JSON.stringify` cannot encode it",
+            "",
+            preparation.diagnosticNode,
+          )
+        }
+      }
+      case None => ()
+    }
+  }
+  if target.namespace == "JSON" &&
+    (target.member == "parseAs" || target.member == "decode") {
+    let typeArguments = children(node, "typeArguments")
+    if typeArguments.length == 0 {
+      if bareCallContext {
+        addDiagnostic(
+          state,
+          moduleIndex,
+          "TPZ5020",
+          "this expression needs a contextual type (§22.1): annotate the binding or surrounding expectation",
+          "",
+          preparation.diagnosticNode,
+        )
+      }
+      addDiagnostic(
+        state,
+        moduleIndex,
+        "TPZ5534",
+        "`JSON.{target.member}` requires an explicit type argument, e.g. `JSON.{target.member}<User>(...)`",
+        "",
+        preparation.diagnosticNode,
+      )
+    } else if rawResult.kind == "constructor" && rawResult.name == "Result" {
+      match rawResult.arguments.get(0) {
+        case Some(value) => if jsonCapability(
+          state,
+          moduleIndex,
+          value,
+          [],
+          true,
+        ) == "reject" {
+          addDiagnostic(
+            state,
+            moduleIndex,
+            "TPZ5534",
+            "`{typeText(value)}` is not JSON-decodable, so `JSON.{target.member}` cannot decode into it",
+            "",
+            preparation.diagnosticNode,
+          )
+        }
+        case None => ()
+      }
+    }
+  }
+  if target.namespace == "Test" &&
+    (target.member == "assertEq" || target.member == "assertNe") {
+    match preparedCallActual(preparation, inferred, 0) {
+      case Some(value) => {
+        let actual = applyBindings(value, bindings)
+        if !comparableType(state, moduleIndex, actual, []) {
+          addDiagnostic(
+            state,
+            moduleIndex,
+            "TPZ5007",
+            "`{typeText(actual)}` is not comparable, so `Test.{target.member}` cannot compare it",
+            "",
+            preparation.diagnosticNode,
+          )
+        }
+      }
+      case None => ()
+    }
+  }
+  ()
+}
+
+function checkedCallResultCandidates(
+  service: CheckerService,
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  callee: SyntaxNode,
+  calleeType: TypeValue,
+) -> CallResultCandidates {
+  let nominal = nominalConstructorCallResult(
+    state,
+    moduleIndex,
+    source,
+    callee,
+  )
+  let protocol = protocolCallResult(service, state, moduleIndex, source, callee)
+  let nominalKnown = match nominal {
+    case Some(_) => true
+    case None => false
+  }
+  let protocolKnown = match protocol {
+    case Some(_) => true
+    case None => false
+  }
+  if !hasHole(calleeType) &&
+    calleeType.kind != "function" &&
+    calleeType.kind != "nominal-record" &&
+    calleeType.kind != "newtype" &&
+    !nominalKnown &&
+    !protocolKnown {
+    addDiagnostic(
+      state,
+      moduleIndex,
+      "TPZ5005",
+      "`{typeText(calleeType)}` is not callable",
+      "",
+      if callee.kind == "expression/member" ||
+        callee.kind == "expression/optional-access" {
+        match child(callee, "field") {
+          case Some(field) => field
+          case None => callee
+        }
+      } else {
+        callee
+      },
+    )
+  }
+  CallResultCandidates { nominal: nominal, protocol: protocol }
+}
+
+export function prepareCall(
+  service: CheckerService,
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  node: SyntaxNode,
+  diagnosticNode: SyntaxNode,
+  leading: Option<LeadingCallArgument>,
+) -> CallPreparation {
+  let callee = match child(node, "callee") {
+    case Some(found) => found
+    case None => node
+  }
+  let inferredCallee = inferCallCallee(
+    service,
+    state,
+    moduleIndex,
+    source,
+    diagnosticNode,
+    callee,
+  )
+  let declaredType = inferredCallee.declaredType
+  let referencedDefinition = match lastReferenceInNode(
+    state,
+    moduleIndex,
+    callee,
+  ) {
+    case Some(reference) => functionDefinitionForReference(state, reference)
+    case None => None
+  }
+  let bindings = explicitCallBindings(
+    service,
+    state,
+    moduleIndex,
+    source,
+    node,
+    diagnosticNode,
+    callee,
+    referencedDefinition,
+    inferredCallee.optionalContainer == "",
+    inferredCallee.receiverType,
+  )
+  match currentExpectedExpression(state, node) {
+    case Some(expectedResult) => match declaredType.result.get(0) {
+      case Some(declaredResult) => collectTypeBindings(
+        declaredResult,
+        expectedResult,
+        bindings,
+        false,
+      )
+      case None => ()
+    }
+    case None => ()
+  }
+  let contextualType = applyBindings(declaredType, bindings)
+  let hasLeading = match leading {
+    case Some(_) => true
+    case None => false
+  }
+  let projectedMember = projectedCallMember(
+    source,
+    callee,
+    inferredCallee.receiverType,
+  )
+  let userProtocolTarget = userProtocolCallTarget(
+    state,
+    moduleIndex,
+    source,
+    callee,
+  )
+  let callSignature = match referencedDefinition {
+    case Some(definition) => Some(declaredCallSignature(definition))
+    case None => match userProtocolTarget {
+      case Some(target) => Some(userProtocolCallSignature(target))
+      case None => match inferredCallee.builtinSignature {
+        case Some(signature) => Some(signature)
+        case None => builtinMemberCallSignature(
+          service,
+          state,
+          moduleIndex,
+          source,
+          node,
+          callee,
+        )
+      }
+    }
+  }
+  let deferProtocolArity = match userProtocolTarget {
+    case Some(_) => true
+    case None => false
+  }
+  let argumentPlan = if projectedMember != "" {
+    unknownCallArgumentPlan(node)
+  } else { match callSignature {
+    case Some(signature) => planSignatureArguments(
+      state,
+      moduleIndex,
+      source,
+      node,
+      diagnosticNode,
+      signature,
+      hasLeading,
+      deferProtocolArity,
+    )
+    case None => planTypedCallArguments(
+      state,
+      moduleIndex,
+      node,
+      diagnosticNode,
+      contextualType,
+      hasLeading,
+    )
+  } }
+  CallPreparation {
+    callee: callee,
+    diagnosticNode: diagnosticNode,
+    declaredType: declaredType,
+    contextualType: contextualType,
+    receiverType: inferredCallee.receiverType,
+    optionalContainer: inferredCallee.optionalContainer,
+    referencedDefinition: referencedDefinition,
+    userProtocolTarget: userProtocolTarget,
+    argumentPlan: argumentPlan,
+    bindings: bindings,
+    leading: leading,
+    projectedMember: projectedMember,
+  }
+}
+
+record ProjectedArmCallResult {
+  status: string,
+  resultType: TypeValue,
+}
+
+function projectedArmCalleeType(
+  state: CheckerState,
+  moduleIndex: int,
+  receiverType: TypeValue,
+  member: string,
+) -> TypeValue {
+  match receiverMethodType(state, moduleIndex, receiverType, member) {
+    case Some(found) => found
+    case None => memberType(state, moduleIndex, receiverType, member)
+  }
+}
+
+function projectedArmCallSignature(
+  state: CheckerState,
+  moduleIndex: int,
+  receiverType: TypeValue,
+  member: string,
+) -> Option<CallSignature> {
+  match receiverMethodCallSignature(
+    state,
+    moduleIndex,
+    receiverType,
+    member,
+  ) {
+    case Some(found) => Some(found)
+    case None => builtinReceiverCallSignature(receiverType, member)
+  }
+}
+
+function completeProjectedArmCall(
+  service: CheckerService,
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  node: SyntaxNode,
+  preparation: CallPreparation,
+  inferred: InferredCallArguments,
+  receiverType: TypeValue,
+) -> ProjectedArmCallResult {
+  let calleeType = projectedArmCalleeType(
+    state,
+    moduleIndex,
+    receiverType,
+    preparation.projectedMember,
+  )
+  if calleeType.kind == "unknown" {
+    return ProjectedArmCallResult {
+      status: "absent",
+      resultType: emptyType("unknown"),
+    }
+  }
+  if calleeType.kind != "function" {
+    addDiagnostic(
+      state,
+      moduleIndex,
+      "TPZ5005",
+      "`{typeText(calleeType)}` is not callable",
+      "",
+      match child(preparation.callee, "field") {
+        case Some(field) => field
+        case None => preparation.callee
+      },
+    )
+    return ProjectedArmCallResult {
+      status: "not-callable",
+      resultType: emptyType("unknown"),
+    }
+  }
+  let diagnosticNode = match child(preparation.callee, "field") {
+    case Some(field) => field
+    case None => preparation.diagnosticNode
+  }
+  let hasLeading = match preparation.leading {
+    case Some(_) => true
+    case None => false
+  }
+  let argumentPlan = match projectedArmCallSignature(
+    state,
+    moduleIndex,
+    receiverType,
+    preparation.projectedMember,
+  ) {
+    case Some(signature) => planSignatureArguments(
+      state,
+      moduleIndex,
+      source,
+      node,
+      diagnosticNode,
+      signature,
+      hasLeading,
+      false,
+    )
+    case None => planTypedCallArguments(
+      state,
+      moduleIndex,
+      node,
+      diagnosticNode,
+      calleeType,
+      hasLeading,
+    )
+  }
+  let mut bindings: Array<TypeBinding> = []
+  collectCallInputTypeBindings(
+    node,
+    calleeType,
+    argumentPlan,
+    inferred.types,
+    preparation.leading,
+    bindings,
+  )
+  let specialized = applyBindings(calleeType, bindings)
+  refineCallArguments(
+    state,
+    moduleIndex,
+    node,
+    specialized,
+    argumentPlan.slots,
+    false,
+    inferred.types,
+    inferred.nodes,
+    bindings,
+  )
+  refineLeadingCallArgument(
+    state,
+    moduleIndex,
+    specialized,
+    argumentPlan,
+    preparation.leading,
+    diagnosticNode,
+  )
+  let rawResult = if argumentPlan.resultUnknown {
+    emptyType("unknown")
+  } else {
+    match specialized.result.get(0) {
+      case Some(found) => found
+      case None => emptyType("unknown")
+    }
+  }
+  gatePreparedCallCapabilities(
+    service,
+    state,
+    moduleIndex,
+    source,
+    node,
+    CallPreparation {
+      ...preparation,
+      diagnosticNode: diagnosticNode,
+      declaredType: calleeType,
+      contextualType: calleeType,
+      receiverType: receiverType,
+      optionalContainer: "",
+      referencedDefinition: None,
+      userProtocolTarget: None,
+      argumentPlan: argumentPlan,
+      bindings: bindings,
+      projectedMember: "",
+    },
+    inferred,
+    bindings,
+    rawResult,
+  )
+  ProjectedArmCallResult {
+    status: "callable",
+    resultType: rawResult,
+  }
+}
+
+function projectedMemberCallResult(
+  service: CheckerService,
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  node: SyntaxNode,
+  preparation: CallPreparation,
+  inferred: InferredCallArguments,
+) -> TypeValue {
+  let receiverType = preparation.receiverType
+  if receiverType.kind != "union" {
+    let projection = "CallOf<{typeText(receiverType)}, {preparation.projectedMember}>"
+    return rigid(
+      projection,
+      "projection:{projection}",
+    )
+  }
+  let mut results: Array<TypeValue> = []
+  for arm in receiverType.members {
+    if arm.kind == "literal" && arm.name == "null" {
+      continue
+    }
+    if rigidOrUnionRigid(arm) {
+      let projection = "CallOf<{typeText(arm)}, {preparation.projectedMember}>"
+      results.push(rigid(
+        projection,
+        "projection:{projection}",
+      ))
+      continue
+    }
+    let completed = completeProjectedArmCall(
+      service,
+      state,
+      moduleIndex,
+      source,
+      node,
+      preparation,
+      inferred,
+      arm,
+    )
+    if completed.status == "not-callable" {
+      return emptyType("unknown")
+    }
+    if completed.status == "absent" {
+      let projection = "CallOf<{typeText(receiverType)}, {preparation.projectedMember}>"
+      return rigid(
+        projection,
+        "projection:{projection}",
+      )
+    }
+    results.push(completed.resultType)
+  }
+  unionType(results)
+}
+
+function completeProjectedMemberCall(
+  service: CheckerService,
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  node: SyntaxNode,
+  preparation: CallPreparation,
+  inferred: InferredCallArguments,
+) -> CompletedCall {
+  let specialized = applyBindings(
+    preparation.declaredType,
+    preparation.bindings,
+  )
+  let observedCallee = wrapOptionalResult(
+    specialized,
+    preparation.optionalContainer,
+  )
+  replaceNodeType(
+    state,
+    moduleIndex,
+    "expression",
+    preparation.callee,
+    observedCallee,
+  )
+  let rawResult = projectedMemberCallResult(
+    service,
+    state,
+    moduleIndex,
+    source,
+    node,
+    preparation,
+    inferred,
+  )
+  CompletedCall {
+    calleeType: observedCallee,
+    resultType: wrapOptionalResult(rawResult, preparation.optionalContainer),
+  }
+}
+
+export function completePreparedCall(
+  service: CheckerService,
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  node: SyntaxNode,
+  preparation: CallPreparation,
+  inferred: InferredCallArguments,
+) -> CompletedCall {
+  if preparation.projectedMember != "" {
+    return completeProjectedMemberCall(
+      service,
+      state,
+      moduleIndex,
+      source,
+      node,
+      preparation,
+      inferred,
+    )
+  }
+  let mut bindings = preparation.bindings
+  collectCallTypeBindings(
+    state,
+    node,
+    preparation.contextualType,
+    preparation.argumentPlan,
+    inferred.types,
+    preparation.leading,
+    bindings,
+  )
+  let actuals = completeCallActuals(preparation.leading, inferred.types)
+  let boundSpecialized = specializeCallCallee(
+    state,
+    moduleIndex,
+    source,
+    node,
+    preparation.callee,
+    preparation.declaredType,
+    actuals,
+    bindings,
+  )
+  let specialized = eraseUnboundBuiltinCallTypeParameters(
+    service,
+    state,
+    moduleIndex,
+    source,
+    preparation.callee,
+    preparation.receiverType,
+    bindings,
+    boundSpecialized,
+  )
+  let userProtocolConformance = userProtocolCallConformance(
+    state,
+    moduleIndex,
+    preparation,
+    inferred,
+  )
+  gateUserProtocolCall(
+    state,
+    moduleIndex,
+    preparation,
+    inferred,
+    userProtocolConformance,
+  )
+  let skipProtocolReceiver = userProtocolConformance == "reject" ||
+    userProtocolConformance == "defer"
+  let refinementCallee = if skipProtocolReceiver {
+    substitute(
+      preparation.contextualType,
+      ["Self"],
+      [emptyType("unknown")],
+    )
+  } else {
+    specialized
+  }
+  refineCallArguments(
+    state,
+    moduleIndex,
+    node,
+    refinementCallee,
+    preparation.argumentPlan.slots,
+    skipProtocolReceiver,
+    inferred.types,
+    inferred.nodes,
+    bindings,
+  )
+  if !skipProtocolReceiver || preparation.argumentPlan.leadingSlot != 0 {
+    refineLeadingCallArgument(
+      state,
+      moduleIndex,
+      refinementCallee,
+      preparation.argumentPlan,
+      preparation.leading,
+      preparation.diagnosticNode,
+    )
+  }
+  let observedCallee = wrapOptionalResult(
+    specialized,
+    preparation.optionalContainer,
+  )
+  replaceNodeType(
+    state,
+    moduleIndex,
+    "expression",
+    preparation.callee,
+    observedCallee,
+  )
+  let candidates = checkedCallResultCandidates(
+    service,
+    state,
+    moduleIndex,
+    source,
+    preparation.callee,
+    preparation.declaredType,
+  )
+  let rawResult = if preparation.argumentPlan.resultUnknown {
+    emptyType("unknown")
+  } else {
+    callResultType(
+      specialized,
+      preparation.declaredType,
+      candidates.nominal,
+      candidates.protocol,
+      bindings,
+    )
+  }
+  gatePreparedCallCapabilities(
+    service,
+    state,
+    moduleIndex,
+    source,
+    node,
+    preparation,
+    inferred,
+    bindings,
+    rawResult,
+  )
+  let result = wrapOptionalResult(rawResult, preparation.optionalContainer)
+  match preparation.referencedDefinition {
+    case Some(definition) => checkFunctionBounds(
+      state,
+      moduleIndex,
+      preparation.diagnosticNode,
+      definition,
+      bindings,
+    )
+    case None => ()
+  }
+  CompletedCall {
+    calleeType: observedCallee,
+    resultType: result,
+  }
+}
+
+export function inferCall(
+  service: CheckerService,
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  node: SyntaxNode,
+) -> TypeValue {
+  let preparation = prepareCall(
+    service,
+    state,
+    moduleIndex,
+    source,
+    node,
+    node,
+    None,
+  )
+  let inferred = inferCallArguments(
+    service,
+    state,
+    moduleIndex,
+    source,
+    node,
+    preparation.callee,
+    preparation.contextualType,
+    preparation.argumentPlan.slots,
+    [],
+  )
+  let completed = completePreparedCall(
+    service,
+    state,
+    moduleIndex,
+    source,
+    node,
+    preparation,
+    inferred,
+  )
+  addCall(
+    service,
+    state,
+    moduleIndex,
+    source,
+    node,
+    preparation.callee,
+    completed.calleeType,
+    preparation.receiverType,
+    completed.resultType,
+  )
+  completed.resultType
+}

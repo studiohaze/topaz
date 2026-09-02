@@ -1,0 +1,6 @@
+function a() { print("A")
+() => "a" }
+function b() { print("B")
+() => "b" }
+let oo: Option<Option<int>> = Some(None)
+oo?.okOrElse(a(), b())

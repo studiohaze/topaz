@@ -1,0 +1,4 @@
+export function slug(name: string) -> Result<string, string> {
+  let spaces = Regex.compile(" +")?
+  Ok(spaces.replaceAll(name.trim(), "-"))
+}

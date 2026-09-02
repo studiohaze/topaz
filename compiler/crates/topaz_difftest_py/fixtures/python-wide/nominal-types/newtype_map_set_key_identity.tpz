@@ -1,0 +1,6 @@
+
+newtype UserId = int
+let ids = set { UserId(1), UserId(1), UserId(2) }
+let m = map { UserId(1): "hit" }
+print("{ids.length}:{m.getOr(UserId(1), "miss")}")
+ids.length

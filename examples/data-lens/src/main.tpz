@@ -1,0 +1,277 @@
+import data_lens_core { DataFormat, ExportDocument, LensResult, SortMode, Summary, applyLens, emptySummary, exportRows, parseData }
+import src.model { Model, Msg }
+import src.session { LensSession, decodeSession, encodeSession, sessionSortMode }
+import src.view { render }
+import std.dom { BrowserEvent, Html, LocalDataEvent, LocalDataResult, LocalStateEvent, LocalStateResult, TextDocument, WebAppCommand, WebAppEvent, WebAppStep, deleteState, dom, downloadText, focus, loadState, openText, saveState }
+
+const CSV_SAMPLE = "name,category,value,active\n서울_alpha,city,12,true\nКазань_beta,city,8,false\nTopaz_core,language,21,true"
+const JSON_SAMPLE = "[\{\"name\":\"東京_gamma\",\"category\":\"city\",\"value\":17,\"active\":true\},\{\"name\":\"Lispex\",\"category\":\"language\",\"value\":9,\"active\":false\}]"
+const SESSION_KEY = "session"
+
+function modelWith(model: Model, source: string, query: string, activeOnly: bool, format: DataFormat, sort: SortMode, status: string) -> Model {
+  Model {
+    source: source,
+    query: query,
+    activeOnly: activeOnly,
+    format: format,
+    sortMode: sort,
+    rows: model.rows,
+    summary: model.summary,
+    status: status,
+    error: None,
+  }
+}
+
+function applyModel(model: Model) -> Model {
+  match parseData(model.source, model.format) {
+    case Ok(rows) => {
+      let result = applyLens(rows, model.query, model.activeOnly, model.sortMode)
+      Model {
+        source: model.source,
+        query: model.query,
+        activeOnly: model.activeOnly,
+        format: model.format,
+        sortMode: model.sortMode,
+        rows: result.rows,
+        summary: result.summary,
+        status: "Lens applied to {result.summary.totalRows} rows",
+        error: None,
+      }
+    }
+    case Err(error) => Model {
+      source: model.source,
+      query: model.query,
+      activeOnly: model.activeOnly,
+      format: model.format,
+      sortMode: model.sortMode,
+      rows: [],
+      summary: emptySummary(),
+      status: "Dataset rejected",
+      error: Some(error),
+    }
+  }
+}
+
+function step(model: Model, commands: Array<WebAppCommand<Msg>>) -> WebAppStep<Model, Msg> {
+  WebAppStep { model: model, commands: commands }
+}
+
+export function init() -> WebAppStep<Model, Msg> {
+  let base = Model {
+    source: CSV_SAMPLE,
+    query: "",
+    activeOnly: false,
+    format: DataFormat.Csv,
+    sortMode: SortMode.ByName,
+    rows: [],
+    summary: emptySummary(),
+    status: "Ready",
+    error: None,
+  }
+  WebAppStep { model: applyModel(base), commands: [loadState("data-lens-session-load", SESSION_KEY, Msg.LocalCompleted)] }
+}
+
+export function initialModel() -> Model {
+  init().model
+}
+
+function browserEvent(event: WebAppEvent) -> Option<BrowserEvent> {
+  match event {
+    case Browser(found) => Some(found)
+    case LocalData(_) | LocalState(_) => None
+  }
+}
+
+function openedFormat(name: string, mediaType: string) -> DataFormat {
+  if name.endsWith(".json") || mediaType.contains("application/json") {
+    return DataFormat.Json
+  }
+  DataFormat.Csv
+}
+
+function completeLocalData(model: Model, local: LocalDataEvent) -> WebAppStep<Model, Msg> {
+  match local.result {
+    case TextOpened(document) => {
+      let format = openedFormat(document.name, document.mediaType)
+      let next = modelWith(model, document.text, model.query, model.activeOnly, format, model.sortMode, "Opened {document.name}")
+      step(applyModel(next), [dom(focus("#source"))])
+    }
+    case DownloadStarted(filename) => step(modelWith(model, model.source, model.query, model.activeOnly, model.format, model.sortMode, "Download started: {filename}"), [])
+    case Cancelled => step(modelWith(model, model.source, model.query, model.activeOnly, model.format, model.sortMode, "Local file request cancelled"), [])
+    case Failed(code, message) => step(
+      Model {
+        source: model.source,
+        query: model.query,
+        activeOnly: model.activeOnly,
+        format: model.format,
+        sortMode: model.sortMode,
+        rows: model.rows,
+        summary: model.summary,
+        status: "Local file request failed",
+        error: Some("{code}: {message}"),
+      },
+      [],
+    )
+  }
+}
+
+function completeLocalState(model: Model, local: LocalStateEvent) -> WebAppStep<Model, Msg> {
+  match local.result {
+    case Loaded(key, value) => {
+      if key != SESSION_KEY {
+        return step(modelWith(model, model.source, model.query, model.activeOnly, model.format, model.sortMode, "Unexpected state key: {key}"), [])
+      }
+      match value {
+        case None => step(modelWith(model, model.source, model.query, model.activeOnly, model.format, model.sortMode, "No saved session"), [])
+        case Some(encoded) => {
+          match decodeSession(encoded) {
+            case Ok(session) => {
+              let restored = applyModel(modelWith(model, model.source, session.query, session.activeOnly, model.format, sessionSortMode(session), "Restoring session"))
+              step(modelWith(restored, restored.source, restored.query, restored.activeOnly, restored.format, restored.sortMode, "Session restored"), [])
+            }
+            case Err(error) => step(
+              Model {
+                source: model.source,
+                query: model.query,
+                activeOnly: model.activeOnly,
+                format: model.format,
+                sortMode: model.sortMode,
+                rows: model.rows,
+                summary: model.summary,
+                status: "Saved session rejected",
+                error: Some(error),
+              },
+              [],
+            )
+          }
+        }
+      }
+    }
+    case Saved(key) => step(modelWith(model, model.source, model.query, model.activeOnly, model.format, model.sortMode, if key == SESSION_KEY { "Session saved" } else { "Unexpected state key: {key}" }), [])
+    case Deleted(key, existed) => {
+      if key != SESSION_KEY {
+        return step(modelWith(model, model.source, model.query, model.activeOnly, model.format, model.sortMode, "Unexpected state key: {key}"), [])
+      }
+      step(modelWith(model, model.source, model.query, model.activeOnly, model.format, model.sortMode, if existed { "Session forgotten" } else { "No saved session" }), [])
+    }
+    case Failed(code, message) => step(
+      Model {
+        source: model.source,
+        query: model.query,
+        activeOnly: model.activeOnly,
+        format: model.format,
+        sortMode: model.sortMode,
+        rows: model.rows,
+        summary: model.summary,
+        status: "Local state request failed",
+        error: Some("{code}: {message}"),
+      },
+      [],
+    )
+  }
+}
+
+export function update(model: Model, message: Msg, event: WebAppEvent) -> WebAppStep<Model, Msg> {
+  let browser = browserEvent(event)
+  match message {
+    case SourceChanged => step(modelWith(model, browser?.value ?? model.source, model.query, model.activeOnly, model.format, model.sortMode, "Source edited"), [])
+    case QueryChanged => step(applyModel(modelWith(model, model.source, browser?.value ?? "", model.activeOnly, model.format, model.sortMode, "Filter changed")), [])
+    case ActiveChanged => step(applyModel(modelWith(model, model.source, model.query, browser?.checked ?? false, model.format, model.sortMode, "Active filter changed")), [])
+    case FormatChanged => {
+      let format = if (browser?.value ?? "CSV") == "JSON" { DataFormat.Json } else { DataFormat.Csv }
+      step(modelWith(model, model.source, model.query, model.activeOnly, format, model.sortMode, "Format changed"), [])
+    }
+    case SortChanged => {
+      let sort = if (browser?.value ?? "Name") == "Value" { SortMode.ByValue } else { SortMode.ByName }
+      step(applyModel(modelWith(model, model.source, model.query, model.activeOnly, model.format, sort, "Sort changed")), [])
+    }
+    case Apply | Submit => step(applyModel(model), [])
+    case SourceKey => {
+      if (browser?.key ?? "") == "Enter" {
+        return step(applyModel(model), [])
+      }
+      step(model, [])
+    }
+    case LoadCsv => {
+      let next = modelWith(model, CSV_SAMPLE, model.query, model.activeOnly, DataFormat.Csv, model.sortMode, "CSV sample loaded")
+      step(applyModel(next), [dom(focus("#source"))])
+    }
+    case LoadJson => {
+      let next = modelWith(model, JSON_SAMPLE, model.query, model.activeOnly, DataFormat.Json, model.sortMode, "JSON sample loaded")
+      step(applyModel(next), [dom(focus("#source"))])
+    }
+    case OpenDocument => step(modelWith(model, model.source, model.query, model.activeOnly, model.format, model.sortMode, "Choose a CSV or JSON document"), [openText("data-lens-open", ".csv,.json,text/csv,application/json", Msg.LocalCompleted)])
+    case DownloadResults => {
+      match exportRows(model.rows, model.format) {
+        case Ok(document) => step(modelWith(model, model.source, model.query, model.activeOnly, model.format, model.sortMode, "Preparing download"), [downloadText("data-lens-download", document.filename, document.mediaType, document.text, Msg.LocalCompleted)])
+        case Err(error) => step(
+          Model {
+            source: model.source,
+            query: model.query,
+            activeOnly: model.activeOnly,
+            format: model.format,
+            sortMode: model.sortMode,
+            rows: model.rows,
+            summary: model.summary,
+            status: "Export failed",
+            error: Some(error),
+          },
+          [],
+        )
+      }
+    }
+    case SaveSession => {
+      match encodeSession(model) {
+        case Ok(encoded) => step(modelWith(model, model.source, model.query, model.activeOnly, model.format, model.sortMode, "Saving session"), [saveState("data-lens-session-save", SESSION_KEY, encoded, Msg.LocalCompleted)])
+        case Err(error) => step(
+          Model {
+            source: model.source,
+            query: model.query,
+            activeOnly: model.activeOnly,
+            format: model.format,
+            sortMode: model.sortMode,
+            rows: model.rows,
+            summary: model.summary,
+            status: "Session encoding failed",
+            error: Some(error),
+          },
+          [],
+        )
+      }
+    }
+    case ForgetSession => step(modelWith(model, model.source, model.query, model.activeOnly, model.format, model.sortMode, "Forgetting session"), [deleteState("data-lens-session-delete", SESSION_KEY, Msg.LocalCompleted)])
+    case LocalCompleted => {
+      match event {
+        case LocalData(local) => completeLocalData(model, local)
+        case LocalState(local) => completeLocalState(model, local)
+        case Browser(_) => step(model, [])
+      }
+    }
+    case Clear => step(
+      Model {
+        source: "",
+        query: "",
+        activeOnly: false,
+        format: DataFormat.Csv,
+        sortMode: SortMode.ByName,
+        rows: [],
+        summary: emptySummary(),
+        status: "Cleared",
+        error: None,
+      },
+      [dom(focus("#source"))],
+    )
+  }
+}
+
+export function transitionModel(model: Model, message: Msg, event: BrowserEvent) -> Model {
+  update(model, message, WebAppEvent.Browser(event)).model
+}
+
+export function transitionAppModel(model: Model, message: Msg, event: WebAppEvent) -> Model {
+  update(model, message, event).model
+}
+
+export function view(model: Model) -> Html<Msg> {
+  render(model)
+}

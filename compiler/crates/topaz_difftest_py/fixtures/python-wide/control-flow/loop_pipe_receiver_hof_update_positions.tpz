@@ -1,0 +1,22 @@
+
+function inc(x: int) -> int {
+    x + 1
+}
+let mut mu = map { "a": 1 }
+let updateKey = loop {
+    print("key")
+    break "b"
+} |> mu.update(_, 7, (v) => v / 0)
+let updateInitial = loop {
+    print("initial")
+    break 5
+} |> mu.update("c", _, inc)
+let updateFunction = inc |> mu.update(loop {
+    print("function-key")
+    break "a"
+}, 0, _)
+let a = mu.getOr("a", 0)
+let b = mu.getOr("b", 0)
+let c = mu.getOr("c", 0)
+print("{a}:{b}:{c}")
+a + b + c

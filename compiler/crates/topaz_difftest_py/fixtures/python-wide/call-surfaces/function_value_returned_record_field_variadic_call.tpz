@@ -1,0 +1,18 @@
+
+function sum(seed: int = 0, ...xs: int) -> int {
+    let mut total = seed
+    for x in xs {
+        total = total + x
+    }
+    total
+}
+function makeCallbacks() {
+    { total: sum }
+}
+function main() -> int {
+    let first = makeCallbacks().total(3, ...[1, 2])
+    let callbacks = makeCallbacks()
+    let second = callbacks.total(...[1])
+    first + second
+}
+main()

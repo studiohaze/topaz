@@ -1,0 +1,878 @@
+import types {
+  PreviewAstNode,
+  PreviewCheckDiagnostic,
+  PreviewModuleResult,
+  PreviewResolvedReference,
+  PreviewToken,
+  PreviewTypeAtom,
+  PreviewTypedCall,
+  PreviewTypedCapture,
+  PreviewTypedNode,
+}
+
+record ProfileSpan {
+  lo: int,
+  hi: int,
+}
+
+record ProfileDenial {
+  rule: string,
+  message: string,
+}
+
+function moduleText(source: Bytes, lo: int, hi: int) -> string {
+  match source.slice(lo, hi).decodeUtf8() {
+    case Ok(value) => value
+    case Err(_) => ""
+  }
+}
+
+function sameFinding(
+  left: PreviewCheckDiagnostic,
+  right: PreviewCheckDiagnostic,
+) -> bool {
+  left.moduleIndex == right.moduleIndex &&
+    left.lo == right.lo &&
+    left.hi == right.hi &&
+    left.code == right.code &&
+    left.message == right.message &&
+    left.profileRule == right.profileRule
+}
+
+function before(
+  left: PreviewCheckDiagnostic,
+  right: PreviewCheckDiagnostic,
+) -> bool {
+  left.moduleIndex < right.moduleIndex ||
+    (left.moduleIndex == right.moduleIndex && left.lo < right.lo) ||
+    (left.moduleIndex == right.moduleIndex && left.lo == right.lo &&
+      left.hi < right.hi) ||
+    (left.moduleIndex == right.moduleIndex && left.lo == right.lo &&
+      left.hi == right.hi && left.profileRule < right.profileRule) ||
+    (left.moduleIndex == right.moduleIndex && left.lo == right.lo &&
+      left.hi == right.hi && left.profileRule == right.profileRule &&
+      left.message < right.message)
+}
+
+function insertFinding(
+  output: Array<PreviewCheckDiagnostic>,
+  finding: PreviewCheckDiagnostic,
+) -> () {
+  let mut target = output
+  let mut index = 0
+  while index < target.length {
+    let existing = target[index]
+    if sameFinding(existing, finding) {
+      return ()
+    }
+    if before(finding, existing) {
+      target.insert(index, finding)
+      return ()
+    }
+    index += 1
+  }
+  target.push(finding)
+  ()
+}
+
+function insertTypedFinding(
+  output: Array<PreviewCheckDiagnostic>,
+  finding: PreviewCheckDiagnostic,
+) -> () {
+  let mut target = output
+  let mut index = 0
+  while index < target.length {
+    let existing = target[index]
+    if existing.moduleIndex == finding.moduleIndex &&
+      existing.lo == finding.lo &&
+      existing.hi == finding.hi {
+      return ()
+    }
+    if before(finding, existing) {
+      target.insert(index, finding)
+      return ()
+    }
+    index += 1
+  }
+  target.push(finding)
+  ()
+}
+
+function finding(
+  moduleIndex: int,
+  lo: int,
+  hi: int,
+  rule: string,
+  message: string,
+  primaryMessage: string,
+  notes: Array<string>,
+) -> PreviewCheckDiagnostic {
+  PreviewCheckDiagnostic {
+    moduleIndex: moduleIndex,
+    code: "TPZ5801",
+    message: message,
+    primaryMessage: primaryMessage,
+    lo: lo,
+    hi: hi,
+    secondary: [],
+    notes: notes,
+    profileRule: rule,
+  }
+}
+
+function sourceFinding(
+  moduleIndex: int,
+  lo: int,
+  hi: int,
+  rule: string,
+  message: string,
+) -> PreviewCheckDiagnostic {
+  finding(
+    moduleIndex,
+    lo,
+    hi,
+    rule,
+    message,
+    "not in the deterministic compiler-kernel inventory",
+    [
+      "profile rule: {rule}",
+      "move this effect to the Rust host shell or use a deterministic admitted value/library leaf",
+    ],
+  )
+}
+
+function typedFinding(
+  moduleIndex: int,
+  lo: int,
+  hi: int,
+  rule: string,
+  message: string,
+) -> PreviewCheckDiagnostic {
+  finding(
+    moduleIndex,
+    lo,
+    hi,
+    rule,
+    message,
+    "Bootstrap Profile package boundary",
+    ["profile rule: {rule}"],
+  )
+}
+
+record DirectChildIndexes {
+  byParent: Map<int, Map<string, int>>,
+}
+
+record ProfileSpanIndexes {
+  byModule: Map<int, Map<int, Map<int, int>>>,
+}
+
+function directChildIndexes(
+  nodes: Array<PreviewAstNode>,
+) -> DirectChildIndexes {
+  let mut byParent: Map<int, Map<string, int>> = Map.new()
+  let mut index = 0
+  for node in nodes {
+    match byParent.get(node.parent) {
+      case Some(found) => {
+        let mut byField = found
+        match byField.get(node.field) {
+          case Some(_) => ()
+          case None => byField.insert(node.field, index)
+        }
+      }
+      case None => {
+        let mut byField: Map<string, int> = Map.new()
+        byField.insert(node.field, index)
+        byParent.insert(node.parent, byField)
+      }
+    }
+    index += 1
+  }
+  DirectChildIndexes { byParent: byParent }
+}
+
+function directChild(
+  nodes: Array<PreviewAstNode>,
+  indexes: DirectChildIndexes,
+  parent: int,
+  field: string,
+) -> Option<PreviewAstNode> {
+  match indexes.byParent.get(parent) {
+    case Some(byField) => match byField.get(field) {
+      case Some(index) => Some(nodes[index])
+      case None => None
+    }
+    case None => None
+  }
+}
+
+function insertProfileSpanIndex(
+  indexes: ProfileSpanIndexes,
+  moduleIndex: int,
+  lo: int,
+  hi: int,
+  index: int,
+) -> () {
+  let mut byModule = indexes.byModule
+  let mut byLo = match byModule.get(moduleIndex) {
+    case Some(found) => found
+    case None => {
+      let value: Map<int, Map<int, int>> = Map.new()
+      byModule.insert(moduleIndex, value)
+      value
+    }
+  }
+  let mut byHi = match byLo.get(lo) {
+    case Some(found) => found
+    case None => {
+      let value: Map<int, int> = Map.new()
+      byLo.insert(lo, value)
+      value
+    }
+  }
+  match byHi.get(hi) {
+    case Some(_) => ()
+    case None => byHi.insert(hi, index)
+  }
+}
+
+function profileSpanIndex(
+  indexes: ProfileSpanIndexes,
+  moduleIndex: int,
+  lo: int,
+  hi: int,
+) -> Option<int> {
+  match indexes.byModule.get(moduleIndex) {
+    case Some(byLo) => match byLo.get(lo) {
+      case Some(byHi) => byHi.get(hi)
+      case None => None
+    }
+    case None => None
+  }
+}
+
+function memberReference(
+  catalog: ProfileReferenceCatalog,
+  moduleIndex: int,
+  lo: int,
+  hi: int,
+) -> Option<PreviewResolvedReference> {
+  match profileSpanIndex(catalog.memberReferences, moduleIndex, lo, hi) {
+    case Some(index) => Some(catalog.references[index])
+    case None => None
+  }
+}
+
+function memberIdentity(
+  reference: Option<PreviewResolvedReference>,
+  objectName: string,
+  fieldName: string,
+) -> string {
+  match reference {
+    case Some(found) => {
+      let reference = found
+      let targetName = if reference.targetName == "" {
+        fieldName
+      } else {
+        reference.targetName
+      }
+      "{reference.targetModule}::{targetName}"
+    }
+    case None => "{objectName}::{fieldName}"
+  }
+}
+
+function composeSpan(
+  module: PreviewModuleResult,
+  childIndexes: DirectChildIndexes,
+  node: PreviewAstNode,
+  ordinal: int,
+) -> ProfileSpan {
+  match [
+    directChild(module.ast, childIndexes, ordinal, "left"),
+    directChild(module.ast, childIndexes, ordinal, "right"),
+  ] {
+    case [Some(left), Some(right)] => for token in module.raw {
+      if token.kind == "gt-gt" &&
+        token.lo >= left.hi &&
+        token.hi <= right.lo {
+        return ProfileSpan { lo: token.lo, hi: token.hi }
+      }
+    }
+    case _ => ()
+  }
+  ProfileSpan { lo: node.lo, hi: node.hi }
+}
+
+function identityHasHead(identity: string, head: string) -> bool {
+  identity == head ||
+    identity.startsWith("{head}.") ||
+    identity.startsWith("{head}::")
+}
+
+function deniedModule(identity: string) -> bool {
+  identityHasHead(identity, "std.fs") ||
+    identityHasHead(identity, "std.io") ||
+    identityHasHead(identity, "std.path") ||
+    identityHasHead(identity, "std.cli") ||
+    identityHasHead(identity, "std.http") ||
+    identityHasHead(identity, "std.dom") ||
+    identityHasHead(identity, "std.test") ||
+    identityHasHead(identity, "std.regex") ||
+    identityHasHead(identity, "std.codec") ||
+    identityHasHead(identity, "std.crypto") ||
+    identityHasHead(identity, "std.time") ||
+    identityHasHead(identity, "std.random") ||
+    identityHasHead(identity, "std.process") ||
+    identityHasHead(identity, "std.database")
+}
+
+function deniedLeaf(identity: string) -> bool {
+  deniedModule(identity) ||
+    identityHasHead(identity, "FS") ||
+    identityHasHead(identity, "Cli") ||
+    identityHasHead(identity, "Path") ||
+    identityHasHead(identity, "HTTP") ||
+    identityHasHead(identity, "DOM") ||
+    identityHasHead(identity, "Test") ||
+    identityHasHead(identity, "Regex") ||
+    identityHasHead(identity, "Date") ||
+    identityHasHead(identity, "Math") ||
+    identityHasHead(identity, "HMAC") ||
+    identityHasHead(identity, "Base64") ||
+    identityHasHead(identity, "Deflate") ||
+    identityHasHead(identity, "Zlib") ||
+    identityHasHead(identity, "ReedSolomon")
+}
+
+function testFrameworkIdentity(identity: string) -> bool {
+  identityHasHead(identity, "std.test") || identityHasHead(identity, "Test")
+}
+
+function testMember(name: string) -> bool {
+  name == "assert" ||
+    name == "assertEq" ||
+    name == "assertNe" ||
+    name == "assertContains" ||
+    name == "assertOk" ||
+    name == "assertErr" ||
+    name == "assertSome" ||
+    name == "assertNone" ||
+    name == "assertGolden"
+}
+
+function typeDenial(atoms: Array<PreviewTypeAtom>) -> Option<ProfileDenial> {
+  for atom in atoms {
+    if (atom.kind == "primitive" || atom.kind == "literal") &&
+      atom.name == "float" {
+      return Some(ProfileDenial {
+        rule: "bootstrap/no-float",
+        message: "`float` is not available to the deterministic Bootstrap Profile",
+      })
+    }
+    if atom.kind == "file" || atom.kind == "path" {
+      return Some(ProfileDenial {
+        rule: "bootstrap/no-resource",
+        message: "host file and path values are not available to the Bootstrap Profile",
+      })
+    }
+    if atom.kind == "regex" ||
+      atom.kind == "match" ||
+      atom.kind == "toml-value" ||
+      atom.kind == "url" ||
+      atom.kind == "date" ||
+      atom.kind == "big-int" ||
+      atom.kind == "decimal" ||
+      atom.kind == "rounding-mode" {
+      return Some(ProfileDenial {
+        rule: "bootstrap/no-host-leaf",
+        message: "this runtime value family is outside the Bootstrap Profile inventory",
+      })
+    }
+  }
+  None
+}
+
+function appendTypeFinding(
+  output: Array<PreviewCheckDiagnostic>,
+  moduleIndex: int,
+  lo: int,
+  hi: int,
+  atoms: Array<PreviewTypeAtom>,
+) -> () {
+  match typeDenial(atoms) {
+    case Some(value) => insertTypedFinding(
+      output,
+      typedFinding(moduleIndex, lo, hi, value.rule, value.message),
+    )
+    case None => ()
+  }
+}
+
+function appendCallTypeFinding(
+  output: Array<PreviewCheckDiagnostic>,
+  call: PreviewTypedCall,
+) -> () {
+  match typeDenial(call.calleeType) {
+    case Some(value) => insertTypedFinding(
+      output,
+      typedFinding(
+        call.moduleIndex,
+        call.lo,
+        call.hi,
+        value.rule,
+        value.message,
+      ),
+    )
+    case None => match typeDenial(call.resultType) {
+      case Some(value) => insertTypedFinding(
+        output,
+        typedFinding(
+          call.moduleIndex,
+          call.lo,
+          call.hi,
+          value.rule,
+          value.message,
+        ),
+      )
+      case None => ()
+    }
+  }
+}
+
+function appendTestFramework(
+  output: Array<PreviewCheckDiagnostic>,
+  profile: string,
+  moduleIndex: int,
+  lo: int,
+  hi: int,
+  label: string,
+) -> () {
+  let rule = if profile == "agent-pack" {
+    "agent-pack/no-test-framework"
+  } else if profile == "test-profile" {
+    "test-profile/no-test-framework"
+  } else {
+    "bootstrap/no-test-framework"
+  }
+  insertFinding(
+    output,
+    finding(
+      moduleIndex,
+      lo,
+      hi,
+      rule,
+      "test-framework APIs are not allowed by profile `{profile}`",
+      label,
+      [
+        "profile rule: {rule}",
+        "the executable test-profile grants only the canonical free `assert(...)` function",
+      ],
+    ),
+  )
+}
+
+record ProfileReferenceCatalog {
+  references: Array<PreviewResolvedReference>,
+  resolvedTargets: ProfileSpanIndexes,
+  memberReferences: ProfileSpanIndexes,
+}
+
+record ProfileModuleContext {
+  profile: string,
+  moduleIndex: int,
+  module: PreviewModuleResult,
+  source: Bytes,
+  referenceCatalog: ProfileReferenceCatalog,
+  childIndexes: DirectChildIndexes,
+}
+
+function profileReferenceCatalog(
+  references: Array<PreviewResolvedReference>,
+) -> ProfileReferenceCatalog {
+  let resolvedTargets = ProfileSpanIndexes { byModule: Map.new() }
+  let memberReferences = ProfileSpanIndexes { byModule: Map.new() }
+  let mut referenceIndex = 0
+  for reference in references {
+    if reference.targetModuleIndex >= 0 {
+      insertProfileSpanIndex(
+        resolvedTargets,
+        reference.moduleIndex,
+        reference.lo,
+        reference.hi,
+        referenceIndex,
+      )
+    }
+    if reference.targetModule != "" {
+      insertProfileSpanIndex(
+        memberReferences,
+        reference.moduleIndex,
+        reference.lo,
+        reference.hi,
+        referenceIndex,
+      )
+    }
+    referenceIndex += 1
+  }
+  ProfileReferenceCatalog {
+    references: references,
+    resolvedTargets: resolvedTargets,
+    memberReferences: memberReferences,
+  }
+}
+
+function appendCompositionFinding(
+  output: Array<PreviewCheckDiagnostic>,
+  context: ProfileModuleContext,
+  node: PreviewAstNode,
+  ordinal: int,
+) -> () {
+  if node.kind != "expression/compose" ||
+    (context.profile != "agent-pack" && context.profile != "test-profile") {
+    return ()
+  }
+  let span = composeSpan(context.module, context.childIndexes, node, ordinal)
+  let rule = "{context.profile}/no-composition"
+  insertFinding(
+    output,
+    finding(
+      context.moduleIndex,
+      span.lo,
+      span.hi,
+      rule,
+      "function composition is not allowed by profile `{context.profile}`",
+      "profile-disallowed `>>`",
+      [
+        "profile rule: {rule}",
+        "use an explicit lambda, or a pipeline only when it preserves the intended semantics",
+      ],
+    ),
+  )
+}
+
+function appendIdentifierFinding(
+  output: Array<PreviewCheckDiagnostic>,
+  context: ProfileModuleContext,
+  node: PreviewAstNode,
+) -> () {
+  if node.kind != "expression/identifier" {
+    return ()
+  }
+  let name = moduleText(context.source, node.lo, node.hi)
+  let unresolved = profileSpanIndex(
+    context.referenceCatalog.resolvedTargets,
+    context.moduleIndex,
+    node.lo,
+    node.hi,
+  ) == None
+  if context.profile == "bootstrap" && unresolved &&
+    (name == "print" || name == "input" || name == "open" || name == "assert") {
+    insertFinding(
+      output,
+      sourceFinding(
+        context.moduleIndex,
+        node.lo,
+        node.hi,
+        "bootstrap/no-host-leaf",
+        "runtime leaf `{name}` is not available to the Bootstrap Profile",
+      ),
+    )
+  } else if context.profile == "agent-pack" && unresolved && name == "assert" {
+    insertFinding(
+      output,
+      finding(
+        context.moduleIndex,
+        node.lo,
+        node.hi,
+        "agent-pack/no-assert",
+        "`assert` is not allowed by profile `agent-pack`",
+        "test-only function reference",
+        [
+          "profile rule: agent-pack/no-assert",
+          "use `--profile test-profile` only for test code, or express the failure with canonical Result/control flow",
+        ],
+      ),
+    )
+  }
+}
+
+function bootstrapSyntaxDenial(kind: string) -> Option<ProfileDenial> {
+  if kind == "expression/float" {
+    Some(ProfileDenial {
+      rule: "bootstrap/no-float",
+      message: "`float` is not available to the deterministic Bootstrap Profile",
+    })
+  } else if kind == "expression/duration" {
+    Some(ProfileDenial {
+      rule: "bootstrap/no-duration",
+      message: "duration values are not available to the deterministic Bootstrap Profile",
+    })
+  } else if kind == "expression/concurrent" {
+    Some(ProfileDenial {
+      rule: "bootstrap/no-concurrency",
+      message: "`concurrent` is not available to the deterministic Bootstrap Profile",
+    })
+  } else if kind == "statement/using" {
+    Some(ProfileDenial {
+      rule: "bootstrap/no-resource",
+      message: "`using` and host resource values are not available to the Bootstrap Profile",
+    })
+  } else {
+    None
+  }
+}
+
+function appendBootstrapSyntaxFinding(
+  output: Array<PreviewCheckDiagnostic>,
+  context: ProfileModuleContext,
+  node: PreviewAstNode,
+) -> () {
+  if context.profile != "bootstrap" {
+    return ()
+  }
+  match bootstrapSyntaxDenial(node.kind) {
+    case Some(denial) => insertFinding(
+      output,
+      sourceFinding(
+        context.moduleIndex,
+        node.lo,
+        node.hi,
+        denial.rule,
+        denial.message,
+      ),
+    )
+    case None => ()
+  }
+}
+
+function appendImportFinding(
+  output: Array<PreviewCheckDiagnostic>,
+  context: ProfileModuleContext,
+  node: PreviewAstNode,
+  ordinal: int,
+) -> () {
+  if node.kind != "statement/import" {
+    return ()
+  }
+  match directChild(context.module.ast, context.childIndexes, ordinal, "path") {
+    case Some(path) => {
+      let identity = moduleText(context.source, path.lo, path.hi)
+      if context.profile == "bootstrap" && deniedModule(identity) {
+        insertFinding(
+          output,
+          sourceFinding(
+            context.moduleIndex,
+            path.lo,
+            path.hi,
+            "bootstrap/no-host-module",
+            "module `{identity}` is not available to the Bootstrap Profile",
+          ),
+        )
+      }
+      if identity == "std.test" {
+        appendTestFramework(
+          output,
+          context.profile,
+          context.moduleIndex,
+          path.lo,
+          path.hi,
+          "test-only `std.test` import",
+        )
+      }
+    }
+    case None => ()
+  }
+}
+
+function appendMemberFinding(
+  output: Array<PreviewCheckDiagnostic>,
+  context: ProfileModuleContext,
+  node: PreviewAstNode,
+  ordinal: int,
+) -> () {
+  if node.kind != "expression/member" && node.kind != "expression/optional-access" {
+    return ()
+  }
+  match [
+    directChild(context.module.ast, context.childIndexes, ordinal, "object"),
+    directChild(context.module.ast, context.childIndexes, ordinal, "field"),
+  ] {
+    case [Some(object), Some(field)] => if object.kind == "expression/identifier" {
+      let objectName = moduleText(context.source, object.lo, object.hi)
+      let fieldName = moduleText(context.source, field.lo, field.hi)
+      let objectResolved = profileSpanIndex(
+        context.referenceCatalog.resolvedTargets,
+        context.moduleIndex,
+        object.lo,
+        object.hi,
+      ) != None
+      let resolvedMember = memberReference(
+        context.referenceCatalog,
+        context.moduleIndex,
+        field.lo,
+        field.hi,
+      )
+      let memberResolved = match resolvedMember {
+        case Some(_) => true
+        case None => false
+      }
+      let identity = memberIdentity(
+        resolvedMember,
+        objectName,
+        fieldName,
+      )
+      if context.profile == "bootstrap" &&
+        (memberResolved || !objectResolved) && deniedLeaf(identity) {
+        insertFinding(
+          output,
+          sourceFinding(
+            context.moduleIndex,
+            node.lo,
+            node.hi,
+            "bootstrap/no-host-leaf",
+            "runtime leaf `{identity}` is not available to the Bootstrap Profile",
+          ),
+        )
+      }
+      let testNamespace = if memberResolved {
+        testFrameworkIdentity(identity)
+      } else {
+        !objectResolved && objectName == "Test"
+      }
+      if testNamespace && testMember(fieldName) {
+        appendTestFramework(
+          output,
+          context.profile,
+          context.moduleIndex,
+          node.lo,
+          node.hi,
+          "test-only `Test.*` namespace member",
+        )
+      }
+    }
+    case _ => ()
+  }
+}
+
+function appendSourceNodeFindings(
+  output: Array<PreviewCheckDiagnostic>,
+  context: ProfileModuleContext,
+  node: PreviewAstNode,
+  ordinal: int,
+) -> () {
+  appendCompositionFinding(output, context, node, ordinal)
+  appendIdentifierFinding(output, context, node)
+  appendBootstrapSyntaxFinding(output, context, node)
+  appendImportFinding(output, context, node, ordinal)
+  appendMemberFinding(output, context, node, ordinal)
+}
+
+function appendSourceFindings(
+  output: Array<PreviewCheckDiagnostic>,
+  profile: string,
+  modules: Array<PreviewModuleResult>,
+  referenceCatalog: ProfileReferenceCatalog,
+) -> () {
+  let mut moduleIndex = 0
+  for module in modules {
+    if module.identity != "std" && !module.identity.startsWith("std.") {
+      let context = ProfileModuleContext {
+        profile: profile,
+        moduleIndex: moduleIndex,
+        module: module,
+        source: Bytes.encodeUtf8(module.source),
+        referenceCatalog: referenceCatalog,
+        childIndexes: directChildIndexes(module.ast),
+      }
+      let mut ordinal = 0
+      for node in module.ast {
+        appendSourceNodeFindings(output, context, node, ordinal)
+        ordinal += 1
+      }
+    }
+    moduleIndex += 1
+  }
+  ()
+}
+
+function appendBootstrapTypedFindings(
+  output: Array<PreviewCheckDiagnostic>,
+  typedNodes: Array<PreviewTypedNode>,
+  typedCalls: Array<PreviewTypedCall>,
+  typedCaptures: Array<PreviewTypedCapture>,
+) -> () {
+  let mut typedOutput: Array<PreviewCheckDiagnostic> = []
+  for node in typedNodes {
+    if node.ambient {
+      insertTypedFinding(
+        typedOutput,
+        typedFinding(
+          node.moduleIndex,
+          node.lo,
+          node.hi,
+          "bootstrap/no-ambient-type",
+          "the compiler kernel may not retain an ambient or unexplained type",
+        ),
+      )
+    }
+  }
+  for call in typedCalls {
+    if call.ambient {
+      insertTypedFinding(
+        typedOutput,
+        typedFinding(
+          call.moduleIndex,
+          call.lo,
+          call.hi,
+          "bootstrap/no-ambient-type",
+          "the compiler kernel may not retain an unexplained callable or result type",
+        ),
+      )
+    }
+  }
+  for node in typedNodes {
+    appendTypeFinding(typedOutput, node.moduleIndex, node.lo, node.hi, node.typeValue)
+  }
+  for call in typedCalls {
+    appendCallTypeFinding(typedOutput, call)
+  }
+  for capture in typedCaptures {
+    appendTypeFinding(
+      typedOutput,
+      capture.moduleIndex,
+      capture.referenceLo,
+      capture.referenceHi,
+      capture.typeValue,
+    )
+  }
+  for found in typedOutput {
+    insertFinding(output, found)
+  }
+  ()
+}
+
+export function checkProfile(
+  profile: string,
+  modules: Array<PreviewModuleResult>,
+  references: Array<PreviewResolvedReference>,
+  typedNodes: Array<PreviewTypedNode>,
+  typedCalls: Array<PreviewTypedCall>,
+  typedCaptures: Array<PreviewTypedCapture>,
+) -> Result<Array<PreviewCheckDiagnostic>, string> {
+  if profile == "" {
+    return Ok([])
+  }
+  if profile != "agent-pack" &&
+    profile != "test-profile" &&
+    profile != "bootstrap" {
+    return Err("unsupported compiler profile `{profile}`")
+  }
+  let mut output: Array<PreviewCheckDiagnostic> = []
+  let referenceCatalog = profileReferenceCatalog(references)
+  appendSourceFindings(output, profile, modules, referenceCatalog)
+  if profile == "bootstrap" {
+    appendBootstrapTypedFindings(output, typedNodes, typedCalls, typedCaptures)
+  }
+  Ok(output)
+}

@@ -1,0 +1,8 @@
+let mut оценки: Map<string, int> = Map.new()
+оценки.insert("alice", 10)
+оценки.insert("bob", 20)
+
+let оценкаAlice = оценки.get("alice")    // Some(10) — None, если ключа нет
+let удалено = оценки.remove("bob")       // Some(20) — Some(старое) если был, иначе None
+let знаетAlice = "alice" in оценки.keys  // принадлежность идёт через представление keys
+print("Есть alice: {знаетAlice}")

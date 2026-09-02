@@ -1,0 +1,14 @@
+import codegen { emitReport }
+import diagnostics { collectDiagnostics }
+import order { orderNames }
+import syntax { atom, group }
+
+let nodes = [
+  atom("토", 0, 3),
+  atom("파즈", 3, 9),
+  atom("broken", 12, 10),
+]
+let root = group("Module", nodes)
+let ordered = orderNames(["beta", "alpha", "beta", "감마"])
+let diagnostics = collectDiagnostics(nodes)
+let generated = emitReport(root, diagnostics, ordered)

@@ -1,0 +1,9 @@
+function applyTwice<T>(value: T, transform: (T) -> T) -> T {
+    transform(transform(value))
+}
+
+let five = applyTwice(3, x => x + 1)            // T inferred as int
+let loud = applyTwice("topaz", x => "{x}!")     // T inferred as string
+
+print("{five}")   // 5
+print(loud)       // "topaz!!"

@@ -1,0 +1,3 @@
+import left
+import right
+let x = 1

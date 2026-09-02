@@ -1,0 +1,9 @@
+[package]
+name = "registry_dep_root"
+version = "0.1.0"
+language = "5.4"
+entry = "src/main.tpz"
+
+[dependencies]
+std = "5.4"
+greeter = "1.0.0"

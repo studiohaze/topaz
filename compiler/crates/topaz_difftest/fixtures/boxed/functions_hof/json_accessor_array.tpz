@@ -1,0 +1,4 @@
+match JSON.parse("[10, 20, 30]") {
+  case Ok(j) => print("k={j.kind()} len={j.length()} at1={j.at(1)} oob={j.at(9)}")
+  case Err(e) => print("e")
+}

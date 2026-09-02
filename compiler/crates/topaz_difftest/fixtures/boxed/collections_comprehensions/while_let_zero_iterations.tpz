@@ -1,0 +1,6 @@
+let opt: Option<int> = None
+let mut ran = 0
+while let Some(n) = opt {
+  ran = ran + n
+}
+ran

@@ -1,0 +1,11 @@
+
+function bump(value: int) -> int {
+    value + 100
+}
+function main() -> int {
+    let mut m = Map.new()
+    m.insert("a", 1)
+    m.update("a", 0, bump)
+    m.getOr("a", -1)
+}
+main()

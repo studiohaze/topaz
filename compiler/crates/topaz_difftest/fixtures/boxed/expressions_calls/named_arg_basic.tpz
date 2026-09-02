@@ -1,0 +1,2 @@
+function f(a: int, b: int) { a - b }
+f(b: 3, a: 10)

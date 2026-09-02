@@ -1,0 +1,2 @@
+let r = { get: (i) => i + 1 }
+r.get(5)

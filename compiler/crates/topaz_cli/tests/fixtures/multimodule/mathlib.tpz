@@ -1,0 +1,2 @@
+export function double(x: int) { x * 2 }
+export const ANSWER = 42

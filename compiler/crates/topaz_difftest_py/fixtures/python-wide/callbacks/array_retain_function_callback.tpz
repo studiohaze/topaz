@@ -1,0 +1,10 @@
+
+function large(x: int) -> bool {
+    x > 2
+}
+function main() -> int {
+    let mut xs = [1, 2, 3, 4]
+    xs.retain(large)
+    xs[0] + xs.length
+}
+main()

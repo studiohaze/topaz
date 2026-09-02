@@ -1,0 +1,107 @@
+{
+  "schema": "lispex.f15-final-provider-court/v1",
+  "subjects": {
+    "evaluator_source_revision": "e3909e56491b53c61a63efaff51b6093019d8b27",
+    "provider_wire_revision": "451027beb8daff90c09364a1fd38a2a9f3790e55",
+    "qualification_revision": "8e7d4bf2a1bc550b5e1315449002cf2938952ec4",
+    "cross_architecture_revision": "baf0907c229283e6706a6ceb91dcaef41e225a37",
+    "artifact_sha256": "dd4cde2976d825ae99b542d308d87489ac96848e0710329dbb9173664d8c5ad8",
+    "component_manifest_sha256": "741275df24d81b7eb002657c285fb142a6f089ec5ebc744fbb5a88c749fc1b09",
+    "redistribution_sha256": "7b28fb74bd0d05b9b6aee190a2d4cb863f5b0fcea7ed23946bd00068a3fc4511"
+  },
+  "inputs": {
+    "execution_record": {
+      "path": "docs/bounded-execution/f15-final-provider-execution-inputs.v1.json",
+      "sha256": "6222dc50e99ca51ac85e6f214b2c03a692493c1aac9b6c9ec6b17c30bc10df28"
+    },
+    "semantic_surface_closure": {
+      "path": "docs/bounded-execution/f15-final-semantic-surface-closure.v1.json",
+      "sha256": "271ac76509fd77363eb317f0511b697604484d653ffd9d5a09194d691b4bb8d8"
+    },
+    "full_machine_contract": {
+      "path": "docs/bounded-execution/f15-full-provider-machine-contract.v1.json",
+      "sha256": "de774f9de996faa848f5088f23202403ad2889f070f5ce4b89bc859a2ed0f58a"
+    },
+    "full_vectors": {
+      "path": "products/full-embed-evaluator/v1.15.8/vectors/vectors.v1.json",
+      "sha256": "7455460787a0ce53d92d96834e055462b0d4407795c61033b0bdf274e5627337"
+    },
+    "restricted_machine_contract": {
+      "path": "docs/bounded-execution/f15-retained-restricted-lda-c1-machine-contract.v1.json",
+      "sha256": "e860efb53189f6f0c9de64a31eb2b1b331a96aaeebf99a76835aa25fb8920662"
+    },
+    "restricted_vectors": {
+      "path": "products/embed-evaluator/handoffs/lda-c1/v1/vectors/vectors.v1.json",
+      "sha256": "d110f7c2c4e52a321c8c808992b2bfadd7658e9cc739faaa9064841471975d9d"
+    }
+  },
+  "evidence": [
+    {
+      "kind": "post-b7-structural-closure",
+      "path": "docs/bounded-execution/f15-provider-evidence/post-b7-structural-closure.v1.json",
+      "sha256": "f29f99f443405971697286d2f931fff32e048922cb9d8a864e0cac01215ce82d"
+    },
+    {
+      "kind": "post-closure-meter-site-reachability",
+      "path": "docs/bounded-execution/f15-provider-evidence/post-closure-meter-site-reachability.v1.json",
+      "sha256": "47f9f8f81634dc962218ee115cc7f68aa460f77eae6c00d86977dfa57bf35bed"
+    },
+    {
+      "kind": "post-closure-mutation",
+      "path": "docs/bounded-execution/f15-provider-evidence/post-closure-mutation.v1.json",
+      "sha256": "2c9cd10e6ad1e902ed83f443925136130a22909e62fe9ab04bbe67d724cef9cb"
+    },
+    {
+      "kind": "post-closure-property-fuzz",
+      "path": "docs/bounded-execution/f15-provider-evidence/post-closure-property-fuzz.v1.json",
+      "sha256": "db08b2f09b9e8fcdaf1012955c3bf84c5934e98c7ff7b02f7620d2ae8362f8fb"
+    },
+    {
+      "kind": "post-closure-safety-dominance",
+      "path": "docs/bounded-execution/f15-provider-evidence/post-closure-safety-dominance.v1.json",
+      "sha256": "89ccdafd38a4802df78beb4e3bec883cc309f66ca6cf520f185f9a87f6228bdd"
+    },
+    {
+      "kind": "cross-architecture-portable-core",
+      "path": "docs/bounded-execution/f15-provider-evidence/cross-architecture-portable-core.v1.json",
+      "sha256": "d552481c0c9d7c34c83a02852c2279fb8f34781fce8a31ed3f20a8eb8116e6f2"
+    },
+    {
+      "kind": "installed-source-free-product",
+      "path": "docs/bounded-execution/f15-provider-evidence/installed-source-free-product.v1.json",
+      "sha256": "e0494978ad8dea52e94e90fc01aeb803b7784cf09e88c18f6ba29fced8b01eb3"
+    }
+  ],
+  "evidence_digests": [
+    "f29f99f443405971697286d2f931fff32e048922cb9d8a864e0cac01215ce82d",
+    "47f9f8f81634dc962218ee115cc7f68aa460f77eae6c00d86977dfa57bf35bed",
+    "2c9cd10e6ad1e902ed83f443925136130a22909e62fe9ab04bbe67d724cef9cb",
+    "db08b2f09b9e8fcdaf1012955c3bf84c5934e98c7ff7b02f7620d2ae8362f8fb",
+    "89ccdafd38a4802df78beb4e3bec883cc309f66ca6cf520f185f9a87f6228bdd",
+    "d552481c0c9d7c34c83a02852c2279fb8f34781fce8a31ed3f20a8eb8116e6f2",
+    "e0494978ad8dea52e94e90fc01aeb803b7784cf09e88c18f6ba29fced8b01eb3"
+  ],
+  "result": {
+    "status": "passed",
+    "missing_inputs": 0,
+    "failed_inputs": 0,
+    "stale_inputs": 0,
+    "full_positive_vectors": 6,
+    "full_negative_vectors": 14,
+    "restricted_positive_vectors": 6,
+    "restricted_negative_vectors": 13,
+    "safety_precedence_count": 0,
+    "fallback_count": 0,
+    "fresh_instance_passed": true,
+    "deferred_executable_rows": 0
+  },
+  "boundaries": {
+    "whole_release_pin": false,
+    "component_admission": false,
+    "topaz_implementation_authority": false,
+    "topaz_release_authority": false,
+    "public_compatibility_claim": false,
+    "public_component_release": false,
+    "external_witness": false
+  }
+}

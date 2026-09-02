@@ -1,0 +1,7 @@
+let task = { let: true }
+let mut total = 0
+if task.let {
+    total += 1
+    total += 2
+}
+total

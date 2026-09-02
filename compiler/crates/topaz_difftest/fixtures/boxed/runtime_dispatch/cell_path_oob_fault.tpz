@@ -1,0 +1,3 @@
+let mut xs = [{ a: 1 }]
+xs[5].a = 9
+xs[0]

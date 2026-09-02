@@ -1,0 +1,3 @@
+record Point { x: int, y: int }
+let pts = [Point { x: 1, y: 2 }, Point { x: 3, y: 4 }]
+[ for Point { x, y } in pts => x + y ]

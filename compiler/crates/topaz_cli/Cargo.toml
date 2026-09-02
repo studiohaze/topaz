@@ -1,0 +1,59 @@
+[package]
+name = "topaz_cli"
+description = "Developer driver for the Topaz compiler (parse, dump-ast, check-corpus)"
+version.workspace = true
+license.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "topaz"
+path = "src/main.rs"
+
+[[test]]
+name = "historical_lit_projection"
+path = "tests/historical_lit_projection.rs"
+required-features = ["historical-lit-projection"]
+
+[[test]]
+name = "installed_lispex_tree_replay"
+path = "tests/installed_lispex_tree_replay.rs"
+required-features = ["historical-lit-projection"]
+
+[features]
+historical-lit-projection = []
+test-invalid-stage2-identity = [
+  "topaz_self_frontend/test-invalid-stage2-identity",
+]
+
+[dependencies]
+topaz_diag = { workspace = true }
+topaz_syntax = { workspace = true }
+topaz_lexer = { workspace = true }
+topaz_parser = { workspace = true }
+topaz_resolve = { workspace = true }
+topaz_value = { workspace = true }
+topaz_package = { workspace = true }
+topaz_check = { workspace = true }
+topaz_hir = { workspace = true }
+topaz_lower = { workspace = true }
+topaz_kernel = { workspace = true }
+topaz_self_frontend = { workspace = true }
+topaz_interp = { workspace = true }
+topaz_lispex_embed = { workspace = true }
+topaz_lispex_product = { workspace = true }
+topaz_mcp = { workspace = true }
+topaz_host_native = { workspace = true }
+topaz_emit = { workspace = true }
+topaz_emit_py = { workspace = true }
+rustix = { workspace = true }
+# Internal workspace tool (not an external dependency): check-corpus
+# drives the same extractor rows the test harness uses.
+corpus-extract = { path = "../../tools/corpus-extract" }
+
+[dev-dependencies]
+serde_json = { workspace = true }
+topaz_package = { workspace = true }
+
+[lints]
+workspace = true

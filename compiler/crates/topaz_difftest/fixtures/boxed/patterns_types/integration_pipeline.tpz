@@ -1,0 +1,5 @@
+let nums = [1, 2, 3, 4, 5, 6]
+let result = nums |> filter((n) => n > 2) |> map((n) => n * 10)
+let sum = result |> reduce(0, (a, b) => a + b)
+print("kept {result.length}, sum {sum}")
+result

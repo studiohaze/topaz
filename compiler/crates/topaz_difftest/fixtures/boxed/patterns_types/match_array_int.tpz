@@ -1,0 +1,2 @@
+match [1, 2, 3] { case n: Array<int> => 1
+case _ => 0 }

@@ -1,0 +1,23 @@
+
+function add(a: int, b: int) -> int {
+    a + b
+}
+function inc(x: int) -> int {
+    x + 1
+}
+let xs = [1, 2, 3]
+let reduced = xs.reduce(initial: loop {
+    print("initial")
+    break 5
+}, f: add)
+let mut m = map { "a": 1 }
+m.update(k: loop {
+    print("update-key")
+    break "b"
+}, initial: loop {
+    print("update-initial")
+    break 4
+}, f: inc)
+let updated = m.getOr("b", 0)
+print("{reduced}:{updated}")
+0

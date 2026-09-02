@@ -1,0 +1,13 @@
+let user: Option<{ name: string, profile: Option<{ city: string }> }> =
+    Some({ name: "Ann", profile: Some({ city: "Seoul" }) })
+
+// Each hop returns Option<...>
+let nameOpt = user?.name
+let cityOpt = user?.profile?.city
+
+// Combine with ?? for defaults
+let city = user?.profile?.city ?? "Unknown"
+
+// Not generic object chaining; use `.` for non‑Option values
+let plain = { name: "Jo" }
+let ok = plain.name        // use .

@@ -1,0 +1,35 @@
+[package]
+workspace = "../../difftest"
+name = "topaz_difftest"
+version.workspace = true
+license.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+# Workspace-internal differential harness (CDR-006 §7): it compiles and
+# runs emitted programs against the WORKSPACE runtime and compares them
+# to the interpreter in-process. Not part of the shipped, vendored
+# closure — so (unlike emitted crates) it MAY use a build script.
+publish = false
+
+# INVARIANT (CDR-006 §7, CDR-003 §13): this harness pins run≡build over the
+# runtime-semantics lane — resolve → `emit_module` / `Machine`, with NO checker
+# in the loop. It must NEVER gain a `topaz_check` (or `topaz_cli`) dependency:
+# routing fixtures through the static checker would couple the differential
+# harness to the CLI's default check gate and silently drop the TPZ5xxx
+# dynamic-guard fixtures the harness exists to pin.
+[dependencies]
+topaz_rt = { workspace = true }
+topaz_interp = { workspace = true }
+topaz_value = { workspace = true }
+topaz_diag = { workspace = true }
+topaz_resolve = { workspace = true }
+topaz_syntax = { workspace = true }
+
+[build-dependencies]
+topaz_emit = { workspace = true }
+topaz_resolve = { workspace = true }
+topaz_lower = { workspace = true }
+topaz_syntax = { workspace = true }
+
+[lints]
+workspace = true

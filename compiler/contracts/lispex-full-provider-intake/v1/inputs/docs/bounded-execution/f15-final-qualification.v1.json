@@ -1,0 +1,66 @@
+{
+  "schema": "lispex.f15-final-evaluator-qualification/v1",
+  "status": "qualified-and-frozen",
+  "provider_contract_frozen": true,
+  "public_contract": false,
+  "release_authority": false,
+  "source_revision": "e3909e56491b53c61a63efaff51b6093019d8b27",
+  "provider_wire_revision": "451027beb8daff90c09364a1fd38a2a9f3790e55",
+  "qualification_candidate_revision": "8e7d4bf2a1bc550b5e1315449002cf2938952ec4",
+  "cross_architecture_revision": "baf0907c229283e6706a6ceb91dcaef41e225a37",
+  "evaluator": {
+    "path": "products/full-embed-evaluator/v1.15.7/lispex-full-embed-evaluator.wasm",
+    "bytes": 1484873,
+    "sha256": "dd4cde2976d825ae99b542d308d87489ac96848e0710329dbb9173664d8c5ad8",
+    "imports": 0,
+    "memory_initial_pages": 19,
+    "memory_maximum_pages": 256
+  },
+  "contracts": {
+    "language_profile_id": "lispex-profile-1.5",
+    "semantic_profile_id": "lispex/r7rs-rule-current-profile-bounded/1",
+    "feature_set_sha256": "6ff16159ab9c6758c1485b67c928a9b3b4a896e4f2ecf96e4cf3cbaf5ac22fae",
+    "model_id": "lispex-full-vm-meter/1",
+    "abi_id": "lispex.embed-wasm-abi/v1",
+    "value_codec_id": "lispex.embed-value/v1",
+    "transcript_id": "lispex.embed-transcript/v1",
+    "receipt_schema_id": "lispex.embed-receipt-core/v1",
+    "component_id": "lispex-evaluator/rust-vm-current-profile/1"
+  },
+  "semantic_surface_closure": {
+    "path": "docs/bounded-execution/f15-final-semantic-surface-closure.v1.json",
+    "sha256": "271ac76509fd77363eb317f0511b697604484d653ffd9d5a09194d691b4bb8d8"
+  },
+  "denominator": {
+    "primitive_rows": 205,
+    "deferred_rows": 0,
+    "opcodes": 22,
+    "guest_calling_rows": 18
+  },
+  "mutation": {
+    "generated": 253,
+    "detected": 253,
+    "survivors": 0
+  },
+  "portable_core": {
+    "bytes": 1930,
+    "raw_sha256": "3cbd38dc840902d4e606431545bf9cadb584fafe6c023add26745a49a9da7dd0",
+    "vector": "products/full-embed-evaluator/v1.15.8/vectors/complete.core"
+  },
+  "cross_architecture": {
+    "workflow": ".github/workflows/f15-final-provider-cross-architecture.yml",
+    "run_id": 30646266047,
+    "workflow_revision": "baf0907c229283e6706a6ceb91dcaef41e225a37",
+    "qualification_revision": "8e7d4bf2a1bc550b5e1315449002cf2938952ec4",
+    "portable_core_byte_equal": true
+  },
+  "forbidden": {
+    "discovery": true,
+    "fallback": true,
+    "host_capability": true,
+    "remote_transport": true,
+    "instance_pooling": true,
+    "vouch_promotion": true,
+    "topaz_consumption_implementation": true
+  }
+}

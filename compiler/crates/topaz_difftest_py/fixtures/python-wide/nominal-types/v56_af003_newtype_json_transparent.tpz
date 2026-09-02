@@ -1,0 +1,13 @@
+
+newtype UserId = int
+newtype Box<T> = T
+newtype Outer<T> = Box<T>
+function main() -> string {
+    let boxed: Box<int> = Box(8)
+    let outer: Outer<int> = Outer(boxed)
+    match JSON.stringify([UserId(7), outer]) {
+        case Ok(text) => text
+        case Err(error) => error
+    }
+}
+main()

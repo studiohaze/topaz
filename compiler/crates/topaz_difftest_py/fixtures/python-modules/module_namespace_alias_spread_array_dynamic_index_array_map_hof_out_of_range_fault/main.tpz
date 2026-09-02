@@ -1,0 +1,13 @@
+
+import util
+
+function main() -> int {
+    let seeds = [0, 2]
+    let i = seeds[1]
+    let base = util.base
+    let callbacks = [...base]
+    let xs = [1]
+    xs.map(callbacks[i])
+    0
+}
+main()

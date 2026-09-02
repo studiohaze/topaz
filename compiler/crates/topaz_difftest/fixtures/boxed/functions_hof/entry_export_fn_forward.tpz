@@ -1,0 +1,3 @@
+export function f() -> int { g() }
+export function g() -> int { 2 }
+f()

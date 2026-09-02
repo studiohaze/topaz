@@ -1,0 +1,3 @@
+let mut xs = [[Some(1)]]
+for [Some(x)] in xs { xs[0].push(Some(2)) }
+xs[0].length

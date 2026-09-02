@@ -1,0 +1,2 @@
+let add10 = x => add(10, x)
+let result = map([1, 2, 3], add10)  // [11, 12, 13]

@@ -1,0 +1,16 @@
+
+function keep(x: int) -> bool {
+    let mut i = 0
+    while i < 200 {
+        i = i + 1
+    }
+    (1 / 0) == 0
+}
+
+concurrent {
+    slow: {
+        let mut xs = [1]
+        xs.retain(keep)
+    }
+}
+0

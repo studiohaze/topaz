@@ -1,0 +1,8 @@
+function hidden() -> int {
+    record Hidden {
+        value: int,
+    }
+    0
+}
+
+hidden()

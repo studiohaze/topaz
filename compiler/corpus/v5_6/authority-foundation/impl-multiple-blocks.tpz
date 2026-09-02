@@ -1,0 +1,14 @@
+record Point { x: int }
+
+impl Point {}
+
+impl Point {
+    function plus(self, n: int) -> int { self.x + n }
+}
+
+impl Point {
+    function doubled(self,) -> int { self.plus(self.x) }
+}
+
+let point: Point = Point { x: 2 }
+print("{point.doubled()}")

@@ -1,0 +1,10 @@
+
+import ops { add as plus }
+function mark(label: string, n: int) -> int {
+    print(label)
+    n
+}
+function main() -> int {
+    plus(c: mark("c", 3), a: mark("a", 4))
+}
+main()

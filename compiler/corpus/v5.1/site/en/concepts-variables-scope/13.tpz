@@ -1,0 +1,10 @@
+// Good: Use let by default
+let config = {
+    theme: "dark",
+    language: "English"
+}
+
+// Use let mut only when necessary
+let mut progressStatus = "started"
+progressStatus = "in-progress"
+progressStatus = "completed"

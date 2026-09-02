@@ -1,0 +1,2 @@
+match "y" { case "y" | "yes" => 1
+case _ => 0 }

@@ -1,0 +1,3 @@
+let r = { res: Ok(7) }
+let { res: Ok(v) } = r
+v

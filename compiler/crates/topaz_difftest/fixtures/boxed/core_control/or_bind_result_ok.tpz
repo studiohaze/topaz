@@ -1,0 +1,6 @@
+function f(r: Result<int, int>) -> int {
+    match r {
+        case Ok(x) | Err(x) => x
+    }
+}
+f(Ok(5))

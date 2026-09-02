@@ -1,0 +1,7 @@
+function обработатьФайл(путь: string) -> Result<string, string> {
+    let файл = open(путь)?
+    defer { файл.close() }                  // всегда закрывает (LIFO)
+
+    let содержимое = файл.read()?           // работа с ресурсом
+    Ok(содержимое)
+}

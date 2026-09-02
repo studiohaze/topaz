@@ -1,0 +1,4 @@
+let mut m = Map.new()
+m.insert("a", 1)
+"a" |> m.update(0, (v) => v + 5)
+m.get("a")

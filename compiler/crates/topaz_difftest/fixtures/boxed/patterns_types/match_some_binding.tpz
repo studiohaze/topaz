@@ -1,0 +1,2 @@
+match Some(5) { case Some(x) => x
+case None => 0 }

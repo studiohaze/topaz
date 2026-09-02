@@ -1,0 +1,16 @@
+
+import util
+function main() -> int {
+    let callbacks = if true {
+        util.callbacks
+    } else {
+        util.callbacks
+    }
+    let handlers = if false {
+        util.handlers
+    } else {
+        util.handlers
+    }
+    callbacks[0](a: 5) + callbacks[1](b: 3, a: 10) + handlers.primary(a: 7)
+}
+main()

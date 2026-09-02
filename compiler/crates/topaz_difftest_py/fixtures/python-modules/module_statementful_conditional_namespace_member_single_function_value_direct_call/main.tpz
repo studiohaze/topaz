@@ -1,0 +1,13 @@
+
+import util
+function main() -> int {
+    let seeds = [1]
+    let f = if seeds[0] == 1 {
+        let marker = 1
+        util.add
+    } else {
+        util.add
+    }
+    f(a: 5)
+}
+main()

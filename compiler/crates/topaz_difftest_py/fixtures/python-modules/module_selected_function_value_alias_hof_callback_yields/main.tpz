@@ -1,0 +1,13 @@
+
+import util { alias }
+concurrent {
+    slow: {
+        let xs = [1]
+        xs.map(alias)
+    }
+    boom: {
+        let ys = [1]
+        ys[2]
+    }
+}
+0

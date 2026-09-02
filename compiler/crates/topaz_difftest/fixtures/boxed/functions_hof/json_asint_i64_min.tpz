@@ -1,0 +1,4 @@
+match JSON.parse("-9223372036854775808") {
+  case Ok(j) => print("i={j.asInt()}")
+  case Err(e) => print("e")
+}

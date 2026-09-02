@@ -1,0 +1,16 @@
+
+import contract.request { parseRequest }
+import contract.handler { handle }
+import contract.response { renderResponse }
+
+function main() -> Result<int, string> {
+    let file = open("request.json")?
+    defer file.close()
+    let body = file.read()?
+    let req = parseRequest(body)?
+    let res = handle(req)
+    print(renderResponse(res)?)
+    Ok(res.status)
+}
+
+main()

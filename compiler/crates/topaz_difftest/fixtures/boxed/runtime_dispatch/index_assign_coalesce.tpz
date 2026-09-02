@@ -1,0 +1,4 @@
+let mut xs = [null, 2]
+xs[0] ??= 7
+xs[1] ??= 8
+xs

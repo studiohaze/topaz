@@ -1,0 +1,2 @@
+function f(a: int, ...rest: int) { [a, rest] }
+f(1, 2, 3)

@@ -1,0 +1,2 @@
+newtype Bad = Map<string, int>
+let values: Set<Bad> = Set.of(Bad(Map.new()))

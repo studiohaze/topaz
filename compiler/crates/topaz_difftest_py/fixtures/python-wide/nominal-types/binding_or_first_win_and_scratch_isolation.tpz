@@ -1,0 +1,15 @@
+
+function main() -> string {
+    let both = { left: 1, right: 2 }
+    let first = match both {
+        case { left: x, right: 2 } | { left: 1, right: x } => x
+        case _ => -1
+    }
+    let missed = { left: 9, right: 2 }
+    let scratch = match missed {
+        case { left: x, right: 1 } | { left: 0, right: x } => x
+        case { left: x } => x
+    }
+    "{first}:{scratch}"
+}
+main()

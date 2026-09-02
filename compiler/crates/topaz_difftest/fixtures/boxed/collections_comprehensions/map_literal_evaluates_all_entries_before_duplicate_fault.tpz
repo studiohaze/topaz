@@ -1,0 +1,8 @@
+map {
+  { print("k1")
+    "same" }: { print("v1")
+    1 },
+  { print("k2")
+    "same" }: { print("v2")
+    2 },
+}

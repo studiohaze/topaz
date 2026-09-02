@@ -1,0 +1,12 @@
+let numbers = [1, 2, 3]
+
+let safe = numbers.get(10)        // None — non-faulting read
+// numbers[10] would fault: direct indexing aborts when out of bounds
+
+// Keep recoverable failure in Result instead of fault-prone forms
+function safeIndex(xs: Array<int>, i: int) -> Result<int, string> {
+    match xs.get(i) {
+        case Some(value) => Ok(value)
+        case None => Err("Index {i} is out of bounds")
+    }
+}

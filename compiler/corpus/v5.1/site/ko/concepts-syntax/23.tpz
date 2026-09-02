@@ -1,0 +1,14 @@
+let 경로 = p"/home/{사용자}/docs/{파일명}"        // 경로 정규화
+let 패턴 = r"^[a-z0-9_]+$"                         // 정규식 이스케이프 간소화
+let 명령 = sh"grep {패턴} {파일}"                  // 안전 셸 템플릿(실행 정책 적용)
+
+// SQL: 보간은 항상 파라미터 바인딩으로 처리 (직접 문자열 삽입 금지)
+let 쿼리 = sql"SELECT * FROM users WHERE age > {나이} AND city = {도시}"
+
+// 여러 줄 SQL은 삼중따옴표 형식과 결합합니다
+let 보고서 = sql"""
+    SELECT name, total
+    FROM orders
+    WHERE region = {지역}
+    ORDER BY total DESC
+    """

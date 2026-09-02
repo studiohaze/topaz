@@ -1,0 +1,9 @@
+// Recursive pattern matching for list processing
+function listSum(list: Array<int>) -> int {
+    match list {
+        case [] => 0
+        case [first, ..rest] => first + listSum(rest)
+    }
+}
+
+print("List sum: {listSum([1, 2, 3, 4, 5])}")  // 15

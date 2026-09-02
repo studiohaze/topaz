@@ -1,0 +1,3 @@
+let d = Decimal.fromInt(-42)
+let f = d.toString
+f()

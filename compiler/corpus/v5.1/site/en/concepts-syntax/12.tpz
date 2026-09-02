@@ -1,0 +1,13 @@
+// Restrict types to exact values
+type TrafficLight = "red" | "yellow" | "green"
+type DiceRoll = 1 | 2 | 3 | 4 | 5 | 6
+type StatusCode = 200 | 404 | 500
+
+function handleSignal(color: TrafficLight) {
+    match color {
+        case "red" => stop()
+        case "yellow" => caution()
+        case "green" => go()
+        // Compiler ensures all cases are handled!
+    }
+}

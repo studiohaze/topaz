@@ -1,0 +1,4 @@
+type N = int
+let mut s = 0
+for x: N in [1, 2, 3] { s = s + x }
+s

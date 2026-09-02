@@ -1,0 +1,15 @@
+// 커링된 함수
+function 더하기(a: int) -> (int) -> int {
+    return (b: int) => a + b
+}
+
+let 더하기5 = 더하기(5)
+print("{더하기5(3)}")  // 8
+
+// 다중 매개변수 커링
+function 곱하고더하기(곱수: float) -> (float) -> (float) -> float {
+    return (더할수: float) => (값: float) => 값 * 곱수 + 더할수
+}
+
+let 두배하고십더하기 = 곱하고더하기(2.0)(10.0)
+print("{두배하고십더하기(5.0)}")  // 20.0 (5 * 2 + 10)

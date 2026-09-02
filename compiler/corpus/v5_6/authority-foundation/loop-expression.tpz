@@ -1,0 +1,4 @@
+let value = loop {
+    break 5
+}
+value

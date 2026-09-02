@@ -1,0 +1,3 @@
+import utils.strings { trim as cut }
+let t = cut("x")
+let bad = trim("x")

@@ -1,0 +1,2 @@
+import facade
+let t = facade.trim("x")

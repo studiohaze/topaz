@@ -1,0 +1,6 @@
+record User derives Eq, Show {
+    name: string,
+}
+
+let user: User = User { name: "Ada" }
+print("{user}")

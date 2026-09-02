@@ -1,0 +1,13 @@
+function lead() {
+  print("L")
+  5
+}
+function rcv() {
+  print("R")
+  { get: (a, b) => a + b }
+}
+function arg() {
+  print("A")
+  9
+}
+lead() |> rcv().get(arg())

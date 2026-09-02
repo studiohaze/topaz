@@ -1,0 +1,3 @@
+let parse = Decimal.parse
+match parse("10.50") { case Some(d) => d.toString()
+case None => "none" }

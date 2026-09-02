@@ -1,0 +1,14 @@
+function scopeExample() {
+    let outerVariable = "outside"
+    
+    if true {
+        let innerVariable = "inside"      // Block scope
+        let mut blockMutable = 10            // Block scope
+        
+        print(outerVariable)             // Accessible (outer scope)
+        print(innerVariable)             // Accessible (same scope)
+    }
+    
+    print(outerVariable)                 // Accessible
+    // print(innerVariable)              // Error! Cannot access outside block
+}

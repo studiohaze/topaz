@@ -1,0 +1,3 @@
+newtype UserId = int
+let m = map { UserId(1): "a" }
+m.getOr(UserId(1), "miss")

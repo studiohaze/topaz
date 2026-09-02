@@ -1,0 +1,3 @@
+type C = int
+let x: C | string = "s"
+x

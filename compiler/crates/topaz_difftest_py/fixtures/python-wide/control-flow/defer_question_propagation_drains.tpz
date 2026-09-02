@@ -1,0 +1,7 @@
+
+function f() -> Result<int, string> {
+    defer print("cleanup")
+    let x = Err("boom")?
+    Ok(x)
+}
+f()

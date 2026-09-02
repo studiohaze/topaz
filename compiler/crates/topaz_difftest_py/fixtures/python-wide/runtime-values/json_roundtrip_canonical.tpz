@@ -1,0 +1,8 @@
+
+function f() -> Result<int, string> {
+    let parsed = JSON.parse("\{\"b\":2,\"a\":[true,null,\"한\"]\}")?
+    let text = JSON.stringify(parsed)?
+    print(text)
+    Ok(0)
+}
+f()

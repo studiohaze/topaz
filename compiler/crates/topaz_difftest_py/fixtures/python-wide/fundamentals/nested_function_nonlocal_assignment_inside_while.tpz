@@ -1,0 +1,12 @@
+
+function main() -> int {
+    let mut counter = 0
+    function bump() -> int {
+        while counter < 1 {
+            counter = counter + 1
+        }
+        counter
+    }
+    bump()
+}
+main()

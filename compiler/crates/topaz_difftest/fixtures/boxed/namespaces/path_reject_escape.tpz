@@ -1,0 +1,2 @@
+match Path.from("../escape") { case Ok(p) => p.toString()
+case Err(e) => e }

@@ -1,0 +1,6 @@
+let r = { write: (prefix: int, suffix: int) => prefix * 10 + suffix }
+let direct = r.write(prefix: 1, suffix: 2)
+let optional = Some(r)?.write(prefix: 3, suffix: 4)
+let piped = 5 |> r.write(prefix: 6, suffix: _)
+let optionalPiped = 7 |> Some(r)?.write(prefix: 8, suffix: _)
+{ direct: direct, optional: optional, piped: piped, optionalPiped: optionalPiped }

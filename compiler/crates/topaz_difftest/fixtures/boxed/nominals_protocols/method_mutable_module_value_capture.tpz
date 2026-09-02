@@ -1,0 +1,7 @@
+record Point { x: int }
+let mut offset = 1
+impl Point { function shifted(self) -> int { self.x + offset } }
+let p: Point = Point { x: 1 }
+let before = p.shifted()
+offset = 4
+before * 10 + p.shifted()

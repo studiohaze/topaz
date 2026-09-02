@@ -1,0 +1,5 @@
+newtype UserId = int
+record Account { id: UserId, name: string }
+let a: Account = Account { id: UserId(7), name: "Ada" }
+print("{a.id.value()}/{a.name}")
+0

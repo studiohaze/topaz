@@ -1,0 +1,10 @@
+[[package]]
+name = "local_dep_root"
+version = "0.1.0"
+source = "root"
+manifest_hash = "sha256:686ce8da55fda69fb4e900228f2e43739be4785f6d10b59328653622299eb799"
+
+[[package]]
+name = "local_schema"
+path = "../local-schema"
+hash = "sha256:d8647a2755e78d734c87784a3e83af2a47138a28e9ea3d15bfde190a4a7e2ddf"

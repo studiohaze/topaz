@@ -1,0 +1,7 @@
+newtype Id<T> = T
+
+impl Id {
+    function tag(self) -> int { 0 }
+}
+
+0

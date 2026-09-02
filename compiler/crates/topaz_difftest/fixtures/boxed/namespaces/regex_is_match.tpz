@@ -1,0 +1,2 @@
+match Regex.compile("\\d+") { case Ok(re) => re.isMatch("abc123")
+case Err(e) => false }

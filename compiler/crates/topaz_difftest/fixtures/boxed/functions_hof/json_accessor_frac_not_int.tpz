@@ -1,0 +1,4 @@
+match JSON.parse("1.5") {
+  case Ok(j) => print("i={j.asInt()} t={j.numberText()}")
+  case Err(e) => print("e")
+}

@@ -1,0 +1,10 @@
+record User { name: string }
+
+function demo(base: User) -> int {
+    let User = { name: "shadow" }
+    let next = User { ...base }
+    print("{next}")
+    0
+}
+
+demo(User { name: "Ada" })

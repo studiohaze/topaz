@@ -1,0 +1,19 @@
+[package]
+name = "topaz_mcp"
+description = "Built-in native stdio MCP server for the Topaz toolchain"
+version.workspace = true
+license.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+rmcp = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+tokio = { workspace = true, features = ["io-std"] }
+tokio-util = { workspace = true }
+topaz_mcp_worker = { workspace = true }
+
+[lints]
+workspace = true

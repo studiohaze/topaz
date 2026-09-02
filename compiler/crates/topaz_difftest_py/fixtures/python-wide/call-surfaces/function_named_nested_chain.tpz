@@ -1,0 +1,8 @@
+
+function add(a: int, b: int = 0) -> int {
+    a + b
+}
+function twice(x: int) -> int {
+    add(b: x, a: x)
+}
+twice(add(b: 2, a: 3))

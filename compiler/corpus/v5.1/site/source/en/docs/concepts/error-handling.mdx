@@ -1,0 +1,657 @@
+---
+title: 'Error Handling'
+description: 'Master Topaz powerful error handling system. Learn safe error handling approaches using Result types, Option types, pattern matching, and exception handling optimization strategies.'
+covers: '§12, §13, §13a, §14'
+---
+
+> **Library names note**: Helper and member calls beyond the standard-library minimum — `Math.sqrt`, `.endsWith`, `.contains`, `fileExists`, `hasReadPermission`, `readFileContent`, `createDefaultConfig`, `validateData`, `transformData`, `saveData`, `processFile`, `batchProcess`, `networkRequest`, `Thread.sleep`, `createUser`, `saveToDatabase`, `databaseQuery`, `incrementErrorMetric`, `collectErrorLogs`, `sendAlert`, `sendUrgentAlert`, `input`, `open`, `.read`, `.close`, etc. — are illustrative placeholders, not canonical APIs. `JSON.parse` is a reserved standard-library name whose full typing is deferred.
+
+Error handling is the **core of robust software**. Topaz provides **Result** and **Option** types for type-safe error handling. 
+
+**Result-first philosophy**  
+Topaz canonical error handling uses `Result`, the `?` propagation operator, and `match`. Exception-style forms are not part of Topaz v5.2. Non-recoverable runtime errors travel on a separate channel — **faults** — covered later on this page.
+
+##  Result Type
+
+### Basic Result Usage
+
+```topaz
+// Result<SuccessType, ErrorType>
+function divide(numerator: float, denominator: float) -> Result<float, string> {
+    if denominator == 0.0 {
+        return Err("Cannot divide by zero")
+    }
+    return Ok(numerator / denominator)
+}
+
+// Handling Result
+let result = divide(10.0, 2.0)
+match result {
+    case Ok(value) => print("Result: {value}")
+    case Err(errorMessage) => print("Error: {errorMessage}")
+}
+
+// Various error cases
+function readFile(path: string) -> Result<string, string> {
+    if path == "" {
+        return Err("File path is empty")
+    }
+    
+    if !path.endsWith(".txt") {
+        return Err("Only text files are supported")
+    }
+    
+    if !fileExists(path) {
+        return Err("File not found: {path}")
+    }
+    
+    // Actual file reading logic
+    return Ok("File content")
+}
+```
+
+### Result Handling with match
+
+```topaz
+// Transform success value with match
+let result = match divide(10.0, 2.0) {
+    case Ok(value) => Ok("Result: {value * 2.0}")
+    case Err(error) => Err(error)
+}
+
+match result {
+    case Ok(message) => print(message)     // success message
+    case Err(error) => print("Error: {error}")
+}
+
+// Chain processing with nested match
+function squareRoot(value: float) -> Result<float, string> {
+    if value < 0.0 {
+        return Err("Cannot calculate square root of negative number")
+    }
+    return Ok(Math.sqrt(value))
+}
+
+let finalResult = match divide(100.0, 4.0) {
+    case Ok(value) => match squareRoot(value) {
+        case Ok(root) => Ok("Square root: {root}")
+        case Err(error) => Err(error)
+    }
+    case Err(error) => Err(error)
+}
+
+match finalResult {
+    case Ok(message) => print(message)         // square-root message
+    case Err(error) => print("Error: {error}")
+}
+
+// Error recovery with match
+function useDefault(error: string) -> Result<float, string> {
+    print("Using default value: {error}")
+    return Ok(0.0)
+}
+
+let recoveredResult = match divide(10.0, 0.0) {
+    case Ok(value) => Ok(value)
+    case Err(error) => useDefault(error)
+}
+
+match recoveredResult {
+    case Ok(value) => print("Recovered: {value}")
+    case Err(error) => print("Error: {error}")
+}
+```
+
+### Complex Error Types
+
+```topaz
+// Structured error types
+type FileErrorKind = "not_found" | "permission_denied" | "read_failed" | "format_error"
+type FileError = { kind: FileErrorKind, message: string }
+
+function readConfigFile(path: string) -> Result<{ theme: string }, FileError> {
+    if !fileExists(path) {
+        return Err({ kind: "not_found", message: "Config file not found: {path}" })
+    }
+    
+    if !hasReadPermission(path) {
+        return Err({ kind: "permission_denied", message: "No permission to read: {path}" })
+    }
+    
+    return match readFileContent(path) {
+        case Ok(content) => match JSON.parse(content) {
+            case Ok(config) => Ok({ theme: config.theme })
+            case Err(_) => Err({ kind: "format_error", message: "Invalid JSON format" })
+        }
+        case Err(reason) => Err({ kind: "read_failed", message: reason })
+    }
+}
+
+// Specific error handling: match the closed error-kind union directly,
+// so exhaustiveness is checked statically
+match readConfigFile("config.json") {
+    case Ok(config) => {
+        print("Config loaded successfully")
+        print("Theme: {config.theme}")
+    }
+    case Err(error) => match error.kind {
+        case "not_found" => {
+            print("Config file not found: {error.message}")
+            createDefaultConfig()
+        }
+        case "permission_denied" => print("No permission: {error.message}")
+        case "format_error" => print("Format error: {error.message}")
+        case "read_failed" => print("Read failed: {error.message}")
+    }
+}
+```
+
+##  Option Type
+
+### Basic Option Usage
+
+```topaz
+// Option<T> - value may or may not exist
+function findUser(id: int) -> Option<{ name: string, age: int }> {
+    let users = [
+        { id: 1, name: "TopazDev", age: 25 },
+        { id: 2, name: "CodeMaster", age: 30 }
+    ]
+    
+    for user in users {
+        if user.id == id {
+            return Some({ name: user.name, age: user.age })
+        }
+    }
+    
+    return None
+}
+
+// Handling Option
+match findUser(1) {
+    case Some(user) => print("User found: {user.name}, {user.age} years old")
+    case None => print("User not found")
+}
+
+// Finding element in array — .get is the non-faulting read
+function firstElementInt(array: Array<int>) -> Option<int> {
+    array.get(0)
+}
+
+let numbers = [1, 2, 3, 4, 5]
+match firstElementInt(numbers) {
+    case Some(first) => print("First element: {first}")
+    case None => print("Array is empty")
+}
+```
+
+### Option Handling with match
+
+```topaz
+// Transform value with match
+let result = match findUser(1) {
+    case Some(user) => Some("Hello, {user.name}!")
+    case None => None
+}
+
+match result {
+    case Some(greeting) => print(greeting)
+    case None => print("User not found")
+}
+
+// Chain Options with nested match
+function checkAdult(user: { name: string, age: int }) -> Option<string> {
+    if user.age >= 18 {
+        return Some(user.name)
+    }
+    return None
+}
+
+let adultUser = match findUser(1) {
+    case Some(user) => match checkAdult(user) {
+        case Some(name) => Some("{name} is an adult")
+        case None => None
+    }
+    case None => None
+}
+
+// Provide default value with match
+let userName = match findUser(999) {
+    case Some(user) => user.name
+    case None => "Unknown User"
+}
+
+print("User name: {userName}")  // "User name: Unknown User"
+
+// Filter with condition using match
+let youngUser = match findUser(1) {
+    case Some(user) => if user.age < 30 { Some("{user.name} is young") } else { None }
+    case None => None
+}
+```
+
+### Combining Option and Result
+
+```topaz
+// Convert Option to Result
+function requireUser(id: int) -> Result<{ name: string, age: int }, string> {
+    return match findUser(id) {
+        case Some(user) => Ok(user)
+        case None => Err("User not found: ID {id}")
+    }
+}
+
+// Convert Result to Option
+let optionalResult = match divide(10.0, 0.0) {
+    case Ok(value) => Some(value)
+    case Err(_) => None
+}
+
+match optionalResult {
+    case Some(value) => print("Division successful: {value}")
+    case None => print("Division failed (error message ignored)")
+}
+
+// Complex processing
+function doubleUserAge(id: int) -> Result<int, string> {
+    return match requireUser(id) {
+        case Ok(user) => Ok(user.age * 2)
+        case Err(error) => Err(error)
+    }
+}
+
+match doubleUserAge(1) {
+    case Ok(doubleAge) => print("Double age: {doubleAge}")
+    case Err(error) => print("Error: {error}")
+}
+```
+
+##  Error Propagation and Early Return
+
+### ? Operator (Error Propagation)
+
+```topaz
+// Automatic error propagation with ? operator
+function complexCalculation(a: float, b: float, c: float) -> Result<float, string> {
+    let first = divide(a, b)?          // Auto return on error
+    let second = squareRoot(first)?    // Auto return on error
+    let final = divide(second, c)?     // Auto return on error
+    
+    return Ok(final)
+}
+
+// Above code is equivalent to:
+function complexCalculation_manual(a: float, b: float, c: float) -> Result<float, string> {
+    return match divide(a, b) {
+        case Ok(first) => match squareRoot(first) {
+            case Ok(second) => match divide(second, c) {
+                case Ok(final) => Ok(final)
+                case Err(error) => Err(error)
+            }
+            case Err(error) => Err(error)
+        }
+        case Err(error) => Err(error)
+    }
+}
+
+// Option values use explicit match (`?` applies to Result only)
+function firstAndSecondSum(array: Array<int>) -> Option<int> {
+    match firstElementInt(array) {
+        case Some(first) => match array.get(1) {
+            case Some(second) => Some(first + second)
+            case None => None
+        }
+        case None => None
+    }
+}
+```
+
+> Canonical Topaz error handling uses `?` propagation and `match`. `?` requires a `Result` value; `Option` values are handled with explicit `match`. `try` blocks (`try { ... }`) and `try` expressions are not specified in Topaz v5.2 — postfix `expr?` is the canonical propagation spelling.
+
+### `defer` (Scope Guards)
+
+Register cleanup actions to run when the current scope exits. Execution order is LIFO. `defer` runs on the scope's exit paths: normal completion, `return`, and early return via `?`.
+
+Policy: errors that occur inside a `defer` action are logged or collected per runtime policy — they never replace an `Err` already being returned, and all remaining deferred actions still run.
+
+```topaz
+function processFile(path: string) -> Result<string, string> {
+    let file = open(path)?
+    defer { file.close() }                  // always closes (LIFO)
+
+    let content = file.read()?              // work with the resource
+    Ok(content)
+}
+```
+
+##  Faults: the Non-Recoverable Channel
+
+Some runtime errors are **faults**, not values. A fault aborts the current program evaluation: it is not a `Result`, not an `Option`, and cannot be caught by `?`, `??`, or `concurrent`. There is no panic keyword and no fault-catching form in Topaz v5.2.
+
+Fault sources include:
+
+- direct array indexing out of bounds or with a negative index (`arr[i]`)
+- integer `/` or `%` by zero
+- integer overflow in runtime arithmetic
+- a dynamic range step of zero
+- a runtime `match` miss where exhaustiveness was not statically provable and no catch-all case exists
+
+```topaz
+let numbers = [1, 2, 3]
+
+let safe = numbers.get(10)        // None — non-faulting read
+// numbers[10] would fault: direct indexing aborts when out of bounds
+
+// Keep recoverable failure in Result instead of fault-prone forms
+function safeIndex(xs: Array<int>, i: int) -> Result<int, string> {
+    match xs.get(i) {
+        case Some(value) => Ok(value)
+        case None => Err("Index {i} is out of bounds")
+    }
+}
+```
+
+The boundary rule: use `Result` for failures the caller is expected to handle (missing files, bad input, network errors); faults are reserved for programming errors that should never happen in correct code. Canonical Topaz models recoverable failure with `Result` and avoids fault-prone forms in public examples.
+
+##  Error Handling Patterns
+
+### Adding Error Context
+
+```topaz
+// Add context information to errors
+function loadUserData(id: int) -> Result<{ name: string, settings: { theme: string } }, string> {
+    return match requireUser(id) {
+        case Ok(user) => match readConfigFile("user_{id}.json") {
+            case Ok(settings) => Ok({ name: user.name, settings: settings })
+            case Err(error) => Err("User settings load failed (ID: {id}): {error.message}")
+        }
+        case Err(error) => Err("User lookup failed (ID: {id}): {error}")
+    }
+}
+
+// Step-by-step error handling
+function stepByStepProcessing() -> Result<string, string> {
+    print("Step 1: Validating data...")
+    return match validateData() {
+        case Err(error) => Err("Step 1 failed: {error}")
+        case Ok(validationResult) => {
+            print("Step 2: Transforming data...")
+            match transformData(validationResult) {
+                case Err(error) => Err("Step 2 failed: {error}")
+                case Ok(transformResult) => {
+                    print("Step 3: Saving data...")
+                    match saveData(transformResult) {
+                        case Err(error) => Err("Step 3 failed: {error}")
+                        case Ok(saveResult) => Ok("All steps completed: {saveResult}")
+                    }
+                }
+            }
+        }
+    }
+}
+```
+
+### Partial Failure Handling
+
+```topaz
+// Allow partial failures in multiple operations
+function batchProcess(fileList: Array<string>) -> { success: Array<string>, failures: Array<{ file: string, error: string }> } {
+    let mut successList: Array<string> = []
+    let mut failureList: Array<{ file: string, error: string }> = []
+    
+    for file in fileList {
+        match processFile(file) {
+            case Ok(result) => {
+                successList.push(result)
+                print("Success: {file}")
+            }
+            case Err(error) => {
+                failureList.push({ file: file, error: error })
+                print("Failed: {file} - {error}")
+            }
+        }
+    }
+    
+    return { success: successList, failures: failureList }
+}
+
+// Processing Result arrays
+function collectFloatResults(results: Array<Result<float, string>>) -> Result<Array<float>, Array<string>> {
+    let mut successValues: Array<float> = []
+    let mut errors: Array<string> = []
+    
+    for result in results {
+        match result {
+            case Ok(value) => successValues.push(value)
+            case Err(error) => errors.push(error)
+        }
+    }
+    
+    if errors.length > 0 {
+        Err(errors)
+    } else {
+        Ok(successValues)
+    }
+}
+
+let calculationResults = [
+    divide(10.0, 2.0),   // Ok(5.0)
+    divide(8.0, 4.0),    // Ok(2.0)
+    divide(6.0, 0.0)     // Err("Cannot divide by zero")
+]
+
+match collectFloatResults(calculationResults) {
+    case Ok(values) => print("All calculations successful: {values}")
+    case Err(errors) => print("Some calculations failed: {errors}")
+}
+```
+
+### Retry Pattern
+
+```topaz
+// Retry logic
+function retryStringResult(
+    operation: () -> Result<string, string>,
+    maxAttempts: int,
+    attempt: int = 1,
+    delay: int = 1000
+) -> Result<string, string> {
+    return match operation() {
+        case Ok(result) => {
+            if attempt > 1 {
+                print("Succeeded on retry attempt {attempt}")
+            }
+            Ok(result)
+        }
+        case Err(error) => {
+            print("Attempt {attempt} failed: {error}")
+            if attempt >= maxAttempts {
+                Err(error)
+            } else {
+                print("Retrying after {delay}ms...")
+                Thread.sleep(delay)
+                retryStringResult(operation, maxAttempts, attempt + 1, delay)
+            }
+        }
+    }
+}
+
+// Network request retry
+let response = retryStringResult(
+    operation: () => networkRequest("https://api.example.com/data"),
+    maxAttempts: 3,
+    delay: 2000
+)
+
+match response {
+    case Ok(data) => print("Data received: {data}")
+    case Err(error) => print("Final failure: {error}")
+}
+```
+
+##  Type Safety and Compile-time Checking
+
+### Forcing All Error Cases to be Handled
+
+```topaz
+// Compiler forces handling of all cases
+type NetworkErrorKind = "connection_failed" | "timeout" | "authentication_failed" | "server_error"
+type NetworkError = { kind: NetworkErrorKind, message: string, code: int | null }
+
+function handleNetworkRequest(result: Result<string, NetworkError>) -> string {
+    match result {
+        case Ok(data) => "Success: {data}"
+        case Err(error) => match error.kind {
+            case "connection_failed" => "Cannot connect to network"
+            case "timeout" => "Request timed out"
+            case "authentication_failed" => "Authentication required"
+            case "server_error" => "Server error (code: {error.code})"
+        }
+    }
+}
+```
+
+### Custom Error Metadata
+
+```topaz
+// Use explicit helper functions in canonical docs
+type ApplicationErrorKind = "database_connection_failed" | "file_access_denied" | "invalid_input" | "external_service_unavailable"
+type ApplicationError = { kind: ApplicationErrorKind, message: string, field: string | null, value: string | null }
+
+function errorMessage(error: ApplicationError) -> string {
+    match error.kind {
+        case "database_connection_failed" => "Cannot connect to database"
+        case "file_access_denied" => "No permission to access file"
+        case "invalid_input" => "Invalid input - {error.field}: {error.value}"
+        case "external_service_unavailable" => "External service unavailable"
+    }
+}
+
+function errorCode(error: ApplicationError) -> int {
+    match error.kind {
+        case "database_connection_failed" => 1001
+        case "file_access_denied" => 1002
+        case "invalid_input" => 1003
+        case "external_service_unavailable" => 1004
+    }
+}
+
+function errorRecoverable(error: ApplicationError) -> bool {
+    match error.kind {
+        case "database_connection_failed" => true
+        case "external_service_unavailable" => true
+        case _ => false
+    }
+}
+
+// Integrated error handling
+function logErr(error: ApplicationError) {
+    print("[Error {errorCode(error)}] {errorMessage(error)}")
+    
+    if errorRecoverable(error) {
+        print("Recovery can be attempted")
+    } else {
+        print("Unrecoverable error")
+    }
+}
+```
+
+##  Optimization and Best Practices
+
+### 1. Treat Errors as Values
+
+```topaz
+// Good: Explicitly handle errors
+function safeUserInput() -> Result<int, string> {
+    let userInput = input("Enter a number: ")
+
+    // toInt returns Option<int> — handle the None case explicitly
+    let number = match toInt(userInput) {
+        case Some(value) => value
+        case None => { return Err("Not a valid number: {userInput}") }
+    }
+
+    if number < 0 {
+        return Err("Negative numbers not allowed")
+    }
+    return Ok(number)
+}
+```
+
+Avoid panic-style extraction; keep errors in `Result` and handle via `match` or `?`.
+
+### 2. Optimize Error Propagation
+
+```topaz
+// Prevent deep nesting with early returns
+function registerUser(data: { name: string, email: string, age: int }) -> Result<string, string> {
+    // Early validation
+    if data.name == "" {
+        return Err("Name is required")
+    }
+    
+    if !data.email.contains("@") {
+        return Err("Valid email is required")
+    }
+    
+    if data.age < 0 {
+        return Err("Valid age is required")
+    }
+    
+    // Process only after all validations pass
+    let user = createUser(data)?
+    let id = saveToDatabase(user)?
+    
+    return Ok("User registration complete: {id}")
+}
+```
+
+Use `?` propagation between steps for canonical Result handling, as shown in `registerUser`.
+
+### 3. Error Logging and Monitoring
+
+```topaz
+// Structured error logging
+function handleStringWithLogging(
+    result: Result<string, string>,
+    context: string,
+    logLevel: string = "error"
+) -> Result<string, string> {
+    match result {
+        case Ok(value) => {
+            if logLevel == "debug" {
+                print("[DEBUG] {context}: Success")
+            }
+            Ok(value)
+        }
+        case Err(error) => {
+            print("[{logLevel}] {context}: {error}")
+            
+            // Collect metrics
+            incrementErrorMetric(context, logLevel)
+            
+            Err(error)
+        }
+    }
+}
+
+// Usage example
+let result = databaseQuery("SELECT * FROM users")
+    |> handleStringWithLogging(_, context: "User list query", logLevel: "error")
+
+// Error aggregation and alerting
+function errorAlertSystem() {
+    let recentErrors = collectErrorLogs(lastHours: 1)  // 1 hour
+    
+    if recentErrors.length > 100 {
+        sendAlert("High error rate detected: {recentErrors.length} errors/hour")
+    }
+    
+    let criticalErrors = filter(recentErrors, error => error.level == "critical")
+    if criticalErrors.length > 0 {
+        sendUrgentAlert("Critical errors occurred", criticalErrors)
+    }
+}
+```
+
+Topaz error handling is **type-safe and explicit**. Use Result and Option to build **predictable and robust** applications! 

@@ -1,0 +1,8 @@
+function outer() {
+  {
+    defer print("outer")
+    let f = () => { return "x" }
+    print(f())
+  }
+}
+outer()

@@ -1,0 +1,5 @@
+function double(x: int) -> int { x * 2 }
+function increment(x: int) -> int { x + 1 }
+
+let pipeline = double >> increment
+let result = pipeline(5)

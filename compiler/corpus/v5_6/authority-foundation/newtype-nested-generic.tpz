@@ -1,0 +1,6 @@
+newtype Inner<T> = T
+newtype Outer<T> = Inner<T>
+let wrapped: Outer<int> = Outer(Inner(1))
+let inner: Inner<int> = wrapped.value()
+let value: int = inner.value()
+print("{value}")

@@ -1,0 +1,40 @@
+// Transform value with match
+let result = match findUser(1) {
+    case Some(user) => Some("Hello, {user.name}!")
+    case None => None
+}
+
+match result {
+    case Some(greeting) => print(greeting)
+    case None => print("User not found")
+}
+
+// Chain Options with nested match
+function checkAdult(user: { name: string, age: int }) -> Option<string> {
+    if user.age >= 18 {
+        return Some(user.name)
+    }
+    return None
+}
+
+let adultUser = match findUser(1) {
+    case Some(user) => match checkAdult(user) {
+        case Some(name) => Some("{name} is an adult")
+        case None => None
+    }
+    case None => None
+}
+
+// Provide default value with match
+let userName = match findUser(999) {
+    case Some(user) => user.name
+    case None => "Unknown User"
+}
+
+print("User name: {userName}")  // "User name: Unknown User"
+
+// Filter with condition using match
+let youngUser = match findUser(1) {
+    case Some(user) => if user.age < 30 { Some("{user.name} is young") } else { None }
+    case None => None
+}

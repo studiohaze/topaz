@@ -1,0 +1,6 @@
+// Range operators (.. inclusive, ..< exclusive upper bound)
+let inclusive = 1..5       // 1, 2, 3, 4, 5
+let exclusive = 1..<5      // 1, 2, 3, 4
+
+for i in inclusive { print("{i}") }
+for i in exclusive { print("{i}") }

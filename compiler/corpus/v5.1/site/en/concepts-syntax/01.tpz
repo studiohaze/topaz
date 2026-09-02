@@ -1,0 +1,12 @@
+// Immutable variables (default)
+let name = "Alice"
+let age = 25
+let isActive = true
+
+// Mutable variables
+let mut score = 85
+score = 90  // Can be changed
+
+// Type annotation (optional)
+let distance: float = 3.14
+let users: Array<string> = ["John", "Jane"]

@@ -1,0 +1,15 @@
+
+let n = 2
+let fromMatch = match n {
+    case 1 => loop {
+        print("one")
+        break 10
+    }
+    case 2 => loop {
+        print("two")
+        break 20
+    }
+    case _ => 0
+}
+print("{fromMatch}")
+fromMatch

@@ -1,0 +1,7 @@
+let mut value: Option<int> = Some(7)
+let mut total = 0
+while let Some(n) = value {
+    total = total + n
+    value = None
+}
+print("{total}")

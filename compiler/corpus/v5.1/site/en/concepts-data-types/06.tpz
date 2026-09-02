@@ -1,0 +1,14 @@
+// Option type for null safety
+let searchResult: Option<string> = None
+let username: Option<string> = Some("admin")
+
+// Safe handling with pattern matching
+match username {
+    case Some(name) => print("Welcome, {name}!")
+    case None => print("Login required")
+}
+
+// Safe handling with chaining (strings expose no .length;
+// scalar count goes through s.scalars())
+let nameLength = username?.scalars()?.length ?? 0
+let display = username ?? "guest"

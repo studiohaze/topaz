@@ -1,0 +1,14 @@
+function g(n: int) -> Result<int, string> {
+  if n > 0 {
+    Ok(n)
+  } else {
+    Err("neg")
+  }
+}
+function h() -> Result<int, string> {
+  let a = g(3)?
+  let b = g(a)?
+  Ok(a + b)
+}
+print("{h()}")
+0

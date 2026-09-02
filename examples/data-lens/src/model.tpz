@@ -1,0 +1,32 @@
+import data_lens_core { DataFormat, DataRow, SortMode, Summary }
+
+export record Model {
+  source: string,
+  query: string,
+  activeOnly: bool,
+  format: DataFormat,
+  sortMode: SortMode,
+  rows: Array<DataRow>,
+  summary: Summary,
+  status: string,
+  error: Option<string>,
+}
+
+export enum Msg {
+  SourceChanged,
+  QueryChanged,
+  ActiveChanged,
+  FormatChanged,
+  SortChanged,
+  Apply,
+  Submit,
+  SourceKey,
+  LoadCsv,
+  LoadJson,
+  OpenDocument,
+  LocalCompleted,
+  DownloadResults,
+  SaveSession,
+  ForgetSession,
+  Clear,
+}

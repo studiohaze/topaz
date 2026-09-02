@@ -1,0 +1,141 @@
+{
+  "schema": "topaz.self-product-partition-ledger/v1",
+  "checkpoint": "DT-K2",
+  "productSchema": "topaz.self-compilation-product/v1",
+  "status": "covered-by-focused-fixtures",
+  "partitions": [
+    {
+      "id": "source-syntax",
+      "owner": "topaz-stage2/front-end",
+      "features": [
+        "ordered modules",
+        "raw tokens",
+        "layout tokens",
+        "canonical AST"
+      ],
+      "fixture": "one current-mode exported function",
+      "productFields": [
+        "typed.resolved.modules"
+      ]
+    },
+    {
+      "id": "resolution-exports",
+      "owner": "topaz-stage2/resolver",
+      "features": [
+        "module graph",
+        "scopes",
+        "declarations",
+        "references",
+        "public exports",
+        "resolver diagnostics"
+      ],
+      "fixture": "ordered single-entry source plus deterministic identity checks",
+      "productFields": [
+        "typed.resolved.edges",
+        "typed.resolved.scopes",
+        "typed.resolved.declarations",
+        "typed.resolved.references",
+        "typed.resolved.exports",
+        "typed.resolved.diagnostics"
+      ]
+    },
+    {
+      "id": "typed-profile-diagnostics",
+      "owner": "topaz-stage2/checker-and-profile",
+      "features": [
+        "typed nodes",
+        "typed calls",
+        "captures",
+        "agent-pack",
+        "test-profile",
+        "bootstrap",
+        "structured diagnostics"
+      ],
+      "fixture": "agent-pack rejected complete product plus test-profile and bootstrap focused rejections and an admitted unprofiled product",
+      "productFields": [
+        "typed.nodes",
+        "typed.calls",
+        "typed.captures",
+        "typed.diagnostics"
+      ]
+    },
+    {
+      "id": "lowering-runtime",
+      "owner": "topaz-stage2/lowering",
+      "features": [
+        "admitted current AST inventory",
+        "operation identity",
+        "operand order",
+        "runtime requirements",
+        "unsupported ledger"
+      ],
+      "fixture": "exported function with deterministic integer operation",
+      "productFields": [
+        "lowered.modules",
+        "lowered.operations",
+        "lowered.unsupported"
+      ]
+    },
+    {
+      "id": "generated-source",
+      "owner": "topaz-stage2/emitter",
+      "features": [
+        "canonical generated Rust",
+        "generated source byte identity"
+      ],
+      "fixture": "same one-pass C2 response decoded twice without re-execution",
+      "productFields": [
+        "generatedRust",
+        "generatedRustSha256"
+      ]
+    },
+    {
+      "id": "shared-service-data",
+      "owner": "mechanical-adapter",
+      "features": [
+        "formatter parse gate",
+        "documentation index",
+        "LSP index",
+        "Python emitter input",
+        "interpreter and test input",
+        "target scaffold input"
+      ],
+      "fixture": "category inventory and nonempty typed/lowered product",
+      "productFields": [
+        "categories",
+        "typed",
+        "lowered"
+      ]
+    },
+    {
+      "id": "identity-provenance",
+      "owner": "mechanical-adapter",
+      "features": [
+        "compiler image identity",
+        "compiler source-set identity",
+        "target source-set identity",
+        "invocation identity",
+        "result identity",
+        "phase trace",
+        "fallback false"
+      ],
+      "fixture": "repeat result, omitted resultId, fallback mutation, and phase-order mutation",
+      "productFields": [
+        "compiler",
+        "targetSourceSetId",
+        "invocationId",
+        "resultId",
+        "phaseTrace",
+        "targetCompilerFallback"
+      ]
+    }
+  ],
+  "deferredToLaterCheckpoints": [
+    "ordinary CLI route activation",
+    "shared backend and artifact consumption",
+    "formatter, docs, and LSP routing",
+    "installed product qualification",
+    "bounded dogfood",
+    "public-candidate full corpus and cross-platform comparison"
+  ]
+}

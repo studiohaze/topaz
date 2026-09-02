@@ -1,0 +1,173 @@
+// Compiler-owned application contract. This module is available only through
+// the exact topaz/lispex-decision-application/1 package capability.
+
+export enum __PreparedLispexRuleCarrier {
+    __PreparedLispexRuleValue,
+}
+
+export enum __LispexValueCarrier {
+    __LispexValueValue,
+}
+
+export enum __LispexConsumerArtifactCarrier {
+    __LispexConsumerArtifactValue,
+}
+
+export type PreparedLispexRule = __PreparedLispexRuleCarrier
+export type LispexValue = __LispexValueCarrier
+export type LispexConsumerArtifact = __LispexConsumerArtifactCarrier
+
+export enum LispexValueError {
+    InvalidCanonicalValue(string),
+}
+
+export record LispexLimits {
+    canonicalInputBytes: int,
+    evalWork: int,
+    logicalAllocation: int,
+    semanticFrames: int,
+    traversalDepth: int,
+    outputBytes: int,
+    diagnosticBytes: int,
+    transcriptBytes: int,
+    transcriptEvents: int,
+    resultBytes: int,
+}
+
+export record LispexRuleIdentity {
+    name: string,
+    profile: string,
+    componentId: string,
+    evaluatorSha256: string,
+    preparedArtifactSha256: string,
+    preparationRequestSha256: string,
+}
+
+export enum LispexSettlement {
+    Complete(LispexValue),
+    SemanticFailure(string),
+    LimitExhaustion(string),
+    RequestRefusal(string),
+}
+
+export enum LispexOperationalFault {
+    Cancelled,
+    DeadlineExceeded,
+    QueueFull,
+    TotalEvaluationsExceeded,
+    InputQuotaExceeded,
+    ResultQuotaExceeded,
+    OutputQuotaExceeded,
+    TranscriptQuotaExceeded,
+    SafetyFuelQuotaExceeded,
+    PreparedBytesQuotaExceeded,
+    CancellationTokenAlreadyUsed,
+    ComponentMismatch,
+    AdmissionMismatch,
+    SafetyPreemption,
+    TargetUnavailable,
+    EngineFailure(string),
+}
+
+export record LispexConsumerEvidence {
+    settlement: LispexSettlement,
+    artifact: LispexConsumerArtifact,
+}
+
+export enum LispexEvidenceOutcome {
+    Portable(LispexConsumerEvidence),
+    Unrecorded(LispexSettlement),
+}
+
+export record LispexConsumerArtifactInspection {
+    kind: string,
+    category: string,
+    evaluatorSha256: string,
+    semanticProfileId: Option<string>,
+    artifactSha256: string,
+    artifactBytes: int,
+    portableCoreSha256: Option<string>,
+    portableCoreBytes: int,
+    authenticated: bool,
+    issuer: Option<string>,
+}
+
+export enum LispexEvidenceError {
+    InvalidConsumerArtifact(string),
+    NoPortableCore,
+}
+
+export enum LispexReplayError {
+    InvalidConsumerArtifact(string),
+    ContextMismatch(string),
+    ReplayMismatch,
+    OperationalFault(LispexOperationalFault),
+}
+
+export function valueFromCanonical(bytes: Bytes) -> Result<LispexValue, LispexValueError> {
+    __lispexValueFromCanonical(bytes)
+}
+
+export function canonicalBytes(value: LispexValue) -> Bytes {
+    __lispexCanonicalBytes(value)
+}
+
+export function defaultLimits(rule: PreparedLispexRule) -> LispexLimits {
+    __lispexDefaultLimits(rule)
+}
+
+export function inspectRule(rule: PreparedLispexRule) -> LispexRuleIdentity {
+    __lispexInspectRule(rule)
+}
+
+export function evaluate(
+    rule: PreparedLispexRule,
+    input: LispexValue,
+    limits: LispexLimits,
+) -> Result<LispexSettlement, LispexOperationalFault> {
+    __lispexEvaluate(rule, input, limits)
+}
+
+export function evaluateWithEvidence(
+    rule: PreparedLispexRule,
+    input: LispexValue,
+    limits: LispexLimits,
+) -> Result<LispexEvidenceOutcome, LispexOperationalFault> {
+    __lispexEvaluateWithEvidence(rule, input, limits)
+}
+
+export function consumerArtifactFromBytes(
+    bytes: Bytes,
+) -> Result<LispexConsumerArtifact, LispexEvidenceError> {
+    __lispexConsumerArtifactFromBytes(bytes)
+}
+
+export function consumerArtifactBytes(artifact: LispexConsumerArtifact) -> Bytes {
+    __lispexConsumerArtifactBytes(artifact)
+}
+
+export function portableCoreBytes(
+    artifact: LispexConsumerArtifact,
+) -> Result<Bytes, LispexEvidenceError> {
+    __lispexPortableCoreBytes(artifact)
+}
+
+export function inspectConsumerArtifact(
+    artifact: LispexConsumerArtifact,
+) -> Result<LispexConsumerArtifactInspection, LispexEvidenceError> {
+    __lispexInspectConsumerArtifact(artifact)
+}
+
+export function verifyConsumerArtifact(
+    artifact: LispexConsumerArtifact,
+) -> Result<LispexConsumerArtifactInspection, LispexEvidenceError> {
+    __lispexVerifyConsumerArtifact(artifact)
+}
+
+export function freshReplay(
+    rule: PreparedLispexRule,
+    input: LispexValue,
+    artifact: LispexConsumerArtifact,
+) -> Result<LispexSettlement, LispexReplayError> {
+    __lispexFreshReplay(rule, input, artifact)
+}

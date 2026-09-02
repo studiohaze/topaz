@@ -1,0 +1,1323 @@
+# corpus/v5.2/modules manifest (CDR-002 §3): the M-077..M-086
+# fixture classes. parse-phase rows are runnable now; resolve-phase
+# rows are recorded with expectations and activate when the resolver
+# ships (Phase B). TPZ3xxx codes are assigned then; until that,
+# resolve rows carry expectation text instead of codes.
+
+[totals]
+recorded = 137
+runnable = 137
+pending = 0
+
+[[fixture]]
+dir = "m077-01-dotted-path"
+entry = "main.tpz"
+phase = "resolve"
+status = "runnable"
+versions = "5.2"
+result = "ok"
+expect = "resolves utils.strings to utils/strings.tpz; namespace request name = strings"
+
+[[fixture]]
+dir = "m077-02-unicode-path"
+entry = "main.tpz"
+phase = "resolve"
+status = "runnable"
+versions = "5.2"
+result = "ok"
+expect = "exact scalar mapping; namespace request name = 문자열"
+
+[[fixture]]
+dir = "m077-03-string-path"
+entry = "main.tpz"
+phase = "parse"
+versions = "5.2"
+result = "error"
+code = "TPZ2008"
+expect = "string module specifiers are reserved-unused"
+
+[[fixture]]
+dir = "m077-04-tagged-adjacency"
+entry = "main.tpz"
+phase = "parse"
+versions = "5.2"
+result = "error"
+code = "TPZ2002"
+expect = "no-whitespace template stays base-owned (unknown tag), no module diagnostic"
+
+[[fixture]]
+dir = "m077-05-selected-import"
+entry = "main.tpz"
+phase = "parse"
+versions = "5.2"
+result = "ok"
+expect = "ImportItem with path utils.strings and direct names trim, pad; no namespace request"
+
+[[fixture]]
+dir = "m077-06-empty-list"
+entry = "main.tpz"
+phase = "parse"
+versions = "5.2"
+result = "error"
+code = "TPZ2011"
+expect = "empty selection list is a module syntax diagnostic"
+
+[[fixture]]
+dir = "m077-07-duplicate-entry"
+entry = "main.tpz"
+phase = "parse"
+versions = "5.2"
+result = "error"
+code = "TPZ2011"
+expect = "duplicate import-list entry"
+
+[[fixture]]
+dir = "m077-08-keyword-entry"
+entry = "main.tpz"
+phase = "parse"
+versions = "5.2"
+result = "error"
+code = "TPZ2011"
+expect = "keyword import-list entries are invalid; ImportSpec names are Identifier only"
+
+[[fixture]]
+dir = "m077-09-prologue"
+entry = "main.tpz"
+phase = "parse"
+versions = "5.2"
+result = "error"
+code = "TPZ2010"
+expect = "imports form the file prologue"
+
+[[fixture]]
+dir = "m077-10-prologue-comments"
+entry = "main.tpz"
+phase = "parse"
+versions = "5.2"
+result = "ok"
+expect = "comments and blank lines do not close the prologue"
+
+[[fixture]]
+dir = "m077-11-exact-extension"
+entry = "main.tpz"
+phase = "resolve"
+status = "runnable"
+versions = "5.2"
+result = "error"
+code = "TPZ3001"
+expect = "unresolved module or exact-extension diagnostic; .TPZ is not .tpz"
+
+[[fixture]]
+dir = "m077-12-case-collision"
+entry = "main.tpz"
+phase = "resolve"
+status = "runnable"
+versions = "5.2"
+result = "error"
+code = "TPZ3004"
+expect = "case-fold collision among candidate entries (strings.tpz vs Strings.tpz)"
+
+[[fixture]]
+dir = "m077-13-normalization-collision"
+entry = "main.tpz"
+phase = "resolve"
+status = "runnable"
+versions = "5.2"
+result = "error"
+code = "TPZ3004"
+expect = "NFC/NFD collision between canonically equivalent scalar-distinct names"
+
+[[fixture]]
+dir = "m077-14-no-implicit-parent"
+modules = "a.b,main"
+not_read = "a.tpz"
+entry = "main.tpz"
+phase = "resolve"
+status = "runnable"
+versions = "5.2"
+result = "ok"
+expect = "resolves only a/b.tpz; a.tpz is not imported as a parent segment"
+
+[[fixture]]
+dir = "m078-01-default-root"
+modules = "main,utils.strings"
+not_read = "lib/strings.tpz"
+entry = "src/main.tpz"
+phase = "resolve"
+status = "runnable"
+versions = "5.2"
+result = "ok"
+expect = "default root = src; import utils.strings sees src/utils/strings.tpz; lib/ is invisible"
+
+[[fixture]]
+dir = "m078-02-explicit-root"
+entry = "src/main.tpz"
+phase = "resolve"
+status = "runnable"
+versions = "5.2"
+result = "ok"
+expect = "ROOT=.; import lib.strings addressable; entry identity src.main"
+
+[[fixture]]
+dir = "m078-03-root-containment"
+entry = "src/main.tpz"
+phase = "resolve"
+status = "runnable"
+versions = "5.2"
+result = "error"
+code = "TPZ3002"
+expect = "ROOT=lib does not contain the entry: containment diagnostic"
+
+[[fixture]]
+dir = "m078-04-no-upward-addressing"
+entry = "main.tpz"
+phase = "parse"
+versions = "5.2"
+result = "ok"
+expect = "no upward addressing exists: the leading-dot spelling is a base range expression, never an import"
+
+[[fixture]]
+dir = "m078-05-deterministic-order"
+entry = "main.tpz"
+phase = "resolve"
+status = "runnable"
+order = "a,z,main"
+versions = "5.2"
+result = "ok"
+expect = "independent modules process in lexicographic order: a before z regardless of source order"
+
+[[fixture]]
+dir = "m078-06-cycle-discovery"
+entry = "main.tpz"
+phase = "resolve"
+status = "runnable"
+versions = "5.2"
+result = "error"
+code = "TPZ3006"
+expect = "two-module cycle: deterministic SCC discovery; final diagnostic per ADR-080"
+
+[[fixture]]
+dir = "m078-07-self-import-discovery"
+entry = "main.tpz"
+phase = "resolve"
+status = "runnable"
+versions = "5.2"
+result = "error"
+code = "TPZ3006"
+expect = "target equals current module identity; diagnostic is ADR-080 self-import"
+
+[[fixture]]
+dir = "m078-08-symlink-containment"
+entry = "main.tpz"
+phase = "resolve"
+status = "runnable"
+versions = "5.2"
+result = "error"
+code = "TPZ3005"
+expect = "VIRTUAL-LINK escape -> ../outside; physical containment rejects the escape"
+
+[[fixture]]
+dir = "m079-01-entry-role"
+entry = "script.tpz"
+phase = "resolve"
+status = "runnable"
+versions = "5.2"
+result = "ok"
+expect = "free statements legal in the entry role"
+
+[[fixture]]
+dir = "m079-02-import-role"
+entry = "main.tpz"
+phase = "resolve"
+status = "runnable"
+versions = "5.2"
+result = "error"
+code = "TPZ3007"
+expect = "same file rejected as an import: free-statement static error at the ExprStmt"
+
+[[fixture]]
+dir = "m079-03-imported-assignment"
+entry = "main.tpz"
+phase = "resolve"
+status = "runnable"
+versions = "5.2"
+result = "error"
+code = "TPZ3007"
+expect = "top-level assignment in an imported module is a static error"
+
+[[fixture]]
+dir = "m079-04-imported-free-statements"
+entry = "main.tpz"
+phase = "resolve"
+status = "runnable"
+versions = "5.2"
+result = "error"
+code = "TPZ3007"
+expect = "while/defer/return at imported top level: static error at each item"
+
+[[fixture]]
+dir = "m079-05-imported-declarations-ok"
+entry = "main.tpz"
+phase = "resolve"
+status = "runnable"
+order = "sub,lib,main"
+versions = "5.2"
+result = "ok"
+expect = "imports + declarations + bindings only: accepted"
+
+[[fixture]]
+dir = "m079-06-outside-closure"
+entry = "main.tpz"
+phase = "resolve"
+status = "runnable"
+modules = "main"
+not_read = "stray.tpz"
+versions = "5.2"
+result = "ok"
+expect = "free-statement file outside the closure is not checked"
+
+[[fixture]]
+dir = "m079-07-init-order"
+entry = "main.tpz"
+phase = "resolve"
+status = "runnable"
+order = "a,z,main"
+versions = "5.2"
+result = "ok"
+expect = "ASSERT init-order: a, z, entry (lexicographic across independent modules)"
+
+[[fixture]]
+dir = "m079-08-diamond-once"
+entry = "main.tpz"
+phase = "resolve"
+status = "runnable"
+order = "shared,left,right,main"
+versions = "5.2"
+result = "ok"
+expect = "ASSERT shared module initializes exactly once (diamond)"
+
+[[fixture]]
+dir = "m079-09-imports-before-entry"
+entry = "main.tpz"
+phase = "resolve"
+status = "runnable"
+order = "lib,main"
+versions = "5.2"
+result = "ok"
+expect = "ASSERT imported initializers complete before the first entry item"
+
+[[fixture]]
+dir = "m079-10-init-fault-aborts"
+entry = "main.tpz"
+phase = "exec"
+status = "runnable"
+versions = "5.2"
+result = "error"
+code = "TPZ4002"
+message = "integer division by zero"
+expect = "initializer fault aborts the program with module context + import chain (activated at v0.3)"
+
+[[fixture]]
+dir = "m085-01-qualified-conformance"
+entry = "main.tpz"
+phase = "exec"
+status = "runnable"
+versions = "5.2"
+result = "ok"
+expect = "qualified let annotation conforms through the exporting module's alias table (C-8)"
+
+[[fixture]]
+dir = "m079-11-function-local-defer"
+entry = "main.tpz"
+phase = "resolve"
+status = "runnable"
+versions = "5.2"
+result = "ok"
+expect = "function-local defer inside initializer-called functions follows §14"
+
+[[fixture]]
+dir = "m079-12-private-let-mut"
+entry = "main.tpz"
+phase = "resolve"
+status = "runnable"
+versions = "5.2"
+result = "ok"
+expect = "imported module-private let mut accepted; exportability is ADR-082"
+
+[[fixture]]
+dir = "m079-13-forward-read"
+entry = "main.tpz"
+phase = "resolve"
+status = "runnable"
+versions = "5.2"
+result = "error"
+code = "TPZ3018"
+expect = "ADR-086 (narrowed): a DIRECT immediately-evaluated read of a later binding (j >= k) is a static error"
+
+[[fixture]]
+dir = "m079-14-indirect-forward-read"
+entry = "main.tpz"
+phase = "exec"
+status = "runnable"
+versions = "5.2"
+result = "error"
+code = "TPZ5002"
+message = "is not bound"
+expect = "ADR-086 (narrowed, §4-consistent): the initializer calls an earlier module function whose body reads a later binding — a DELAYED reference, resolve-ok + check-ok; calling it during init faults dynamically (`later` not bound)"
+
+[[fixture]]
+dir = "m080-01-self-import"
+entry = "main.tpz"
+phase = "resolve"
+status = "runnable"
+versions = "5.2"
+result = "error"
+code = "TPZ3006"
+expect = "module imports itself"
+
+[[fixture]]
+dir = "m080-02-two-cycle"
+entry = "main.tpz"
+phase = "resolve"
+status = "runnable"
+versions = "5.2"
+result = "error"
+code = "TPZ3006"
+expect = "one SCC diagnostic for a <-> b"
+
+[[fixture]]
+dir = "m080-03-three-cycle"
+entry = "main.tpz"
+phase = "resolve"
+status = "runnable"
+versions = "5.2"
+result = "error"
+code = "TPZ3006"
+expect = "ASSERT canonical path: a -> b -> c -> a"
+
+[[fixture]]
+dir = "m080-04-two-sccs"
+entry = "main.tpz"
+phase = "resolve"
+status = "runnable"
+versions = "5.2"
+result = "error"
+code = "TPZ3006"
+expect = "two diagnostics, one per SCC"
+
+[[fixture]]
+dir = "m080-05-acyclic-diamond"
+entry = "main.tpz"
+phase = "resolve"
+status = "runnable"
+order = "shared,a,b,main"
+versions = "5.2"
+result = "ok"
+expect = "OK; no duplicate initialization"
+
+[[fixture]]
+dir = "m080-06-form-b-cycle"
+entry = "main.tpz"
+phase = "resolve"
+status = "runnable"
+versions = "5.2"
+result = "error"
+code = "TPZ3006"
+expect = "selected imports still create graph edges: cycle error"
+
+[[fixture]]
+dir = "m080-07-type-only-cycle"
+entry = "main.tpz"
+phase = "resolve"
+status = "runnable"
+versions = "5.2"
+result = "error"
+code = "TPZ3006"
+expect = "no type-only carve-out: cycle error"
+
+[[fixture]]
+dir = "m080-08-canonical-path"
+entry = "main.tpz"
+phase = "resolve"
+status = "runnable"
+versions = "5.2"
+result = "error"
+code = "TPZ3006"
+expect = "ASSERT canonical simple cycle a -> b -> a, not the traversal path through z"
+
+[[fixture]]
+dir = "m080-09-unicode-cycle"
+entry = "main.tpz"
+phase = "resolve"
+status = "runnable"
+versions = "5.2"
+result = "error"
+code = "TPZ3006"
+expect = "ASSERT anchor/path use Unicode scalar ordering"
+
+[[fixture]]
+dir = "m080-10-duplicate-edges"
+entry = "main.tpz"
+phase = "resolve"
+status = "runnable"
+versions = "5.2"
+result = "error"
+code = "TPZ3017"
+expect = "duplicate-import (ADR-083) fires first as primary; the SCC still yields exactly one cycle diagnostic"
+
+[[fixture]]
+dir = "m081-01-namespace-binding"
+entry = "main.tpz"
+phase = "resolve"
+status = "runnable"
+versions = "5.2"
+result = "ok"
+expect = "binds strings; strings.trim resolves; utils unbound"
+
+[[fixture]]
+dir = "m081-02-no-dotted-expression"
+entry = "main.tpz"
+phase = "check"
+status = "runnable"
+versions = "5.2"
+result = "error"
+code = "TPZ5002"
+expect = "utils.strings.trim is not a namespace path; utils is unresolved"
+
+[[fixture]]
+dir = "m081-03-namespace-not-value"
+entry = "main.tpz"
+phase = "resolve"
+status = "runnable"
+versions = "5.2"
+result = "error"
+code = "TPZ3012"
+expect = "namespace is not a value"
+
+[[fixture]]
+dir = "m081-04-form-b-binding"
+entry = "main.tpz"
+phase = "resolve"
+status = "runnable"
+versions = "5.2"
+result = "ok"
+expect = "trim binds directly; strings is unbound"
+
+[[fixture]]
+dir = "m081-05-zero-export-import"
+entry = "main.tpz"
+phase = "resolve"
+status = "runnable"
+versions = "5.2"
+result = "error"
+code = "TPZ3010"
+expect = "importing a module with no exports is a static error"
+
+[[fixture]]
+dir = "m081-06-namespace-collision"
+entry = "main.tpz"
+phase = "resolve"
+status = "runnable"
+versions = "5.2"
+result = "error"
+code = "TPZ3008"
+expect = "namespace vs declaration collision at module top level"
+
+[[fixture]]
+dir = "m081-07-same-segment-collision"
+entry = "main.tpz"
+phase = "resolve"
+status = "runnable"
+versions = "5.2"
+result = "error"
+code = "TPZ3008"
+expect = "two namespace imports with the same final segment collide"
+
+[[fixture]]
+dir = "m081-08-nested-shadowing"
+entry = "main.tpz"
+phase = "resolve"
+status = "runnable"
+versions = "5.2"
+result = "ok"
+expect = "local binding shadows the namespace in nested scope"
+
+[[fixture]]
+dir = "m081-09-one-segment-lookup"
+entry = "main.tpz"
+phase = "resolve"
+status = "runnable"
+versions = "5.2"
+result = "ok"
+expect = "ASSERT strings.user resolves the export; .name is ordinary member access"
+
+[[fixture]]
+dir = "m081-10-type-qualification"
+entry = "main.tpz"
+phase = "resolve"
+status = "runnable"
+versions = "5.2"
+result = "ok"
+expect = "ns.Type resolves only when User is an exported type alias"
+
+[[fixture]]
+dir = "m081-11-kind-mismatch"
+entry = "main.tpz"
+phase = "resolve"
+status = "runnable"
+versions = "5.2"
+result = "error"
+code = "TPZ3013"
+expect = "type position requires an exported type alias, not a value export"
+
+[[fixture]]
+dir = "m081-12-keyword-member"
+entry = "main.tpz"
+phase = "resolve"
+status = "runnable"
+versions = "5.2"
+result = "error"
+code = "TPZ3013"
+expect = "ns keyword member is a namespace-member error; value.type stays legal"
+
+[[fixture]]
+dir = "m082-01-default-private"
+entry = "main.tpz"
+phase = "resolve"
+status = "runnable"
+versions = "5.2"
+result = "error"
+code = "TPZ3009"
+expect = "default private: helper is not selectable"
+
+[[fixture]]
+dir = "m082-02-export-kinds"
+entry = "main.tpz"
+phase = "resolve"
+status = "runnable"
+versions = "5.2"
+result = "ok"
+expect = "function/type/let/const exports all importable"
+
+[[fixture]]
+dir = "m082-03-export-linebreak"
+entry = "main.tpz"
+phase = "parse"
+versions = "5.2"
+result = "ok"
+expect = "Sep after export: base reading wins and the source parses at both versions"
+
+[[fixture]]
+dir = "m082-04-export-list"
+entry = "main.tpz"
+phase = "parse"
+versions = "5.2"
+result = "error"
+code = "TPZ2009"
+expect = "export lists are not v5.2"
+
+[[fixture]]
+dir = "m082-05-export-let-mut"
+entry = "main.tpz"
+phase = "resolve"
+status = "runnable"
+versions = "5.2"
+result = "error"
+code = "TPZ3011"
+expect = "export let mut parses; rejected by static semantics"
+
+[[fixture]]
+dir = "m082-06-export-destructure"
+entry = "main.tpz"
+phase = "parse"
+versions = "5.2"
+result = "error"
+code = "TPZ2007"
+expect = "exported let binds exactly one identifier"
+
+[[fixture]]
+dir = "m082-07-form-a-private"
+entry = "main.tpz"
+phase = "resolve"
+status = "runnable"
+versions = "5.2"
+result = "error"
+code = "TPZ3009"
+expect = "Form A access to a private name errors"
+
+[[fixture]]
+dir = "m082-08-form-b-private"
+entry = "main.tpz"
+phase = "resolve"
+status = "runnable"
+versions = "5.2"
+result = "error"
+code = "TPZ3009"
+expect = "Form B selection of a private name errors"
+
+[[fixture]]
+dir = "m082-09-imports-read-only"
+entry = "main.tpz"
+phase = "resolve"
+status = "runnable"
+versions = "5.2"
+result = "error"
+code = "TPZ3015"
+expect = "imported bindings are not assignable"
+
+[[fixture]]
+dir = "m082-10-private-alias-signature"
+entry = "main.tpz"
+phase = "resolve"
+status = "runnable"
+versions = "5.2"
+result = "error"
+code = "TPZ3014"
+expect = "private alias in an exported public signature is a static error"
+
+[[fixture]]
+dir = "m082-11-public-alias-signature"
+entry = "main.tpz"
+phase = "resolve"
+status = "runnable"
+versions = "5.2"
+result = "ok"
+expect = "exporting the alias fixes the signature"
+
+[[fixture]]
+dir = "m082-12-qualified-public-type"
+entry = "main.tpz"
+phase = "resolve"
+status = "runnable"
+versions = "5.2"
+result = "ok"
+expect = "namespace-qualified exported type in an exported signature succeeds"
+
+[[fixture]]
+dir = "m082-13-entry-exports-inert"
+entry = "main.tpz"
+phase = "resolve"
+status = "runnable"
+versions = "5.2"
+result = "ok"
+expect = "entry exports are legal and inert"
+
+[[fixture]]
+dir = "m082-14-use-reserved"
+entry = "main.tpz"
+phase = "parse"
+versions = "5.2"
+result = "error"
+code = "TPZ2008"
+expect = "use stays reserved-unused"
+
+[[fixture]]
+dir = "m083-01-form-a-alias"
+entry = "main.tpz"
+phase = "check"
+status = "runnable"
+versions = "5.2"
+result = "error"
+code = "TPZ5002"
+expect = "alias is the only bound name: text resolves, strings does not"
+
+[[fixture]]
+dir = "m083-02-form-b-alias"
+entry = "main.tpz"
+phase = "check"
+status = "runnable"
+versions = "5.2"
+result = "error"
+code = "TPZ5002"
+expect = "cut binds; trim does not"
+
+[[fixture]]
+dir = "m083-03-alias-collision"
+entry = "main.tpz"
+phase = "resolve"
+status = "runnable"
+versions = "5.2"
+result = "error"
+code = "TPZ3008"
+expect = "Form A alias collides with a local declaration"
+
+[[fixture]]
+dir = "m083-04-selected-alias-collision"
+entry = "main.tpz"
+phase = "resolve"
+status = "runnable"
+versions = "5.2"
+result = "error"
+code = "TPZ3008"
+expect = "Form B alias collides with a local binding"
+
+[[fixture]]
+dir = "m083-05-duplicate-source"
+entry = "main.tpz"
+phase = "parse"
+versions = "5.2"
+result = "error"
+code = "TPZ2011"
+expect = "duplicate selected export"
+
+[[fixture]]
+dir = "m083-06-duplicate-bound"
+entry = "main.tpz"
+phase = "parse"
+versions = "5.2"
+result = "error"
+code = "TPZ2011"
+expect = "duplicate local import name"
+
+[[fixture]]
+dir = "m083-07-duplicate-module-form-a"
+entry = "main.tpz"
+phase = "resolve"
+status = "runnable"
+versions = "5.2"
+result = "error"
+code = "TPZ3017"
+expect = "duplicate module import: Form A twice"
+
+[[fixture]]
+dir = "m083-08-duplicate-module-form-b"
+entry = "main.tpz"
+phase = "resolve"
+status = "runnable"
+versions = "5.2"
+result = "error"
+code = "TPZ3017"
+expect = "duplicate module import: Form B twice"
+
+[[fixture]]
+dir = "m083-09-duplicate-module-mixed"
+entry = "main.tpz"
+phase = "resolve"
+status = "runnable"
+versions = "5.2"
+result = "error"
+code = "TPZ3017"
+expect = "duplicate module import: A+B mix; reported before name collisions"
+
+[[fixture]]
+dir = "m083-10-noop-alias"
+entry = "main.tpz"
+phase = "resolve"
+status = "runnable"
+versions = "5.2"
+result = "ok"
+expect = "no-op aliases are legal; non-canonical"
+
+[[fixture]]
+dir = "m083-11-as-path-segment"
+entry = "main.tpz"
+phase = "resolve"
+status = "runnable"
+versions = "5.2"
+result = "ok"
+expect = "a module path named as imports; as as alias aliases it"
+
+[[fixture]]
+dir = "m083-12-as-ordinary"
+entry = "main.tpz"
+phase = "parse"
+versions = "5.2"
+result = "ok"
+expect = "as stays an ordinary identifier outside helper slots"
+
+[[fixture]]
+dir = "m083-13-sep-kills-alias"
+entry = "main.tpz"
+phase = "parse"
+versions = "5.2"
+result = "error"
+code = "TPZ2001"
+expect = "Sep between path and as ends the module reading; base diagnostic follows"
+
+[[fixture]]
+dir = "m083-14-alias-selection-compose"
+entry = "main.tpz"
+phase = "parse"
+versions = "5.2"
+result = "error"
+code = "TPZ2009"
+expect = "alias and selection do not compose"
+
+[[fixture]]
+dir = "m083-15-export-rename"
+entry = "main.tpz"
+phase = "parse"
+versions = "5.2"
+result = "error"
+code = "TPZ2001"
+expect = "export-site renaming is not v5.2 syntax"
+
+[[fixture]]
+dir = "m084-01-ambient-prelude-import"
+entry = "main.tpz"
+phase = "resolve"
+status = "runnable"
+versions = "5.2"
+result = "ok"
+expect = "imported modules use the prelude without imports"
+
+[[fixture]]
+dir = "m084-02-ambient-constructors"
+entry = "main.tpz"
+phase = "resolve"
+status = "runnable"
+versions = "5.2"
+result = "ok"
+expect = "Some/None/Ok/Err ambient in imported modules"
+
+[[fixture]]
+dir = "m084-03-prelude-public-resolvable"
+entry = "main.tpz"
+phase = "resolve"
+status = "runnable"
+versions = "5.2"
+result = "ok"
+expect = "prelude names are public-resolvable in exported signatures"
+
+[[fixture]]
+dir = "m084-04-local-shadow-prelude"
+entry = "main.tpz"
+phase = "resolve"
+status = "runnable"
+versions = "5.2"
+result = "ok"
+expect = "module top level shadows the prelude; not a collision"
+
+[[fixture]]
+dir = "m084-05-namespace-shadows-prelude"
+entry = "main.tpz"
+phase = "resolve"
+status = "runnable"
+versions = "5.2"
+result = "error"
+code = "TPZ3012"
+expect = "namespace print shadows prelude print; calling it as a value errors"
+
+[[fixture]]
+dir = "m084-06-alias-avoids-shadow"
+entry = "main.tpz"
+phase = "resolve"
+status = "runnable"
+versions = "5.2"
+result = "ok"
+expect = "alias keeps the prelude spelling usable"
+
+[[fixture]]
+dir = "m084-07-private-alias-shadows-prelude"
+entry = "main.tpz"
+phase = "resolve"
+status = "runnable"
+versions = "5.2"
+result = "error"
+code = "TPZ3014"
+expect = "private alias shadowing a prelude name is not public-resolvable: error"
+
+[[fixture]]
+dir = "m084-08-no-importable-stdlib"
+entry = "main.tpz"
+phase = "resolve"
+status = "runnable"
+versions = "5.2"
+result = "error"
+code = "TPZ3016"
+expect = "reserved-root diagnostic, not unresolved-module"
+
+[[fixture]]
+dir = "m084-09-reserved-topaz-root"
+entry = "main.tpz"
+phase = "resolve"
+status = "runnable"
+versions = "5.2"
+result = "error"
+code = "TPZ3016"
+expect = "reserved-root diagnostic"
+
+[[fixture]]
+dir = "m084-10-entry-named-std"
+entry = "std.tpz"
+phase = "resolve"
+status = "runnable"
+versions = "5.2"
+result = "ok"
+expect = "a file named std.tpz may be the entry; reserved roots are addressed paths only"
+
+[[fixture]]
+dir = "m084-11-unimported-reserved-file"
+modules = "main"
+not_read = "std.tpz"
+entry = "main.tpz"
+phase = "resolve"
+status = "runnable"
+versions = "5.2"
+result = "ok"
+expect = "a std.tpz outside the closure is not checked"
+
+[[fixture]]
+dir = "m084-12-use-module-head"
+entry = "main.tpz"
+phase = "parse"
+versions = "5.2"
+result = "error"
+code = "TPZ2008"
+expect = "reserved-unused module diagnostic"
+
+[[fixture]]
+dir = "m084-13-use-ordinary"
+entry = "main.tpz"
+phase = "parse"
+versions = "5.2"
+result = "ok"
+expect = "use ordinary outside module-head position"
+
+[[fixture]]
+dir = "m084-14-no-csv-prelude"
+entry = "main.tpz"
+phase = "check"
+status = "runnable"
+versions = "5.2"
+result = "error"
+code = "TPZ5002"
+expect = "YAML is not prelude; unresolved at name resolution"
+
+[[fixture]]
+dir = "m084-15-zero-export-still-errors"
+entry = "main.tpz"
+phase = "resolve"
+status = "runnable"
+versions = "5.2"
+result = "error"
+code = "TPZ3010"
+expect = "zero-export import errors despite the ambient prelude"
+
+[[fixture]]
+dir = "m085-01-manifest-ignored"
+not_read = "topaz.toml"
+entry = "src/main.tpz"
+phase = "resolve"
+status = "runnable"
+versions = "5.2"
+result = "ok"
+expect = "manifest files have no language meaning; default root stays src"
+
+[[fixture]]
+dir = "m085-02-root-only-by-cli"
+entry = "src/main.tpz"
+phase = "resolve"
+status = "runnable"
+versions = "5.2"
+result = "ok"
+expect = "only --root changes root semantics"
+
+[[fixture]]
+dir = "m085-03-no-multi-root-search"
+entry = "src/main.tpz"
+phase = "resolve"
+status = "runnable"
+versions = "5.2"
+result = "error"
+code = "TPZ3001"
+expect = "sibling root is not searched: unresolved module"
+
+[[fixture]]
+dir = "m085-04-package-words-ordinary"
+entry = "main.tpz"
+phase = "parse"
+versions = "5.2"
+result = "ok"
+expect = "package/module stay ordinary identifiers"
+
+[[fixture]]
+dir = "m085-05-export-import-rejected"
+entry = "main.tpz"
+phase = "parse"
+versions = "5.2"
+result = "error"
+code = "TPZ2009"
+expect = "export import is rejected"
+
+[[fixture]]
+dir = "m085-06-export-list-rejected"
+entry = "main.tpz"
+phase = "parse"
+versions = "5.2"
+result = "error"
+code = "TPZ2009"
+expect = "export lists stay rejected"
+
+[[fixture]]
+dir = "m085-07-wildcard-rejected"
+entry = "main.tpz"
+phase = "parse"
+versions = "5.2"
+result = "error"
+code = "TPZ2001"
+expect = "wildcard export is base-owned (not module-eligible): base diagnostic"
+
+[[fixture]]
+dir = "m085-08-value-forwarding"
+entry = "main.tpz"
+phase = "resolve"
+status = "runnable"
+versions = "5.2"
+result = "ok"
+expect = "manual value forwarding is an ordinary exported binding"
+
+[[fixture]]
+dir = "m085-09-type-forwarding"
+entry = "main.tpz"
+phase = "resolve"
+status = "runnable"
+versions = "5.2"
+result = "ok"
+expect = "manual type forwarding is an ordinary public alias"
+
+[[fixture]]
+dir = "m085-10-forwarding-not-metadata"
+entry = "main.tpz"
+phase = "resolve"
+status = "runnable"
+order = "utils.strings,facade,main"
+versions = "5.2"
+result = "ok"
+expect = "ASSERT forwarding binding initializes in ADR-079 order (not zero-runtime)"
+
+[[fixture]]
+dir = "m085-11-wholesale-facade-legal"
+entry = "main.tpz"
+phase = "resolve"
+status = "runnable"
+versions = "5.2"
+result = "ok"
+expect = "wholesale facades are legal; canonical-docs guidance only"
+
+[[fixture]]
+dir = "m085-12-markers-harness-only"
+entry = "main.tpz"
+phase = "resolve"
+status = "runnable"
+versions = "5.2"
+result = "ok"
+expect = "ENTRY/ROOT markers have no language meaning"
+
+[[fixture]]
+dir = "m085-13-codes-at-cdr"
+entry = "main.tpz"
+phase = "resolve"
+status = "runnable"
+versions = "5.2"
+result = "ok"
+expect = "TPZ3xxx codes assigned when the resolver ships; rows carry empty codes until then"
+
+[[fixture]]
+dir = "m085-14-no-import-site-interop"
+entry = "main.tpz"
+phase = "parse"
+versions = "5.2"
+result = "error"
+code = "TPZ2001"
+expect = "no import-site interop spelling; trailing token is a base separator error"
+
+[[fixture]]
+dir = "m085-15-foreign-words-ordinary"
+entry = "main.tpz"
+phase = "parse"
+versions = "5.2"
+result = "ok"
+expect = "foreign words stay ordinary identifiers"
+
+[[fixture]]
+dir = "m085-16-inline-foreign-invalid"
+entry = "main.tpz"
+phase = "parse"
+versions = "5.2"
+result = "error"
+code = "TPZ2001"
+expect = "inline foreign syntax is not Topaz"
+
+[[fixture]]
+dir = "m086-01-direct-forward-read"
+entry = "main.tpz"
+phase = "resolve"
+status = "runnable"
+versions = "5.2"
+result = "error"
+code = "TPZ3018"
+expect = "DIRECT immediately-evaluated forward read of a later let (j >= k): rejected (§17, §4-consistent)"
+
+[[fixture]]
+dir = "m086-02-direct-self-read"
+entry = "main.tpz"
+phase = "resolve"
+status = "runnable"
+versions = "5.2"
+result = "error"
+code = "TPZ3018"
+expect = "DIRECT self-read (j = k): rejected (§17, §4-consistent)"
+
+[[fixture]]
+dir = "m086-03-indirect-function-read"
+entry = "main.tpz"
+phase = "exec"
+status = "runnable"
+versions = "5.2"
+result = "error"
+code = "TPZ5002"
+message = "is not bound"
+expect = "DELAYED: an earlier function's body reads a later binding — §17 does not descend into bodies, so resolve-ok + check-ok; calling it during init faults dynamically (`later` not bound)"
+
+[[fixture]]
+dir = "m086-04-function-value-use"
+entry = "main.tpz"
+phase = "exec"
+status = "runnable"
+versions = "5.2"
+result = "error"
+code = "TPZ5002"
+message = "is not bound"
+expect = "DELAYED: a function passed by value to an earlier higher-order helper (`pick`); its body's later read is not scanned, so resolve-ok + check-ok; invoking it during init faults dynamically (`later` not bound)"
+
+[[fixture]]
+dir = "m086-05-anonymous-lambda-argument"
+entry = "main.tpz"
+phase = "exec"
+status = "runnable"
+versions = "5.2"
+result = "error"
+code = "TPZ5002"
+message = "is not bound"
+expect = "DELAYED: an anonymous lambda argument body (`() => later`) is not scanned (delayed position), so resolve-ok + check-ok; forcing it during init faults dynamically (`later` not bound)"
+
+[[fixture]]
+dir = "m086-06-immediate-lambda-call"
+entry = "main.tpz"
+phase = "exec"
+status = "runnable"
+versions = "5.2"
+result = "error"
+code = "TPZ5002"
+message = "is not bound"
+expect = "DELAYED: an immediately-invoked lambda's BODY is a delayed position (`(() => later)()`); not scanned, so resolve-ok + check-ok; running it during init faults dynamically (`later` not bound) — matches §4 entry behavior"
+
+[[fixture]]
+dir = "m086-07-closure-in-record"
+entry = "main.tpz"
+phase = "exec"
+status = "runnable"
+versions = "5.2"
+result = "error"
+code = "TPZ5002"
+message = "is not bound"
+expect = "DELAYED: a closure stored in a record field (`{ read: () => config }`) is a delayed body; not scanned, so resolve-ok + check-ok; reading it during init faults dynamically (`config` not bound)"
+
+[[fixture]]
+dir = "m086-08-nested-local-function"
+entry = "main.tpz"
+phase = "exec"
+status = "runnable"
+versions = "5.2"
+result = "error"
+code = "TPZ5002"
+message = "is not bound"
+expect = "DELAYED: a nested local function body is a delayed position; not scanned, so resolve-ok + check-ok; reaching it during init faults dynamically (`later` not bound)"
+
+[[fixture]]
+dir = "m086-09-let-mut-write"
+entry = "main.tpz"
+phase = "exec"
+status = "runnable"
+versions = "5.2"
+result = "error"
+code = "TPZ5002"
+message = "is not bound"
+expect = "DELAYED: a write to a later `let mut` lives inside a function body (delayed); not scanned, so resolve-ok + check-ok; executing it during init faults dynamically (`counter` not bound)"
+
+[[fixture]]
+dir = "m086-10-earlier-binding-ok"
+entry = "main.tpz"
+phase = "resolve"
+status = "runnable"
+versions = "5.2"
+result = "ok"
+expect = "earlier reads accepted"
+
+[[fixture]]
+dir = "m086-11-imported-forwarding-ok"
+entry = "main.tpz"
+phase = "resolve"
+status = "runnable"
+versions = "5.2"
+result = "ok"
+expect = "imported reads are always legal"
+
+[[fixture]]
+dir = "m086-12-export-let-same-rule"
+entry = "main.tpz"
+phase = "resolve"
+status = "runnable"
+versions = "5.2"
+result = "error"
+code = "TPZ3018"
+expect = "private and exported let follow the identical DIRECT rule: an immediate read of a later let is rejected"
+
+[[fixture]]
+dir = "m086-13-entry-import-role-split"
+entry = "main.tpz"
+phase = "resolve"
+status = "runnable"
+versions = "5.2"
+result = "error"
+code = "TPZ3018"
+expect = "role split, IMPORT leg: `let a = peek()` directly calls a textually-later function — a DIRECT forward reference; the resolver rejects it (TPZ3018) for an imported module"
+
+[[fixture]]
+dir = "m086-13-entry-role-ok"
+entry = "lib.tpz"
+phase = "check"
+status = "runnable"
+versions = "5.2"
+result = "error"
+code = "TPZ5002"
+expect = "role split, ENTRY leg (now §4-consistent): the identical DIRECT forward call resolves clean (the resolver exempts the entry), but the §4 entry checker rejects it as TPZ5002 — same outcome as the import leg, reached via the entry path"
+
+[[fixture]]
+dir = "m086-14-destructuring-index"
+entry = "main.tpz"
+phase = "resolve"
+status = "runnable"
+versions = "5.2"
+result = "ok"
+expect = "destructuring is one index; names share it"
+
+[[fixture]]
+dir = "m086-15-recursive-fixpoint"
+entry = "main.tpz"
+phase = "resolve"
+status = "runnable"
+versions = "5.2"
+result = "ok"
+expect = "mutual recursion converges; no forward binding read: accepted"
+
+[[fixture]]
+dir = "m086-16-diagnostic-path"
+entry = "main.tpz"
+phase = "exec"
+status = "runnable"
+versions = "5.2"
+result = "error"
+code = "TPZ5002"
+message = "is not bound"
+expect = "DELAYED: a lambda forced by an earlier helper reaches a later function (`helper`) — a delayed body, not scanned, so resolve-ok + check-ok; running it during init faults dynamically (`helper` not bound)"
+
+[[fixture]]
+dir = "m086-17-param-shadow-ok"
+entry = "main.tpz"
+phase = "resolve"
+status = "runnable"
+versions = "5.2"
+result = "ok"
+expect = "function parameter shadows a later module binding (lexical resolution first)"

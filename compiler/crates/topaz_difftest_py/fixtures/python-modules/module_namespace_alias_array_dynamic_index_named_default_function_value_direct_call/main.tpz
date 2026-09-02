@@ -1,0 +1,9 @@
+
+import util
+function main() -> int {
+    let callbacks = util.callbacks
+    let i = 0
+    let j = 1
+    callbacks[i](a: 5) * 10 + callbacks[j](a: 15)
+}
+main()

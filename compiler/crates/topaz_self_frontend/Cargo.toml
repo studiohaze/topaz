@@ -1,0 +1,31 @@
+[package]
+name = "topaz_self_frontend"
+version.workspace = true
+license.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+
+[features]
+test-invalid-stage2-identity = [
+  "topaz_stage1_runtime/test-invalid-stage2-identity",
+]
+
+[dependencies]
+topaz_check = { workspace = true }
+topaz_diag = { workspace = true }
+topaz_hir = { workspace = true }
+topaz_interp = { workspace = true }
+topaz_kernel = { workspace = true }
+topaz_resolve = { workspace = true }
+topaz_syntax = { workspace = true }
+topaz_stage1_runtime = { workspace = true }
+topaz_value = { workspace = true }
+
+[dev-dependencies]
+topaz_diag = { workspace = true }
+topaz_lexer = { workspace = true }
+topaz_parser = { workspace = true }
+
+[lints]
+workspace = true

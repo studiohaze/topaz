@@ -1,0 +1,2 @@
+let mut xs = Array.of<int>()
+xs.pop()

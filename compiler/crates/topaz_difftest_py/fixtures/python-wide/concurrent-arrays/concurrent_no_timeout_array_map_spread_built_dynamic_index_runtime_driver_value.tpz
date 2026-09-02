@@ -1,0 +1,27 @@
+
+function zero(x: int) -> int {
+    0
+}
+
+function inc(x: int) -> int {
+    x + 1
+}
+
+function dbl(x: int) -> int {
+    x * 2
+}
+
+let seeds = [0, 1]
+let i = seeds[1]
+let base = [zero, inc]
+let callbacks = [...base, dbl]
+
+let r = concurrent {
+    slow: {
+        let xs = [1, 2, 3]
+        let out = xs.map(callbacks[i])
+        out[0] * 100 + out[1] * 10 + out[2]
+    }
+    fast: 0
+}
+r.slow + r.fast

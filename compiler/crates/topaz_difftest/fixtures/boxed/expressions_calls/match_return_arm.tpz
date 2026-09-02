@@ -1,0 +1,3 @@
+let f = (x) => { match x { case 0 => return 100
+case _ => 1 } }
+f(0)

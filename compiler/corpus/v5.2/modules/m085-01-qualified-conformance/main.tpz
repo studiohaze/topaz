@@ -1,0 +1,4 @@
+import ui.theme
+
+let s: theme.Style = theme.defaultStyle
+print("bold: {s.bold}")

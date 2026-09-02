@@ -1,0 +1,2 @@
+match Some([1, 2, 3]) { case Some([head, ..tail]) => tail
+case _ => [] }

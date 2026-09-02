@@ -1,0 +1,441 @@
+import src.model { Msg }
+import std.dom { Attr, Html, attr, element, text }
+
+function chars(value: string) -> Array<string> {
+  value.scalars()
+}
+
+function startsWith(value: Array<string>, prefix: string) -> bool {
+  let expected = chars(prefix)
+  if value.length < expected.length {
+    return false
+  }
+  let mut index = 0
+  while index < expected.length {
+    if value[index] != expected[index] {
+      return false
+    }
+    index += 1
+  }
+  true
+}
+
+function findClose(value: Array<string>, from: int, delimiter: Array<string>) -> int {
+  let mut index = from
+  while index + delimiter.length <= value.length {
+    let mut matches = true
+    let mut offset = 0
+    while offset < delimiter.length {
+      if value[index + offset] != delimiter[offset] {
+        matches = false
+      }
+      offset += 1
+    }
+    if matches {
+      return index
+    }
+    index += 1
+  }
+  -1
+}
+
+function linkEnd(value: Array<string>, from: int) -> int {
+  let mut depth = 0
+  let mut index = from
+  while index < value.length {
+    if value[index] == "(" {
+      depth += 1
+    } else if value[index] == ")" {
+      if depth == 0 {
+        return index
+      }
+      depth -= 1
+    }
+    index += 1
+  }
+  -1
+}
+
+function hasColonBeforeSlash(value: Array<string>) -> bool {
+  for scalar in value {
+    if scalar == ":" {
+      return true
+    }
+    if scalar == "/" {
+      return false
+    }
+  }
+  false
+}
+
+export function linkAllowed(value: string) -> bool {
+  let url = value.trimStart()
+  if url.startsWith("//") || url.startsWith("/\\") || url.startsWith("\\") {
+    return false
+  }
+  if url.startsWith("http://") || url.startsWith("https://") {
+    return true
+  }
+  if url.startsWith("/") || url.startsWith("#") || url.startsWith("./") || url.startsWith("../") {
+    return true
+  }
+  !hasColonBeforeSlash(url.scalars())
+}
+
+function appendNodes(target: Array<Html<Msg>>, source: Array<Html<Msg>>) -> Array<Html<Msg>> {
+  let mut output = target
+  for node in source {
+    output.push(node)
+  }
+  output
+}
+
+function inlineSpecial(scalar: string) -> bool {
+  scalar == "\\" || scalar == "!" || scalar == "`" || scalar == "*" || scalar == "~" || scalar == "["
+}
+
+function inlineNodes(value: Array<string>) -> Array<Html<Msg>> {
+  let mut output: Array<Html<Msg>> = []
+  let mut index = 0
+  while index < value.length {
+    let scalar = value[index]
+    if scalar == "\\" && index + 1 < value.length {
+      output.push(text(value[index + 1]))
+      index += 2
+    } else if scalar == "!" && index + 1 < value.length && value[index + 1] == "[" {
+      let closeBracket = findClose(value, index + 2, ["]"])
+      if closeBracket >= 0 && closeBracket + 1 < value.length && value[closeBracket + 1] == "(" {
+        let closeParen = linkEnd(value, closeBracket + 2)
+        if closeParen >= 0 {
+          let alt = value.slice(index + 2, closeBracket).join("")
+          let url = value.slice(closeBracket + 2, closeParen).join("")
+          if linkAllowed(url) {
+            output.push(element("img", [attr("src", url), attr("alt", alt)], [], []))
+          } else {
+            output.push(text(alt))
+          }
+          index = closeParen + 1
+        } else {
+          output.push(text(scalar))
+          index += 1
+        }
+      } else {
+        output.push(text(scalar))
+        index += 1
+      }
+    } else if scalar == "`" {
+      let close = findClose(value, index + 1, ["`"])
+      if close >= 0 {
+        output.push(element("code", [], [], [text(value.slice(index + 1, close).join(""))]))
+        index = close + 1
+      } else {
+        output.push(text(scalar))
+        index += 1
+      }
+    } else if scalar == "*" && index + 1 < value.length && value[index + 1] == "*" {
+      let close = findClose(value, index + 2, ["*", "*"])
+      if close >= 0 {
+        output.push(element("strong", [], [], inlineNodes(value.slice(index + 2, close))))
+        index = close + 2
+      } else {
+        output.push(text(scalar))
+        index += 1
+      }
+    } else if scalar == "*" {
+      let close = findClose(value, index + 1, ["*"])
+      if close >= 0 {
+        output.push(element("em", [], [], inlineNodes(value.slice(index + 1, close))))
+        index = close + 1
+      } else {
+        output.push(text(scalar))
+        index += 1
+      }
+    } else if scalar == "~" && index + 1 < value.length && value[index + 1] == "~" {
+      let close = findClose(value, index + 2, ["~", "~"])
+      if close >= 0 {
+        output.push(element("del", [], [], inlineNodes(value.slice(index + 2, close))))
+        index = close + 2
+      } else {
+        output.push(text(scalar))
+        index += 1
+      }
+    } else if scalar == "[" {
+      let closeBracket = findClose(value, index + 1, ["]"])
+      if closeBracket >= 0 && closeBracket + 1 < value.length && value[closeBracket + 1] == "(" {
+        let closeParen = linkEnd(value, closeBracket + 2)
+        if closeParen >= 0 {
+          let label = value.slice(index + 1, closeBracket)
+          let url = value.slice(closeBracket + 2, closeParen).join("")
+          if linkAllowed(url) {
+            output.push(element("a", [attr("href", url)], [], inlineNodes(label)))
+          } else {
+            output = appendNodes(output, inlineNodes(label))
+          }
+          index = closeParen + 1
+        } else {
+          output.push(text(scalar))
+          index += 1
+        }
+      } else {
+        output.push(text(scalar))
+        index += 1
+      }
+    } else {
+      let mut end = index + 1
+      while end < value.length && !inlineSpecial(value[end]) {
+        end += 1
+      }
+      output.push(text(value.slice(index, end).join("")))
+      index = end
+    }
+  }
+  output
+}
+
+function dropCr(value: Array<string>) -> Array<string> {
+  let mut output: Array<string> = []
+  for scalar in value {
+    if scalar != "\r" {
+      output.push(scalar)
+    }
+  }
+  output
+}
+
+function splitLines(source: string) -> Array<Array<string>> {
+  let mut lines: Array<Array<string>> = []
+  for line in source.split("\n") {
+    lines.push(dropCr(line.scalars()))
+  }
+  lines
+}
+
+function exactLine(value: Array<string>, expected: string) -> bool {
+  let other = chars(expected)
+  if value.length != other.length {
+    return false
+  }
+  let mut index = 0
+  while index < other.length {
+    if value[index] != other[index] {
+      return false
+    }
+    index += 1
+  }
+  true
+}
+
+function orderedMarker(value: Array<string>) -> int {
+  let mut index = 0
+  while index < value.length && value[index] >= "0" && value[index] <= "9" {
+    index += 1
+  }
+  if index > 0 && index + 1 < value.length && value[index] == "." && value[index + 1] == " " {
+    return index + 2
+  }
+  0
+}
+
+function trimCell(value: Array<string>) -> Array<string> {
+  let mut start = 0
+  while start < value.length && (value[start] == " " || value[start] == "\t") {
+    start += 1
+  }
+  let mut end = value.length
+  while end > start && (value[end - 1] == " " || value[end - 1] == "\t") {
+    end -= 1
+  }
+  value.slice(start, end)
+}
+
+function hasPipe(value: Array<string>) -> bool {
+  for scalar in value {
+    if scalar == "|" {
+      return true
+    }
+  }
+  false
+}
+
+function splitCells(value: Array<string>) -> Array<Array<string>> {
+  let mut raw: Array<Array<string>> = []
+  let mut cell: Array<string> = []
+  let mut index = 0
+  while index < value.length {
+    if value[index] == "\\" && index + 1 < value.length {
+      cell.push(value[index])
+      cell.push(value[index + 1])
+      index += 2
+    } else if value[index] == "|" {
+      raw.push(trimCell(cell))
+      cell = []
+      index += 1
+    } else {
+      cell.push(value[index])
+      index += 1
+    }
+  }
+  raw.push(trimCell(cell))
+  let mut cells: Array<Array<string>> = []
+  let mut cellIndex = 0
+  while cellIndex < raw.length {
+    let edge = cellIndex == 0 || cellIndex == raw.length - 1
+    if !(edge && raw[cellIndex].length == 0) {
+      cells.push(raw[cellIndex])
+    }
+    cellIndex += 1
+  }
+  cells
+}
+
+function separatorCell(value: Array<string>) -> bool {
+  if value.length == 0 {
+    return false
+  }
+  let mut index = 0
+  if value[index] == ":" {
+    index += 1
+  }
+  let mut dashes = 0
+  while index < value.length && value[index] == "-" {
+    dashes += 1
+    index += 1
+  }
+  if dashes == 0 {
+    return false
+  }
+  if index < value.length && value[index] == ":" {
+    index += 1
+  }
+  index == value.length
+}
+
+function separatorRow(value: Array<string>) -> bool {
+  if !hasPipe(value) {
+    return false
+  }
+  let cells = splitCells(value)
+  if cells.length == 0 {
+    return false
+  }
+  for cell in cells {
+    if !separatorCell(cell) {
+      return false
+    }
+  }
+  true
+}
+
+function tableRow(cells: Array<Array<string>>, tag: string) -> Html<Msg> {
+  let mut children: Array<Html<Msg>> = []
+  for cell in cells {
+    children.push(element(tag, [], [], inlineNodes(cell)))
+  }
+  element("tr", [], [], children)
+}
+
+function blockStart(value: Array<string>) -> bool {
+  value.length == 0
+    || startsWith(value, "# ")
+    || startsWith(value, "## ")
+    || startsWith(value, "### ")
+    || startsWith(value, "- ")
+    || orderedMarker(value) > 0
+    || startsWith(value, "> ")
+    || startsWith(value, "```")
+    || exactLine(value, "---")
+}
+
+export function renderMarkdown(source: string) -> Html<Msg> {
+  let lines = splitLines(source)
+  let mut blocks: Array<Html<Msg>> = []
+  let mut index = 0
+  while index < lines.length {
+    let line = lines[index]
+    if line.length == 0 {
+      index += 1
+    } else if startsWith(line, "```") {
+      index += 1
+      let mut code = ""
+      while index < lines.length && !startsWith(lines[index], "```") {
+        code = code + lines[index].join("") + "\n"
+        index += 1
+      }
+      if index < lines.length {
+        index += 1
+      }
+      blocks.push(element("pre", [], [], [element("code", [], [], [text(code)])]))
+    } else if startsWith(line, "- ") {
+      let mut items: Array<Html<Msg>> = []
+      while index < lines.length && startsWith(lines[index], "- ") {
+        items.push(element("li", [], [], inlineNodes(lines[index].slice(2, lines[index].length))))
+        index += 1
+      }
+      blocks.push(element("ul", [], [], items))
+    } else if orderedMarker(line) > 0 {
+      let mut items: Array<Html<Msg>> = []
+      while index < lines.length && orderedMarker(lines[index]) > 0 {
+        let marker = orderedMarker(lines[index])
+        items.push(element("li", [], [], inlineNodes(lines[index].slice(marker, lines[index].length))))
+        index += 1
+      }
+      blocks.push(element("ol", [], [], items))
+    } else if startsWith(line, "> ") {
+      let mut quote: Array<Html<Msg>> = []
+      let mut first = true
+      while index < lines.length && startsWith(lines[index], "> ") {
+        if !first {
+          quote.push(text(" "))
+        }
+        quote = appendNodes(quote, inlineNodes(lines[index].slice(2, lines[index].length)))
+        first = false
+        index += 1
+      }
+      blocks.push(element("blockquote", [], [], quote))
+    } else if exactLine(line, "---") {
+      blocks.push(element("hr", [], [], []))
+      index += 1
+    } else if startsWith(line, "### ") {
+      blocks.push(element("h3", [], [], inlineNodes(line.slice(4, line.length))))
+      index += 1
+    } else if startsWith(line, "## ") {
+      blocks.push(element("h2", [], [], inlineNodes(line.slice(3, line.length))))
+      index += 1
+    } else if startsWith(line, "# ") {
+      blocks.push(element("h1", [], [], inlineNodes(line.slice(2, line.length))))
+      index += 1
+    } else if index + 1 < lines.length
+      && hasPipe(line)
+      && separatorRow(lines[index + 1])
+      && splitCells(line).length == splitCells(lines[index + 1]).length {
+      let header = tableRow(splitCells(line), "th")
+      index += 2
+      let mut body: Array<Html<Msg>> = []
+      while index < lines.length && hasPipe(lines[index]) && !blockStart(lines[index]) {
+        body.push(tableRow(splitCells(lines[index]), "td"))
+        index += 1
+      }
+      blocks.push(element("table", [], [], [
+        element("thead", [], [], [header]),
+        element("tbody", [], [], body),
+      ]))
+    } else {
+      let mut paragraph: Array<string> = []
+      for scalar in line {
+        paragraph.push(scalar)
+      }
+      index += 1
+      while index < lines.length
+        && !blockStart(lines[index])
+        && !(index + 1 < lines.length && hasPipe(lines[index]) && separatorRow(lines[index + 1])) {
+        paragraph.push(" ")
+        for scalar in lines[index] {
+          paragraph.push(scalar)
+        }
+        index += 1
+      }
+      blocks.push(element("p", [], [], inlineNodes(paragraph)))
+    }
+  }
+  element("article", [attr("id", "markdown-preview")], [], blocks)
+}

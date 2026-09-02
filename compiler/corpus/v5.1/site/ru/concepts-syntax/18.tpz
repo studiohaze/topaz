@@ -1,0 +1,10 @@
+// Массивы/Списки/Множества
+let ok1 = 3 in [1, 2, 3]
+let ok2 = "a" in Set.of("a", "b")
+
+// Ключи map
+let hasId = "id" in userMap.keys
+
+// Диапазоны
+let inside = 5 in 1..10
+let outside = 10 in 1..<10

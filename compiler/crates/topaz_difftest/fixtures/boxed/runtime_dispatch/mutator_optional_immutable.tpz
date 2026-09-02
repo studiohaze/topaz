@@ -1,0 +1,2 @@
+let obj = Some({ xs: [1, 2] })
+obj?.xs?.push(3)

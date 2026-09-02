@@ -1,0 +1,6 @@
+
+function addOne(r: Result<int, string>) -> Result<int, string> {
+    let n = r?
+    Ok(n + 1)
+}
+addOne(Ok(41))

@@ -1,0 +1,6 @@
+function tag(s: string) -> string { "[{s}]" }
+protocol Label { function label(value: Self) -> string }
+record Item { name: string }
+impl Label<Item> { function label(value: Item) -> string { tag(value.name) } }
+print(Label.label(Item { name: "x" }))
+0

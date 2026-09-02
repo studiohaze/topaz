@@ -1,0 +1,25 @@
+[package]
+name = "topaz_lispex_profile_suite"
+description = "Exact-profile observation suite for Lispex embedding"
+version = "5.17.0"
+license = "Apache-2.0"
+edition = "2024"
+rust-version = "1.96.0"
+publish = false
+
+[dependencies]
+sha2 = { version = "=0.10.9", default-features = false }
+wasmtime = { version = "=38.0.4", default-features = false, features = [
+  "cranelift",
+  "runtime",
+] }
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[lints.clippy]
+all = "warn"
+
+[[bin]]
+name = "topaz-lispex-profile-suite"
+path = "src/main.rs"

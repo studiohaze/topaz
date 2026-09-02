@@ -1,0 +1,3 @@
+let a = [Some(5), 7]
+match a { case [Some(x), y] => x + y
+case _ => 0 }

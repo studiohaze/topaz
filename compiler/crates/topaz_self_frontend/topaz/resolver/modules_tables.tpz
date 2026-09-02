@@ -1,0 +1,455 @@
+// Import drafts and module binding and export tables.
+// Graph discovery provides parsed roots; scope walking consumes the canonical
+// table catalog produced here.
+
+import types {
+  PreviewResolvedDiagnostic,
+  PreviewResolvedExport,
+  SyntaxNode,
+}
+import resolver.model_facts {
+  Binding,
+  ExportBinding,
+  ImportDraft,
+  ModuleDraft,
+  ModuleTable,
+  ModuleTableCatalog,
+  boolAttribute,
+  child,
+  children,
+  contains,
+  diagnostic,
+  isNone,
+  stringJoin,
+  text,
+}
+
+export function importDrafts(root: SyntaxNode, source: Bytes) -> Array<ImportDraft> {
+  let mut output: Array<ImportDraft> = []
+  for statement in root.children {
+    if statement.kind != "statement/import" {
+      continue
+    }
+    let itemOption = child(statement, "import")
+    if isNone(itemOption) {
+      continue
+    }
+    let item = match itemOption {
+      case Some(value) => value
+      case None => statement
+    }
+    let pathOption = child(item, "path")
+    if isNone(pathOption) {
+      continue
+    }
+    let path = match pathOption {
+      case Some(value) => value
+      case None => item
+    }
+    let mut segments: Array<string> = []
+    for segment in children(path, "segments") {
+      segments.push(text(source, segment))
+    }
+    let mut selectedNames: Array<string> = []
+    let mut selectedLos: Array<int> = []
+    let mut selectedHis: Array<int> = []
+    for spec in children(item, "specs") {
+      let nameNode = child(spec, "name")
+      let name = match nameNode {
+        case Some(value) => text(source, value)
+        case None => ""
+      }
+      selectedNames.push(name)
+      selectedLos.push(match nameNode {
+        case Some(value) => value.lo
+        case None => spec.lo
+      })
+      selectedHis.push(match nameNode {
+        case Some(value) => value.hi
+        case None => spec.hi
+      })
+    }
+    output.push(ImportDraft {
+      target: stringJoin(segments, "."),
+      segments: segments,
+      pathLo: path.lo,
+      pathHi: path.hi,
+      selectedNames: selectedNames,
+      selectedLos: selectedLos,
+      selectedHis: selectedHis,
+    })
+  }
+  output
+}
+
+export function collectPatternBindings(
+  pattern: SyntaxNode,
+  source: Bytes,
+  output: Array<SyntaxNode>,
+) -> () {
+  let mut target = output
+  if pattern.kind == "pattern/binding" || pattern.kind == "pattern/typed" {
+    match child(pattern, "name") {
+      case Some(name) => target.push(name)
+      case None => ()
+    }
+    return ()
+  }
+  if pattern.kind == "record-pattern-field" {
+    match child(pattern, "pattern") {
+      case Some(value) => collectPatternBindings(value, source, output)
+      case None => match child(pattern, "name") {
+        case Some(name) => target.push(name)
+        case None => ()
+      }
+    }
+    return ()
+  }
+  let mut alternatives: Array<string> = []
+  for found in pattern.children {
+    if pattern.kind == "pattern/or" && found.field == "alternatives" {
+      let mut local: Array<SyntaxNode> = []
+      collectPatternBindings(found, source, local)
+      let mut seenHere: Array<string> = []
+      for binding in local {
+        let name = text(source, binding)
+        let repeatedHere = contains(seenHere, name)
+        let firstAlternative = !contains(alternatives, name)
+        if repeatedHere || firstAlternative {
+          target.push(binding)
+        }
+        if !repeatedHere {
+          seenHere.push(name)
+        }
+        if firstAlternative {
+          alternatives.push(name)
+        }
+      }
+    } else if found.kind.startsWith("pattern/") ||
+      found.kind == "record-pattern-field" ||
+      found.kind == "list-pattern/rest" {
+      collectPatternBindings(found, source, output)
+    }
+    ()
+  }
+  ()
+}
+
+export function unwrapExport(statement: SyntaxNode) -> SyntaxNode {
+  if statement.kind == "statement/export" {
+    return match child(statement, "item") {
+      case Some(value) => value
+      case None => statement
+    }
+  }
+  statement
+}
+
+function importBindings(
+  moduleIndexValue: int,
+  item: SyntaxNode,
+  source: Bytes,
+) -> Array<Binding> {
+  let mut output: Array<Binding> = []
+  let importItem = match child(item, "import") {
+    case Some(value) => value
+    case None => return output
+  }
+  let path = match child(importItem, "path") {
+    case Some(value) => value
+    case None => return output
+  }
+  let mut segments: Array<string> = []
+  for segment in children(path, "segments") {
+    segments.push(text(source, segment))
+  }
+  let target = stringJoin(segments, ".")
+  let specs = children(importItem, "specs")
+  if specs.length == 0 {
+    let nameNode = match child(importItem, "alias") {
+      case Some(value) => value
+      case None => match path.children.get(path.children.length - 1) {
+        case Some(value) => value
+        case None => return output
+      }
+    }
+    output.push(Binding {
+      moduleIndex: moduleIndexValue,
+      scopeOrdinal: 0,
+      name: text(source, nameNode),
+      namespace: "module",
+      declarationKind: "namespace-import",
+      lo: nameNode.lo,
+      hi: nameNode.hi,
+      exported: false,
+      targetModule: target,
+      targetName: "",
+      mutable: false,
+    })
+    return output
+  }
+  for spec in specs {
+    let sourceName = match child(spec, "name") {
+      case Some(value) => text(source, value)
+      case None => ""
+    }
+    let bound = match child(spec, "alias") {
+      case Some(value) => Some(value)
+      case None => child(spec, "name")
+    }
+    match bound {
+      case Some(name) => output.push(Binding {
+        moduleIndex: moduleIndexValue,
+        scopeOrdinal: 0,
+        name: text(source, name),
+        namespace: "value",
+        declarationKind: "selected-import",
+        lo: name.lo,
+        hi: name.hi,
+        exported: false,
+        targetModule: target,
+        targetName: sourceName,
+        mutable: false,
+      })
+      case None => ()
+    }
+  }
+  output
+}
+
+function namedStatementBinding(
+  moduleIndexValue: int,
+  item: SyntaxNode,
+  source: Bytes,
+  exported: bool,
+) -> Option<Binding> {
+  let kind = match item.kind {
+    case "statement/function" => "function"
+    case "statement/type-alias" => "type-alias"
+    case "statement/enum" | "statement/record" | "statement/newtype" =>
+      "nominal-type"
+    case "statement/const" => "const"
+    case _ => return None
+  }
+  let holder = if item.kind == "statement/function" {
+    match child(item, "declaration") {
+      case Some(value) => value
+      case None => item
+    }
+  } else {
+    item
+  }
+  match child(holder, "name") {
+    case Some(name) => Some(Binding {
+      moduleIndex: moduleIndexValue,
+      scopeOrdinal: 0,
+      name: text(source, name),
+      namespace: if kind == "type-alias" || kind == "nominal-type" {
+        "type"
+      } else {
+        "value"
+      },
+      declarationKind: kind,
+      lo: name.lo,
+      hi: name.hi,
+      exported: exported,
+      targetModule: "",
+      targetName: "",
+      mutable: false,
+    })
+    case None => None
+  }
+}
+
+function letBindings(
+  moduleIndexValue: int,
+  item: SyntaxNode,
+  source: Bytes,
+  exported: bool,
+) -> Array<Binding> {
+  let mut output: Array<Binding> = []
+  let pattern = match child(item, "pattern") {
+    case Some(value) => value
+    case None => return output
+  }
+  let mut names: Array<SyntaxNode> = []
+  collectPatternBindings(pattern, source, names)
+  let mutable = boolAttribute(item, "mutable")
+  for name in names {
+    output.push(Binding {
+      moduleIndex: moduleIndexValue,
+      scopeOrdinal: 0,
+      name: text(source, name),
+      namespace: "value",
+      declarationKind: "let",
+      lo: name.lo,
+      hi: name.hi,
+      exported: exported && !mutable,
+      targetModule: "",
+      targetName: "",
+      mutable: mutable,
+    })
+  }
+  output
+}
+
+export function bindingForStatement(
+  moduleIndexValue: int,
+  statement: SyntaxNode,
+  source: Bytes,
+  exported: bool,
+) -> Array<Binding> {
+  let item = unwrapExport(statement)
+  if item.kind == "statement/import" {
+    return importBindings(moduleIndexValue, item, source)
+  }
+  match namedStatementBinding(moduleIndexValue, item, source, exported) {
+    case Some(binding) => return [binding]
+    case None => ()
+  }
+  if item.kind == "statement/let" {
+    return letBindings(moduleIndexValue, item, source, exported)
+  }
+  []
+}
+
+function buildTable(
+  moduleIndexValue: int,
+  module: ModuleDraft,
+  diagnostics: Array<PreviewResolvedDiagnostic>,
+) -> ModuleTable {
+  let source = module.source
+  let mut bindings: Array<Binding> = []
+  let mut bindingIndexes: Map<string, int> = Map.new()
+  let mut exportedBindings: Map<string, ExportBinding> = Map.new()
+  for statement in module.root.children {
+    let exported = statement.kind == "statement/export"
+    for binding in bindingForStatement(moduleIndexValue, statement, source, exported) {
+      let existingIndex = bindingIndexes.get(binding.name)
+      if exported && binding.declarationKind == "let" && binding.mutable {
+        diagnostic(
+          diagnostics,
+          moduleIndexValue,
+          "TPZ3011",
+          "`export let mut` is a static error: exported bindings are immutable views",
+          binding.lo,
+          binding.hi,
+        )
+      }
+      if binding.exported {
+        let exportIndex = match existingIndex {
+          case Some(index) => index
+          case None => bindings.length
+        }
+        exportedBindings.insert(binding.name, ExportBinding {
+          bindingIndex: exportIndex,
+          namespace: binding.namespace,
+        })
+      }
+      match existingIndex {
+        case Some(index) => {
+          let firstLo = bindings[index].lo
+          diagnostic(
+            diagnostics,
+            moduleIndexValue,
+            "TPZ3008",
+            "`{binding.name}` is already bound at this module's top level (first binding at byte {firstLo})",
+            binding.lo,
+            binding.hi,
+          )
+        }
+        case None => {
+          let bindingIndexValue = bindings.length
+          bindingIndexes.insert(binding.name, bindingIndexValue)
+          bindings.push(binding)
+        }
+      }
+    }
+  }
+  let mut exportedNames: Array<string> = []
+  for binding in bindings {
+    if !isNone(exportedBindings.get(binding.name)) {
+      exportedNames.push(binding.name)
+    }
+  }
+  exportedNames.sort()
+  ModuleTable {
+    moduleIndex: moduleIndexValue,
+    identity: module.result.identity,
+    bindings: bindings,
+    bindingIndexes: bindingIndexes,
+    exportedBindings: exportedBindings,
+    exportedNames: exportedNames,
+  }
+}
+
+export function catalogTable(
+  catalog: ModuleTableCatalog,
+  identity: string,
+) -> Option<ModuleTable> {
+  match catalog.indexes.get(identity) {
+    case Some(index) => Some(catalog.tables[index])
+    case None => None
+  }
+}
+
+export function tableBinding(table: ModuleTable, name: string) -> Option<Binding> {
+  match table.bindingIndexes.get(name) {
+    case Some(index) => Some(table.bindings[index])
+    case None => None
+  }
+}
+
+export function exportedBinding(table: ModuleTable, name: string) -> Option<ExportBinding> {
+  table.exportedBindings.get(name)
+}
+
+export function exportedNames(
+  table: ModuleTable,
+  namespace: string,
+) -> Array<string> {
+  if namespace == "" {
+    return table.exportedNames
+  }
+  let mut candidates: Array<string> = []
+  for name in table.exportedNames {
+    let namespaceValue = match exportedBinding(table, name) {
+      case Some(binding) => binding.namespace
+      case None => ""
+    }
+    if (namespace == "type" && namespaceValue == "type") ||
+      (namespace == "value" && namespaceValue != "type") {
+      candidates.push(name)
+    }
+  }
+  candidates
+}
+
+export function effectiveNamespace(binding: Binding, tables: ModuleTableCatalog) -> string {
+  if binding.declarationKind != "selected-import" {
+    return binding.namespace
+  }
+  let targetTable = match catalogTable(tables, binding.targetModule) {
+    case Some(found) => found
+    case None => return binding.namespace
+  }
+  match exportedBinding(targetTable, binding.targetName) {
+    case Some(found) => found.namespace
+    case None => binding.namespace
+  }
+}
+
+export function buildModuleTables(
+  modules: Array<ModuleDraft>,
+  diagnostics: Array<PreviewResolvedDiagnostic>,
+) -> ModuleTableCatalog {
+  let mut tables: Array<ModuleTable> = []
+  let mut indexes: Map<string, int> = Map.new()
+  let mut index = 0
+  for module in modules {
+    indexes.insert(module.result.identity, index)
+    tables.push(buildTable(index, module, diagnostics))
+    index += 1
+  }
+  ModuleTableCatalog { tables: tables, indexes: indexes }
+}

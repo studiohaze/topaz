@@ -1,0 +1,23 @@
+
+import util
+let mut first = util.spin
+let second = first
+let mut reserved = util.sortedBy
+let chainedReserved = reserved
+first = util.fast
+reserved = util.otherSorted
+concurrent {
+    valueChain: {
+        let xs = [1]
+        xs.map(second)
+    }
+    reservedChain: {
+        let ys = [1]
+        ys.map(chainedReserved)
+    }
+    boom: {
+        let zs = [1]
+        zs[2]
+    }
+}
+0

@@ -1,0 +1,490 @@
+// Higher-order, vector traversal, control, and error primitives.
+// Callback requests return to the machine as explicit steps rather than running
+// nested evaluator loops inside primitive dispatch.
+
+import lit.model {
+  GuestInt,
+  GuestRational,
+  ErrorObjectRow,
+  GuardClauseRow,
+  GuestValue,
+  ValuePacket,
+  MachineSignal,
+  ContinuationFrame,
+  ContinuationRow,
+  DynamicFrame,
+  DynamicRow,
+  MachineMode,
+  KernelInvokeStep,
+}
+import lit.render {
+  renderGuest,
+}
+import lit.numeric {
+  guestIndex,
+}
+import lit.value_runtime {
+  allocateGuestIdentity,
+  packetFrom,
+  allocateContinuation,
+  allocateDynamic,
+  isProcedure,
+  requireArity,
+  properList,
+  requireHigherOrderArity,
+  reversedGuestValues,
+  higherOrderInvocationArguments,
+  completedHigherOrderPacket,
+  guestList,
+}
+
+function higherOrderElements(name: string, value: GuestValue) -> Result<Array<GuestValue>, string> {
+  if name == "string-map" || name == "string-for-each" {
+    match value {
+      case VString(_, text) => {
+        let mut elements: Array<GuestValue> = []
+        for scalar in text.scalars() {
+          elements.push(GuestValue.VChar(scalar.codePointAt(0) ?? 0))
+        }
+        return Ok(elements)
+      }
+      case _ => return Err("E312 {name}: expected a string, got {renderGuest(value)}")
+    }
+  }
+  if name == "vector-map" || name == "vector-for-each" {
+    match value {
+      case VVector(_, elements, _) => return Ok(elements)
+      case _ => return Err("E312 {name}: expected a vector, got {renderGuest(value)}")
+    }
+  }
+  let mut elements: Array<GuestValue> = []
+  let mut cursor = value
+  loop {
+    match cursor {
+      case VNil => { break }
+      case VPair(_, car, cdr) => {
+        elements.push(car)
+        cursor = cdr
+      }
+      case _ => return Err("E312 {name}: expected a proper list, got {renderGuest(cursor)}")
+    }
+  }
+  Ok(elements)
+}
+
+export function invokePrimitiveHigherOrderAndVector(
+  name: string,
+  arguments: Array<GuestValue>,
+  continuation: int,
+  activeOrigin: int,
+  continuations: Array<ContinuationRow>,
+  dynamics: Array<DynamicRow>,
+  dynamicSuppressed: Array<bool>,
+  initialEscapeActive: Array<bool>,
+  guestIdentities: Array<int>,
+  initialAllocations: int,
+  initialMaxContinuationDepth: int,
+  initialTransfers: int,
+  initialDynamic: int,
+  emittedOutput: string,
+) -> Option<KernelInvokeStep> {
+  let mut escapeActive = initialEscapeActive
+  let mut allocations = initialAllocations
+  let mut maxContinuationDepth = initialMaxContinuationDepth
+  let mut transfers = initialTransfers
+  let mut dynamic = initialDynamic
+  let mut mode = MachineMode.HaltMode
+  match name {
+    case "values" => {
+      mode = MachineMode.DeliverMode(packetFrom(arguments), continuation)
+    }
+    case "call-with-values" => match requireArity("call-with-values", arguments.length, 2, 2) {
+      case Err(error) => {
+        transfers += 1
+        mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+      }
+      case Ok(_) => {
+        let frame = allocateContinuation(continuations, ContinuationFrame.ProducerFrame(arguments[1], activeOrigin), continuation)
+        allocations += 1
+        if continuations[frame].depth > maxContinuationDepth { maxContinuationDepth = continuations[frame].depth }
+        mode = MachineMode.InvokeMode(arguments[0], [], frame, activeOrigin)
+      }
+    }
+    case "apply" => match requireArity("apply", arguments.length, 2, -1) {
+      case Err(error) => {
+        transfers += 1
+        mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+      }
+      case Ok(_) => {
+        match properList(arguments[arguments.length - 1]) {
+          case Err(error) => {
+            transfers += 1
+            mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+          }
+          case Ok(tail) => {
+            let mut expanded: Array<GuestValue> = []
+            let mut index = 1
+            while index + 1 < arguments.length {
+              expanded.push(arguments[index])
+              index += 1
+            }
+            for value in tail { expanded.push(value) }
+            mode = MachineMode.InvokeMode(arguments[0], expanded, continuation, activeOrigin)
+          }
+        }
+      }
+    }
+    case "all?" | "any?" | "filter" | "fold-left" | "fold-right"
+      | "for-each" | "map" | "reduce" | "string-for-each" | "string-map"
+      | "vector-for-each" | "vector-map" => match requireHigherOrderArity(name, arguments.length) {
+      case Err(error) => {
+        transfers += 1
+        mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+      }
+      case Ok(_) => {
+        let sourceIndex = if name == "reduce" || name == "fold-left" || name == "fold-right" { 2 } else { 1 }
+        match higherOrderElements(name, arguments[sourceIndex]) {
+          case Err(error) => {
+            transfers += 1
+            mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+          }
+          case Ok(sourceElements) => {
+            let elements = if name == "fold-right" { reversedGuestValues(sourceElements) } else { sourceElements }
+            let accumulator = if name == "reduce" || name == "fold-left" || name == "fold-right" {
+              arguments[1]
+            } else {
+              GuestValue.VNil
+            }
+            if elements.length == 0 {
+              mode = MachineMode.DeliverMode(
+                completedHigherOrderPacket(name, [], accumulator, guestIdentities),
+                continuation,
+              )
+            } else {
+              let frame = allocateContinuation(
+                continuations,
+                ContinuationFrame.HigherOrderFrame(
+                  name,
+                  arguments[0],
+                  elements,
+                  1,
+                  [],
+                  accumulator,
+                  activeOrigin,
+                ),
+                continuation,
+              )
+              allocations += 1
+              if continuations[frame].depth > maxContinuationDepth { maxContinuationDepth = continuations[frame].depth }
+              mode = MachineMode.InvokeMode(
+                arguments[0],
+                higherOrderInvocationArguments(name, elements[0], accumulator),
+                frame,
+                activeOrigin,
+              )
+            }
+          }
+        }
+      }
+    }
+    case "vector-ref" => match requireArity("vector-ref", arguments.length, 2, 2) {
+      case Err(error) => {
+        transfers += 1
+        mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+      }
+      case Ok(_) => match arguments[0] {
+        case VVector(_, values, _) => match guestIndex(arguments[1], "vector-ref") {
+          case Ok(index) => if index >= 0 && index < values.length {
+            mode = MachineMode.DeliverMode(ValuePacket.One(values[index]), continuation)
+          } else {
+            transfers += 1
+            mode = MachineMode.TransferMode(
+              MachineSignal.ProjectedRuntimeSignal(
+                "E311 vector-ref: index out of range",
+                "E311",
+                "vector-ref: index {index} out of range (length {values.length})",
+                [],
+              ),
+              continuation,
+            )
+          }
+          case Err(error) => {
+            transfers += 1
+            mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+          }
+        }
+        case _ => {
+          transfers += 1
+          mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal("E312 vector-ref: vector required"), continuation)
+        }
+      }
+    }
+    case "vector-set!" => match requireArity("vector-set!", arguments.length, 3, 3) {
+      case Err(error) => {
+        transfers += 1
+        mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+      }
+      case Ok(_) => match arguments[0] {
+        case VVector(_, values, mutable) => if !mutable {
+          transfers += 1
+          mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal("E312 vector-set!: immutable quoted vector"), continuation)
+        } else {
+          match guestIndex(arguments[1], "vector-set!") {
+            case Ok(index) => if index >= 0 && index < values.length {
+              let mut mutableValues = values
+              mutableValues[index] = arguments[2]
+              mode = MachineMode.DeliverMode(ValuePacket.Many([]), continuation)
+            } else {
+              transfers += 1
+              mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal("E311 vector-set!: index out of range"), continuation)
+            }
+            case Err(error) => {
+              transfers += 1
+              mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+            }
+          }
+        }
+        case _ => {
+          transfers += 1
+          mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal("E312 vector-set!: vector required"), continuation)
+        }
+      }
+    }
+    case _ => { return None }
+  }
+  Some(KernelInvokeStep {
+    mode: mode,
+    allocations: allocations,
+    maxContinuationDepth: maxContinuationDepth,
+    transfers: transfers,
+    dynamic: dynamic,
+    emittedOutput: emittedOutput,
+  })
+}
+
+export function invokePrimitiveControlAndErrors(
+  name: string,
+  arguments: Array<GuestValue>,
+  continuation: int,
+  activeOrigin: int,
+  continuations: Array<ContinuationRow>,
+  dynamics: Array<DynamicRow>,
+  dynamicSuppressed: Array<bool>,
+  initialEscapeActive: Array<bool>,
+  guestIdentities: Array<int>,
+  initialAllocations: int,
+  initialMaxContinuationDepth: int,
+  initialTransfers: int,
+  initialDynamic: int,
+  emittedOutput: string,
+) -> Option<KernelInvokeStep> {
+  let mut escapeActive = initialEscapeActive
+  let mut allocations = initialAllocations
+  let mut maxContinuationDepth = initialMaxContinuationDepth
+  let mut transfers = initialTransfers
+  let mut dynamic = initialDynamic
+  let mut mode = MachineMode.HaltMode
+  match name {
+    case "call/cc" | "call-with-current-continuation" => match requireArity(name, arguments.length, 1, 1) {
+      case Err(error) => {
+        transfers += 1
+        mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+      }
+      case Ok(_) => if !isProcedure(arguments[0]) {
+        transfers += 1
+        mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal("E312 call/cc: procedure required"), continuation)
+      } else {
+        let escapeId = escapeActive.length
+        escapeActive.push(true)
+        allocations += 1
+        let ownerDynamic = allocateDynamic(
+          dynamics,
+          dynamicSuppressed,
+          DynamicFrame.EscapeOwnerDynamic(escapeId, continuation),
+          dynamic,
+        )
+        allocations += 1
+        let frame = allocateContinuation(
+          continuations,
+          ContinuationFrame.EscapeScopeFrame(ownerDynamic),
+          continuation,
+        )
+        allocations += 1
+        if continuations[frame].depth > maxContinuationDepth { maxContinuationDepth = continuations[frame].depth }
+        dynamic = ownerDynamic
+        mode = MachineMode.InvokeMode(arguments[0], [GuestValue.VEscape(escapeId)], frame, activeOrigin)
+      }
+    }
+    case "dynamic-wind" => match requireArity("dynamic-wind", arguments.length, 3, 3) {
+      case Err(error) => {
+        transfers += 1
+        mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+      }
+      case Ok(_) => if !isProcedure(arguments[0]) || !isProcedure(arguments[1]) || !isProcedure(arguments[2]) {
+        transfers += 1
+        mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal("E312 dynamic-wind: procedures required"), continuation)
+      } else {
+        let frame = allocateContinuation(
+          continuations,
+          ContinuationFrame.WindBeforeFrame(arguments[1], arguments[2], activeOrigin),
+          continuation,
+        )
+        allocations += 1
+        if continuations[frame].depth > maxContinuationDepth { maxContinuationDepth = continuations[frame].depth }
+        mode = MachineMode.InvokeMode(arguments[0], [], frame, activeOrigin)
+      }
+    }
+    case "with-exception-handler" => match requireArity("with-exception-handler", arguments.length, 2, 2) {
+      case Err(error) => {
+        transfers += 1
+        mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+      }
+      case Ok(_) => if !isProcedure(arguments[0]) || !isProcedure(arguments[1]) {
+        transfers += 1
+        mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal("E312 with-exception-handler: procedures required"), continuation)
+      } else {
+        let handlerDynamic = allocateDynamic(
+          dynamics,
+          dynamicSuppressed,
+          DynamicFrame.HandlerDynamic(arguments[0]),
+          dynamic,
+        )
+        allocations += 1
+        let frame = allocateContinuation(
+          continuations,
+          ContinuationFrame.HandlerScopeFrame(handlerDynamic),
+          continuation,
+        )
+        allocations += 1
+        if continuations[frame].depth > maxContinuationDepth { maxContinuationDepth = continuations[frame].depth }
+        dynamic = handlerDynamic
+        mode = MachineMode.InvokeMode(arguments[1], [], frame, activeOrigin)
+      }
+    }
+    case "raise" => match requireArity("raise", arguments.length, 1, 1) {
+      case Err(error) => {
+        transfers += 1
+        mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+      }
+      case Ok(_) => {
+        transfers += 1
+        mode = MachineMode.TransferMode(
+          MachineSignal.ConditionSignal(arguments[0], false, "E331 object raised, uncaught"),
+          continuation,
+        )
+      }
+    }
+    case "raise-continuable" => match requireArity("raise-continuable", arguments.length, 1, 1) {
+      case Err(error) => {
+        transfers += 1
+        mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+      }
+      case Ok(_) => {
+        transfers += 1
+        mode = MachineMode.TransferMode(
+          MachineSignal.ConditionSignal(arguments[0], true, "E331 object raised, uncaught"),
+          continuation,
+        )
+      }
+    }
+    case "error" => match requireArity("error", arguments.length, 1, -1) {
+      case Err(error) => {
+        transfers += 1
+        mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+      }
+      case Ok(_) => match arguments[0] {
+        case VString(_, message) => {
+          let mut irritants: Array<GuestValue> = []
+          let mut irritantIndex = 1
+          while irritantIndex < arguments.length {
+            irritants.push(arguments[irritantIndex])
+            irritantIndex += 1
+          }
+          let mut diagnostic = "E330 {message}"
+          for irritant in irritants { diagnostic += " {renderGuest(irritant)}" }
+          transfers += 1
+          mode = MachineMode.TransferMode(
+            MachineSignal.ConditionSignal(
+              GuestValue.VError(
+                allocateGuestIdentity(guestIdentities),
+                ErrorObjectRow { code: "E330", message: message },
+                irritants,
+              ),
+              false,
+              diagnostic,
+            ),
+            continuation,
+          )
+        }
+        case _ => {
+          transfers += 1
+          mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal("E312 error: message string required"), continuation)
+        }
+      }
+    }
+    case "error-object?" => match requireArity("error-object?", arguments.length, 1, 1) {
+      case Err(error) => {
+        transfers += 1
+        mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+      }
+      case Ok(_) => {
+        let answer = match arguments[0] {
+          case VError(_, _, _) => true
+          case _ => false
+        }
+        mode = MachineMode.DeliverMode(ValuePacket.One(GuestValue.VBool(answer)), continuation)
+      }
+    }
+    case "error-object-message" => match requireArity("error-object-message", arguments.length, 1, 1) {
+      case Err(error) => {
+        transfers += 1
+        mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+      }
+      case Ok(_) => match arguments[0] {
+        case VError(_, error, _) => {
+          mode = MachineMode.DeliverMode(
+            ValuePacket.One(GuestValue.VString(
+              allocateGuestIdentity(guestIdentities),
+              error.message,
+            )),
+            continuation,
+          )
+        }
+        case _ => {
+          transfers += 1
+          mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal("E312 error-object-message: error object required"), continuation)
+        }
+      }
+    }
+    case "error-object-irritants" => match requireArity("error-object-irritants", arguments.length, 1, 1) {
+      case Err(error) => {
+        transfers += 1
+        mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+      }
+      case Ok(_) => match arguments[0] {
+        case VError(_, _, irritants) => {
+          mode = MachineMode.DeliverMode(
+            ValuePacket.One(guestList(irritants, guestIdentities)),
+            continuation,
+          )
+        }
+        case _ => {
+          transfers += 1
+          mode = MachineMode.TransferMode(
+            MachineSignal.RuntimeSignal("HK244 error-object-irritants: error object required"),
+            continuation,
+          )
+        }
+      }
+    }
+    case _ => { return None }
+  }
+  Some(KernelInvokeStep {
+    mode: mode,
+    allocations: allocations,
+    maxContinuationDepth: maxContinuationDepth,
+    transfers: transfers,
+    dynamic: dynamic,
+    emittedOutput: emittedOutput,
+  })
+}

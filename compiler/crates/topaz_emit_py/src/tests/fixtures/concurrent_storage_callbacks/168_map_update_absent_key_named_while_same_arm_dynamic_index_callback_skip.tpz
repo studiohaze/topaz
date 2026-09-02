@@ -1,0 +1,30 @@
+
+function spin(x: int) -> int {
+    x / 0
+}
+
+function bust(x: int) -> int {
+    x / 0
+}
+
+function choose(i: int) -> int {
+    let r = concurrent {
+        slow: {
+            let mut cbs = [spin, bust]
+            let mut out = -9
+            let mut n = 0
+            while n < 1 {
+                cbs[i] = bust
+                let mut values = map { "a": 1 }
+                values.update(k: "z", initial: 7, f: cbs[i])
+                out = values.getOr("z", 0) + values.getOr("a", 0)
+                n = n + 1
+            }
+            out
+        }
+        fast: 0
+    }
+    r.slow + r.fast
+}
+
+choose(1)

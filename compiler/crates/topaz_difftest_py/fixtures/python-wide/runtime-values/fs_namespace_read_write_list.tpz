@@ -1,0 +1,27 @@
+
+function sizeText(value: Option<int>) -> string {
+    match value {
+        case Some(n) => "{n}"
+        case None => "none"
+    }
+}
+
+function entryText(entries: Array<{ name: string, kind: string, sizeBytes: Option<int> }>, index: int) -> string {
+    match entries.get(index) {
+        case Some(e) => "{e.name}:{e.kind}:{sizeText(e.sizeBytes)}"
+        case None => "missing"
+    }
+}
+
+function main() -> Result<int, string> {
+    let before = FS.readText(path: "config.txt")?
+    FS.writeText(path: "config.txt", text: "v=2")?
+    let after = FS.readText("config.txt")?
+    let raw = Bytes.fromArray([65, 66, 255])?
+    FS.writeBytes(bytes: raw, path: "raw.bin")?
+    let rawRead = FS.readBytes(path: "raw.bin")?
+    let entries = FS.list(path: ".")?
+    print("{before}|{after}|{rawRead.toHex()}|{entryText(entries, 0)}|{entryText(entries, 1)}")
+    Ok(0)
+}
+let ignored = main()

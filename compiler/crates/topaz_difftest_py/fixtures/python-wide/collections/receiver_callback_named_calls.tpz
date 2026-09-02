@@ -1,0 +1,45 @@
+
+function double(x: int) -> int {
+    x * 2
+}
+function add(acc: int, x: int) -> int {
+    acc + x
+}
+function keepEntry(key: string, value: int) -> bool {
+    key == "b" || value > 10
+}
+function maybeInc(x: int) -> Option<int> {
+    Some(x + 1)
+}
+function okInc(x: int) -> Result<int, string> {
+    Ok(x + 1)
+}
+function late() -> string {
+    "late"
+}
+function main() -> int {
+    let xs = [1, 2, 3]
+    let ys = xs.map(f: double)
+    let zs = xs.filter(f: (x) => x > 1)
+    let total = xs.reduce(f: add, initial: 0)
+    let sorted = [3, 1, 2].sortedBy(f: (x) => 0 - x)
+    let opt = match Some(2).flatMap(f: maybeInc) {
+        case Some(n) => n
+        case None => 0
+    }
+    let res = match Ok(3).flatMap(f: okInc) {
+        case Ok(n) => n
+        case Err(_) => 0
+    }
+    let none: Option<int> = None
+    let err = match none.okOrElse(f: late) {
+        case Ok(_) => 0
+        case Err(e) => if e == "late" { 1 } else { 0 }
+    }
+    let mut m = map { "a": 1, "b": 2 }
+    let mapped = m.mapValues(f: double)
+    let filtered = m.filter(f: keepEntry)
+    m.update(f: double, initial: 0, k: "a")
+    total + ys[0] + zs[0] + sorted[0] + opt + res + err + mapped.getOr("b", 0) + filtered.getOr("b", 0) + m.getOr("a", 0)
+}
+main()

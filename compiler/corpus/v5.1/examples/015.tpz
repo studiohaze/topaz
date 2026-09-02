@@ -1,0 +1,4 @@
+let scores: Array<int> = [80, 90, 100]
+
+let mut users: Map<string, int> = Map.new()
+users.insert("alice", 1)

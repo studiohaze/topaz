@@ -1,0 +1,7 @@
+match BigInt.parse("100000000000000000000", 10) { case Some(big) => { let x: BigInt = big
+let mut m = Map.new()
+m.insert(x, "ok")
+let first = [x, BigInt.fromInt(-1)].sorted().get(0)
+match first { case Some(v) => "{m.getOr(x, \"miss\")}/{v.toString(10)}"
+case None => "none" } }
+case None => "none" }

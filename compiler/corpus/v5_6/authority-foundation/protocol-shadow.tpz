@@ -1,0 +1,3 @@
+let Show = { show: (value) => value + 1 }
+let value: int = Show.show(1)
+print("{value}")

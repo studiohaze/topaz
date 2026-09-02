@@ -1,0 +1,7 @@
+record Empty { }
+record Config { host: string = "localhost", port: int = 8080 }
+let e: Empty = Empty {}
+let c: Config = Config {}
+print("{e}")
+print("{c}")
+0

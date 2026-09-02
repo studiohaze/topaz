@@ -1,0 +1,2 @@
+let r = None
+5 |> r?.g()

@@ -1,0 +1,13 @@
+// Result 타입을 사용한 안전한 함수
+function 안전한나누기(분자: float, 분모: float) -> Result<float, string> {
+    if 분모 == 0.0 {
+        return Err("0으로 나눌 수 없습니다")
+    }
+    return Ok(분자 / 분모)
+}
+
+// 사용 시
+match 안전한나누기(10.0, 2.0) {
+    case Ok(결과) => print("결과: {결과}")
+    case Err(오류) => print("오류: {오류}")
+}

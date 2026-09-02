@@ -1,0 +1,6 @@
+enum Box {
+    Wrap(int | string),
+}
+
+let value: Box = Box.Wrap(7)
+print("{value}")

@@ -1,0 +1,18 @@
+let 참 = true
+let 거짓 = false
+
+// 논리 AND
+let AND결과 = 참 && 거짓     // false
+let AND결과2 = 참 && 참      // true
+
+// 논리 OR  
+let OR결과 = 참 || 거짓      // true
+let OR결과2 = 거짓 || 거짓   // false
+
+// 논리 NOT
+let NOT결과 = !참           // false
+let NOT결과2 = !거짓        // true
+
+print("AND 결과: {AND결과}")
+print("OR 결과: {OR결과}")
+print("NOT 결과: {NOT결과}")

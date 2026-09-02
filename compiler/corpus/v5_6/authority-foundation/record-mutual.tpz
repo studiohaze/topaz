@@ -1,0 +1,11 @@
+record Left {
+    right: Right | null = null,
+}
+
+record Right {
+    left: Left | null = null,
+}
+
+let left: Left = Left {}
+let right: Right = Right { left: left }
+print("{left}:{right}")

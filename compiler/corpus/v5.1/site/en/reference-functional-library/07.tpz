@@ -1,0 +1,13 @@
+type TransformMode = "double" | "square"
+
+function chooseTransform(mode: TransformMode) -> (int) -> int {
+    return match mode {
+        case "double" => (x: int) => x * 2
+        case "square" => (x: int) => x * x
+    }
+}
+
+let transform = chooseTransform("square")
+let value = transform(5)
+
+print("Value: {value}")  // 25

@@ -1,0 +1,4 @@
+
+import config as cfg
+let base: int = 7
+export record User { name: string, age: int = cfg.base, localAge: int = base }

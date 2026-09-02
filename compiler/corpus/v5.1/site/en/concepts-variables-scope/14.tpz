@@ -1,0 +1,7 @@
+// Bad example
+let a = userList.length
+let b = a * 2
+
+// Good example  
+let totalUsers = userList.length
+let doubledCapacity = totalUsers * 2

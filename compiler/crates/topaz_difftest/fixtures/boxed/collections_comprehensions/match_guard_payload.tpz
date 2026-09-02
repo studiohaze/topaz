@@ -1,0 +1,6 @@
+let opt: Option<int> = Some(5)
+match opt {
+  case Some(n) if n > 10 => "big"
+  case Some(_) => "small"
+  case None => "none"
+}

@@ -1,0 +1,2 @@
+
+export newtype Box<T> = T

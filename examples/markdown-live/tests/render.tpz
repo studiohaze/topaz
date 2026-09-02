@@ -1,0 +1,9 @@
+import src.render_dom { linkAllowed, renderMarkdown }
+
+assert(linkAllowed("https://topaz.ooo/docs"), "HTTPS link")
+assert(linkAllowed("./guide"), "relative link")
+assert(!linkAllowed("javascript:alert(1)"), "javascript rejected")
+assert(!linkAllowed("data:text/html,x"), "data rejected")
+assert(!linkAllowed("//evil.example"), "protocol-relative rejected")
+
+let rendered = renderMarkdown("# 제목\n\nA **bold** and *safe* [link](https://topaz.ooo).\n\n| A | B |\n|---|---|\n| 1 | 2 |\n\n<script>x</script>")

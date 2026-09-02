@@ -1,0 +1,7 @@
+let r = loop {
+  defer { print("defer") }
+  break { print("eval-value")
+          7 }
+}
+print("r={r}")
+0

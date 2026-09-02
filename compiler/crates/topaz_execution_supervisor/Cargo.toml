@@ -1,0 +1,14 @@
+[package]
+name = "topaz_execution_supervisor"
+description = "Resource, nonretention, isolation, and cleanup supervisor for Topaz execution"
+version.workspace = true
+license.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+topaz_execution_sandbox = { workspace = true }
+topaz_value = { workspace = true }
+
+[lints]
+workspace = true

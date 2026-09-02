@@ -1,0 +1,734 @@
+// Arithmetic, numeric text conversion, equality, and pair primitives.
+// Exact-number operations come from lit.numeric, while list allocation and
+// identity comparisons remain in the shared value runtime.
+
+import lit.model {
+  GuestInt,
+  GuestRational,
+  ErrorObjectRow,
+  GuardClauseRow,
+  GuestValue,
+  ValuePacket,
+  MachineSignal,
+  NodeOp,
+  SpanRow,
+  OriginRow,
+  BinderRow,
+  GlobalRow,
+  NodeRow,
+  Kernel,
+  ContinuationFrame,
+  ContinuationRow,
+  DynamicFrame,
+  DynamicRow,
+  MachineMode,
+  KernelInvokeStep,
+}
+import lit.numeric {
+  guestIntZero,
+  guestIntOne,
+  renderGuestInt,
+  valueFromRational,
+  renderRational,
+  renderReal,
+  parseGuestNumberToken,
+  exactRational,
+  guestNumberToFloat,
+  numericAdd,
+  numericSubtract,
+  numericMultiply,
+  numericDivide,
+  numericComparisonChain,
+  numericNegate,
+  numericEqual,
+  numericIntegerDivision,
+  numericAbs,
+  numericSquare,
+  numericRounded,
+  numericSignPredicate,
+  numericTowerPredicate,
+  numericEvenOdd,
+  numericMinMax,
+  numericGcdLcm,
+  numericExpt,
+  exactIntegerSqrt,
+}
+import lit.value_runtime {
+  allocateGuestIdentity,
+  requireArity,
+  guestListElements,
+  guestCount,
+  guestListWithTail,
+  guestList,
+  eqvGuest,
+  equalGuest,
+}
+import lit.render {
+  renderGuest,
+}
+import lit.unicode_text {
+  unicodeAlphabeticV16,
+  asciiDecimalScalar,
+  guestHomogeneousEquality,
+}
+
+function invokeCompletedNumericCapability(
+  name: string,
+  arguments: Array<GuestValue>,
+) -> Result<ValuePacket, string> {
+  if name == "%" || name == "modulo" || name == "floor-remainder" {
+    requireArity(name, arguments.length, 2, 2)?
+    return numericIntegerDivision(arguments[0], arguments[1], name, true, "remainder")
+  }
+  if name == "floor-quotient" {
+    requireArity(name, arguments.length, 2, 2)?
+    return numericIntegerDivision(arguments[0], arguments[1], name, true, "quotient")
+  }
+  if name == "quotient" || name == "truncate-quotient" {
+    requireArity(name, arguments.length, 2, 2)?
+    return numericIntegerDivision(arguments[0], arguments[1], name, false, "quotient")
+  }
+  if name == "remainder" || name == "truncate-remainder" {
+    requireArity(name, arguments.length, 2, 2)?
+    return numericIntegerDivision(arguments[0], arguments[1], name, false, "remainder")
+  }
+  if name == "floor/" || name == "truncate/" {
+    requireArity(name, arguments.length, 2, 2)?
+    return numericIntegerDivision(arguments[0], arguments[1], name, name == "floor/", "both")
+  }
+  if name == "abs" {
+    requireArity(name, arguments.length, 1, 1)?
+    return Ok(ValuePacket.One(numericAbs(arguments[0], name)?))
+  }
+  if name == "square" {
+    requireArity(name, arguments.length, 1, 1)?
+    return Ok(ValuePacket.One(numericSquare(arguments[0])?))
+  }
+  if name == "floor" || name == "ceiling" || name == "round" || name == "truncate" {
+    requireArity(name, arguments.length, 1, 1)?
+    return Ok(ValuePacket.One(numericRounded(arguments[0], name)?))
+  }
+  if name == "zero?" || name == "positive?" || name == "negative?" {
+    requireArity(name, arguments.length, 1, 1)?
+    return Ok(ValuePacket.One(GuestValue.VBool(numericSignPredicate(arguments[0], name)?)))
+  }
+  if name == "rational?" || name == "real?" || name == "complex?" {
+    requireArity(name, arguments.length, 1, 1)?
+    return Ok(ValuePacket.One(GuestValue.VBool(numericTowerPredicate(arguments[0]))))
+  }
+  if name == "even?" || name == "odd?" {
+    requireArity(name, arguments.length, 1, 1)?
+    return Ok(ValuePacket.One(GuestValue.VBool(numericEvenOdd(arguments[0], name)?)))
+  }
+  if name == "exact" || name == "inexact->exact" {
+    requireArity(name, arguments.length, 1, 1)?
+    return Ok(ValuePacket.One(valueFromRational(exactRational(arguments[0], name)?)))
+  }
+  if name == "inexact" || name == "exact->inexact" {
+    requireArity(name, arguments.length, 1, 1)?
+    return Ok(ValuePacket.One(GuestValue.VReal(guestNumberToFloat(arguments[0], name)?)))
+  }
+  if name == "min" || name == "max" {
+    return Ok(ValuePacket.One(numericMinMax(arguments, name)?))
+  }
+  if name == "gcd" || name == "lcm" {
+    return Ok(ValuePacket.One(numericGcdLcm(arguments, name)?))
+  }
+  if name == "expt" {
+    requireArity(name, arguments.length, 2, 2)?
+    return Ok(ValuePacket.One(numericExpt(arguments[0], arguments[1])?))
+  }
+  if name == "exact-integer-sqrt" {
+    requireArity(name, arguments.length, 1, 1)?
+    return exactIntegerSqrt(arguments[0])
+  }
+  Err("LIT200 unknown completed numeric capability `{name}`")
+}
+
+export function searchListTail(needle: GuestValue, list: GuestValue, name: string, identityOnly: bool) -> Result<GuestValue, string> {
+  let mut cursor = list
+  loop {
+    match cursor {
+      case VNil => { break Ok(GuestValue.VBool(false)) }
+      case VPair(_, car, cdr) => {
+        let found = if identityOnly { eqvGuest(needle, car) } else { equalGuest(needle, car) }
+        if found { break Ok(cursor) }
+        cursor = cdr
+      }
+      case _ => { break Err("E312 {name}: expected a proper list, got {renderGuest(cursor)}") }
+    }
+  }
+}
+
+function searchAssociation(
+  needle: GuestValue,
+  list: GuestValue,
+  name: string,
+  structural: bool,
+) -> Result<GuestValue, string> {
+  let mut cursor = list
+  loop {
+    match cursor {
+      case VNil => { break Ok(GuestValue.VBool(false)) }
+      case VPair(_, entry, cdr) => match entry {
+        case VPair(_, key, _) => {
+          let found = if structural { equalGuest(needle, key) } else { eqvGuest(needle, key) }
+          if found { break Ok(entry) }
+          cursor = cdr
+        }
+        case _ => { break Err("E312 {name}: expected an association list (each entry a pair), got {renderGuest(entry)}") }
+      }
+      case _ => { break Err("E312 {name}: expected an association list, got {renderGuest(cursor)}") }
+    }
+  }
+}
+
+function guestCxr(name: string, value: GuestValue) -> Result<GuestValue, string> {
+  let letters = name.scalars()
+  let mut cursor = value
+  let mut index = letters.length - 2
+  while index >= 1 {
+    match cursor {
+      case VPair(_, car, cdr) => {
+        cursor = if letters[index] == "a" { car } else { cdr }
+      }
+      case _ => return Err("E310 {name}: expected a pair, got {renderGuest(cursor)}")
+    }
+    index -= 1
+  }
+  Ok(cursor)
+}
+
+function guestListCopy(value: GuestValue, identities: Array<int>) -> GuestValue {
+  let mut cars: Array<GuestValue> = []
+  let mut cursor = value
+  loop {
+    match cursor {
+      case VPair(_, car, cdr) => {
+        cars.push(car)
+        cursor = cdr
+      }
+      case _ => { break guestListWithTail(cars, cursor, identities) }
+    }
+  }
+}
+
+function guestListRef(list: GuestValue, index: GuestValue) -> Result<GuestValue, string> {
+  let values = guestListElements(list, "list-ref", "E312")?
+  let position = guestCount(index, "list-ref")?
+  if position >= values.length {
+    return Err("E311 list-ref: index {position} out of range (length {values.length})")
+  }
+  Ok(values[position])
+}
+
+function guestListTail(list: GuestValue, index: GuestValue) -> Result<GuestValue, string> {
+  let position = guestCount(index, "list-tail")?
+  let mut cursor = list
+  let mut remaining = position
+  while remaining > 0 {
+    match cursor {
+      case VPair(_, _, cdr) => { cursor = cdr }
+      case _ => return Err("E311 list-tail: index {position} out of range")
+    }
+    remaining -= 1
+  }
+  Ok(cursor)
+}
+
+function guestMakeList(arguments: Array<GuestValue>, identities: Array<int>) -> Result<GuestValue, string> {
+  requireArity("make-list", arguments.length, 1, 2)?
+  let count = guestCount(arguments[0], "make-list")?
+  let fill = if arguments.length == 2 { arguments[1] } else { GuestValue.VInt(guestIntZero()) }
+  let mut values: Array<GuestValue> = []
+  let mut index = 0
+  while index < count {
+    values.push(fill)
+    index += 1
+  }
+  Ok(guestList(values, identities))
+}
+
+function invokeCompletedListSearchCapability(
+  name: string,
+  arguments: Array<GuestValue>,
+  identities: Array<int>,
+) -> Result<GuestValue, string> {
+  if name == "list-first" {
+    requireArity("car", arguments.length, 1, 1)?
+    return match arguments[0] {
+      case VPair(_, car, _) => Ok(car)
+      case _ => Err("E310 car: expected a pair, got {renderGuest(arguments[0])}")
+    }
+  }
+  if name == "list-rest" {
+    requireArity("cdr", arguments.length, 1, 1)?
+    return match arguments[0] {
+      case VPair(_, _, cdr) => Ok(cdr)
+      case _ => Err("E310 cdr: expected a pair, got {renderGuest(arguments[0])}")
+    }
+  }
+  if name.startsWith("c") && name.endsWith("r") {
+    requireArity(name, arguments.length, 1, 1)?
+    return guestCxr(name, arguments[0])
+  }
+  if name == "list-copy" {
+    requireArity(name, arguments.length, 1, 1)?
+    return Ok(guestListCopy(arguments[0], identities))
+  }
+  if name == "list-ref" || name == "nth" {
+    requireArity("list-ref", arguments.length, 2, 2)?
+    return guestListRef(arguments[0], arguments[1])
+  }
+  if name == "list-tail" {
+    requireArity(name, arguments.length, 2, 2)?
+    return guestListTail(arguments[0], arguments[1])
+  }
+  if name == "make-list" { return guestMakeList(arguments, identities) }
+  if name == "memv" {
+    requireArity(name, arguments.length, 2, 2)?
+    return searchListTail(arguments[0], arguments[1], name, true)
+  }
+  if name == "assoc" || name == "assq" || name == "assv" {
+    requireArity(name, arguments.length, 2, 2)?
+    return searchAssociation(arguments[0], arguments[1], name, name == "assoc")
+  }
+  Err("LIT200 unknown completed list/search capability {name}")
+}
+
+
+export function invokePrimitiveArithmeticAndPairs(
+  name: string,
+  arguments: Array<GuestValue>,
+  continuation: int,
+  activeOrigin: int,
+  continuations: Array<ContinuationRow>,
+  dynamics: Array<DynamicRow>,
+  initialDynamicSuppressed: Array<bool>,
+  initialEscapeActive: Array<bool>,
+  guestIdentities: Array<int>,
+  initialAllocations: int,
+  initialMaxContinuationDepth: int,
+  initialTransfers: int,
+  initialDynamic: int,
+  emittedOutput: string,
+) -> Option<KernelInvokeStep> {
+  let mut escapeActive = initialEscapeActive
+  let mut allocations = initialAllocations
+  let mut maxContinuationDepth = initialMaxContinuationDepth
+  let mut transfers = initialTransfers
+  let mut dynamic = initialDynamic
+  let mut mode = MachineMode.HaltMode
+  match name {
+    case "+" => {
+      let mut total = GuestValue.VInt(guestIntZero())
+      let mut failed: Option<string> = None
+      let mut failedValue: Option<GuestValue> = None
+      for argument in arguments {
+        match numericAdd(total, argument) {
+          case Ok(number) => { total = number }
+          case Err(error) => {
+            failed = Some(error)
+            failedValue = Some(argument)
+          }
+        }
+      }
+      match failed {
+        case Some(error) => {
+          transfers += 1
+          let value = match failedValue {
+            case Some(argument) => renderGuest(argument)
+            case None => "value"
+          }
+          mode = MachineMode.TransferMode(
+            MachineSignal.ProjectedRuntimeSignal(
+              error,
+              "E312",
+              "+: expected a number, got {value}",
+              [],
+            ),
+            continuation,
+          )
+        }
+        case None => {
+          mode = MachineMode.DeliverMode(ValuePacket.One(total), continuation)
+        }
+      }
+    }
+    case "-" => {
+      match requireArity("-", arguments.length, 1, -1) {
+        case Err(error) => {
+          transfers += 1
+          mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+        }
+        case Ok(_) => {
+          match if arguments.length == 1 { numericNegate(arguments[0]) } else { Ok(arguments[0]) } {
+            case Err(error) => {
+              transfers += 1
+              mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+            }
+            case Ok(first) => {
+              let mut total = first
+              let mut index = 1
+              let mut failed: Option<string> = None
+              while index < arguments.length {
+                match numericSubtract(total, arguments[index]) {
+                  case Ok(number) => { total = number }
+                  case Err(error) => { failed = Some(error) }
+                }
+                index += 1
+              }
+              match failed {
+                case Some(error) => {
+                  transfers += 1
+                  mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+                }
+                case None => {
+                  mode = MachineMode.DeliverMode(ValuePacket.One(total), continuation)
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+    case "=" => {
+      match requireArity("=", arguments.length, 2, -1) {
+        case Err(error) => {
+          transfers += 1
+          mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+        }
+        case Ok(_) => {
+          let mut equal = true
+          let mut index = 0
+          let mut failed: Option<string> = None
+          while index + 1 < arguments.length {
+            match numericEqual(arguments[index], arguments[index + 1]) {
+              case Err(error) => { failed = Some(error) }
+              case Ok(pairEqual) => { if !pairEqual { equal = false } }
+            }
+            index += 1
+          }
+          match failed {
+            case Some(error) => {
+              transfers += 1
+              mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+            }
+            case None => {
+              mode = MachineMode.DeliverMode(ValuePacket.One(GuestValue.VBool(equal)), continuation)
+            }
+          }
+        }
+      }
+    }
+    case "%" | "abs" | "ceiling" | "complex?" | "even?" | "exact"
+      | "exact->inexact" | "exact-integer-sqrt" | "expt" | "floor"
+      | "floor-quotient" | "floor-remainder" | "floor/" | "gcd" | "inexact"
+      | "inexact->exact" | "lcm" | "max" | "min" | "modulo" | "negative?"
+      | "odd?" | "positive?" | "quotient" | "rational?" | "real?" | "remainder"
+      | "round" | "square" | "truncate" | "truncate-quotient"
+      | "truncate-remainder" | "truncate/" | "zero?" => {
+      match invokeCompletedNumericCapability(name, arguments) {
+        case Ok(packet) => {
+          mode = MachineMode.DeliverMode(packet, continuation)
+        }
+        case Err(error) => {
+          transfers += 1
+          mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+        }
+      }
+    }
+    case "cons" => match requireArity("cons", arguments.length, 2, 2) {
+      case Err(error) => {
+        transfers += 1
+        mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+      }
+      case Ok(_) => {
+        mode = MachineMode.DeliverMode(
+          ValuePacket.One(GuestValue.VPair(
+            allocateGuestIdentity(guestIdentities),
+            arguments[0],
+            arguments[1],
+          )),
+          continuation,
+        )
+      }
+    }
+    case "null?" | "empty?" => match requireArity(name, arguments.length, 1, 1) {
+      case Err(error) => {
+        transfers += 1
+        mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+      }
+      case Ok(_) => {
+        let isNull = match arguments[0] {
+          case VNil => true
+          case _ => false
+        }
+        mode = MachineMode.DeliverMode(ValuePacket.One(GuestValue.VBool(isNull)), continuation)
+      }
+    }
+    case _ => { return None }
+  }
+  Some(KernelInvokeStep {
+    mode: mode,
+    allocations: allocations,
+    maxContinuationDepth: maxContinuationDepth,
+    transfers: transfers,
+    dynamic: dynamic,
+    emittedOutput: emittedOutput,
+  })
+}
+
+export function invokePrimitiveNumericAndEquality(
+  name: string,
+  arguments: Array<GuestValue>,
+  continuation: int,
+  guestIdentities: Array<int>,
+  allocations: int,
+  maxContinuationDepth: int,
+  initialTransfers: int,
+  dynamic: int,
+  initialEmittedOutput: string,
+) -> Option<KernelInvokeStep> {
+  let mut transfers = initialTransfers
+  let mut emittedOutput = initialEmittedOutput
+  let mut mode = MachineMode.HaltMode
+  match name {
+    case "*" => {
+      let mut total = GuestValue.VInt(guestIntOne())
+      let mut failed: Option<string> = None
+      for argument in arguments {
+        if failed == None {
+          match numericMultiply(total, argument) {
+            case Ok(number) => { total = number }
+            case Err(error) => { failed = Some(error) }
+          }
+        }
+      }
+      match failed {
+        case Some(error) => {
+          transfers += 1
+          mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+        }
+        case None => { mode = MachineMode.DeliverMode(ValuePacket.One(total), continuation) }
+      }
+    }
+    case "/" => match requireArity("/", arguments.length, 1, -1) {
+      case Err(error) => {
+        transfers += 1
+        mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+      }
+      case Ok(_) => {
+        let mut total = if arguments.length == 1 { GuestValue.VInt(guestIntOne()) } else { arguments[0] }
+        let mut index = if arguments.length == 1 { 0 } else { 1 }
+        let mut failed: Option<string> = None
+        while index < arguments.length {
+          if failed == None {
+            match numericDivide(total, arguments[index]) {
+              case Ok(number) => { total = number }
+              case Err(error) => { failed = Some(error) }
+            }
+          }
+          index += 1
+        }
+        match failed {
+          case Some(error) => {
+            transfers += 1
+            mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+          }
+          case None => { mode = MachineMode.DeliverMode(ValuePacket.One(total), continuation) }
+        }
+      }
+    }
+    case "<" | ">" | "<=" | ">=" => match numericComparisonChain(arguments, name) {
+      case Ok(answer) => {
+        mode = MachineMode.DeliverMode(ValuePacket.One(GuestValue.VBool(answer)), continuation)
+      }
+      case Err(error) => {
+        transfers += 1
+        mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+      }
+    }
+    case "assoc" | "assq" | "assv"
+      | "caaaar" | "caaadr" | "caaar" | "caadar" | "caaddr" | "caadr" | "caar"
+      | "cadaar" | "cadadr" | "cadar" | "caddar" | "cadddr" | "caddr" | "cadr"
+      | "cdaaar" | "cdaadr" | "cdaar" | "cdadar" | "cdaddr" | "cdadr" | "cdar"
+      | "cddaar" | "cddadr" | "cddar" | "cdddar" | "cddddr" | "cdddr" | "cddr"
+      | "list-copy" | "list-first" | "list-ref" | "list-rest" | "list-tail"
+      | "make-list" | "memv" | "nth" => match invokeCompletedListSearchCapability(
+        name,
+        arguments,
+        guestIdentities,
+      ) {
+        case Ok(value) => {
+          mode = MachineMode.DeliverMode(ValuePacket.One(value), continuation)
+        }
+        case Err(error) => {
+          transfers += 1
+          mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+        }
+      }
+    case "!=" => match requireArity("!=", arguments.length, 2, 2) {
+      case Err(error) => {
+        transfers += 1
+        mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+      }
+      case Ok(_) => {
+        mode = MachineMode.DeliverMode(
+          ValuePacket.One(GuestValue.VBool(!equalGuest(arguments[0], arguments[1]))),
+          continuation,
+        )
+      }
+    }
+    case "boolean=?" | "symbol=?" => match guestHomogeneousEquality(name, arguments) {
+      case Ok(value) => { mode = MachineMode.DeliverMode(ValuePacket.One(value), continuation) }
+      case Err(error) => {
+        transfers += 1
+        mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+      }
+    }
+    case _ => { return None }
+  }
+  Some(KernelInvokeStep {
+    mode: mode,
+    allocations: allocations,
+    maxContinuationDepth: maxContinuationDepth,
+    transfers: transfers,
+    dynamic: dynamic,
+    emittedOutput: emittedOutput,
+  })
+}
+
+export function invokePrimitiveNumericTextConversions(
+  name: string,
+  arguments: Array<GuestValue>,
+  continuation: int,
+  kernel: Kernel,
+  guestIdentities: Array<int>,
+  allocations: int,
+  maxContinuationDepth: int,
+  initialTransfers: int,
+  dynamic: int,
+  emittedOutput: string,
+) -> Option<KernelInvokeStep> {
+  let mut transfers = initialTransfers
+  let mut mode = MachineMode.HaltMode
+  match name {
+    case "number->string" => match requireArity("number->string", arguments.length, 1, 1) {
+      case Err(error) => {
+        transfers += 1
+        mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+      }
+      case Ok(_) => {
+        let rendered: Option<string> = match arguments[0] {
+          case VInt(number) => Some(renderGuestInt(number))
+          case VRational(number) => Some(renderRational(number))
+          case VReal(number) => Some(renderReal(number))
+          case _ => None
+        }
+        match rendered {
+          case Some(text) => {
+            mode = MachineMode.DeliverMode(
+              ValuePacket.One(GuestValue.VString(allocateGuestIdentity(guestIdentities), text)),
+              continuation,
+            )
+          }
+          case None => {
+            transfers += 1
+            mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal("HK276 number->string: number required"), continuation)
+          }
+        }
+      }
+    }
+    case "string->number" => match requireArity("string->number", arguments.length, 1, 1) {
+      case Err(error) => {
+        transfers += 1
+        mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+      }
+      case Ok(_) => match arguments[0] {
+        case VString(_, text) => match parseGuestNumberToken(text) {
+          case Ok(Some(number)) => { mode = MachineMode.DeliverMode(ValuePacket.One(number), continuation) }
+          case Ok(None) => { mode = MachineMode.DeliverMode(ValuePacket.One(GuestValue.VBool(false)), continuation) }
+          case Err(error) => {
+            transfers += 1
+            mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+          }
+        }
+        case _ => {
+          transfers += 1
+          mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal("HK277 string->number: string required"), continuation)
+        }
+      }
+    }
+    case "char-alphabetic?" | "char-numeric?" => match requireArity(name, arguments.length, 1, 1) {
+      case Err(error) => {
+        transfers += 1
+        mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+      }
+      case Ok(_) => match arguments[0] {
+        case VChar(scalar) => {
+          let answer = if name == "char-alphabetic?" { unicodeAlphabeticV16(scalar) } else { asciiDecimalScalar(scalar) }
+          mode = MachineMode.DeliverMode(ValuePacket.One(GuestValue.VBool(answer)), continuation)
+        }
+        case _ => {
+          transfers += 1
+          let code = if name == "char-alphabetic?" { "HK280" } else { "HK281" }
+          mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal("{code} {name}: character required"), continuation)
+        }
+      }
+    }
+    case "char=?" => {
+      if arguments.length < 2 {
+        transfers += 1
+        mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal("HK282 char=?: expected at least 2 characters"), continuation)
+      } else {
+        let mut equal = true
+        let mut allCharacters = true
+        let mut first = 0
+        let mut index = 0
+        while index < arguments.length {
+          match arguments[index] {
+            case VChar(scalar) => {
+              if index == 0 { first = scalar } else if scalar != first { equal = false }
+            }
+            case _ => { allCharacters = false }
+          }
+          index += 1
+        }
+        if !allCharacters {
+          transfers += 1
+          mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal("HK282 char=?: characters required"), continuation)
+        } else {
+          mode = MachineMode.DeliverMode(ValuePacket.One(GuestValue.VBool(equal)), continuation)
+        }
+      }
+    }
+    case "exact?" | "inexact?" => match requireArity(name, arguments.length, 1, 1) {
+      case Err(error) => {
+        transfers += 1
+        mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+      }
+      case Ok(_) => match arguments[0] {
+        case VInt(_) | VRational(_) => {
+          mode = MachineMode.DeliverMode(ValuePacket.One(GuestValue.VBool(name == "exact?")), continuation)
+        }
+        case VReal(_) => {
+          mode = MachineMode.DeliverMode(ValuePacket.One(GuestValue.VBool(name == "inexact?")), continuation)
+        }
+        case _ => {
+          transfers += 1
+          mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal("HK283 {name}: number required"), continuation)
+        }
+      }
+    }
+    case _ => { return None }
+  }
+  Some(KernelInvokeStep {
+    mode: mode,
+    allocations: allocations,
+    maxContinuationDepth: maxContinuationDepth,
+    transfers: transfers,
+    dynamic: dynamic,
+    emittedOutput: emittedOutput,
+  })
+}

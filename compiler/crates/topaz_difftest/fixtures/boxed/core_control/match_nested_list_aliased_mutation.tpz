@@ -1,0 +1,6 @@
+let mut xs = [[Some(1)]]
+match xs[0] { case [Some(x)] => {
+xs[0].push(Some(2))
+xs[0].length
+}
+case _ => 0 }

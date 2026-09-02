@@ -1,0 +1,2 @@
+match Regex.compile("\\D+") { case Ok(re) => "ok"
+case Err(e) => e }

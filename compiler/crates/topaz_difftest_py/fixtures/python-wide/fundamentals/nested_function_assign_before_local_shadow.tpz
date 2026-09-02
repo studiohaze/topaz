@@ -1,0 +1,12 @@
+
+function main() -> int {
+    let mut seed = 1
+    function bad() -> int {
+        seed = 2
+        let mut seed = 0
+        seed
+    }
+    let got = bad()
+    seed + got
+}
+main()

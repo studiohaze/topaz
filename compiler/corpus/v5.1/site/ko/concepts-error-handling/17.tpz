@@ -1,0 +1,41 @@
+// 구조화된 에러 로깅
+function 문자열로깅처리(
+    결과: Result<string, string>,
+    컨텍스트: string,
+    로그레벨: string = "error"
+) -> Result<string, string> {
+    match 결과 {
+        case Ok(값) => {
+            if 로그레벨 == "debug" {
+                print("[DEBUG] {컨텍스트}: 성공")
+            }
+            Ok(값)
+        }
+        case Err(오류) => {
+            print("[{로그레벨}] {컨텍스트}: {오류}")
+            
+            // 메트릭 수집
+            에러메트릭증가(컨텍스트, 로그레벨)
+            
+            Err(오류)
+        }
+    }
+}
+
+// 사용 예시
+let 결과 = 데이터베이스쿼리("SELECT * FROM users")
+    |> 문자열로깅처리(_, 컨텍스트: "사용자 목록 조회", 로그레벨: "error")
+
+// 에러 집계 및 알림
+function 에러알림시스템() {
+    let 최근에러들 = 에러로그수집(지난시간: 3600)  // 1시간
+    
+    if 최근에러들.length > 100 {
+        알림발송("높은 에러율 감지: {최근에러들.length}건/시간")
+    }
+    
+    let 치명적에러들 = filter(최근에러들, 에러 => 에러.레벨 == "critical")
+    if 치명적에러들.length > 0 {
+        긴급알림발송("치명적 에러 발생", 치명적에러들)
+    }
+}

@@ -1,0 +1,2 @@
+match Some(Some(5)) { case Some(Some(x)) => x
+case _ => 0 }

@@ -1,0 +1,1 @@
+{"request":{"fields":["schema","source","sourceId"]},"response":{"fields":["diagnostics","layout","raw","schema","sourceId","status"],"statuses":["completed","rejected"],"tokenFields":["hi","kind","lo","stream","synthetic"]},"schema":"topaz.compiler.frontend-preview-exchange/v1"}

@@ -1,0 +1,13 @@
+
+function add(a: int, b: int) -> int {
+    a + b
+}
+function addDefault(a: int, b: int = 2) -> int {
+    a + b
+}
+function main() -> int {
+    let base = [42]
+    let callbacks = [...base, addDefault, add]
+    callbacks[1](a: 5) + callbacks[2](b: 3, a: 10)
+}
+main()

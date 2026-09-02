@@ -1,0 +1,2 @@
+export record User derives Show { name: string }
+export function make() -> User { User { name: "Ada" } }

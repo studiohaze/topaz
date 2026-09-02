@@ -1,0 +1,22 @@
+
+import selected_model { Box as ForeignBox, makeIntBox, makeStringBox }
+import qualified_model
+function main() -> string {
+    let b = makeIntBox(7)
+    let c = makeStringBox("x")
+    let selected = match b {
+        case found: ForeignBox<int> => "{found.value}"
+        case _ => "bad"
+    }
+    let q = qualified_model.makeIntBox(9)
+    let qualified = match q {
+        case found: qualified_model.Box<int> => "{found.value}"
+        case _ => "bad"
+    }
+    let mismatch = match c {
+        case found: ForeignBox<int> => "bad"
+        case _ => "ok"
+    }
+    "{selected}:{qualified}:{mismatch}"
+}
+main()

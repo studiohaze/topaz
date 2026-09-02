@@ -1,0 +1,8 @@
+
+function add(acc: int, x: int) -> int {
+    acc + x
+}
+function main() -> int {
+    reduce([1, 2, 3], 0, add)
+}
+main()

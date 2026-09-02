@@ -1,0 +1,2 @@
+match Ok(5) { case n: Result<int, string> => 1
+case _ => 0 }

@@ -1,0 +1,348 @@
+{
+  "schema": "topaz.mcp-verified-examples/v1",
+  "authority": "https://topaz.ooo/v5.20/en/docs/",
+  "examples": [
+    {
+      "route": "introduction",
+      "title": "Introducing Topaz",
+      "heading": "Unicode-first",
+      "source": "function greet(name: string, language: string) -> string {\n    return match language {\n        case \"한국어\" => \"안녕하세요, {name}님!\"\n        case \"Русский\" => \"Привет, {name}!\"\n        case _ => \"Hello, {name}!\"\n    }\n}\n\nlet 사용자 = \"김토파즈\"\nprint(greet(사용자, \"한국어\"))\nprint(greet(\"Topaz\", \"Русский\"))"
+    },
+    {
+      "route": "introduction",
+      "title": "Introducing Topaz",
+      "heading": "A coherent canonical surface",
+      "source": "function parsePort(raw: string) -> Result<int, string> {\n    let n = toInt(raw) ?? -1\n    if n < 1 {\n        return Err(\"not a port: {raw}\")\n    }\n    return Ok(n)\n}\n\nfunction startup(raw: string) -> Result<string, string> {\n    defer print(\"config closed\")\n    let port = parsePort(raw)?\n    return Ok(\"listening on {port}\")\n}\n\nprint(\"{startup(\"8080\")}\")\nprint(\"{startup(\"http\")}\")"
+    },
+    {
+      "route": "introduction",
+      "title": "Introducing Topaz",
+      "heading": "Templates keep intent structured",
+      "source": "let table = \"users\"\nlet q = sql\"select * from {table} where active = {true}\"\nprint(\"{q}\")"
+    },
+    {
+      "route": "introduction",
+      "title": "Introducing Topaz",
+      "heading": "Check once, choose an output",
+      "source": "type TrafficLight = \"red\" | \"yellow\" | \"green\"\n\nfunction next(light: TrafficLight) -> TrafficLight {\n    return match light {\n        case \"red\" => \"green\"\n        case \"green\" => \"yellow\"\n        case _ => \"red\"\n    }\n}"
+    },
+    {
+      "route": "learn/coming-from-other-languages",
+      "title": "Coming From Other Languages",
+      "heading": "Start from what transfers unchanged",
+      "source": "record Task {\n    title: string,\n    minutes: int\n}\n\nfunction totalMinutes(tasks: Array<Task>) -> int {\n    let mut total = 0\n    for task in tasks {\n        total = total + task.minutes\n    }\n    total\n}"
+    },
+    {
+      "route": "learn/what-a-program-is",
+      "title": "What a Program Is",
+      "heading": "Four ideas cover most of it",
+      "source": "function minutesLeft(total: int, spent: int) -> int {\n    total - spent\n}\n\nlet plan = \"study plan\"\nlet total = 45\nlet spent = 20\n\nprint(\"{plan}: {minutesLeft(total, spent)} minutes left\")"
+    },
+    {
+      "route": "getting-started",
+      "title": "First Program",
+      "heading": "Write the smallest study plan",
+      "source": "let topic = \"Topaz basics\"\nlet minutes: int = 25\nprint(\"{topic}: {minutes} minutes\")"
+    },
+    {
+      "route": "learn/values-functions",
+      "title": "Values and Functions",
+      "heading": "Extend the working file",
+      "source": "function minutesLeft(total: int, spent: int) -> int {\n    total - spent\n}\n\nlet topic = \"Topaz basics\"\nlet total: int = 45\nlet spent = 20\nlet mut sessions = 0\nsessions = sessions + 1\n\nprint(\"{topic}: {minutesLeft(total, spent)} minutes left\")\nprint(\"sessions: {sessions}\")"
+    },
+    {
+      "route": "learn/data-control",
+      "title": "Data and Control",
+      "heading": "Give each task a shape",
+      "source": "record StudyTask {\n    title: string,\n    minutes: int,\n    done: bool = false,\n}\n\nfunction pace(task: StudyTask) -> string {\n    if task.done {\n        return \"done\"\n    }\n    match task.minutes {\n        case 1..15 => \"quick\"\n        case 16..30 => \"focused\"\n        case _ => \"deep\"\n    }\n}\n\nlet tasks: Array<StudyTask> = [\n    StudyTask { title: \"Run first program\", minutes: 10, done: true },\n    StudyTask { title: \"Build application\", minutes: 25 },\n]\nlet mut remaining = 0\nfor task in tasks {\n    if !task.done {\n        remaining = remaining + task.minutes\n    }\n    print(\"{task.title}: {pace(task)}\")\n}\nprint(\"remaining: {remaining} minutes\")"
+    },
+    {
+      "route": "learn/failures-resources",
+      "title": "Failures and Resources",
+      "heading": "Make bad input an expected result",
+      "source": "record StudyTask {\n    title: string,\n    minutes: int,\n}\n\nfunction parseMinutes(text: string) -> Result<int, string> {\n    match toInt(text) {\n        case Some(value) if value > 0 => Ok(value)\n        case _ => Err(\"minutes must be a positive integer\")\n    }\n}\n\nfunction makeTask(title: string, minuteText: string) -> Result<StudyTask, string> {\n    let minutes = parseMinutes(minuteText)?\n    Ok(StudyTask { title: title, minutes: minutes })\n}\n\nfunction inspect(minuteText: string) -> () {\n    print(\"input: {minuteText}\")\n    defer { print(\"inspection finished\") }\n    match makeTask(\"Build application\", minuteText) {\n        case Ok(task) => print(\"ready: {task.title}, {task.minutes} minutes\")\n        case Err(message) => print(\"cannot add task: {message}\")\n    }\n}\n\ninspect(\"25\")\ninspect(\"later\")"
+    },
+    {
+      "route": "learn/failures-resources",
+      "title": "Failures and Resources",
+      "heading": "Inspect a broken contract",
+      "source": "let tasks = [\"Run first program\", \"Build application\"]\nprint(tasks[2])"
+    },
+    {
+      "route": "learn/first-application",
+      "title": "First Application",
+      "heading": "Create the two modules",
+      "source": "export record StudyTask {\n    title: string,\n    minutes: int,\n    done: bool = false,\n}\n\nfunction parseMinutes(text: string) -> Result<int, string> {\n    match toInt(text) {\n        case Some(value) if value > 0 => Ok(value)\n        case _ => Err(\"minutes must be a positive integer\")\n    }\n}\n\nexport function makeTask(\n    title: string,\n    minuteText: string,\n    done: bool = false,\n) -> Result<StudyTask, string> {\n    let minutes = parseMinutes(minuteText)?\n    Ok(StudyTask { title: title, minutes: minutes, done: done })\n}\n\nexport function summarize(tasks: Array<StudyTask>) -> string {\n    let mut remaining = 0\n    for task in tasks {\n        if !task.done {\n            remaining = remaining + task.minutes\n        }\n    }\n    \"tasks={tasks.length}, remaining={remaining} minutes\"\n}"
+    },
+    {
+      "route": "learn/first-application",
+      "title": "First Application",
+      "heading": "Create the two modules",
+      "source": "import src.plan { StudyTask, makeTask, summarize }\n\nexport function main(args: Array<string>, stdin: string) -> Result<int, string> {\n    let tasks: Array<StudyTask> = [\n        makeTask(\"Run first program\", \"10\", true)?,\n        makeTask(\"Build application\", \"25\", false)?,\n    ]\n    print(summarize(tasks))\n    Ok(0)\n}"
+    },
+    {
+      "route": "learn/first-application",
+      "title": "First Application",
+      "heading": "Create the two modules",
+      "source": "import src.plan { StudyTask, makeTask, summarize }\n\nmatch makeTask(\"Read syntax map\", \"15\") {\n    case Ok(task) => assert(task.minutes == 15, \"valid minutes\")\n    case Err(message) => assert(false, message)\n}\n\nmatch makeTask(\"Read syntax map\", \"later\") {\n    case Ok(_) => assert(false, \"invalid minutes were accepted\")\n    case Err(message) => assert(\n        message == \"minutes must be a positive integer\",\n        \"invalid minutes\",\n    )\n}\n\nlet tasks: Array<StudyTask> = [\n    StudyTask { title: \"Run first program\", minutes: 10, done: true },\n    StudyTask { title: \"Build application\", minutes: 25 },\n]\nassert(\n    summarize(tasks) == \"tasks=2, remaining=25 minutes\",\n    \"summary\",\n)"
+    },
+    {
+      "route": "learn/reading-topaz",
+      "title": "Reading a Real File",
+      "heading": "Pass one, the imports",
+      "source": "import std.bytes { Bytes }\nimport std.json"
+    },
+    {
+      "route": "learn/reading-topaz",
+      "title": "Reading a Real File",
+      "heading": "Pass two, the shapes",
+      "source": "record StudySession {\n    topic: string,\n    minutes: int,\n    finished: bool\n}\n\nfunction summarize(session: StudySession) -> string {\n    if session.finished {\n        return \"{session.topic}: done\"\n    }\n    \"{session.topic}: {session.minutes} minutes left\"\n}"
+    },
+    {
+      "route": "language-tour",
+      "title": "Syntax at a Glance",
+      "heading": "Values, bindings, and types",
+      "source": "const DEFAULT_MINUTES = 25\nlet title: string = \"Check program\"\nlet mut completed: int = 0\ncompleted = completed + 1"
+    },
+    {
+      "route": "language-tour",
+      "title": "Syntax at a Glance",
+      "heading": "Functions and lambdas",
+      "source": "function double(x: int) -> int {\n    x * 2\n}\n\nlet increment: (int) -> int = x => x + 1\nprint(\"{double(increment(3))}\")"
+    },
+    {
+      "route": "language-tour",
+      "title": "Syntax at a Glance",
+      "heading": "Operators and expression results",
+      "source": "let total = {\n    let base = 20\n    base + 5\n}\nprint(\"{total}\")"
+    },
+    {
+      "route": "language-tour",
+      "title": "Syntax at a Glance",
+      "heading": "`if`, `match`, and `for`",
+      "source": "let scores = [92, 74]\nlet labels = for score in scores {\n    match score {\n        case 90..100 => \"A\"\n        case _ => if score >= 70 {\n            \"pass\"\n        } else {\n            \"retry\"\n        }\n    }\n}"
+    },
+    {
+      "route": "language-tour",
+      "title": "Syntax at a Glance",
+      "heading": "Arrays, maps, and sets",
+      "source": "let scores: Array<int> = [80, 90]\nlet ids = set { 3, 1, 3 }\nlet labels = map { 1: \"one\", 2: \"two\" }\n\nprint(\"{scores}:{ids.toArray()}:{labels.keys}\")"
+    },
+    {
+      "route": "language-tour",
+      "title": "Syntax at a Glance",
+      "heading": "Records, enums, and unions",
+      "source": "record Task {\n    title: string,\n    done: bool = false,\n}\n\nenum Filter {\n    All,\n    Open,\n}\n\ntype Selection = Task | null\nlet selected: Selection = null"
+    },
+    {
+      "route": "language-tour",
+      "title": "Syntax at a Glance",
+      "heading": "Absence, recoverable failure, faults, and cleanup",
+      "source": "function readPlan(path: string) -> Result<string, string> {\n    let file = open(path)?\n    defer { file.close() }\n\n    file.read()\n}"
+    },
+    {
+      "route": "language-tour",
+      "title": "Syntax at a Glance",
+      "heading": "Strings and registry-tag templates",
+      "source": "let name = \"Topaz\"\nlet greeting = \"Hello, {name}!\"\nlet path = p\"notes/{name}.txt\""
+    },
+    {
+      "route": "language-tour",
+      "title": "Syntax at a Glance",
+      "heading": "Modules and visibility",
+      "source": "import src.plan { StudyTask, summarize }\n\nexport function summary(tasks: Array<StudyTask>) -> string {\n    summarize(tasks)\n}"
+    },
+    {
+      "route": "guides/application-loop",
+      "title": "Application Loop",
+      "heading": "Shared authoring loop",
+      "source": "export function remainingMinutes(values: Array<int>) -> int {\n  let mut total = 0\n  for value in values {\n    total += value\n  }\n  total\n}"
+    },
+    {
+      "route": "guides/application-loop",
+      "title": "Application Loop",
+      "heading": "Shared authoring loop",
+      "source": "import src.summary { remainingMinutes }\n\nexport function main(args: Array<string>, stdin: string) -> Result<int, string> {\n  let minutes = remainingMinutes([10, 25])\n  print(\"remaining={minutes}\")\n  Ok(0)\n}"
+    },
+    {
+      "route": "guides/application-loop",
+      "title": "Application Loop",
+      "heading": "Path B: managed Web Application",
+      "source": "import std.dom { Html, WebAppEvent, WebAppStep, text }\n\nexport record Model {\n  message: string,\n}\n\nexport enum Msg {\n  Ready,\n}\n\nexport function init() -> WebAppStep<Model, Msg> {\n  WebAppStep { model: Model { message: \"Hello from Topaz\" }, commands: [] }\n}\n\nexport function update(model: Model, message: Msg, event: WebAppEvent) -> WebAppStep<Model, Msg> {\n  WebAppStep { model: model, commands: [] }\n}\n\nexport function view(model: Model) -> Html<Msg> {\n  text(model.message)\n}"
+    },
+    {
+      "route": "guides/application-loop",
+      "title": "Application Loop",
+      "heading": "Path C: HTTP service",
+      "source": "import std.http { HttpRequest, HttpResponse, text }\n\nexport function handle(req: HttpRequest) -> HttpResponse {\n  if req.url.path() == \"/health\" {\n    return text(200, \"ok\")\n  }\n  text(404, \"not found\")\n}"
+    },
+    {
+      "route": "guides/lispex-application",
+      "title": "Run Lispex Rules",
+      "heading": "Call a rule from Topaz code",
+      "source": "let settlement = evaluate(rules.approve(), input, defaultLimits(rules.approve()))\nlet recorded = evaluateWithEvidence(\n    rules.approve(),\n    input,\n    defaultLimits(rules.approve()),\n)"
+    },
+    {
+      "route": "guides/data-lens",
+      "title": "Data Lens",
+      "heading": "Model the data before the UI",
+      "source": "import data_lens_core { DataFormat, DataRow, SortMode, Summary }\n\nexport record Model {\n  source: string,\n  query: string,\n  activeOnly: bool,\n  format: DataFormat,\n  sortMode: SortMode,\n  rows: Array<DataRow>,\n  summary: Summary,\n  status: string,\n  error: Option<string>,\n}"
+    },
+    {
+      "route": "guides/data-lens",
+      "title": "Data Lens",
+      "heading": "Model the data before the UI",
+      "source": "export function init() -> WebAppStep<Model, Msg> {\n  let base = Model {\n    source: CSV_SAMPLE,\n    query: \"\",\n    activeOnly: false,\n    format: DataFormat.Csv,\n    sortMode: SortMode.ByName,\n    rows: [],\n    summary: emptySummary(),\n    status: \"Ready\",\n    error: None,\n  }\n  WebAppStep {\n    model: applyModel(base),\n    commands: [loadState(\"data-lens-session-load\", \"session\", Msg.LocalCompleted)],\n  }\n}"
+    },
+    {
+      "route": "guides/http-service",
+      "title": "HTTP Service",
+      "heading": "Create, lock, and test",
+      "source": "import std.http { HttpRequest, HttpResponse, text }\n\nexport function handle(req: HttpRequest) -> HttpResponse {\n  if req.method == \"GET\" && req.url.path() == \"/health\" {\n    return text(200, \"ok\")\n  }\n  text(404, \"not found\")\n}"
+    },
+    {
+      "route": "language/lexical-layout",
+      "title": "Lexical Structure & Layout",
+      "heading": "Start with a complete source file",
+      "source": "let ready = true\nlet archived = false\nlet missing = null\nlet 상태 = \"ready\"\n\nlet total =\n    40 +\n    2\n\nprint(\"{상태}: {ready}, {archived}, {missing}, {total}\")"
+    },
+    {
+      "route": "language/operators-expressions",
+      "title": "Operators & Expressions",
+      "heading": "Start with a value you can observe",
+      "source": "function score(base: int, bonus: int) -> int {\n    let doubled = base * 2\n    if bonus > 0 { doubled + bonus } else { doubled }\n}\n\nlet result = score(20, 2)\nlet exact = result == 42\nlet changed = result != 41\n\nprint(\"{result} {exact} {changed}\")"
+    },
+    {
+      "route": "language/types",
+      "title": "Types",
+      "heading": "Start with one checked program",
+      "source": "type Stage = \"draft\" | \"ready\"\n\nfunction describe(stage: Stage, checks: int) -> string {\n    \"{stage} after {checks} checks\"\n}\n\nlet checks = 3\nlet current: Stage = \"ready\"\nlet render: (Stage, int) -> string = describe\n\nprint(render(current, checks))"
+    },
+    {
+      "route": "language/bindings-scope-closures",
+      "title": "Bindings, Scope & Closures",
+      "heading": "Watch one captured binding change",
+      "source": "function makeCounter(start: int) -> () -> int {\n    let mut current = start\n    () => {\n        current = current + 1\n        current\n    }\n}\n\nlet label = \"outer\"\nlet next = makeCounter(10)\n\n{\n    let label = \"inner\"\n    print(\"{label}: {next()}, {next()}\")\n}\n\nprint(label)"
+    },
+    {
+      "route": "language/functions-generics",
+      "title": "Functions & Generics",
+      "heading": "Run the progression in one program",
+      "source": "record Label derives Show {\n    text: string,\n}\n\nfunction applyTwice(value: int, step: (int) -> int) -> int {\n    step(step(value))\n}\n\nfunction firstOr<T>(values: Array<T>, fallback: T) -> T {\n    match values {\n        case [] => fallback\n        case [first, ..] => first\n    }\n}\n\nfunction showValue<T: Show>(value: T) -> string {\n    Show.show(value)\n}\n\nlet increment: (int) -> int = value => value + 1\nlet first: string = firstOr([\"Topaz\", \"Classic\"], \"none\")\nlet shown = showValue(Label { text: \"docs\" })\n\nprint(\"{applyTwice(3, increment)}\")\nprint(first)\nprint(shown)"
+    },
+    {
+      "route": "language/records-nominal-data",
+      "title": "Records & Nominal Data",
+      "heading": "Run one example",
+      "source": "type DisplayValue = int | string\n\nnewtype UserId = int\n\nenum Status {\n    Active,\n    Paused(string),\n}\n\nrecord User {\n    id: UserId,\n    name: string,\n    status: Status = Status.Active,\n}\n\nfunction statusLabel(status: Status) -> string {\n    match status {\n        case Active => \"active\"\n        case Paused(reason) => reason\n    }\n}\n\nfunction display(value: DisplayValue) -> string {\n    match value {\n        case number: int => \"number {number}\"\n        case text: string => text\n    }\n}\n\nlet before: User = User { id: UserId(7), name: \"Ada\" }\nlet after: User = User { ...before, status: Status.Paused(\"review\") }\nlet preview = { name: \"Ada\", age: 36 }\nlet older = preview{ age: 37 }\nlet ready = display(\"ready\")\n\nprint(\"{before.id.value()}:{before.name}:{statusLabel(before.status)}\")\nprint(\"{after.name}:{statusLabel(after.status)}\")\nprint(\"{preview.age}:{older.age}\")\nprint(\"{display(7)}:{ready}\")"
+    },
+    {
+      "route": "language/collections-comprehensions",
+      "title": "Collections & Comprehensions",
+      "heading": "Run one example",
+      "source": "let scores = [10, 25, 10]\nlet labels = map { \"Ada\": 10, \"Lin\": 25 }\nlet unique = set { 10, 25, 10 }\nlet focused = [ for score in scores if score >= 20 => score * 2 ]\n\nlet first = scores[0]\nlet missing = scores.get(9)\nlet hasAda = \"Ada\" in labels.keys\nlet missingLabel = match missing {\n    case Some(value) => \"found {value}\"\n    case None => \"missing\"\n}\n\nprint(\"{scores}:{unique.toArray()}:{labels.keys}\")\nprint(\"{focused}:{first}:{hasAda}\")\nprint(missingLabel)"
+    },
+    {
+      "route": "language/pipelines-placeholders",
+      "title": "Pipelines & Placeholders",
+      "heading": "Start with a self-contained pipeline",
+      "source": "function add(value: int, amount: int) -> int {\n    value + amount\n}\n\nfunction multiply(left: int, right: int) -> int {\n    left * right\n}\n\nfunction equal(left: int, right: int) -> bool {\n    left == right\n}\n\nlet result = 5\n    |> add(2)\n    |> multiply(_, 3)\nlet repeated = result |> equal(_, _)\n\nprint(\"{result} {repeated}\")"
+    },
+    {
+      "route": "language/defer-resources",
+      "title": "Defer & Resources",
+      "heading": "Watch the cleanup order",
+      "source": "function inspectNote(path: string) -> Result<(), string> {\n    using file = open(path)? {\n        defer { print(\"body cleanup\") }\n        let note = file.read()?\n        print(\"note scalars: {note.scalars().length}\")\n    }\n\n    print(\"resource scope closed\")\n    Ok(())\n}\n\nmatch inspectNote(\"defer-resources.txt\") {\n    case Ok(_) => print(\"done\")\n    case Err(message) => print(\"error: {message}\")\n}"
+    },
+    {
+      "route": "language/concurrency",
+      "title": "Concurrency",
+      "heading": "Complete successfully",
+      "source": "let result = concurrent(timeout: 3s) {\n    total: 1 + 2\n    label: \"ready\"\n} else {\n    { total: -1, label: \"timeout\" }\n}\n\nprint(\"{result.total} {result.label}\")"
+    },
+    {
+      "route": "language/concurrency",
+      "title": "Concurrency",
+      "heading": "Let the deadline choose the fallback",
+      "source": "function spin() -> int {\n    let mut i = 0\n    while true { i += 1 }\n    i\n}\n\nlet result = concurrent(timeout: 5ms) {\n    stuck: spin()\n} else {\n    { stuck: -1 }\n}\n\nprint(\"{result.stuck}\")"
+    },
+    {
+      "route": "language/strings-templates",
+      "title": "Strings & Templates",
+      "heading": "Start with observable Unicode text",
+      "source": "let title = \"Topaz 💎\"\nlet scalarCount = title.scalars().length\nlet configPath = p\"config/topaz.toml\"\nlet query = sql\"SELECT name FROM projects WHERE title = {title}\"\n\nprint(\"{title}: {scalarCount}\")"
+    },
+    {
+      "route": "language/forbidden-deferred",
+      "title": "Forbidden & Deferred Forms",
+      "heading": "Check a program that uses the current forms",
+      "source": "let mut count = 0\nlet values: Array<int> = [1, 2]\nlet transform: (int) -> int = value => value + 1\n\nmatch values {\n    case [head, ..tail] => {\n        count = transform(head) + tail.length\n    }\n    case [] => {\n        count = 0\n    }\n}\n\nprint(\"{count}\")"
+    },
+    {
+      "route": "stdlib/overview",
+      "title": "Standard Library Overview",
+      "heading": "An everyday recipe",
+      "source": "let parsed: Option<int> = toInt(\"42\")\nlet values: Array<int> = Array.of(1, 2, 3)\nlet doubled = map(values, value => value * 2)\n\nprint(\"{parsed}:{doubled}\")"
+    },
+    {
+      "route": "stdlib/core",
+      "title": "Core Library",
+      "heading": "Parse and transform values",
+      "source": "function parseAll(values: Array<string>) -> Array<Option<int>> {\n    return map(values, value => toInt(value))\n}\n\nlet scalars = \"토파즈\".scalars()\nlet parsed = parseAll([\"1\", \"x\", \"3\"])\nprint(\"{scalars.length}:{parsed}\")"
+    },
+    {
+      "route": "stdlib/core",
+      "title": "Core Library",
+      "heading": "Assemble bytes in place",
+      "source": "let mut row = ByteBuffer.allocate(8)\nrow.fill(0, 8, 255)\nrow.set(0, 137)\n\nlet mut frame = ByteBuffer.allocate(12)\nframe.copy(row, 0, 2, 8)\nlet payload = frame.toBytes()\nprint(payload.toHex())"
+    },
+    {
+      "route": "stdlib/core",
+      "title": "Core Library",
+      "heading": "Compute a CRC-32 integrity field",
+      "source": "let checksum = Hash.crc32(Bytes.encodeUtf8(\"123456789\"))\nprint(\"{checksum}\")"
+    },
+    {
+      "route": "stdlib/core",
+      "title": "Core Library",
+      "heading": "Produce deterministic fixed DEFLATE",
+      "source": "match Codec.deflateFixedCompress(Bytes.encodeUtf8(\"hello\")) {\n  case Ok(compressed) => print(compressed.toHex())\n  case Err(error) => print(error)\n}"
+    },
+    {
+      "route": "stdlib/core",
+      "title": "Core Library",
+      "heading": "Produce deterministic fixed zlib",
+      "source": "match Codec.zlibFixedCompress(Bytes.encodeUtf8(\"hello\")) {\n  case Ok(compressed) => print(compressed.toHex())\n  case Err(error) => print(error)\n}"
+    },
+    {
+      "route": "stdlib/core",
+      "title": "Core Library",
+      "heading": "Add Reed–Solomon protection bytes",
+      "source": "match Codec.reedSolomon255223Protect(Bytes.encodeUtf8(\"hello\")) {\n  case Ok(protected) => print(\"{protected.length()}\")\n  case Err(error) => print(error)\n}"
+    },
+    {
+      "route": "stdlib/collections",
+      "title": "Collection Operations",
+      "heading": "Use Array, Map, and Set together",
+      "source": "let tasks = [\"draft\", \"check\", \"ship\"]\nlet selected = tasks.get(1)\n\nlet mut scores: Map<string, int> = Map.new()\nscores.insert(\"ada\", 10)\nscores.insert(\"lin\", 12)\n\nlet mut labels = Set.of(\"docs\")\nlabels.add(\"tests\")\n\nprint(\"{selected}:{scores.get(\"lin\")}:{scores.keys}:{labels.toArray()}\")"
+    },
+    {
+      "route": "stdlib/files-resources",
+      "title": "Files & Resources",
+      "heading": "Read through one managed File",
+      "source": "function readNote(path: string) -> Result<string, string> {\n    let mut result: Result<string, string> = Err(\"not read\")\n    using file = open(path)? {\n        result = file.read()\n    }\n    return result\n}\n\nmatch readNote(\"note.txt\") {\n    case Ok(text) => print(text.trim())\n    case Err(error) => print(error)\n}"
+    },
+    {
+      "route": "runtime/behavior",
+      "title": "Runtime Behavior",
+      "heading": "Observe ordinary values",
+      "source": "let values = [10, 20]\n\nprint(\"int: {7 / 2} {-7 % 3}\")\nprint(\"float: {1.5 + 1.5}\")\nprint(\"safe: {values.get(9)}\")"
+    },
+    {
+      "route": "migration/from-pre-v5",
+      "title": "Legacy Syntax Migration",
+      "heading": "3. Keep historical code historical",
+      "source": "let mut names: Array<string> = [\"Ada\"]\nlet first: Option<string> = names.get(0)\nprint(\"{first}\")"
+    }
+  ]
+}

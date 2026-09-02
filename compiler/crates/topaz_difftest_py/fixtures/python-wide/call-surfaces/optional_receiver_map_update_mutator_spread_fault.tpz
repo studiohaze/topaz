@@ -1,0 +1,12 @@
+
+function mark(label: string, fs: Array<(int) -> int>) -> Array<(int) -> int> {
+    print(label)
+    fs
+}
+function inc(x: int) -> int { x + 1 }
+function main() -> string {
+    let mut m: Option<Map<string, int>> = Some(map { "x": 1 })
+    m?.update("x", 0, ...mark("map-update", [inc]))
+    "unreachable"
+}
+main()

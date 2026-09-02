@@ -1,0 +1,10 @@
+// Trace bindings with interpolated prints
+let globalLabel = "build-42"
+
+function printScopeInfo() {
+    let localVariable = "local"
+    
+    print("Variables in current function:")
+    print("- localVariable: {localVariable}")
+    print("- globalLabel: {globalLabel}")   // outer bindings stay reachable
+}

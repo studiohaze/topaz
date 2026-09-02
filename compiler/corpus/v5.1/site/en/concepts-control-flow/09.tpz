@@ -1,0 +1,9 @@
+let rawInput = "42"
+let value = JSON.parse(rawInput)
+
+match value {
+    case text: string => print("Text: {text}")
+    case count: int => print("Number: {count}")
+    case flag: bool => print("Flag: {flag}")
+    case _ => print("Unsupported value")
+}

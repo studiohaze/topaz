@@ -1,0 +1,4 @@
+while true { () }
+defer { () }
+return
+export function ok() -> int { 1 }

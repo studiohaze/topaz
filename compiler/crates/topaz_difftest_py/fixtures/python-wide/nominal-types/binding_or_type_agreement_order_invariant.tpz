@@ -1,0 +1,11 @@
+
+function pick(value: Option<int>) -> int {
+    match value {
+        case Some(x: 1) | Some(x: 2) | Some(x: int) => x
+        case None => 0
+    }
+}
+function main() -> string {
+    "{pick(Some(1))}:{pick(Some(2))}:{pick(Some(3))}:{pick(None)}"
+}
+main()

@@ -1,0 +1,21 @@
+{
+  "schema": "topaz.lispex-embed-limits/v1",
+  "prepare": {
+    "raw_source_bytes": 4096,
+    "prepare_work": 1000000,
+    "logical_allocation": 1000000,
+    "syntax_depth": 64
+  },
+  "evaluate": {
+    "canonical_input_bytes": 4096,
+    "eval_work": 10000,
+    "logical_allocation": 1000000,
+    "semantic_frames": 1000,
+    "traversal_depth": 256,
+    "output_bytes": 4096,
+    "diagnostic_bytes": 4096,
+    "transcript_bytes": 4096,
+    "transcript_events": 100,
+    "result_bytes": 4096
+  }
+}

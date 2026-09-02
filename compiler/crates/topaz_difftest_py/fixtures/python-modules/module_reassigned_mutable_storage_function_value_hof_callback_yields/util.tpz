@@ -1,0 +1,15 @@
+
+function fast(x: int) -> int {
+    x
+}
+function spin(x: int) -> int {
+    let mut i = 0
+    while i < 200 {
+        i = i + 1
+    }
+    1 / 0
+}
+export let fastCallbacks = [42, fast]
+export let slowCallbacks = [42, spin]
+export let fastHandlers = { primary: fast }
+export let slowHandlers = { primary: spin }

@@ -1,0 +1,197 @@
+---
+title: '핵심 함수'
+description: 'SPEC이 정의한 작은 built-in 함수와 helper 집합을 위한 canonical Topaz public-example 표면입니다.'
+covers: '§11, §13, §14, §15, §16, §22'
+---
+
+Topaz는 public canonical 함수 표면을 의도적으로 작게 유지합니다. 아래 이름들은 public 예시가 더 큰 표준 라이브러리를 발명하지 않고 사용할 수 있는 표면입니다. future 표준 라이브러리 명세가 이 표면을 더 다듬을 수 있지만, canonical 문서는 아래 형식 안에 머뭅니다.
+
+## 출력과 변환
+
+`print`는 `string`만 받습니다 — 비문자열 값은 보간으로 출력합니다. `toInt(text: string)`는 `Option<int>`를 반환하며 조용히 실패하지 않습니다: `None` 경우를 명시적으로 처리하세요.
+
+```topaz
+print("Hello, Topaz!")
+
+// toInt는 Option<int>를 반환합니다
+let 답 = match toInt("42") {
+    case Some(값) => 값
+    case None => 0
+}
+print("파싱된 답: {답}")
+```
+
+```topaz
+function 포트파싱(텍스트: string) -> Result<int, string> {
+    if 텍스트 == "" {
+        return Err("포트가 필요합니다")
+    }
+
+    match toInt(텍스트) {
+        case Some(포트) => Ok(포트)
+        case None => Err("포트는 정수여야 합니다")
+    }
+}
+```
+
+## 문자열
+
+문자열은 인덱싱할 수 없고 `.length`를 노출하지 않습니다. 스칼라 수준 접근은 `s.scalars()`를 거치며, 단일 스칼라 문자열들의 `Array<string>`을 반환합니다.
+
+```topaz
+let 단어 = "topaz"
+let 스칼라들 = 단어.scalars()           // ["t", "o", "p", "a", "z"]
+let 길이 = 단어.scalars().length        // 5
+print("스칼라 개수: {길이}")
+```
+
+## 파일과 리소스
+
+리소스 작업은 Result-first입니다. `?`로 리소스를 열고, `defer`로 정리를 등록한 뒤, 마지막 작업 결과를 반환합니다.
+
+```topaz
+function 텍스트읽기(경로: string) -> Result<string, string> {
+    let 파일 = open(경로)?
+    defer { 파일.close() }
+
+    let 내용 = 파일.read()?
+    Ok(내용)
+}
+
+function 텍스트쓰기(경로: string, 내용: string) -> Result<(), string> {
+    let 파일 = open(경로)?
+    defer { 파일.close() }
+
+    파일.write(내용)
+}
+```
+
+## JSON과 Regex (예약된 이름)
+
+`JSON.parse`와 `regex.match`는 **예약된** 표준 라이브러리 이름입니다: `JSONValue`, `Regex`, `Match`가 명세되기 전까지 typed minimum에 속하지 않습니다. canonical 예시는 반환 shape가 무관한 곳에서만 deferral 노트와 함께 언급할 수 있습니다 — 반환값에 의존하는 코드를 작성하지 마세요.
+
+정규식 *템플릿 값*은 단일행 `r"..."` tagged 형식으로 오늘날에도 canonical입니다:
+
+```topaz
+let 숫자패턴 = r"^[0-9]+$"     // 정규식 템플릿 값 (매칭 API는 아직 없음)
+```
+
+## 컬렉션
+
+canonical 컬렉션 생성자는 `Array.of`, `Map.new`, `Set.of`입니다. 컬렉션 변경 작업은 mutable binding이 필요합니다.
+
+```topaz
+let mut 숫자들 = Array.of(1, 2, 3)
+숫자들.push(4)
+
+let 개수 = 숫자들.length
+let 세번째 = 숫자들[2]          // 3 — 직접 인덱싱은 범위 밖이면 폴트
+let 안전값 = 숫자들.get(10)     // None — 폴트 없는 읽기, Option<int> 반환
+let 사포함 = 4 in 숫자들
+
+print("개수: {개수}")
+print("세 번째: {세번째}")
+print("4 포함: {사포함}")
+```
+
+`arr.get`이 canonical 폴트 없는 읽기입니다. 인덱스가 범위를 벗어날 수 있다면 항상 `.get`을 사용하세요.
+
+```topaz
+let mut 점수들: Map<string, int> = Map.new()
+점수들.insert("alice", 10)
+점수들.insert("bob", 20)
+
+let 앨리스점수 = 점수들.get("alice")     // Some(10) — 키가 없으면 None
+let 제거됨 = 점수들.remove("bob")        // Some(20) — 있으면 Some(이전값), 없으면 None
+let 앨리스있음 = "alice" in 점수들.keys  // 멤버십은 keys 뷰를 거칩니다
+print("alice 있음: {앨리스있음}")
+```
+
+`m.keys`는 키 삽입 순서의 `Array<K>` **스냅샷**입니다 — 이후 맵을 변경해도 이미 만들어진 keys 배열은 바뀌지 않습니다. 직접 `x in map`은 canonical이 아닙니다. `x in map.keys`를 사용하세요.
+
+```topaz
+let mut 태그들 = Set.of("docs")
+태그들.add("v5")
+
+let 문서있음 = "docs" in 태그들
+let 삭제됨 = 태그들.remove("docs")       // 원소가 제거된 경우에만 true
+print("docs 있음: {문서있음}")
+```
+
+## map, filter, reduce
+
+`map`, `filter`, `reduce`는 ordinary function입니다. 시그니처는 `map(xs, f)`, `filter(xs, f)`, `reduce(xs, initial, f)`로, 초기값이 reducer보다 **앞에** 옵니다. 파이프라인에서는 `_`로 piped value를 전달합니다.
+
+```topaz
+let 숫자들 = Array.of(1, 2, 3, 4, 5, 6)
+
+let 결과 = 숫자들
+    |> filter(_, x => x % 2 == 0)
+    |> map(_, x => x * x)
+    |> reduce(_, 0, (누적, x) => 누적 + x)
+
+print("짝수 제곱의 합: {결과}")
+```
+
+## Result helper
+
+복구 가능한 실패에는 `Ok`, `Err`, `match`, `?` 전파를 사용합니다.
+
+```topaz
+function 포트로드(경로: string) -> Result<int, string> {
+    let 내용 = 텍스트읽기(경로)?
+    포트파싱(내용)
+}
+
+match 포트로드("app.port") {
+    case Ok(포트) => print("포트: {포트}")
+    case Err(오류) => print("설정 오류: {오류}")
+}
+```
+
+## Concurrent 블록
+
+`concurrent`는 arm 결과의 레코드를 반환합니다. canonical public 예시에서 `else` 블록은 같은 shape의 fallback 레코드를 반환해야 합니다.
+
+```topaz
+function 프로필스냅샷() -> { 이름: string } {
+    { 이름: "Topaz" }
+}
+
+function 최근활동() -> Array<string> {
+    Array.of("login", "edit")
+}
+
+function 빈프로필() -> { 이름: string } {
+    { 이름: "offline" }
+}
+
+let 대시보드 = concurrent(timeout: 3s) {
+    프로필: 프로필스냅샷()
+    활동: 최근활동()
+} else {
+    {
+        프로필: 빈프로필(),
+        활동: Array.of("offline")
+    }
+}
+
+print("활동 항목: {대시보드.활동.length}")
+```
+
+## Tagged Templates
+
+Tagged template은 값입니다. shell template tag는 shell template 값을 만들 뿐, 그 자체로 명령을 실행하지 않습니다.
+
+```topaz
+let 앱이름 = "topaz"
+let 사용자ID = 42
+let 디렉터리 = p"/var/{앱이름}"
+
+let 설정경로 = p"/etc/{앱이름}/config.toml"
+let 숫자패턴 = r"^[0-9]+$"
+let 목록명령 = sh"ls {디렉터리}"
+let 조회 = sql"select * from users where id = {사용자ID}"
+```
+
+이 페이지는 의도적으로 좁습니다. 여기 나열되지 않았거나 주변 예시에서 정의되지 않은 helper는 canonical Topaz public surface로 취급하지 마세요.

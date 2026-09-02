@@ -1,0 +1,2 @@
+let mut xs = [{ a: 1 }]
+xs["k"].a = 9

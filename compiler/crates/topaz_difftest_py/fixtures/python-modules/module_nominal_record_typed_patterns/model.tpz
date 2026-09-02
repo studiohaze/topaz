@@ -1,0 +1,5 @@
+
+export record User { name: string, age: int }
+export function make() -> User {
+    User { name: "Grace", age: 41 }
+}

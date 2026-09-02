@@ -1,0 +1,5 @@
+
+function addImpl(a: int, b: int = 2) -> int {
+    a + b
+}
+export let add = addImpl

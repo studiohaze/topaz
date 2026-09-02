@@ -1,0 +1,8 @@
+let double = (x: int) => x * 2
+let increment = (x: int) => x + 1
+let labelInt = (x: int) => "value: {x}"
+
+let process = (x: int) => x |> double() |> increment() |> labelInt()
+let message = process(5)
+
+print(message)  // "value: 11"

@@ -1,0 +1,3 @@
+match Date.parseIso("2024-03-01") { case Ok(d) => { let f = d.toIso
+f() }
+case Err(e) => e }

@@ -1,0 +1,9 @@
+enum E { A(int), B(int) }
+function pick(o: Option<E>) -> int {
+  match o {
+    case Some(A(x) | B(x)) if x > 0 => x
+    case _ => 0
+  }
+}
+print("{pick(Some(E.B(7)))}/{pick(Some(E.A(-2)))}/{pick(None)}")
+0

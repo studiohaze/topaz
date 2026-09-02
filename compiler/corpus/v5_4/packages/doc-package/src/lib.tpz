@@ -1,0 +1,8 @@
+/// A user that can be rendered.
+export record User derives Show { name: string }
+
+/// Stable numeric user identity.
+export newtype UserId = int
+
+/// Build a greeting for a user.
+export function greet(user: User) -> string { "hi {user.name}" }

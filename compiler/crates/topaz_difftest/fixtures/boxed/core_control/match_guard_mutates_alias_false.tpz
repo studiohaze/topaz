@@ -1,0 +1,6 @@
+let mut xs = [[1, 2]]
+match xs[0] { case [a, b] if {
+xs[0].push(3)
+false
+} => 1
+case _ => xs[0].length }

@@ -1,0 +1,2 @@
+import 가
+export function ok() -> int { 1 }

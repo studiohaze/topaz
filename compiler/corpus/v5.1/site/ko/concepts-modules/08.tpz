@@ -1,0 +1,4 @@
+// ui/theme.tpz
+export type Style = { bold: bool }
+
+export let defaultStyle: Style = { bold: false }

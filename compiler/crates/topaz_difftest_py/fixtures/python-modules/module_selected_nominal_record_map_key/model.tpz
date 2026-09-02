@@ -1,0 +1,2 @@
+
+export record User { name: string, age: int }

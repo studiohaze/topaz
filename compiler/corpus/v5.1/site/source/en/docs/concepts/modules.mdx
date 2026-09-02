@@ -1,0 +1,248 @@
+---
+title: 'Modules & Visibility'
+description: 'Split Topaz programs across files with v5.2 modules. Learn imports, exports, namespaces, visibility rules, initialization order, and the module constraints that keep builds predictable.'
+covers: '§17'
+---
+
+> **Version note**: Modules are a **Topaz v5.2** feature. Every v5.1
+> single-file program remains a valid v5.2 program with unchanged
+> meaning when used as the build entry — module syntax adds **zero
+> new reserved keywords**. `import` and `export` are contextual head
+> words recognized only at the top of a file's item list.
+
+A Topaz program starts at one **entry file**. With v5.2 you can split
+it across files: **each `.tpz` file is exactly one module**, named by
+its path relative to the project root.
+
+## A Two-File Program
+
+```text
+project/
+  main.tpz            entry
+  utils/
+    strings.tpz       module utils.strings
+```
+
+```topaz
+// utils/strings.tpz
+export function shout(s: string) -> string {
+    return "{s}!"
+}
+
+export let greeting = "hello"
+```
+
+```topaz
+// main.tpz
+import utils.strings
+
+let line = strings.shout(strings.greeting)
+print(line)    // "hello!"
+```
+
+The build resolves `utils.strings` to `utils/strings.tpz` under the
+root (the entry file's directory, unless the build sets an explicit
+root). Filenames must match the module path **exactly** — resolution
+is case-sensitive and rejects files whose names collide under Unicode
+normalization or case folding, so a unit that builds on one machine
+builds the same way on every filesystem.
+
+## Imports
+
+Topaz has exactly two import forms.
+
+### Form A — namespace import
+
+```topaz
+import utils.strings
+
+let s = strings.shout("hi")
+```
+
+`import utils.strings` binds **one name**: the final segment,
+`strings`. The dotted path is an address, not an expression — `utils`
+itself is not bound, and there is no implicit parent module.
+
+### Form B — selected import
+
+```topaz
+import utils.strings { shout, greeting }
+
+let s = shout(greeting)
+```
+
+A selected import binds the listed exported names directly.
+
+### Aliasing with `as`
+
+Both forms accept `as` to rename what gets bound:
+
+```topaz
+import utils.strings as str
+import net.url { encode as encodeUrl }
+
+let s = str.shout(encodeUrl("a b"))
+```
+
+The alias is the **only** name bound. The two slots do not compose:
+`import m as ns { x }` is not v5.2 syntax.
+
+### Import rules
+
+- Imports form a **prologue**: every import precedes all other
+  top-level items in the file.
+- A module may appear in **at most one** import item per importing
+  file — two Form-A imports, two Form-B imports, or a mix of both are
+  all duplicate-import errors.
+- Within one import list, the same source name cannot be selected
+  twice, and two specs cannot produce the same local name.
+- Importing a module that exports nothing is an error: there are no
+  side-effect-only imports in Topaz.
+- The path roots `std` and `topaz` are **reserved** — `import std.io`
+  is a static error. The built-in surface is the prelude (the v5.1
+  §22 surface, unchanged), which needs no import.
+
+## Exports & Visibility
+
+Everything at a module's top level is **private unless exported**.
+There are exactly two visibility levels, and one export spelling: the
+inline `export` in front of a declaration.
+
+```topaz
+export function area(w: float, h: float) -> float { return w * h }
+
+export type Size = { w: float, h: float }
+
+export let defaultSize: Size = { w: 1.0, h: 1.0 }
+
+export const maxSide = 4096
+
+function clamp(v: float) -> float {    // private helper
+    if v > 4096.0 { return 4096.0 }
+    return v
+}
+```
+
+`export` is a zero-runtime wrapper — the declaration behaves exactly
+as if it were unexported. The rules:
+
+- An exported `let` binds **exactly one identifier**. Destructuring,
+  wildcard, and refutable-pattern exports are static errors.
+- `export let mut` is a static error. Module-private `let mut` is
+  legal; a mutable binding cell is never part of a module's public
+  surface (an exported immutable binding may still hold a value that
+  is itself mutable).
+- Imported bindings are **read-only**: assigning to an imported name
+  or through a namespace (`strings.greeting = "x"`) is a static
+  error.
+- A type named in an exported signature, exported binding annotation,
+  or exported alias body must itself be **publicly resolvable** — a
+  primitive or prelude type, an exported alias of the same module, or
+  a namespace-qualified exported type of an imported module. A
+  private alias may not leak through a public surface.
+
+## Using a Namespace
+
+A Form-A binding is a **compile-time resolution object, not a
+value**. It appears in exactly two positions — as the head of a
+member access in an expression, or of a qualified type:
+
+```topaz
+// ui/theme.tpz
+export type Style = { bold: bool }
+
+export let defaultStyle: Style = { bold: false }
+```
+
+```topaz
+// main.tpz
+import ui.theme
+
+let s: theme.Style = theme.defaultStyle    // ns.Type and ns.member
+let b = theme.defaultStyle.bold            // then ordinary access
+```
+
+- A namespace lookup consumes **exactly one** member name; whatever
+  follows is ordinary member access on the resolved value — in
+  `theme.defaultStyle.bold`, the namespace resolves `defaultStyle`
+  and `.bold` reads the record field.
+- The member must be an exported name. Exported *types* are used in
+  type position, exported *values and functions* in expression
+  position — `let x = theme.Style` is an error.
+- The namespace itself cannot be passed, stored, or returned:
+  `let n = theme` is an error.
+- Local and nested scopes shadow module-level names by the ordinary
+  scoping rules; name resolution checks locals first, then the module
+  top level, then the prelude.
+
+## Initialization
+
+Imported modules initialize **eagerly, exactly once**, before the
+entry's first non-import item. The order is deterministic: modules in
+dependency order (dependencies first; lexicographic tie-breaks), and
+top to bottom within each module. `const` items are compile-time and
+contribute no runtime step.
+
+Inside an imported module, an initializer may only reach bindings
+that are **already initialized** — earlier items of the same module,
+or anything imported. Forward references are rejected statically, and
+the check looks through lambdas and helper functions:
+
+```topaz
+// config.tpz — rejected
+export let cache = compute()         // error: reaches `limit`,
+export let limit = 100               // declared after `cache`
+
+function compute() -> int { return limit * 2 }
+```
+
+Reordering the two bindings fixes it. Because of this rule (plus
+cycle rejection and the deterministic order), **no module ever
+observes a partially initialized module** — there is no "temporal
+dead zone" at runtime.
+
+Two more facts about imported files:
+
+- Their top level holds imports, declarations, and bindings only.
+  Free statements that *do* something — expression statements,
+  assignments, `while`, `defer`, `return`, `break`, `continue` — are
+  static errors in an imported module. The entry file keeps full v5.1 freedom. The same
+  file can be a valid entry and invalid as an import; the diagnostic
+  shows the import chain.
+- A fault during initialization aborts the program; it is not
+  catchable.
+
+## Cycles Are Errors
+
+Every import creates an edge in the import graph, and **every import
+cycle is a static error** — including a module importing itself, and
+regardless of whether the imported names are "only types". The
+diagnostic reports one canonical cycle path per group of mutually
+importing modules, so the same build error reads the same everywhere.
+
+## What v5.2 Modules Don't Have
+
+The v5.2 module system is deliberately small:
+
+- **No package manager, no manifests** — one root, one entry, paths
+  under the root. Manifest-like files have no language meaning.
+- **No re-export syntax** — `export import`, export lists
+  (`export { a, b }`), and wildcard exports are rejected. A module
+  may manually forward a narrow API as ordinary exports:
+
+  ```topaz
+  import ui.theme
+
+  export let defaultStyle = theme.defaultStyle
+  export type Style = theme.Style
+  ```
+
+  Canonical style still prefers importing the defining module
+  directly.
+- **No `use` items** — `use` is recognized and rejected with a
+  dedicated diagnostic; it is reserved.
+- **No string paths** — `import "utils/strings"` is rejected; module
+  paths are dotted identifiers.
+
+These are diagnosed as module syntax (you get a module error, not a
+confusing base-syntax error), but they are not part of the language.

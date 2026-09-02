@@ -1,0 +1,7 @@
+
+function main() -> int {
+    let m = map { "a": 1, "b": 2 }
+    let out = m.mapValues((v) => v + 1)
+    out.getOr("a", 0) + out.getOr("b", 0)
+}
+main()

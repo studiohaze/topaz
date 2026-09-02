@@ -1,0 +1,9 @@
+
+function mark(label: string, xs: Array<string>) -> Array<string> {
+    print(label)
+    xs
+}
+function main() -> JSONValue {
+    JSON.parse(...mark("json", ["null"]))
+}
+main()

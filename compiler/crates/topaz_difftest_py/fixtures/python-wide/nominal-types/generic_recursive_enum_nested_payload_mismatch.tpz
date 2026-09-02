@@ -1,0 +1,10 @@
+
+enum List<T> derives Eq, Order, Show { Nil, Cons(T, List<T>) }
+function main() -> string {
+    let mixed = List.Cons(1, List.Cons("bad", List.Nil))
+    match mixed {
+        case found: List<int> => "bad"
+        case _ => "mismatch"
+    }
+}
+main()

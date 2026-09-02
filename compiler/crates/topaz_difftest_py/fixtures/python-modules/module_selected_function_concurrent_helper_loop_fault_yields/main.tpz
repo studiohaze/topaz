@@ -1,0 +1,10 @@
+
+import util { spin }
+concurrent {
+    slow: spin()
+    boom: {
+        let xs = [1]
+        xs[2]
+    }
+}
+0

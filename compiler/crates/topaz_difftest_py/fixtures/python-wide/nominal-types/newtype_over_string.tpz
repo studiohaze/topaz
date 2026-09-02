@@ -1,0 +1,6 @@
+
+newtype Email = string
+let e: Email = Email("a@b.c")
+print("{e}")
+print("{e.value()}")
+e.value()

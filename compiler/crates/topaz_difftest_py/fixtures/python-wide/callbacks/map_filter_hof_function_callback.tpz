@@ -1,0 +1,10 @@
+
+function keep(key: string, value: int) -> bool {
+    key == "b" && value == 2
+}
+function main() -> int {
+    let m = map { "a": 1, "b": 2 }
+    let out = m.filter(keep)
+    out.length
+}
+main()

@@ -1,0 +1,8 @@
+function a() -> int {
+  b()
+}
+let sep = 1
+function b() -> int {
+  7
+}
+a()

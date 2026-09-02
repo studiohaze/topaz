@@ -1,0 +1,17 @@
+
+function dbl(x: int) -> int {
+    x * 2
+}
+
+let mut base = []
+let callbacks = [...base, dbl]
+
+let r = concurrent {
+    slow: {
+        let xs = [1, 2, 3]
+        let out = xs.map(callbacks[0])
+        out[0] * 100 + out[1] * 10 + out[2]
+    }
+    fast: 0
+}
+r.slow + r.fast

@@ -1,0 +1,21 @@
+
+let xs: Option<Array<int>> = Some([1, 2, 3])
+let noneXs: Option<Array<int>> = None
+let mapped = loop {
+    print("map-callback")
+    break (x) => x + 1
+} |> xs?.map()
+let skipped = loop {
+    print("none-callback")
+    break (x) => x / 0
+} |> noneXs?.map()
+let mappedFirst = match mapped {
+    case Some(ys) => ys[0]
+    case None => 0
+}
+let skippedValue = match skipped {
+    case Some(_) => 100
+    case None => 1
+}
+print("{mappedFirst}:{skippedValue}")
+mappedFirst + skippedValue

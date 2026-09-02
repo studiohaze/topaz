@@ -1,0 +1,122 @@
+import src.model { Model, Msg, sampleSource }
+import src.render_dom { renderMarkdown }
+import std.dom { BrowserEvent, Html, LocalDataEvent, LocalDataResult, LocalStateEvent, LocalStateResult, TextDocument, WebAppCommand, WebAppEvent, WebAppStep, deleteState, downloadText, attr, element, event, loadState, openText, saveState, text }
+
+const DRAFT_KEY = "draft"
+
+export function initialModel() -> Model {
+  let source = sampleSource()
+  Model { source: source, status: "Rendered {source.byteLength()} bytes" }
+}
+
+export function transitionModel(model: Model, message: Msg, event: BrowserEvent) -> Model {
+  update(model, message, WebAppEvent.Browser(event)).model
+}
+
+export function transitionAppModel(model: Model, message: Msg, event: WebAppEvent) -> Model {
+  update(model, message, event).model
+}
+
+function browserEvent(event: WebAppEvent) -> Option<BrowserEvent> {
+  match event {
+    case Browser(found) => Some(found)
+    case LocalData(_) | LocalState(_) => None
+  }
+}
+
+function step(model: Model, commands: Array<WebAppCommand<Msg>>) -> WebAppStep<Model, Msg> {
+  WebAppStep { model: model, commands: commands }
+}
+
+function status(model: Model, value: string) -> Model {
+  Model { source: model.source, status: value }
+}
+
+function completeData(model: Model, local: LocalDataEvent) -> Model {
+  match local.result {
+    case TextOpened(document) => Model { source: document.text, status: "Opened {document.name}" }
+    case DownloadStarted(filename) => status(model, "Download started: {filename}")
+    case Cancelled => status(model, "Local file request cancelled")
+    case Failed(code, message) => status(model, "{code}: {message}")
+  }
+}
+
+function completeState(model: Model, local: LocalStateEvent) -> Model {
+  match local.result {
+    case Loaded(key, value) => {
+      if key != DRAFT_KEY {
+        return status(model, "Unexpected state key: {key}")
+      }
+      match value {
+        case Some(source) => Model { source: source, status: "Recovered saved draft" }
+        case None => status(model, "No saved draft")
+      }
+    }
+    case Saved(key) => status(model, if key == DRAFT_KEY { "Draft saved" } else { "Unexpected state key: {key}" })
+    case Deleted(key, existed) => {
+      if key != DRAFT_KEY {
+        return status(model, "Unexpected state key: {key}")
+      }
+      status(model, if existed { "Draft forgotten" } else { "No saved draft" })
+    }
+    case Failed(code, message) => status(model, "{code}: {message}")
+  }
+}
+
+export function init() -> WebAppStep<Model, Msg> {
+  step(initialModel(), [loadState("markdown-draft-load", DRAFT_KEY, Msg.LocalCompleted)])
+}
+
+export function update(model: Model, message: Msg, event: WebAppEvent) -> WebAppStep<Model, Msg> {
+  let browser = browserEvent(event)
+  match message {
+    case SourceChanged => {
+      let source = browser?.value ?? model.source
+      step(Model { source: source, status: "Rendered {source.byteLength()} bytes" }, [])
+    }
+    case Reset => step(initialModel(), [])
+    case OpenDocument => step(status(model, "Choose a Markdown document"), [openText("markdown-open", ".md,.markdown,text/markdown,text/plain", Msg.LocalCompleted)])
+    case SaveDraft => step(status(model, "Saving draft"), [saveState("markdown-draft-save", DRAFT_KEY, model.source, Msg.LocalCompleted)])
+    case ForgetDraft => step(status(model, "Forgetting draft"), [deleteState("markdown-draft-delete", DRAFT_KEY, Msg.LocalCompleted)])
+    case DownloadMarkdown => step(status(model, "Preparing download"), [downloadText("markdown-download", "markdown-live.md", "text/markdown;charset=utf-8", model.source, Msg.LocalCompleted)])
+    case LocalCompleted => {
+      match event {
+        case LocalData(local) => step(completeData(model, local), [])
+        case LocalState(local) => step(completeState(model, local), [])
+        case Browser(_) => step(model, [])
+      }
+    }
+  }
+}
+
+export function view(model: Model) -> Html<Msg> {
+  element("main", [attr("id", "markdown-live"), attr("class", "shell")], [], [
+    element("header", [attr("class", "hero")], [], [
+      element("p", [attr("class", "eyebrow")], [], [text("Topaz Web Application Loop")]),
+      element("h1", [], [], [text("Markdown Live")]),
+      element("p", [], [], [text("Markdown becomes a safe typed DOM tree in this browser.")]),
+    ]),
+    element("div", [attr("class", "workspace")], [], [
+      element("section", [attr("class", "editor"), attr("aria-label", "Markdown editor")], [], [
+        element("label", [attr("for", "markdown-source")], [], [text("Markdown source")]),
+        element("textarea", [
+          attr("id", "markdown-source"),
+          attr("name", "markdown-source"),
+          attr("value", model.source),
+          attr("aria-label", "Markdown source"),
+        ], [event("input", Msg.SourceChanged)], []),
+        element("div", [attr("class", "actions")], [], [
+          element("button", [attr("id", "open-document"), attr("type", "button")], [event("click", Msg.OpenDocument)], [text("Open Markdown")]),
+          element("button", [attr("id", "save-draft"), attr("type", "button")], [event("click", Msg.SaveDraft)], [text("Save draft")]),
+          element("button", [attr("id", "forget-draft"), attr("type", "button")], [event("click", Msg.ForgetDraft)], [text("Forget draft")]),
+          element("button", [attr("id", "download-markdown"), attr("type", "button")], [event("click", Msg.DownloadMarkdown)], [text("Download Markdown")]),
+          element("button", [attr("id", "reset"), attr("type", "button")], [event("click", Msg.Reset)], [text("Reset sample")]),
+        ]),
+        element("p", [attr("id", "status"), attr("role", "status"), attr("aria-live", "polite")], [], [text(model.status)]),
+      ]),
+      element("section", [attr("class", "preview"), attr("aria-label", "Markdown preview")], [], [
+        renderMarkdown(model.source),
+      ]),
+    ]),
+  ])
+}

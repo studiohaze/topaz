@@ -1,0 +1,26 @@
+
+function keep(x: int) -> bool {
+    let mut i = 0
+    while i < 200 {
+        i = i + 1
+    }
+    x > 2
+}
+
+let aliasKeep = keep
+let callbacks = map { "alias": aliasKeep }
+
+let r = concurrent {
+    slow: {
+        let xs = [1, 2, 3, 4]
+        match callbacks.get("alias") {
+            case Some(cb) => {
+                let kept = xs.filter(cb)
+                (kept[0] + kept[1]) * 100 + (xs[0] + xs[1] + xs[2] + xs[3])
+            }
+            case None => -1
+        }
+    }
+    fast: 0
+}
+r.slow + r.fast

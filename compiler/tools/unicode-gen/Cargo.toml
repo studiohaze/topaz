@@ -1,0 +1,11 @@
+[package]
+name = "unicode-gen"
+description = "Generates committed Unicode identifier tables for topaz_lexer from a pinned UCD version"
+version.workspace = true
+license.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+
+[lints]
+workspace = true

@@ -1,0 +1,7 @@
+function k() {
+  let mut a = 1
+  defer print("{a}")
+  defer print("first")
+  a = 9
+}
+k()

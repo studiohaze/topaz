@@ -1,0 +1,2 @@
+match Set.of(1, 2, 3) { case n: Set<int> => 1
+case _ => 0 }

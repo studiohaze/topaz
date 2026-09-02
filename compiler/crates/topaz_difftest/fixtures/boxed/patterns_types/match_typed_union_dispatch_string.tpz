@@ -1,0 +1,2 @@
+((x: int | string) => match x { case n: int => 0
+case s: string => 1 })("hi")

@@ -1,0 +1,9 @@
+// Use let mut when you need to change values
+let mut score = 100
+let mut message = "Initial message"
+
+// Value can be changed
+score = 95
+message = "Updated message"
+
+print("Current score: {score}")  // "Current score: 95"

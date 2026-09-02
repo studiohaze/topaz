@@ -1,0 +1,6 @@
+enum Shape { Circle(int), Square(int), Dot }
+let a = Shape.Circle(5) < Shape.Square(1)
+let b = Shape.Circle(5) < Shape.Circle(9)
+let c = Shape.Dot < Shape.Circle(0)
+print("{a}/{b}/{c}")
+0

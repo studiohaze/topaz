@@ -1,0 +1,12 @@
+
+let r = concurrent {
+    a: {
+        let xs = [1]
+        xs.map((x) => "__co(")
+    }
+    b: {
+        0
+    }
+}
+print(r.a[0])
+0

@@ -1,0 +1,17 @@
+// accumulate.tpz — mutable state (`let mut`) and accumulation over a loop.
+// Run: topaz run examples/accumulate.tpz
+
+let scores = [88, 92, 79, 95, 84]
+
+let mut total = 0
+let mut highest = 0
+for s in scores {
+    total += s
+    if s > highest {
+        highest = s
+    }
+}
+
+print("total:   {total}")
+print("highest: {highest}")
+print("average: {total / scores.length}")

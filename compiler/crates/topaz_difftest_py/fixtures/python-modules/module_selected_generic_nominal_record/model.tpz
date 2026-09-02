@@ -1,0 +1,2 @@
+
+export record Box<T> { value: T }

@@ -1,0 +1,27 @@
+
+function one(x: int) -> int {
+    1
+}
+function two(x: int) -> int {
+    2
+}
+function main() -> int {
+    let mut inner = { primary: one }
+    let mut i = 0
+    let mut total = 0
+    while i < 2 {
+        let result = concurrent {
+            a: {
+                let xs = [1]
+                let ys = xs.map(inner.primary)
+                ys[0]
+            }
+            b: 0
+        }
+        total = total + result.a
+        inner.primary = two
+        i = i + 1
+    }
+    total
+}
+main()

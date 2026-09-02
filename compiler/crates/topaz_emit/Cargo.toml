@@ -1,0 +1,23 @@
+[package]
+name = "topaz_emit"
+version.workspace = true
+license.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+topaz_diag = { workspace = true }
+topaz_value = { workspace = true }
+# The call-lowering spine: emit consumes CallPlans for argument shape/order. The
+# dependency direction `emit -> hir` is allowed (only `hir -> check` is forbidden,
+# to keep the checker off the differential harness's no-check path).
+topaz_hir = { workspace = true }
+topaz_syntax = { workspace = true }
+
+[dev-dependencies]
+topaz_check = { workspace = true }
+topaz_lower = { workspace = true }
+topaz_resolve = { workspace = true }
+
+[lints]
+workspace = true

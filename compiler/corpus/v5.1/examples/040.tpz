@@ -1,0 +1,5 @@
+function 인사하기(이름: string) -> string {
+    return "안녕하세요, {이름}님!"
+}
+
+print(인사하기("토파즈"))

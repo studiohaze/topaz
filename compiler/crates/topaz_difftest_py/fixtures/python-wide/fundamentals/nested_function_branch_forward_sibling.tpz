@@ -1,0 +1,16 @@
+
+function main() -> int {
+    let flag = true
+    if flag {
+        function left(x: int) -> int {
+            right(x) + 1
+        }
+        function right(x: int) -> int {
+            x * 2
+        }
+        left(5)
+    } else {
+        0
+    }
+}
+main()

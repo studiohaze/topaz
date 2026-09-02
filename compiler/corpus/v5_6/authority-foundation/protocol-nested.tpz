@@ -1,0 +1,5 @@
+function f() -> int {
+  protocol P { function value(item: Self) -> int }
+  0
+}
+f()

@@ -1,0 +1,2 @@
+let x = 1
+x.update("a", 1, (v) => v)

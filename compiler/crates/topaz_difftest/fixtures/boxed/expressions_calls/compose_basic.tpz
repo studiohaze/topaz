@@ -1,0 +1,4 @@
+let inc = (x) => x + 1
+let dbl = (x) => x * 2
+let h = inc >> dbl
+h(5)

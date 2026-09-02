@@ -1,0 +1,11 @@
+
+let r = concurrent {
+    good: Ok(1)
+    bad: Err("e")
+}
+let s = match r.bad {
+    case Err(e) => e
+    case Ok(v) => "ok"
+}
+print("{s}")
+0

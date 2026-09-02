@@ -1,0 +1,7 @@
+
+function f() -> int {
+    print("main")
+    1
+}
+defer print("end")
+f()

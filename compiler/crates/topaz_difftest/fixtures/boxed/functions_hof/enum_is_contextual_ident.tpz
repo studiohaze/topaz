@@ -1,0 +1,2 @@
+let enum = 5
+print("{enum}")

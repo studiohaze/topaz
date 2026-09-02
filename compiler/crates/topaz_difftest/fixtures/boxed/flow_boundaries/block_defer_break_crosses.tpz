@@ -1,0 +1,7 @@
+for i in 0..5 {
+  {
+    defer print("d")
+    if i == 2 { break }
+  }
+}
+print("done")

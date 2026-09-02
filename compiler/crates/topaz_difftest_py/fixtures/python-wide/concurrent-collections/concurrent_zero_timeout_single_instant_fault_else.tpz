@@ -1,0 +1,28 @@
+
+let ok = concurrent(timeout: 0ms) {
+    x: 21 * 2
+} else {
+    { x: 0 }
+}
+let fault = concurrent(timeout: 0ms) {
+    x: 1 / 0
+} else {
+    { x: 7 }
+}
+let inBounds = concurrent(timeout: 0ms) {
+    x: {
+        let xs = [5]
+        xs[0]
+    }
+} else {
+    { x: -1 }
+}
+let outOfBounds = concurrent(timeout: 0ms) {
+    x: {
+        let xs = [5]
+        xs[1]
+    }
+} else {
+    { x: 9 }
+}
+"{ok.x},{fault.x},{inBounds.x},{outOfBounds.x}"

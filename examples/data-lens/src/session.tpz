@@ -1,0 +1,31 @@
+import data_lens_core { SortMode }
+import src.model { Model }
+
+export record LensSession derives JSON {
+  query: string,
+  activeOnly: bool,
+  sortMode: string,
+}
+
+export function encodeSession(model: Model) -> Result<string, string> {
+  JSON.stringify(LensSession {
+    query: model.query,
+    activeOnly: model.activeOnly,
+    sortMode: match model.sortMode {
+      case ByName => "name"
+      case ByValue => "value"
+    },
+  })
+}
+
+export function decodeSession(value: string) -> Result<LensSession, string> {
+  let session = JSON.parseAs<LensSession>(value)?
+  if session.sortMode != "name" && session.sortMode != "value" {
+    return Err("session.sortMode: expected `name` or `value`")
+  }
+  Ok(session)
+}
+
+export function sessionSortMode(session: LensSession) -> SortMode {
+  if session.sortMode == "value" { SortMode.ByValue } else { SortMode.ByName }
+}

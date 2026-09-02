@@ -1,0 +1,7 @@
+record Point { x: int }
+
+impl Point {
+    function plus(n: int, self: Point) -> int { n + self.x }
+}
+
+0

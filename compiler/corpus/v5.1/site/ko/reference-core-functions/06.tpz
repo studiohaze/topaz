@@ -1,0 +1,11 @@
+let mut 숫자들 = Array.of(1, 2, 3)
+숫자들.push(4)
+
+let 개수 = 숫자들.length
+let 세번째 = 숫자들[2]          // 3 — 직접 인덱싱은 범위 밖이면 폴트
+let 안전값 = 숫자들.get(10)     // None — 폴트 없는 읽기, Option<int> 반환
+let 사포함 = 4 in 숫자들
+
+print("개수: {개수}")
+print("세 번째: {세번째}")
+print("4 포함: {사포함}")

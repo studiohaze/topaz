@@ -1,0 +1,6 @@
+record User { name: string }
+record Other { name: string }
+
+let other: Other = Other { name: "Ada" }
+let user: User = User { ...other }
+print("{user.name}")

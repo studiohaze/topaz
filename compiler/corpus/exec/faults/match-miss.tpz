@@ -1,0 +1,4 @@
+let n = 9
+match n {
+    case 1 => 1
+}

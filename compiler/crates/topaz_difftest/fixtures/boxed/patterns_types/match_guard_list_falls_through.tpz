@@ -1,0 +1,2 @@
+match [2, 1] { case [a, b] if a < b => a + b
+case _ => 99 }

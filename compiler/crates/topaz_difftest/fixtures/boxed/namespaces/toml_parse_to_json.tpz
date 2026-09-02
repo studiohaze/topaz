@@ -1,0 +1,2 @@
+match TOML.parse("name = \"Ada\"\n[db]\nport = 5432") { case Ok(t) => JSON.stringify(TOML.toJson(t))
+case Err(e) => Err(e) }

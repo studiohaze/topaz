@@ -1,0 +1,7 @@
+
+function main() -> int {
+    let xs = [[1], [2, 3]]
+    let ys = [ for [a, b] in xs => a + b ]
+    ys.length
+}
+main()

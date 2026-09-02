@@ -1,0 +1,10 @@
+
+function score(value: Result<Option<int>, string>) -> int {
+    match value {
+        case Ok(Some(n)) if n > 2 => n
+        case Ok(None) => 1
+        case Err(_) => 0
+        case _ => -1
+    }
+}
+score(Ok(Some(5))) + score(Ok(None)) + score(Err("bad"))

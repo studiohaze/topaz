@@ -1,0 +1,25 @@
+
+function quick(x: int) -> int {
+    x + 6
+}
+
+function spin(x: int) -> int {
+    let mut i = 0
+    while i < 200 {
+        i = i + 1
+    }
+    1 / 0
+}
+
+let mut callbacks = { nested: { primary: spin } }
+callbacks.nested = { primary: quick }
+
+let result = concurrent {
+    value: {
+        let xs = [1]
+        let ys = xs.map(callbacks.nested.primary)
+        ys[0]
+    }
+    idle: 0
+}
+result.value

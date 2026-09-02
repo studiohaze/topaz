@@ -1,0 +1,3 @@
+record Bad { m: Map<string, int> }
+let b = Bad { m: Map.new() }
+map { b: "bad" }

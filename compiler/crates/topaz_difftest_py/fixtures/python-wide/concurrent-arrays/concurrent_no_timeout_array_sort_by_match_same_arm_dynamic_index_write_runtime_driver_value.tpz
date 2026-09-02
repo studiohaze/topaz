@@ -1,0 +1,34 @@
+
+function midKey(x: int) -> int {
+    3 * x * x - 13 * x + 16
+}
+
+function negKey(x: int) -> int {
+    0 - x
+}
+
+function idKey(x: int) -> int {
+    x
+}
+
+function choose(i: int) -> int {
+    let r = concurrent {
+        slow: {
+            let mut cbs = [idKey, negKey]
+            match i {
+                case 0 => -1
+                case 1 => {
+                    cbs[i] = midKey
+                    let mut xs = [3, 1, 2]
+                    xs.sortBy(cbs[i])
+                    xs[0] * 10 + xs[1]
+                }
+                case _ => -2
+            }
+        }
+        fast: 0
+    }
+    r.slow + r.fast
+}
+
+choose(1)

@@ -1,0 +1,138 @@
+---
+title: "Introducing Topaz"
+description: "Topaz is a small, closed language for application intent — one canonical way to say each thing, written by people and by agents, checked by the toolchain."
+covers: "§1, §3, §4, §6, §7, §12, §13, §13a, §14, §15, §16, §17, §20, §22"
+---
+
+> **Version note**: This documentation reflects **Topaz v5.2** canonical syntax — a strict superset of frozen v5.1. Modules are new in v5.2: see [Modules & Visibility](/en/docs/concepts/modules).
+
+Topaz is a small, closed language for application intent — one canonical way to say each thing, written by people and by agents, checked by the toolchain. It reads like Python or TypeScript, but the surface is deliberately closed: for each intent there is exactly one canonical form, locked in the v5.2 specification. For who it is for — and who it is not for — see [Why Topaz?](/en/docs/why-topaz).
+
+Every program on this page that shows output is executed against the v0.3 toolchain by the site verifier — each output block is pinned byte-for-byte to a captured run — and the remaining fences are parse-checked.
+
+**Lena Code interop** — Topaz is part of the STUDIO HAZE product family alongside Lena Code. It can serve as both a source and a target language in Lena Code conversion workflows, so code written in Topaz travels well into Lena Code pipelines and back out again. Topaz is also small, closed, Unicode-first, written the same way by people and AI agents, and checked through run/build differential gates for the supported surface.
+
+## First proof: Unicode-first
+
+Identifiers are Unicode from the lexer up. Domain words stay in your language instead of becoming romanized approximations:
+
+```topaz
+function greet(name: string, language: string) -> string {
+    return match language {
+        case "한국어" => "안녕하세요, {name}님!"
+        case "Русский" => "Привет, {name}!"
+        case _ => "Hello, {name}!"
+    }
+}
+
+let 사용자 = "김토파즈"
+print(greet(사용자, "한국어"))
+print(greet("Topaz", "Русский"))
+```
+
+```text output
+안녕하세요, 김토파즈님!
+Привет, Topaz!
+```
+
+`사용자` is an ordinary variable. Unicode identity is not a tolerated edge case: identifiers are exactly the scalar sequences you wrote — no silent normalization (§1) — and the module resolver rejects look-alike module names across files under exact, NFC/NFD, and case-fold collision keys (§17).
+
+## The four pillars
+
+### A small, closed surface
+
+For each intent there is one way to write it. The language decides policy — `Result` for recoverable failure, optionals for absence, `defer` for cleanup — so people and agents don't re-decide it per file:
+
+```topaz
+function parsePort(raw: string) -> Result<int, string> {
+    let n = toInt(raw) ?? -1
+    if n < 1 {
+        return Err("not a port: {raw}")
+    }
+    return Ok(n)
+}
+
+function startup(raw: string) -> Result<string, string> {
+    defer print("config closed")
+    let port = parsePort(raw)?
+    return Ok("listening on {port}")
+}
+
+print("{startup("8080")}")
+print("{startup("http")}")
+```
+
+```text output
+config closed
+Ok(listening on 8080)
+config closed
+Err(not a port: http)
+```
+
+The `?` operator propagates the `Err`; `defer` runs on every exit path — which is why `config closed` appears in both transcripts above.
+
+### Unicode-first identity
+
+Proven above. Strings are Unicode scalar sequences with no implicit normalization — what you wrote is what compares equal (§1). Grapheme-cluster APIs are deferred to a future v5 decision (§20, §22).
+
+### Agent-ready by design
+
+A specification small enough for an agent to hold in full, machine-checkable profiles, and documentation that is itself verified: every canonical fence on this site is parse-checked against the toolchain, and runnable examples execute with their output pinned. See [how this site is verified](/en/docs/status).
+
+### Templates with intent
+
+`sql`, `sh`, and `path` strings are templates — structured values whose parts and interpolations stay separate instead of collapsing into a string:
+
+```topaz
+let table = "users"
+let q = sql"select * from {table} where active = {true}"
+print("{q}")
+```
+
+```text output
+<sql template, 3 part(s), 2 interpolation(s)>
+```
+
+That placeholder rendering is the honest state of v0.3: the template value exists and nothing was concatenated, while the per-domain rendering policies (quoting, escaping) are deferred to a future v5 decision. Safety stays grammar, not discipline.
+
+## The type discipline, honestly
+
+Topaz is statically typed by specification — annotations, inference, literal types are all part of the locked v5.2 surface:
+
+```topaz
+type TrafficLight = "red" | "yellow" | "green"
+
+function next(light: TrafficLight) -> TrafficLight {
+    return match light {
+        case "red" => "green"
+        case "green" => "yellow"
+        case _ => "red"
+    }
+}
+```
+
+The static checker, however, is the next compiler track — **planned**, not shipped. Today this form is parse-checked and module-resolved, and the v0.3 interpreter enforces contracts at runtime as dynamic guards (TPZ5xxx); the checker's job is to turn those guards into static diagnostics. The [status page](/en/docs/status) tracks exactly this boundary.
+
+## What runs today
+
+v0.3 (released 2026-06-12) runs Topaz v5.2 end to end: Unicode-first lexer, full parser, multi-file module resolver, and the reference interpreter behind `topaz run` — including pattern matching, defer, concurrent, and faults rendered with source carets. The toolchain lives in private CI until the open-source release; this site publishes the counts and the gates on [Toolchain status](/en/docs/status).
+
+Run your first program in the [Getting Started](/en/docs/getting-started) guide — every transcript there is captured from the real binary.
+
+## The road ahead — labeled vision
+
+- **Type checker** — planned; the next compiler track.
+- **Rust emission** — vision milestone; no public claims before differential testing against the interpreter.
+- **Distribution** — arrives with the open-source release.
+
+Nothing above is promised by this page beyond its label; the [status page](/en/docs/status) is the source of truth.
+
+## Start here
+
+- **[Why Topaz?](/en/docs/why-topaz)** — positioning in five minutes, including who should not use it
+- **[Getting Started](/en/docs/getting-started)** — first program, real transcripts
+- **[Syntax](/en/docs/concepts/syntax)** — the whole surface, page by page
+- **[Modules & Visibility](/en/docs/concepts/modules)** — multi-file units, new in v5.2
+- **[Toolchain status](/en/docs/status)** — what runs today, and what proves it
+
+**One way to say it.**

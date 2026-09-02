@@ -1,0 +1,38 @@
+{
+  "schema": "lispex.f15-provider-evidence/v1",
+  "subjects": {
+    "evaluator_source_revision": "e3909e56491b53c61a63efaff51b6093019d8b27",
+    "provider_wire_revision": "451027beb8daff90c09364a1fd38a2a9f3790e55",
+    "qualification_revision": "8e7d4bf2a1bc550b5e1315449002cf2938952ec4",
+    "artifact_sha256": "dd4cde2976d825ae99b542d308d87489ac96848e0710329dbb9173664d8c5ad8",
+    "executable_profile_id": "lispex/r7rs-rule-current-profile-bounded/1",
+    "feature_set_sha256": "6ff16159ab9c6758c1485b67c928a9b3b4a896e4f2ecf96e4cf3cbaf5ac22fae"
+  },
+  "execution_input": {
+    "path": "docs/bounded-execution/f15-final-provider-execution-inputs.v1.json",
+    "sha256": "6222dc50e99ca51ac85e6f214b2c03a692493c1aac9b6c9ec6b17c30bc10df28"
+  },
+  "kind": "post-closure-safety-dominance",
+  "primaryEvidence": [
+    {
+      "path": "scripts/check-f15-final-provider.mjs",
+      "sha256": "2ad04522380b89f1b9c174a3de62e118fca43492a6e015f725f76ac7fc7ec417"
+    },
+    {
+      "path": "interp/src/full_embed_host.rs",
+      "sha256": "3e9f78fc5733a958b6a64d5ba7acfe9dca6c37137d81779724e25cc100a8b174"
+    },
+    {
+      "path": "docs/bounded-execution/f15-final-provider-execution-inputs.v1.json",
+      "sha256": "6222dc50e99ca51ac85e6f214b2c03a692493c1aac9b6c9ec6b17c30bc10df28"
+    }
+  ],
+  "result": {
+    "status": "passed",
+    "safetyPrecedenceCount": 0,
+    "semanticWorkPrecedesFuelCeiling": true,
+    "semanticAllocationPrecedesMemoryCeiling": true,
+    "freshInstancePassed": true,
+    "executionRevision": "8e7d4bf2a1bc550b5e1315449002cf2938952ec4"
+  }
+}

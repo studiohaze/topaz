@@ -1,0 +1,37 @@
+
+function boom(x: int) -> int {
+    let n = 0
+    x / n
+}
+
+function same(x: int) -> int {
+    x
+}
+
+function main() -> int {
+    let mut order = 0
+
+    function tick(label: int, value: int) -> int {
+        order = order * 10 + label
+        value
+    }
+
+    let r = concurrent {
+        slow: {
+            let mut cbs = [same, same]
+            let i = 1
+            cbs[i] = boom
+            let values: Array<Result<int, int>> = [Ok(1), Err(7)]
+            let out = values[tick(1, i)].map(f: cbs[tick(2, i)])
+            let payload = match out {
+                case Ok(_) => -1
+                case Err(code) => code
+            }
+            order * 100 + payload
+        }
+        fast: 0
+    }
+    r.slow + r.fast
+}
+
+main()

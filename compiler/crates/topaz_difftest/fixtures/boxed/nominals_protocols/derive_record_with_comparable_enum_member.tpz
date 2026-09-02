@@ -1,0 +1,7 @@
+enum Payload { Empty, Pair(int, string) }
+record Box derives Eq, Order, Show { payload: Payload }
+let a = Box { payload: Payload.Pair(1, "a") }
+let b = Box { payload: Payload.Pair(1, "b") }
+print("{Eq.equals(a, a)}/{Eq.equals(a, b)}/{Order.compare(a, b)}")
+print(Show.show(a))
+0

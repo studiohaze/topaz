@@ -1,0 +1,5 @@
+record Cfg { host: string, port: int = 8080, tls: bool = false }
+let base = Cfg { host: "a", port: 1, tls: true }
+let next = Cfg { ...base, port: 99 }
+print("{next}")
+0

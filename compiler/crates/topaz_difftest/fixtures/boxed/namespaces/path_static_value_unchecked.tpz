@@ -1,0 +1,3 @@
+let f = Path.from
+match f("a/./b") { case Ok(p) => p.toString()
+case Err(e) => e }

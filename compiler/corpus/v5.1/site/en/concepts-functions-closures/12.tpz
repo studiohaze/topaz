@@ -1,0 +1,33 @@
+// Factorial calculation
+function factorial(n: int) -> int {
+    if n <= 1 {
+        return 1
+    }
+    return n * factorial(n - 1)
+}
+
+print("{factorial(5)}")  // 120
+
+// Fibonacci sequence
+function fibonacci(n: int) -> int {
+    if n <= 1 {
+        return n
+    }
+    return fibonacci(n - 1) + fibonacci(n - 2)
+}
+
+print("{fibonacci(8)}")  // 21
+
+// Array sum (recursive, by index — §22 has no slicing)
+function sumFrom(array: Array<int>, start: int) -> int {
+    return match array.get(start) {
+        case Some(value) => value + sumFrom(array, start + 1)
+        case None => 0
+    }
+}
+
+function arraySum(array: Array<int>) -> int {
+    return sumFrom(array, 0)
+}
+
+print("{arraySum([1, 2, 3, 4, 5])}")  // 15

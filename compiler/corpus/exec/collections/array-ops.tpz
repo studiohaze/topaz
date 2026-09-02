@@ -1,0 +1,6 @@
+let mut xs = Array.of(1, 2)
+xs.push(3)
+print("{xs.length} {xs[0]} {xs.get(9) ?? -1}")
+let ys = [0, ...xs]
+print("{ys}")
+print("{2 in ys} {9 in ys}")

@@ -1,0 +1,5 @@
+protocol Greet { function greeting(value: Self) -> string }
+record Dog { name: string }
+impl Greet<Dog> { function greeting(value: Dog) -> string { "Woof {value.name}" } }
+print(Greet.greeting(Dog { name: "Rex" }))
+0

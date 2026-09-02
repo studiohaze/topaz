@@ -1,0 +1,2 @@
+match Date.parseIso("2024-02-30") { case Ok(d) => d.toIso()
+case Err(e) => e }

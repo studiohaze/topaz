@@ -1,0 +1,3 @@
+let f = Regex.compile
+match f("a+") { case Ok(re) => re.isMatch("aaa")
+case Err(e) => false }

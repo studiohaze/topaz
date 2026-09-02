@@ -1,0 +1,2 @@
+let a = [Some(1), None]
+for x: Option<int> in a { x }

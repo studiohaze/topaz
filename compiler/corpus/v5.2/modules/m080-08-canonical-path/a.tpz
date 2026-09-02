@@ -1,0 +1,3 @@
+import b
+import ok
+export function ok() -> int { 1 }

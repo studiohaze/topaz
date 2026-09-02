@@ -1,0 +1,9 @@
+
+function big(x: int) -> bool {
+    x > 1
+}
+function main() -> int {
+    let xs = filter([1, 2, 3], big)
+    xs.length
+}
+main()

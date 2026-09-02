@@ -1,0 +1,5 @@
+enum A { X }
+enum B { X }
+let eq = A.X == B.X
+print("{eq}")
+0

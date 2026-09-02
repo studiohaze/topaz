@@ -1,0 +1,22 @@
+
+function idKey(x: int) -> int {
+    x
+}
+
+function negKey(x: int) -> int {
+    0 - x
+}
+
+let seeds = [0, 1]
+let i = seeds[1]
+let callbacks = [idKey, negKey]
+
+let r = concurrent {
+    slow: {
+        let mut xs = [3, 1, 2]
+        xs.sortBy(callbacks[i])
+        xs[0] * 10 + xs[1]
+    }
+    fast: 0
+}
+r.slow + r.fast

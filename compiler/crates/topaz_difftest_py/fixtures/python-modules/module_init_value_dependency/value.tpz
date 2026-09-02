@@ -1,0 +1,3 @@
+
+import base
+export let answer = base.seed + 40

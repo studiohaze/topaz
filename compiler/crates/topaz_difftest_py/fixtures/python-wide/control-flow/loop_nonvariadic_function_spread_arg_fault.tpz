@@ -1,0 +1,15 @@
+
+function f(a: int, b: int = 0) -> int {
+    a + b
+}
+let result = f(loop {
+    print("prefix")
+    break 1
+}, ...loop {
+    print("spread")
+    break [2]
+}, b: loop {
+    print("named")
+    break 3
+})
+result

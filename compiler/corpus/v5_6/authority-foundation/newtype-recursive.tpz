@@ -1,0 +1,8 @@
+record Node { next: Link | null }
+newtype Link = Node
+newtype Never = Never
+newtype A = B
+newtype B = A
+let end: Node = Node { next: null }
+let linked: Link = Link(end)
+print("{linked}")

@@ -1,0 +1,31 @@
+// Convert Option to Result
+function requireUser(id: int) -> Result<{ name: string, age: int }, string> {
+    return match findUser(id) {
+        case Some(user) => Ok(user)
+        case None => Err("User not found: ID {id}")
+    }
+}
+
+// Convert Result to Option
+let optionalResult = match divide(10.0, 0.0) {
+    case Ok(value) => Some(value)
+    case Err(_) => None
+}
+
+match optionalResult {
+    case Some(value) => print("Division successful: {value}")
+    case None => print("Division failed (error message ignored)")
+}
+
+// Complex processing
+function doubleUserAge(id: int) -> Result<int, string> {
+    return match requireUser(id) {
+        case Ok(user) => Ok(user.age * 2)
+        case Err(error) => Err(error)
+    }
+}
+
+match doubleUserAge(1) {
+    case Ok(doubleAge) => print("Double age: {doubleAge}")
+    case Err(error) => print("Error: {error}")
+}

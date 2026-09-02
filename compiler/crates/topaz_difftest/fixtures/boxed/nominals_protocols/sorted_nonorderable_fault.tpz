@@ -1,0 +1,4 @@
+record Q { m: Map<string, int> }
+let xs: Array<Q> = [Q { m: Map.new() }, Q { m: Map.new() }]
+print("{xs.sorted()}")
+0

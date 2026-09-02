@@ -1,0 +1,10 @@
+
+function sub(a: int, b: int) -> int {
+    a - b
+}
+let result = 10 |> sub(b: loop {
+    print("named")
+    break 3
+})
+print("{result}")
+result

@@ -1,0 +1,692 @@
+// Text, character, list-output, and port-facing primitive families.
+// Unicode operations are delegated to unicode_text; this leaf shapes guest
+// arguments, values, and transcript effects.
+
+import lit.model {
+  GuestInt,
+  GuestRational,
+  ErrorObjectRow,
+  GuardClauseRow,
+  GuestValue,
+  ValuePacket,
+  MachineSignal,
+  NodeOp,
+  SpanRow,
+  OriginRow,
+  BinderRow,
+  GlobalRow,
+  NodeRow,
+  Kernel,
+  MachineMode,
+  KernelInvokeStep,
+}
+import lit.frontend_lex_read {
+  unicodeWhitespace,
+}
+import lit.value_runtime {
+  allocateGuestIdentity,
+  truthy,
+  requireArity,
+  guestListElements,
+  guestIntFromNonnegative,
+  guestCount,
+  guestListWithTail,
+  guestList,
+  primitivePredicate,
+  eqvGuest,
+  equalGuest,
+  scalarText,
+}
+import lit.unicode_text {
+  unicodeUppercaseV16,
+  unicodeLowercaseV16,
+  unicodeSimpleUpperV16,
+  unicodeSimpleLowerV16,
+  unicodeUpperTextV16,
+  unicodeLowerTextV16,
+  guestCharacterComparison,
+  guestStringComparison,
+  guestStringRange,
+}
+import lit.render {
+  renderGuestMode,
+  renderGuest,
+}
+import lit.numeric {
+  renderGuestInt,
+  guestIndex,
+}
+import lit.kernel_decode {
+  validUnicodeScalar,
+}
+
+export function invokePrimitiveTextConstruction(
+  name: string,
+  arguments: Array<GuestValue>,
+  continuation: int,
+  guestIdentities: Array<int>,
+  allocations: int,
+  maxContinuationDepth: int,
+  initialTransfers: int,
+  dynamic: int,
+  initialEmittedOutput: string,
+) -> Option<KernelInvokeStep> {
+  let mut transfers = initialTransfers
+  let mut emittedOutput = initialEmittedOutput
+  let mut mode = MachineMode.HaltMode
+  match name {
+    case "char<?" | "char>?" | "char<=?" | "char>=?"
+      | "char-ci=?" | "char-ci<?" | "char-ci>?" | "char-ci<=?" | "char-ci>=?" => match guestCharacterComparison(name, arguments) {
+        case Ok(value) => { mode = MachineMode.DeliverMode(ValuePacket.One(value), continuation) }
+        case Err(error) => {
+          transfers += 1
+          mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+        }
+      }
+    case "char-whitespace?" | "char-upper-case?" | "char-lower-case?" => match requireArity(name, arguments.length, 1, 1) {
+      case Err(error) => {
+        transfers += 1
+        mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+      }
+      case Ok(_) => match arguments[0] {
+        case VChar(scalar) => {
+          let answer = if name == "char-whitespace?" { unicodeWhitespace(scalar) }
+            else if name == "char-upper-case?" { unicodeUppercaseV16(scalar) }
+            else { unicodeLowercaseV16(scalar) }
+          mode = MachineMode.DeliverMode(ValuePacket.One(GuestValue.VBool(answer)), continuation)
+        }
+        case _ => {
+          transfers += 1
+          mode = MachineMode.TransferMode(
+            MachineSignal.RuntimeSignal("E312 {name}: expected a character, got {renderGuest(arguments[0])}"),
+            continuation,
+          )
+        }
+      }
+    }
+    case "char-upcase" | "char-downcase" | "char-foldcase" => match requireArity(name, arguments.length, 1, 1) {
+      case Err(error) => {
+        transfers += 1
+        mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+      }
+      case Ok(_) => match arguments[0] {
+        case VChar(scalar) => {
+          let mapped = if name == "char-upcase" { unicodeSimpleUpperV16(scalar) }
+            else { unicodeSimpleLowerV16(scalar) }
+          mode = MachineMode.DeliverMode(ValuePacket.One(GuestValue.VChar(mapped)), continuation)
+        }
+        case _ => {
+          transfers += 1
+          mode = MachineMode.TransferMode(
+            MachineSignal.RuntimeSignal("E312 {name}: expected a character, got {renderGuest(arguments[0])}"),
+            continuation,
+          )
+        }
+      }
+    }
+    case "string=?" | "string<?" | "string>?" | "string<=?" | "string>=?"
+      | "string-ci=?" | "string-ci<?" | "string-ci>?" | "string-ci<=?" | "string-ci>=?" => match guestStringComparison(name, arguments) {
+        case Ok(value) => { mode = MachineMode.DeliverMode(ValuePacket.One(value), continuation) }
+        case Err(error) => {
+          transfers += 1
+          mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+        }
+      }
+    case "string-upcase" | "string-downcase" | "string-foldcase" => match requireArity(name, arguments.length, 1, 1) {
+      case Err(error) => {
+        transfers += 1
+        mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+      }
+      case Ok(_) => match arguments[0] {
+        case VString(_, text) => {
+          let mapped = if name == "string-upcase" { unicodeUpperTextV16(text) }
+            else { unicodeLowerTextV16(text) }
+          mode = MachineMode.DeliverMode(
+            ValuePacket.One(GuestValue.VString(allocateGuestIdentity(guestIdentities), mapped)),
+            continuation,
+          )
+        }
+        case _ => {
+          transfers += 1
+          mode = MachineMode.TransferMode(
+            MachineSignal.RuntimeSignal("E312 {name}: expected a string, got {renderGuest(arguments[0])}"),
+            continuation,
+          )
+        }
+      }
+    }
+    case "make-string" => match requireArity(name, arguments.length, 1, 2) {
+      case Err(error) => {
+        transfers += 1
+        mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+      }
+      case Ok(_) => match guestCount(arguments[0], name) {
+        case Err(error) => {
+          transfers += 1
+          mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+        }
+        case Ok(count) => {
+          let fillResult: Result<int, string> = if arguments.length == 1 { Ok(32) } else { match arguments[1] {
+            case VChar(scalar) => Ok(scalar)
+            case _ => Err("E312 make-string: expected a character, got {renderGuest(arguments[1])}")
+          }}
+          match fillResult {
+            case Err(error) => {
+              transfers += 1
+              mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+            }
+            case Ok(fill) => {
+              let mut text = ""
+              let mut index = 0
+              while index < count { text += scalarText(fill); index += 1 }
+              mode = MachineMode.DeliverMode(
+                ValuePacket.One(GuestValue.VString(allocateGuestIdentity(guestIdentities), text)),
+                continuation,
+              )
+            }
+          }
+        }
+      }
+    }
+    case "string->vector" => match requireArity(name, arguments.length, 1, 3) {
+      case Err(error) => {
+        transfers += 1
+        mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+      }
+      case Ok(_) => match arguments[0] {
+        case VString(_, text) => {
+          let scalars = text.scalars()
+          match guestStringRange(name, arguments, scalars.length) {
+            case Err(error) => {
+              transfers += 1
+              mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+            }
+            case Ok(range) => {
+              let mut values: Array<GuestValue> = []
+              let mut index = range[0]
+              while index < range[1] {
+                values.push(GuestValue.VChar(scalars[index].codePointAt(0) ?? 0))
+                index += 1
+              }
+              mode = MachineMode.DeliverMode(
+                ValuePacket.One(GuestValue.VVector(allocateGuestIdentity(guestIdentities), values, true)),
+                continuation,
+              )
+            }
+          }
+        }
+        case _ => {
+          transfers += 1
+          mode = MachineMode.TransferMode(
+            MachineSignal.RuntimeSignal("E312 string->vector: expected a string, got {renderGuest(arguments[0])}"),
+            continuation,
+          )
+        }
+      }
+    }
+    case "vector->string" => match requireArity(name, arguments.length, 1, 3) {
+      case Err(error) => {
+        transfers += 1
+        mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+      }
+      case Ok(_) => match arguments[0] {
+        case VVector(_, values, _) => match guestStringRange(name, arguments, values.length) {
+          case Err(error) => {
+            transfers += 1
+            mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+          }
+          case Ok(range) => {
+            let mut text = ""
+            let mut failed: Option<string> = None
+            let mut index = range[0]
+            while index < range[1] {
+              match values[index] {
+                case VChar(scalar) => { text += scalarText(scalar) }
+                case _ => if failed == None {
+                  failed = Some("E312 vector->string: expected a vector of characters, got {renderGuest(values[index])}")
+                }
+              }
+              index += 1
+            }
+            match failed {
+              case Some(error) => {
+                transfers += 1
+                mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+              }
+              case None => {
+                mode = MachineMode.DeliverMode(
+                  ValuePacket.One(GuestValue.VString(allocateGuestIdentity(guestIdentities), text)),
+                  continuation,
+                )
+              }
+            }
+          }
+        }
+        case _ => {
+          transfers += 1
+          mode = MachineMode.TransferMode(
+            MachineSignal.RuntimeSignal("E312 vector->string: expected a vector, got {renderGuest(arguments[0])}"),
+            continuation,
+          )
+        }
+      }
+    }
+    case _ => { return None }
+  }
+  Some(KernelInvokeStep {
+    mode: mode,
+    allocations: allocations,
+    maxContinuationDepth: maxContinuationDepth,
+    transfers: transfers,
+    dynamic: dynamic,
+    emittedOutput: emittedOutput,
+  })
+}
+
+export function invokePrimitiveListAndOutput(
+  name: string,
+  arguments: Array<GuestValue>,
+  continuation: int,
+  guestIdentities: Array<int>,
+  allocations: int,
+  maxContinuationDepth: int,
+  initialTransfers: int,
+  dynamic: int,
+  initialEmittedOutput: string,
+) -> Option<KernelInvokeStep> {
+  let mut transfers = initialTransfers
+  let mut emittedOutput = initialEmittedOutput
+  let mut mode = MachineMode.HaltMode
+  match name {
+    case "display" | "write" | "println" => match requireArity(name, arguments.length, 1, 1) {
+      case Err(error) => {
+        transfers += 1
+        mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+      }
+      case Ok(_) => {
+        emittedOutput += renderGuestMode(arguments[0], name != "write")
+        if name == "println" { emittedOutput += "\n" }
+        mode = MachineMode.DeliverMode(ValuePacket.Many([]), continuation)
+      }
+    }
+    case "newline" => match requireArity(name, arguments.length, 0, 0) {
+      case Err(error) => {
+        transfers += 1
+        mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+      }
+      case Ok(_) => {
+        emittedOutput += "\n"
+        mode = MachineMode.DeliverMode(ValuePacket.Many([]), continuation)
+      }
+    }
+    case "pair?" => match requireArity("pair?", arguments.length, 1, 1) {
+      case Err(error) => {
+        transfers += 1
+        mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+      }
+      case Ok(_) => {
+        let answer = primitivePredicate("pair?", arguments[0])
+        mode = MachineMode.DeliverMode(ValuePacket.One(GuestValue.VBool(answer)), continuation)
+      }
+    }
+    case "car" | "first" => match requireArity(name, arguments.length, 1, 1) {
+      case Err(error) => {
+        transfers += 1
+        mode = MachineMode.TransferMode(
+          MachineSignal.ProjectedRuntimeSignal(
+            error,
+            "E302",
+            "car: arity mismatch, expected 1 argument, got {arguments.length}",
+            [],
+          ),
+          continuation,
+        )
+      }
+      case Ok(_) => match arguments[0] {
+        case VPair(_, car, _) => { mode = MachineMode.DeliverMode(ValuePacket.One(car), continuation) }
+        case _ => {
+          transfers += 1
+          mode = MachineMode.TransferMode(
+            MachineSignal.ProjectedRuntimeSignal(
+              "HK255 car: pair required",
+              "E310",
+              "car: expected a pair, got {renderGuest(arguments[0])}",
+              [],
+            ),
+            continuation,
+          )
+        }
+      }
+    }
+    case "cdr" | "rest" => match requireArity(name, arguments.length, 1, 1) {
+      case Err(error) => {
+        transfers += 1
+        mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+      }
+      case Ok(_) => match arguments[0] {
+        case VPair(_, _, cdr) => { mode = MachineMode.DeliverMode(ValuePacket.One(cdr), continuation) }
+        case _ => {
+          transfers += 1
+          mode = MachineMode.TransferMode(
+            MachineSignal.ProjectedRuntimeSignal(
+              "HK256 cdr: pair required",
+              "E310",
+              "cdr: expected a pair, got {renderGuest(arguments[0])}",
+              [],
+            ),
+            continuation,
+          )
+        }
+      }
+    }
+    case "list" => {
+      mode = MachineMode.DeliverMode(ValuePacket.One(guestList(arguments, guestIdentities)), continuation)
+    }
+    case "list?" => match requireArity("list?", arguments.length, 1, 1) {
+      case Err(error) => {
+        transfers += 1
+        mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+      }
+      case Ok(_) => {
+        let answer = match guestListElements(arguments[0], "list?", "HK254") {
+          case Ok(_) => true
+          case Err(_) => false
+        }
+        mode = MachineMode.DeliverMode(ValuePacket.One(GuestValue.VBool(answer)), continuation)
+      }
+    }
+    case "length" => match requireArity("length", arguments.length, 1, 1) {
+      case Err(error) => {
+        transfers += 1
+        mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+      }
+      case Ok(_) => match guestListElements(arguments[0], "length", "HK257") {
+        case Ok(values) => {
+          mode = MachineMode.DeliverMode(
+            ValuePacket.One(GuestValue.VInt(guestIntFromNonnegative(values.length))),
+            continuation,
+          )
+        }
+        case Err(error) => {
+          transfers += 1
+          mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+        }
+      }
+    }
+    case "append" => {
+      let mut result = if arguments.length == 0 { GuestValue.VNil } else { arguments[arguments.length - 1] }
+      let mut index = arguments.length - 2
+      let mut failed: Option<string> = None
+      let mut failedValue: Option<GuestValue> = None
+      while index >= 0 {
+        match guestListElements(arguments[index], "append", "HK258") {
+          case Ok(values) => { result = guestListWithTail(values, result, guestIdentities) }
+          case Err(error) => {
+            failed = Some(error)
+            failedValue = Some(arguments[index])
+          }
+        }
+        index -= 1
+      }
+      match failed {
+        case Some(error) => {
+          transfers += 1
+          let value = match failedValue {
+            case Some(argument) => renderGuest(argument)
+            case None => "value"
+          }
+          mode = MachineMode.TransferMode(
+            MachineSignal.ProjectedRuntimeSignal(
+              error,
+              "E312",
+              "append: expected a proper list, got {value}",
+              [],
+            ),
+            continuation,
+          )
+        }
+        case None => { mode = MachineMode.DeliverMode(ValuePacket.One(result), continuation) }
+      }
+    }
+    case "reverse" => match requireArity("reverse", arguments.length, 1, 1) {
+      case Err(error) => {
+        transfers += 1
+        mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+      }
+      case Ok(_) => match guestListElements(arguments[0], "reverse", "HK259") {
+        case Ok(values) => {
+          let mut reversed: Array<GuestValue> = []
+          let mut index = values.length - 1
+          while index >= 0 { reversed.push(values[index]); index -= 1 }
+          mode = MachineMode.DeliverMode(ValuePacket.One(guestList(reversed, guestIdentities)), continuation)
+        }
+        case Err(error) => {
+          transfers += 1
+          mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+        }
+      }
+    }
+    case "eqv?" | "eq?" => match requireArity(name, arguments.length, 2, 2) {
+      case Err(error) => {
+        transfers += 1
+        mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+      }
+      case Ok(_) => {
+        mode = MachineMode.DeliverMode(
+          ValuePacket.One(GuestValue.VBool(eqvGuest(arguments[0], arguments[1]))),
+          continuation,
+        )
+      }
+    }
+    case "equal?" | "==" => match requireArity(name, arguments.length, 2, 2) {
+      case Err(error) => {
+        transfers += 1
+        mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+      }
+      case Ok(_) => {
+        mode = MachineMode.DeliverMode(
+          ValuePacket.One(GuestValue.VBool(equalGuest(arguments[0], arguments[1]))),
+          continuation,
+        )
+      }
+    }
+    case "not" => match requireArity("not", arguments.length, 1, 1) {
+      case Err(error) => {
+        transfers += 1
+        mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+      }
+      case Ok(_) => {
+        let answer = !truthy(arguments[0])
+        mode = MachineMode.DeliverMode(ValuePacket.One(GuestValue.VBool(answer)), continuation)
+      }
+    }
+    case _ => { return None }
+  }
+  Some(KernelInvokeStep {
+    mode: mode,
+    allocations: allocations,
+    maxContinuationDepth: maxContinuationDepth,
+    transfers: transfers,
+    dynamic: dynamic,
+    emittedOutput: emittedOutput,
+  })
+}
+
+export function invokePrimitiveTextAndCharacter(
+  name: string,
+  arguments: Array<GuestValue>,
+  continuation: int,
+  kernel: Kernel,
+  guestIdentities: Array<int>,
+  allocations: int,
+  maxContinuationDepth: int,
+  initialTransfers: int,
+  dynamic: int,
+  emittedOutput: string,
+) -> Option<KernelInvokeStep> {
+  let mut transfers = initialTransfers
+  let mut mode = MachineMode.HaltMode
+  match name {
+    case "string-append" => {
+      let mut text = ""
+      let mut failed = false
+      for argument in arguments {
+        match argument {
+          case VString(_, part) => { text += part }
+          case _ => { failed = true }
+        }
+      }
+      if failed {
+        transfers += 1
+        mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal("HK269 string-append: strings required"), continuation)
+      } else {
+        mode = MachineMode.DeliverMode(
+          ValuePacket.One(GuestValue.VString(allocateGuestIdentity(guestIdentities), text)),
+          continuation,
+        )
+      }
+    }
+    case "string-length" => match requireArity("string-length", arguments.length, 1, 1) {
+      case Err(error) => {
+        transfers += 1
+        mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+      }
+      case Ok(_) => match arguments[0] {
+        case VString(_, text) => {
+          mode = MachineMode.DeliverMode(
+            ValuePacket.One(GuestValue.VInt(guestIntFromNonnegative(text.scalars().length))),
+            continuation,
+          )
+        }
+        case _ => {
+          transfers += 1
+          mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal("HK270 string-length: string required"), continuation)
+        }
+      }
+    }
+    case "string-ref" => match requireArity("string-ref", arguments.length, 2, 2) {
+      case Err(error) => {
+        transfers += 1
+        mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+      }
+      case Ok(_) => match arguments[0] {
+        case VString(_, text) => match guestIndex(arguments[1], "string-ref") {
+          case Ok(index) => {
+            let scalars = text.scalars()
+            if index >= 0 && index < scalars.length {
+              mode = MachineMode.DeliverMode(
+                ValuePacket.One(GuestValue.VChar(scalars[index].codePointAt(0) ?? 0)),
+                continuation,
+              )
+            } else {
+              transfers += 1
+              mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal("HK271 string-ref: index out of range"), continuation)
+            }
+          }
+          case Err(error) => {
+            transfers += 1
+            mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+          }
+        }
+        case _ => {
+          transfers += 1
+          mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal("HK271 string-ref: string required"), continuation)
+        }
+      }
+    }
+    case "string->symbol" => match requireArity("string->symbol", arguments.length, 1, 1) {
+      case Err(error) => {
+        transfers += 1
+        mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+      }
+      case Ok(_) => match arguments[0] {
+        case VString(_, text) => { mode = MachineMode.DeliverMode(ValuePacket.One(GuestValue.VSymbol(text)), continuation) }
+        case _ => {
+          transfers += 1
+          mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal("HK272 string->symbol: string required"), continuation)
+        }
+      }
+    }
+    case "symbol->string" => match requireArity("symbol->string", arguments.length, 1, 1) {
+      case Err(error) => {
+        transfers += 1
+        mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+      }
+      case Ok(_) => match arguments[0] {
+        case VSymbol(nameValue) => {
+          mode = MachineMode.DeliverMode(
+            ValuePacket.One(GuestValue.VString(allocateGuestIdentity(guestIdentities), nameValue)),
+            continuation,
+          )
+        }
+        case _ => {
+          transfers += 1
+          mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal("HK273 symbol->string: symbol required"), continuation)
+        }
+      }
+    }
+    case "char?" => match requireArity("char?", arguments.length, 1, 1) {
+      case Err(error) => {
+        transfers += 1
+        mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+      }
+      case Ok(_) => {
+        mode = MachineMode.DeliverMode(
+          ValuePacket.One(GuestValue.VBool(primitivePredicate("char?", arguments[0]))),
+          continuation,
+        )
+      }
+    }
+    case "char->integer" => match requireArity("char->integer", arguments.length, 1, 1) {
+      case Err(error) => {
+        transfers += 1
+        mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+      }
+      case Ok(_) => match arguments[0] {
+        case VChar(scalar) => {
+          mode = MachineMode.DeliverMode(
+            ValuePacket.One(GuestValue.VInt(guestIntFromNonnegative(scalar))),
+            continuation,
+          )
+        }
+        case _ => {
+          transfers += 1
+          mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal("HK274 char->integer: character required"), continuation)
+        }
+      }
+    }
+    case "integer->char" => match requireArity("integer->char", arguments.length, 1, 1) {
+      case Err(error) => {
+        transfers += 1
+        mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+      }
+      case Ok(_) => match arguments[0] {
+        case VInt(number) => match toInt(renderGuestInt(number)) {
+          case Some(scalar) => if validUnicodeScalar(scalar) {
+            mode = MachineMode.DeliverMode(ValuePacket.One(GuestValue.VChar(scalar)), continuation)
+          } else {
+            transfers += 1
+            mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal("HK275 integer->char: Unicode scalar required"), continuation)
+          }
+          case None => {
+            transfers += 1
+            mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal("HK275 integer->char: Unicode scalar required"), continuation)
+          }
+        }
+        case _ => {
+          transfers += 1
+          mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal("HK275 integer->char: exact integer required"), continuation)
+        }
+      }
+    }
+    case _ => { return None }
+  }
+  Some(KernelInvokeStep {
+    mode: mode,
+    allocations: allocations,
+    maxContinuationDepth: maxContinuationDepth,
+    transfers: transfers,
+    dynamic: dynamic,
+    emittedOutput: emittedOutput,
+  })
+}

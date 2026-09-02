@@ -1,0 +1,30 @@
+export record Box<T> {
+  value: T,
+}
+
+export enum Maybe<T> {
+  Missing,
+  Present(T),
+}
+
+export newtype Id<T> = T
+
+export function makeBox(value: int) -> Box<int> {
+  Box { value: value }
+}
+
+export function makeMaybe(value: int) -> Maybe<int> {
+  Maybe.Present(value)
+}
+
+export function makeId(value: string) -> Id<string> {
+  Id(value)
+}
+
+export function render(b: Box<int>, maybe: Maybe<int>, id: Id<string>) -> string {
+  let picked = match maybe {
+    case Present(value) => value
+    case Missing => 0
+  }
+  "{b.value}:{picked}:{id.value()}"
+}

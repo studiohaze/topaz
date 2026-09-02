@@ -1,0 +1,850 @@
+// Strict decoder for the compact Lispex kernel request carried as JSON.
+// Shape, bounds, identities, and references are admitted before machine state is
+// constructed; execution never reads the wire form directly.
+
+import lit.model {
+  ScopeVisit,
+  GuestInt,
+  GuestRational,
+  ErrorObjectRow,
+  GuardClauseRow,
+  GuestValue,
+  NodeOp,
+  SpanRow,
+  OriginRow,
+  BinderRow,
+  GlobalRow,
+  NodeRow,
+  Kernel,
+  CapabilityTable,
+  KernelRequest,
+}
+import lit.numeric {
+  parseGuestInt,
+  parseGuestRational,
+  parseGuestReal,
+}
+
+export function expectArray(value: JSONValue, label: string) -> Result<Array<JSONValue>, string> {
+  match value.asArray() {
+    case Some(items) => Ok(items)
+    case None => Err("LIT100 {label}: expected array")
+  }
+}
+
+export function expectString(value: JSONValue, label: string) -> Result<string, string> {
+  match value.asString() {
+    case Some(text) => Ok(text)
+    case None => Err("LIT100 {label}: expected string")
+  }
+}
+
+export function expectInt(value: JSONValue, label: string) -> Result<int, string> {
+  match value.asInt() {
+    case Some(number) => Ok(number)
+    case None => Err("LIT100 {label}: expected integer")
+  }
+}
+
+export function expectBool(value: JSONValue, label: string) -> Result<bool, string> {
+  match value.asBool() {
+    case Some(flag) => Ok(flag)
+    case None => Err("LIT100 {label}: expected boolean")
+  }
+}
+
+export function requireLength(items: Array<JSONValue>, expected: int, label: string) -> Result<(), string> {
+  if items.length != expected {
+    return Err("LIT101 {label}: expected {expected} fields, got {items.length}")
+  }
+  Ok(())
+}
+
+function expectMinusOne(value: JSONValue, label: string) -> Result<(), string> {
+  let number = expectInt(value, label)?
+  if number != -1 { return Err("LIT102 {label}: reserved field must be -1") }
+  Ok(())
+}
+
+function decodeIntVector(value: JSONValue, label: string) -> Result<Array<int>, string> {
+  let raw = expectArray(value, label)?
+  let mut result: Array<int> = []
+  let mut index = 0
+  while index < raw.length {
+    result.push(expectInt(raw[index], "{label}[{index}]")?)
+    index += 1
+  }
+  Ok(result)
+}
+
+export function validSha256(text: string) -> bool {
+  if text.byteLength() != 64 { return false }
+  let digits = "0123456789abcdef"
+  for scalar in text.scalars() {
+    if !digits.contains(scalar) { return false }
+  }
+  true
+}
+
+export function pathNeutral(sourceId: string) -> bool {
+  if sourceId.byteLength() == 0 { return false }
+  if sourceId.startsWith("/") || sourceId.contains("\\") { return false }
+  let scalars = sourceId.scalars()
+  if scalars.length >= 2 && scalars[1] == ":" { return false }
+  if sourceId.contains("/Users/") || sourceId.contains("/home/") {
+    return false
+  }
+  for part in sourceId.split("/") {
+    if part == ".." { return false }
+  }
+  true
+}
+
+export function validUnicodeScalar(value: int) -> bool {
+  value >= 0 && value <= 1114111 && !(value >= 55296 && value <= 57343)
+}
+
+function decodeDatum(value: JSONValue, label: string) -> Result<GuestValue, string> {
+  let row = expectArray(value, label)?
+  if row.length == 0 { return Err("LIT110 {label}: datum row is empty") }
+  let tag = expectString(row[0], "{label}.tag")?
+  match tag {
+    case "bool" => {
+      requireLength(row, 2, label)?
+      Ok(GuestValue.VBool(expectBool(row[1], "{label}.value")?))
+    }
+    case "int" => {
+      requireLength(row, 2, label)?
+      let text = expectString(row[1], "{label}.value")?
+      match parseGuestInt(text) {
+        case Ok(number) => Ok(GuestValue.VInt(number))
+        case Err(error) => Err("LIT111 {label}: {error}")
+      }
+    }
+    case "rational" => {
+      requireLength(row, 2, label)?
+      let text = expectString(row[1], "{label}.value")?
+      match parseGuestRational(text) {
+        case Ok(number) => Ok(GuestValue.VRational(number))
+        case Err(error) => Err("LIT111 {label}: {error}")
+      }
+    }
+    case "real" => {
+      requireLength(row, 2, label)?
+      let text = expectString(row[1], "{label}.value")?
+      match parseGuestReal(text) {
+        case Ok(number) => Ok(GuestValue.VReal(number))
+        case Err(error) => Err("LIT111 {label}: {error}")
+      }
+    }
+    case "char" => {
+      requireLength(row, 2, label)?
+      let scalar = expectInt(row[1], "{label}.value")?
+      if !validUnicodeScalar(scalar) { return Err("LIT111 {label}: invalid Unicode scalar") }
+      Ok(GuestValue.VChar(scalar))
+    }
+    case "string" => {
+      requireLength(row, 2, label)?
+      Ok(GuestValue.VString(-1, expectString(row[1], "{label}.value")?))
+    }
+    case "symbol" => {
+      requireLength(row, 2, label)?
+      Ok(GuestValue.VSymbol(expectString(row[1], "{label}.value")?))
+    }
+    case "nil" => {
+      requireLength(row, 1, label)?
+      Ok(GuestValue.VNil)
+    }
+    case "pair" => {
+      requireLength(row, 3, label)?
+      Ok(GuestValue.VPair(
+        -1,
+        decodeDatum(row[1], "{label}.car")?,
+        decodeDatum(row[2], "{label}.cdr")?,
+      ))
+    }
+    case "vector" => {
+      requireLength(row, 2, label)?
+      let values = expectArray(row[1], "{label}.values")?
+      let mut decoded: Array<GuestValue> = []
+      let mut index = 0
+      while index < values.length {
+        decoded.push(decodeDatum(values[index], "{label}.values[{index}]")?)
+        index += 1
+      }
+      Ok(GuestValue.VVector(-1, decoded, false))
+    }
+    case "bytevector" => {
+      requireLength(row, 2, label)?
+      let raw = expectArray(row[1], "{label}.values")?
+      let mut bytes: Array<int> = []
+      let mut index = 0
+      while index < raw.length {
+        let byte = expectInt(raw[index], "{label}.values[{index}]")?
+        if byte < 0 || byte > 255 { return Err("LIT111 {label}: byte outside 0..255") }
+        bytes.push(byte)
+        index += 1
+      }
+      Ok(GuestValue.VBytevector(-1, bytes))
+    }
+    case _ => Err("LIT112 {label}: unknown or internal datum tag {tag}")
+  }
+}
+
+function decodeSpans(value: JSONValue) -> Result<Array<SpanRow>, string> {
+  let raw = expectArray(value, "kernel.spans")?
+  let mut spans: Array<SpanRow> = []
+  let mut index = 0
+  while index < raw.length {
+    let row = expectArray(raw[index], "kernel.spans[{index}]")?
+    requireLength(row, 3, "kernel.spans[{index}]")?
+    let id = expectInt(row[0], "kernel.spans[{index}].id")?
+    let start = expectInt(row[1], "kernel.spans[{index}].start")?
+    let end = expectInt(row[2], "kernel.spans[{index}].end")?
+    if id != index { return Err("LIT120 kernel.spans: ids must be contiguous") }
+    if start < 0 || end < start { return Err("LIT121 kernel.spans[{index}]: invalid half-open span") }
+    spans.push(SpanRow { startByte: start, endByte: end })
+    index += 1
+  }
+  Ok(spans)
+}
+
+function decodeOrigins(value: JSONValue, spanCount: int) -> Result<Array<OriginRow>, string> {
+  let raw = expectArray(value, "kernel.origins")?
+  let mut origins: Array<OriginRow> = []
+  let mut index = 0
+  while index < raw.length {
+    let row = expectArray(raw[index], "kernel.origins[{index}]")?
+    requireLength(row, 5, "kernel.origins[{index}]")?
+    let id = expectInt(row[0], "kernel.origins[{index}].id")?
+    let kind = expectString(row[1], "kernel.origins[{index}].kind")?
+    let span = expectInt(row[2], "kernel.origins[{index}].span")?
+    let rule = expectString(row[3], "kernel.origins[{index}].rule")?
+    let parent = expectInt(row[4], "kernel.origins[{index}].parent")?
+    if id != index { return Err("LIT122 kernel.origins: ids must be contiguous") }
+    if kind != "source" && kind != "generated" && kind != "intrinsic" {
+      return Err("LIT123 kernel.origins[{index}]: unknown origin kind {kind}")
+    }
+    if span < 0 || span >= spanCount { return Err("LIT124 kernel.origins[{index}]: broken span reference") }
+    if parent < -1 || parent >= raw.length || parent == index {
+      return Err("LIT125 kernel.origins[{index}]: broken parent reference")
+    }
+    if kind == "source" && (rule.byteLength() != 0 || parent != -1) {
+      return Err("LIT126 kernel.origins[{index}]: source origin cannot have rule or parent")
+    }
+    origins.push(OriginRow { kind: kind, span: span, rule: rule, parent: parent })
+    index += 1
+  }
+  index = 0
+  while index < origins.length {
+    let mut cursor = origins[index].parent
+    let mut hops = 0
+    while cursor != -1 {
+      hops += 1
+      if hops > origins.length { return Err("LIT127 kernel.origins[{index}]: origin cycle") }
+      cursor = origins[cursor].parent
+    }
+    index += 1
+  }
+  Ok(origins)
+}
+
+function decodeBinders(value: JSONValue, originCount: int) -> Result<Array<BinderRow>, string> {
+  let raw = expectArray(value, "kernel.binders")?
+  let mut binders: Array<BinderRow> = []
+  let mut index = 0
+  while index < raw.length {
+    let row = expectArray(raw[index], "kernel.binders[{index}]")?
+    requireLength(row, 5, "kernel.binders[{index}]")?
+    let id = expectInt(row[0], "kernel.binders[{index}].id")?
+    let name = expectString(row[1], "kernel.binders[{index}].name")?
+    let owner = expectInt(row[2], "kernel.binders[{index}].owner")?
+    let slot = expectInt(row[3], "kernel.binders[{index}].slot")?
+    let origin = expectInt(row[4], "kernel.binders[{index}].origin")?
+    if id != index { return Err("LIT130 kernel.binders: ids must be contiguous") }
+    if name.byteLength() == 0 || owner < 0 || slot < 0 {
+      return Err("LIT131 kernel.binders[{index}]: invalid binder row")
+    }
+    if origin < 0 || origin >= originCount { return Err("LIT132 kernel.binders[{index}]: broken origin") }
+    binders.push(BinderRow { name: name, owner: owner, slot: slot, origin: origin })
+    index += 1
+  }
+  Ok(binders)
+}
+
+function decodeGlobals(value: JSONValue, originCount: int) -> Result<Array<GlobalRow>, string> {
+  let raw = expectArray(value, "kernel.globals")?
+  let mut globals: Array<GlobalRow> = []
+  let mut index = 0
+  while index < raw.length {
+    let row = expectArray(raw[index], "kernel.globals[{index}]")?
+    requireLength(row, 5, "kernel.globals[{index}]")?
+    let id = expectInt(row[0], "kernel.globals[{index}].id")?
+    let name = expectString(row[1], "kernel.globals[{index}].name")?
+    let slot = expectInt(row[2], "kernel.globals[{index}].slot")?
+    let origin = expectInt(row[3], "kernel.globals[{index}].origin")?
+    let capability = expectInt(row[4], "kernel.globals[{index}].capability")?
+    if id != index || slot != index { return Err("LIT133 kernel.globals: ids and slots must be contiguous") }
+    if name.byteLength() == 0 || origin < 0 || origin >= originCount || capability < -1 {
+      return Err("LIT134 kernel.globals[{index}]: invalid global row")
+    }
+    globals.push(GlobalRow { name: name, slot: slot, origin: origin, capability: capability })
+    index += 1
+  }
+  Ok(globals)
+}
+
+function decodeGuardClauses(value: JSONValue, label: string) -> Result<Array<GuardClauseRow>, string> {
+  let raw = expectArray(value, label)?
+  let mut clauses: Array<GuardClauseRow> = []
+  let mut index = 0
+  while index < raw.length {
+    let row = expectArray(raw[index], "{label}[{index}]")?
+    requireLength(row, 2, "{label}[{index}]")?
+    clauses.push(GuardClauseRow {
+      test: expectInt(row[0], "{label}[{index}].test")?,
+      body: expectInt(row[1], "{label}[{index}].body")?,
+    })
+    index += 1
+  }
+  Ok(clauses)
+}
+
+function decodeNodes(value: JSONValue, spanCount: int, originCount: int, feature: string) -> Result<Array<NodeRow>, string> {
+  let raw = expectArray(value, "kernel.nodes")?
+  let mut nodes: Array<NodeRow> = []
+  let mut index = 0
+  while index < raw.length {
+    let row = expectArray(raw[index], "kernel.nodes[{index}]")?
+    requireLength(row, 8, "kernel.nodes[{index}]")?
+    let id = expectInt(row[0], "kernel.nodes[{index}].id")?
+    let opcode = expectString(row[1], "kernel.nodes[{index}].opcode")?
+    let span = expectInt(row[2], "kernel.nodes[{index}].span")?
+    let origin = expectInt(row[3], "kernel.nodes[{index}].origin")?
+    if id != index { return Err("LIT140 kernel.nodes: ids must be contiguous") }
+    if span < 0 || span >= spanCount || origin < 0 || origin >= originCount {
+      return Err("LIT141 kernel.nodes[{index}]: broken span or origin")
+    }
+    let op = match opcode {
+      case "literal" => {
+        expectMinusOne(row[5], "node[{index}].b")?
+        expectMinusOne(row[6], "node[{index}].c")?
+        expectMinusOne(row[7], "node[{index}].d")?
+        NodeOp.Literal(expectInt(row[4], "node[{index}].quote")?)
+      }
+      case "local-ref" => {
+        expectMinusOne(row[7], "node[{index}].d")?
+        NodeOp.LocalRef(
+          expectInt(row[4], "node[{index}].binder")?,
+          expectInt(row[5], "node[{index}].depth")?,
+          expectInt(row[6], "node[{index}].slot")?,
+        )
+      }
+      case "global-ref" => {
+        expectMinusOne(row[6], "node[{index}].c")?
+        expectMinusOne(row[7], "node[{index}].d")?
+        NodeOp.GlobalRef(
+          expectInt(row[4], "node[{index}].global")?,
+          expectInt(row[5], "node[{index}].slot")?,
+        )
+      }
+      case "capability" => {
+        expectMinusOne(row[5], "node[{index}].b")?
+        expectMinusOne(row[6], "node[{index}].c")?
+        expectMinusOne(row[7], "node[{index}].d")?
+        NodeOp.Capability(expectInt(row[4], "node[{index}].capability")?)
+      }
+      case "if" => {
+        expectMinusOne(row[7], "node[{index}].d")?
+        NodeOp.IfNode(
+          expectInt(row[4], "node[{index}].test")?,
+          expectInt(row[5], "node[{index}].then")?,
+          expectInt(row[6], "node[{index}].else")?,
+        )
+      }
+      case "begin" => {
+        expectMinusOne(row[5], "node[{index}].b")?
+        expectMinusOne(row[6], "node[{index}].c")?
+        expectMinusOne(row[7], "node[{index}].d")?
+        let children = decodeIntVector(row[4], "node[{index}].children")?
+        if children.length == 0 { return Err("LIT142 node[{index}]: begin cannot be empty") }
+        NodeOp.Begin(children)
+      }
+      case "lambda" => {
+        let rest = expectInt(row[6], "node[{index}].rest")?
+        if feature != "hosted-kernel-h5/v0" && rest != -1 {
+          return Err("LIT143 kernel.nodes[{index}]: rest binder requires hosted-kernel-h5/v0")
+        }
+        expectMinusOne(row[7], "node[{index}].d")?
+        NodeOp.Lambda(
+          decodeIntVector(row[4], "node[{index}].binders")?,
+          expectInt(row[5], "node[{index}].body")?,
+          rest,
+        )
+      }
+      case "app" => {
+        expectMinusOne(row[6], "node[{index}].c")?
+        expectMinusOne(row[7], "node[{index}].d")?
+        NodeOp.Apply(
+          expectInt(row[4], "node[{index}].operator")?,
+          decodeIntVector(row[5], "node[{index}].operands")?,
+        )
+      }
+      case "set-local" => NodeOp.SetLocal(
+        expectInt(row[4], "node[{index}].binder")?,
+        expectInt(row[5], "node[{index}].depth")?,
+        expectInt(row[6], "node[{index}].slot")?,
+        expectInt(row[7], "node[{index}].rhs")?,
+      )
+      case "set-global" => {
+        expectMinusOne(row[7], "node[{index}].d")?
+        NodeOp.SetGlobal(
+          expectInt(row[4], "node[{index}].global")?,
+          expectInt(row[5], "node[{index}].slot")?,
+          expectInt(row[6], "node[{index}].rhs")?,
+        )
+      }
+      case "letrec" => {
+        expectMinusOne(row[7], "node[{index}].d")?
+        NodeOp.Letrec(
+          decodeIntVector(row[4], "node[{index}].binders")?,
+          decodeIntVector(row[5], "node[{index}].initializers")?,
+          expectInt(row[6], "node[{index}].body")?,
+        )
+      }
+      case "guard" => {
+        if feature != "hosted-kernel-h3/v0" && feature != "hosted-kernel-h4/v0" {
+          return Err("LIT143 kernel.nodes[{index}]: guard requires hosted-kernel-h3/v0")
+        }
+        NodeOp.GuardNode(
+          decodeIntVector(row[4], "node[{index}].binders")?,
+          decodeGuardClauses(row[5], "node[{index}].clauses")?,
+          expectInt(row[6], "node[{index}].else")?,
+          expectInt(row[7], "node[{index}].body")?,
+        )
+      }
+      case _ => return Err("LIT143 kernel.nodes[{index}]: unknown opcode {opcode}")
+    }
+    nodes.push(NodeRow { span: span, origin: origin, op: op })
+    index += 1
+  }
+  Ok(nodes)
+}
+
+function decodeQuotes(value: JSONValue) -> Result<Array<GuestValue>, string> {
+  let raw = expectArray(value, "kernel.quotes")?
+  let mut quotes: Array<GuestValue> = []
+  let mut index = 0
+  while index < raw.length {
+    let row = expectArray(raw[index], "kernel.quotes[{index}]")?
+    requireLength(row, 2, "kernel.quotes[{index}]")?
+    let id = expectInt(row[0], "kernel.quotes[{index}].id")?
+    if id != index { return Err("LIT150 kernel.quotes: ids must be contiguous") }
+    quotes.push(decodeDatum(row[1], "kernel.quotes[{index}].datum")?)
+    index += 1
+  }
+  Ok(quotes)
+}
+
+function decodeCapabilities(value: JSONValue, feature: string) -> Result<CapabilityTable, string> {
+  let raw = expectArray(value, "kernel.capabilities")?
+  if feature == "hosted-kernel-h4/v0" {
+    if raw.length != 80 {
+      return Err("LIT151 kernel.capabilities: expected exact 80-row H4 denominator")
+    }
+    let canonical = match JSON.stringify(value) {
+      case Ok(text) => text
+      case Err(error) => return Err("LIT151 kernel.capabilities: cannot canonicalize H4 rows: {error}")
+    }
+    let identity = Hash.sha256(Bytes.encodeUtf8(canonical)).toHex()
+    if identity != "187a0b3de2abcc416da4e90bdbaf781bb8e7e093ef452d6780237478be44ba24" {
+      return Err("LIT151 kernel.capabilities: H4 metadata identity mismatch")
+    }
+    let mut names: Array<string> = []
+    let mut dispositions: Array<string> = []
+    let mut index = 0
+    while index < raw.length {
+      let row = expectArray(raw[index], "kernel.capabilities[{index}]")?
+      requireLength(row, 15, "kernel.capabilities[{index}]")?
+      let id = expectInt(row[0], "kernel.capabilities[{index}].id")?
+      let name = expectString(row[1], "kernel.capabilities[{index}].name")?
+      if id != index { return Err("LIT152 kernel.capabilities[{index}]: noncontiguous H4 row") }
+      names.push(name)
+      dispositions.push(expectString(row[14], "kernel.capabilities[{index}].disposition")?)
+      index += 1
+    }
+    return Ok(CapabilityTable { names: names, dispositions: dispositions })
+  }
+  let expected = if feature == "hosted-kernel-h0/v0" {
+    ["+", "-", "=", "cons", "null?", "values", "call-with-values", "apply", "vector-ref", "vector-set!"]
+  } else {
+    [
+      "+", "-", "=", "cons", "null?", "values", "call-with-values", "apply", "vector-ref", "vector-set!",
+      "call/cc", "dynamic-wind", "with-exception-handler", "raise", "raise-continuable", "error",
+      "error-object?", "error-object-message",
+    ]
+  }
+  if raw.length != expected.length { return Err("LIT151 kernel.capabilities: expected exact feature denominator") }
+  let mut names: Array<string> = []
+  let mut dispositions: Array<string> = []
+  let mut index = 0
+  while index < raw.length {
+    let row = expectArray(raw[index], "kernel.capabilities[{index}]")?
+    requireLength(row, 2, "kernel.capabilities[{index}]")?
+    let id = expectInt(row[0], "kernel.capabilities[{index}].id")?
+    let name = expectString(row[1], "kernel.capabilities[{index}].name")?
+    if id != index || name != expected[index] {
+      return Err("LIT152 kernel.capabilities[{index}]: noncanonical capability row")
+    }
+    names.push(name)
+    dispositions.push("supported")
+    index += 1
+  }
+  Ok(CapabilityTable { names: names, dispositions: dispositions })
+}
+
+function validNodeId(id: int, count: int) -> bool { id >= 0 && id < count }
+
+export function copyInts(values: Array<int>) -> Array<int> {
+  let mut copied: Array<int> = []
+  for value in values { copied.push(value) }
+  copied
+}
+
+function prependOwner(owner: int, owners: Array<int>) -> Array<int> {
+  let mut result: Array<int> = [owner]
+  for value in owners { result.push(value) }
+  result
+}
+
+function scopeSignature(owners: Array<int>) -> string {
+  let mut parts: Array<string> = []
+  for owner in owners { parts.push("{owner}") }
+  "|{parts.join(",")}"
+}
+
+function validateLexicalScopes(kernel: Kernel) -> Result<(), string> {
+  let mut signatures: Array<string> = []
+  let mut reachable: Array<bool> = []
+  let mut nodeSlot = 0
+  while nodeSlot < kernel.nodes.length {
+    signatures.push("")
+    reachable.push(false)
+    nodeSlot += 1
+  }
+  let mut work: Array<ScopeVisit> = []
+  for root in kernel.roots {
+    work.push(ScopeVisit { node: root, owners: [], ancestors: [] })
+  }
+  let mut cursor = 0
+  while cursor < work.length {
+    let visit = work[cursor]
+    cursor += 1
+    if visit.node in visit.ancestors {
+      return Err("LIT178 node[{visit.node}]: cyclic node graph")
+    }
+    let signature = scopeSignature(visit.owners)
+    if signatures[visit.node].byteLength() != 0 {
+      if signatures[visit.node] != signature {
+        return Err("LIT178 node[{visit.node}]: conflicting lexical scope reuse")
+      }
+      continue
+    }
+    signatures[visit.node] = signature
+    reachable[visit.node] = true
+    let mut descendants = copyInts(visit.ancestors)
+    descendants.push(visit.node)
+    let op = kernel.nodes[visit.node].op
+    match op {
+      case Literal(_) | GlobalRef(_, _) | Capability(_) => {}
+      case LocalRef(binder, depth, slot) => {
+        if depth < 0 || depth >= visit.owners.length || visit.owners[depth] != kernel.binders[binder].owner || slot != kernel.binders[binder].slot {
+          return Err("LIT178 node[{visit.node}]: lexical owner/depth/slot mismatch")
+        }
+      }
+      case IfNode(test, thenNode, elseNode) => {
+        work.push(ScopeVisit { node: test, owners: copyInts(visit.owners), ancestors: copyInts(descendants) })
+        work.push(ScopeVisit { node: thenNode, owners: copyInts(visit.owners), ancestors: copyInts(descendants) })
+        work.push(ScopeVisit { node: elseNode, owners: copyInts(visit.owners), ancestors: copyInts(descendants) })
+      }
+      case Begin(children) => for child in children {
+        work.push(ScopeVisit { node: child, owners: copyInts(visit.owners), ancestors: copyInts(descendants) })
+      }
+      case Lambda(_, body, _) => {
+        work.push(ScopeVisit { node: body, owners: prependOwner(visit.node, visit.owners), ancestors: copyInts(descendants) })
+      }
+      case Apply(operator, operands) => {
+        work.push(ScopeVisit { node: operator, owners: copyInts(visit.owners), ancestors: copyInts(descendants) })
+        for operand in operands {
+          work.push(ScopeVisit { node: operand, owners: copyInts(visit.owners), ancestors: copyInts(descendants) })
+        }
+      }
+      case SetLocal(binder, depth, slot, rhs) => {
+        if depth < 0 || depth >= visit.owners.length || visit.owners[depth] != kernel.binders[binder].owner || slot != kernel.binders[binder].slot {
+          return Err("LIT178 node[{visit.node}]: set! lexical owner/depth/slot mismatch")
+        }
+        work.push(ScopeVisit { node: rhs, owners: copyInts(visit.owners), ancestors: copyInts(descendants) })
+      }
+      case SetGlobal(_, _, rhs) => {
+        work.push(ScopeVisit { node: rhs, owners: copyInts(visit.owners), ancestors: copyInts(descendants) })
+      }
+      case Letrec(_, initializers, body) => {
+        let localOwners = prependOwner(visit.node, visit.owners)
+        for initializer in initializers {
+          work.push(ScopeVisit { node: initializer, owners: copyInts(localOwners), ancestors: copyInts(descendants) })
+        }
+        work.push(ScopeVisit { node: body, owners: copyInts(localOwners), ancestors: copyInts(descendants) })
+      }
+      case GuardNode(_, clauses, elseNode, body) => {
+        let localOwners = prependOwner(visit.node, visit.owners)
+        for clause in clauses {
+          work.push(ScopeVisit { node: clause.test, owners: copyInts(localOwners), ancestors: copyInts(descendants) })
+          work.push(ScopeVisit { node: clause.body, owners: copyInts(localOwners), ancestors: copyInts(descendants) })
+        }
+        if elseNode >= 0 {
+          work.push(ScopeVisit { node: elseNode, owners: copyInts(localOwners), ancestors: copyInts(descendants) })
+        }
+        work.push(ScopeVisit { node: body, owners: copyInts(visit.owners), ancestors: copyInts(descendants) })
+      }
+    }
+  }
+  let mut index = 0
+  while index < reachable.length {
+    if !reachable[index] { return Err("LIT178 node[{index}]: unreachable node row") }
+    index += 1
+  }
+  Ok(())
+}
+
+export function validateReferences(kernel: Kernel) -> Result<(), string> {
+  let nodeCount = kernel.nodes.length
+  if kernel.capabilities.length != kernel.capabilityDispositions.length {
+    return Err("LIT151 kernel.capabilities: disposition denominator mismatch")
+  }
+  let mut declaredBinders: Array<bool> = []
+  let mut binderSlot = 0
+  while binderSlot < kernel.binders.length {
+    declaredBinders.push(false)
+    binderSlot += 1
+  }
+  let mut index = 0
+  while index < kernel.binders.length {
+    let binder = kernel.binders[index]
+    if !validNodeId(binder.owner, nodeCount) {
+      return Err("LIT160 binder[{index}]: broken owner node")
+    }
+    index += 1
+  }
+  index = 0
+  while index < kernel.globals.length {
+    let global = kernel.globals[index]
+    if global.capability >= kernel.capabilities.length {
+      return Err("LIT161 global[{index}]: broken capability reference")
+    }
+    index += 1
+  }
+  index = 0
+  while index < kernel.roots.length {
+    if !validNodeId(kernel.roots[index], nodeCount) { return Err("LIT162 roots[{index}]: broken node reference") }
+    index += 1
+  }
+  if kernel.feature == "hosted-kernel-h6/v0" {
+    if kernel.roots.length == 0 { return Err("LIT190 H6 requires at least one root") }
+  } else if kernel.roots.length != 1 {
+    return Err("LIT190 core features support exactly one root")
+  }
+  index = 0
+  while index < kernel.nodes.length {
+    let op = kernel.nodes[index].op
+    match op {
+      case Literal(quote) => {
+        if quote < 0 || quote >= kernel.quotes.length { return Err("LIT163 node[{index}]: broken quote reference") }
+      }
+      case LocalRef(binder, depth, slot) => {
+        if binder < 0 || binder >= kernel.binders.length || depth < 0 || slot < 0 {
+          return Err("LIT164 node[{index}]: invalid local reference")
+        }
+        if kernel.binders[binder].slot != slot { return Err("LIT165 node[{index}]: binder/slot mismatch") }
+      }
+      case GlobalRef(global, slot) => {
+        if global < 0 || global >= kernel.globals.length || kernel.globals[global].slot != slot {
+          return Err("LIT166 node[{index}]: invalid global reference")
+        }
+      }
+      case Capability(capability) => {
+        if capability < 0 || capability >= kernel.capabilities.length {
+          return Err("LIT167 node[{index}]: invalid capability reference")
+        }
+      }
+      case IfNode(test, thenNode, elseNode) => {
+        if !validNodeId(test, nodeCount) || !validNodeId(thenNode, nodeCount) || !validNodeId(elseNode, nodeCount) {
+          return Err("LIT168 node[{index}]: broken if reference")
+        }
+      }
+      case Begin(children) => {
+        for child in children {
+          if !validNodeId(child, nodeCount) { return Err("LIT169 node[{index}]: broken begin reference") }
+        }
+      }
+      case Lambda(binders, body, rest) => {
+        if !validNodeId(body, nodeCount) { return Err("LIT170 node[{index}]: broken lambda body") }
+        let mut slot = 0
+        for binder in binders {
+          if binder < 0 || binder >= kernel.binders.length || kernel.binders[binder].owner != index || kernel.binders[binder].slot != slot {
+            return Err("LIT171 node[{index}]: invalid lambda binder layout")
+          }
+          if declaredBinders[binder] { return Err("LIT171 binder[{binder}]: declared more than once") }
+          declaredBinders[binder] = true
+          slot += 1
+        }
+        if rest != -1 {
+          if rest < 0 || rest >= kernel.binders.length || kernel.binders[rest].owner != index || kernel.binders[rest].slot != slot {
+            return Err("LIT171 node[{index}]: invalid lambda rest binder layout")
+          }
+          if declaredBinders[rest] { return Err("LIT171 binder[{rest}]: declared more than once") }
+          declaredBinders[rest] = true
+        }
+      }
+      case Apply(operator, operands) => {
+        if !validNodeId(operator, nodeCount) { return Err("LIT172 node[{index}]: broken operator reference") }
+        for operand in operands {
+          if !validNodeId(operand, nodeCount) { return Err("LIT173 node[{index}]: broken operand reference") }
+        }
+      }
+      case SetLocal(binder, depth, slot, rhs) => {
+        if binder < 0 || binder >= kernel.binders.length || depth < 0 || slot < 0 || kernel.binders[binder].slot != slot || !validNodeId(rhs, nodeCount) {
+          return Err("LIT174 node[{index}]: invalid set-local reference")
+        }
+      }
+      case SetGlobal(global, slot, rhs) => {
+        if global < 0 || global >= kernel.globals.length || kernel.globals[global].slot != slot || !validNodeId(rhs, nodeCount) {
+          return Err("LIT175 node[{index}]: invalid set-global reference")
+        }
+      }
+      case Letrec(binders, initializers, body) => {
+        if binders.length != initializers.length || !validNodeId(body, nodeCount) {
+          return Err("LIT176 node[{index}]: invalid letrec shape")
+        }
+        let mut slot = 0
+        while slot < binders.length {
+          let binder = binders[slot]
+          if binder < 0 || binder >= kernel.binders.length || kernel.binders[binder].owner != index || kernel.binders[binder].slot != slot || !validNodeId(initializers[slot], nodeCount) {
+            return Err("LIT177 node[{index}]: invalid letrec binder layout")
+          }
+          if declaredBinders[binder] { return Err("LIT177 binder[{binder}]: declared more than once") }
+          declaredBinders[binder] = true
+          slot += 1
+        }
+      }
+      case GuardNode(binders, clauses, elseNode, body) => {
+        if binders.length != 1 || !validNodeId(body, nodeCount) || (elseNode != -1 && !validNodeId(elseNode, nodeCount)) {
+          return Err("LIT179 node[{index}]: invalid guard shape")
+        }
+        let binder = binders[0]
+        if binder < 0 || binder >= kernel.binders.length || kernel.binders[binder].owner != index || kernel.binders[binder].slot != 0 {
+          return Err("LIT179 node[{index}]: invalid guard binder layout")
+        }
+        if declaredBinders[binder] { return Err("LIT179 binder[{binder}]: declared more than once") }
+        declaredBinders[binder] = true
+        for clause in clauses {
+          if !validNodeId(clause.test, nodeCount) || !validNodeId(clause.body, nodeCount) {
+            return Err("LIT179 node[{index}]: broken guard clause reference")
+          }
+        }
+      }
+    }
+    index += 1
+  }
+  index = 0
+  while index < declaredBinders.length {
+    if !declaredBinders[index] { return Err("LIT178 binder[{index}]: row is not declared by its owner") }
+    index += 1
+  }
+  validateLexicalScopes(kernel)
+}
+
+export function decodeKernelRequest(parsed: JSONValue) -> Result<KernelRequest, string> {
+  let request = expectArray(parsed, "request")?
+  requireLength(request, 4, "request")?
+  if expectString(request[0], "request.tag")? != "lispex.hosted-kernel-request/v0" {
+    return Err("LIT103 request: unsupported version")
+  }
+  let invocationId = expectString(request[1], "request.invocation-id")?
+  if invocationId.byteLength() == 0 { return Err("LIT104 request: empty invocation id") }
+  let limits = expectArray(request[3], "request.limits")?
+  requireLength(limits, 2, "request.limits")?
+  let transitionLimit = expectInt(limits[0], "request.limits.transition")?
+  let outputLimit = expectInt(limits[1], "request.limits.output")?
+  if transitionLimit <= 0 || outputLimit <= 0 { return Err("LIT105 request: limits must be positive") }
+
+  let raw = expectArray(request[2], "kernel")?
+  requireLength(raw, 13, "kernel")?
+  if expectString(raw[0], "kernel.tag")? != "lispex.hosted-kernel/v0" {
+    return Err("LIT106 kernel: unsupported schema")
+  }
+  if expectString(raw[1], "kernel.profile")? != "lispex-r7rs-small-pinned/v1.4" {
+    return Err("LIT107 kernel: unsupported executable profile")
+  }
+  let feature = expectString(raw[2], "kernel.feature")?
+  if feature != "hosted-kernel-h0/v0" && feature != "hosted-kernel-h3/v0" && feature != "hosted-kernel-h4/v0" {
+    return Err("LIT108 kernel: unsupported feature set")
+  }
+  let sourceId = expectString(raw[3], "kernel.source-id")?
+  if !pathNeutral(sourceId) { return Err("LIT109 kernel: source id is empty or host-path-shaped") }
+  let sourceSha = expectString(raw[4], "kernel.source-sha256")?
+  if !validSha256(sourceSha) { return Err("LIT109 kernel: invalid source sha256") }
+
+  let spans = decodeSpans(raw[5])?
+  let origins = decodeOrigins(raw[6], spans.length)?
+  let binders = decodeBinders(raw[7], origins.length)?
+  let globals = decodeGlobals(raw[8], origins.length)?
+  let roots = decodeIntVector(raw[9], "kernel.roots")?
+  let nodes = decodeNodes(raw[10], spans.length, origins.length, feature)?
+  let quotes = decodeQuotes(raw[11])?
+  let capabilityTable = decodeCapabilities(raw[12], feature)?
+  let kernel = Kernel {
+    feature: feature,
+    sourceId: sourceId,
+    sourceSha: sourceSha,
+    spans: spans,
+    origins: origins,
+    binders: binders,
+    globals: globals,
+    roots: roots,
+    nodes: nodes,
+    quotes: quotes,
+    capabilities: capabilityTable.names,
+    capabilityDispositions: capabilityTable.dispositions,
+  }
+  validateReferences(kernel)?
+  Ok(KernelRequest {
+    invocationId: invocationId,
+    kernel: kernel,
+    transitionLimit: transitionLimit,
+    outputLimit: outputLimit,
+  })
+}
+
+export function decodeByteVector(value: JSONValue, label: string) -> Result<Array<int>, string> {
+  let raw = expectArray(value, label)?
+  let mut bytes: Array<int> = []
+  let mut index = 0
+  while index < raw.length {
+    let byte = expectInt(raw[index], "{label}[{index}]")?
+    if byte < 0 || byte > 255 { return Err("LIT180 {label}: byte outside 0..255") }
+    bytes.push(byte)
+    index += 1
+  }
+  Ok(bytes)
+}
+
+export function bytesValue(bytes: Array<int>, label: string) -> Result<Bytes, string> {
+  match Bytes.fromArray(bytes) {
+    case Ok(value) => Ok(value)
+    case Err(error) => Err("LIT180 {label}: {error}")
+  }
+}
+
+export function bytesSha256(bytes: Array<int>, label: string) -> Result<string, string> {
+  Ok(Hash.sha256(bytesValue(bytes, label)?).toHex())
+}

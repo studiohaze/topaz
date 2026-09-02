@@ -1,0 +1,6 @@
+
+function f() -> int {
+    let x = 7
+    x[0]
+}
+f()

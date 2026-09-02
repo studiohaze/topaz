@@ -1,0 +1,6275 @@
+{
+  "schema": "lispex.primitive-capabilities/v2",
+  "profile": "lispex-profile-1.5",
+  "language_contract": "lispex-r7rs-small-pinned/v1.4",
+  "status": "implementation-in-progress",
+  "source_inventory": {
+    "tag": "lispex.executable-builtin-inventory/v0",
+    "profile": "lispex-r7rs-small-pinned/v1.4",
+    "row_count": 205,
+    "order": "guest-name-codepoint-order",
+    "prior_contract": "hosted/contracts/primitive-capabilities.v1.json",
+    "prior_schema": "lispex.hosted-primitive-capabilities/v1"
+  },
+  "release_gate": {
+    "required_supported_rows": 205,
+    "required_unsupported_rows": 0,
+    "required_guest_calling_rows": 18,
+    "required_guest_calling_route": "guest-machine-dispatch",
+    "forbidden_fallback_calls": 0
+  },
+  "baseline": {
+    "rust_supported": 205,
+    "lil_supported": 205,
+    "lit_supported": 204,
+    "lil_unsupported": 0,
+    "lit_unsupported": 1
+  },
+  "columns": [
+    "capability_id",
+    "guest_name",
+    "runtime_identity_group",
+    "intrinsic_id",
+    "arity",
+    "argument_codecs",
+    "result_codec",
+    "value_cardinality",
+    "diagnostic_family",
+    "determinism_class",
+    "may_call_guest_procedure",
+    "logical_cost_model",
+    "support_state",
+    "implementation_route",
+    "product_test_family",
+    "version"
+  ],
+  "rows": [
+    [
+      0,
+      "!=",
+      "!=",
+      "equality/not-equal",
+      "2",
+      [
+        "value",
+        "value"
+      ],
+      "boolean",
+      "exactly-one",
+      [
+        "HK294"
+      ],
+      "deterministic-pinned",
+      false,
+      "structural-equality",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-6-remaining-primitive",
+      2
+    ],
+    [
+      1,
+      "%",
+      "%",
+      "compat/deprecated-percent",
+      "2",
+      [
+        "integer",
+        "integer"
+      ],
+      "integer",
+      "exactly-one",
+      [
+        "W330",
+        "HK299"
+      ],
+      "deterministic-pinned",
+      false,
+      "exact-integer-arithmetic-plus-warning",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-4-numeric",
+      2
+    ],
+    [
+      2,
+      "*",
+      "*",
+      "numeric/multiply",
+      "0+",
+      [
+        "number..."
+      ],
+      "number",
+      "exactly-one",
+      [
+        "HK250"
+      ],
+      "deterministic-pinned",
+      false,
+      "linear-arguments",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "pinned-deterministic-host-primitive",
+        "lit": "pinned-deterministic-host-primitive"
+      },
+      "j57-4-numeric",
+      2
+    ],
+    [
+      3,
+      "+",
+      "+",
+      "numeric/add",
+      "0+",
+      [
+        "number..."
+      ],
+      "number",
+      "exactly-one",
+      [
+        "HK220"
+      ],
+      "deterministic-pinned",
+      false,
+      "linear-arguments",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "pinned-deterministic-host-primitive",
+        "lit": "pinned-deterministic-host-primitive"
+      },
+      "j57-4-numeric",
+      2
+    ],
+    [
+      4,
+      "-",
+      "-",
+      "numeric/subtract",
+      "1+",
+      [
+        "number..."
+      ],
+      "number",
+      "exactly-one",
+      [
+        "HK221"
+      ],
+      "deterministic-pinned",
+      false,
+      "linear-arguments",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "pinned-deterministic-host-primitive",
+        "lit": "pinned-deterministic-host-primitive"
+      },
+      "j57-4-numeric",
+      2
+    ],
+    [
+      5,
+      "/",
+      "/",
+      "numeric/divide",
+      "1+",
+      [
+        "number..."
+      ],
+      "number",
+      "exactly-one",
+      [
+        "HK251",
+        "HK252"
+      ],
+      "deterministic-pinned",
+      false,
+      "linear-arguments",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "pinned-deterministic-host-primitive",
+        "lit": "pinned-deterministic-host-primitive"
+      },
+      "j57-4-numeric",
+      2
+    ],
+    [
+      6,
+      "<",
+      "<",
+      "numeric/less",
+      "2+",
+      [
+        "number..."
+      ],
+      "boolean",
+      "exactly-one",
+      [
+        "HK253"
+      ],
+      "deterministic-pinned",
+      false,
+      "linear-arguments",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "pinned-deterministic-host-primitive",
+        "lit": "pinned-deterministic-host-primitive"
+      },
+      "j57-4-numeric",
+      2
+    ],
+    [
+      7,
+      "<=",
+      "<=",
+      "numeric/less-or-equal",
+      "2+",
+      [
+        "number..."
+      ],
+      "boolean",
+      "exactly-one",
+      [
+        "HK253"
+      ],
+      "deterministic-pinned",
+      false,
+      "linear-arguments",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "pinned-deterministic-host-primitive",
+        "lit": "pinned-deterministic-host-primitive"
+      },
+      "j57-4-numeric",
+      2
+    ],
+    [
+      8,
+      "=",
+      "=",
+      "numeric/equal",
+      "2+",
+      [
+        "number..."
+      ],
+      "boolean",
+      "exactly-one",
+      [
+        "HK222"
+      ],
+      "deterministic-pinned",
+      false,
+      "linear-arguments",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "pinned-deterministic-host-primitive",
+        "lit": "pinned-deterministic-host-primitive"
+      },
+      "j57-4-numeric",
+      2
+    ],
+    [
+      9,
+      "==",
+      "==",
+      "equality/equal",
+      "2",
+      [
+        "value",
+        "value"
+      ],
+      "boolean",
+      "exactly-one",
+      [
+        "HK261"
+      ],
+      "deterministic-pinned",
+      false,
+      "cycle-safe-structural",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-4-numeric",
+      2
+    ],
+    [
+      10,
+      ">",
+      ">",
+      "numeric/greater",
+      "2+",
+      [
+        "number..."
+      ],
+      "boolean",
+      "exactly-one",
+      [
+        "HK253"
+      ],
+      "deterministic-pinned",
+      false,
+      "linear-arguments",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "pinned-deterministic-host-primitive",
+        "lit": "pinned-deterministic-host-primitive"
+      },
+      "j57-4-numeric",
+      2
+    ],
+    [
+      11,
+      ">=",
+      ">=",
+      "numeric/greater-or-equal",
+      "2+",
+      [
+        "number..."
+      ],
+      "boolean",
+      "exactly-one",
+      [
+        "HK253"
+      ],
+      "deterministic-pinned",
+      false,
+      "linear-arguments",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "pinned-deterministic-host-primitive",
+        "lit": "pinned-deterministic-host-primitive"
+      },
+      "j57-4-numeric",
+      2
+    ],
+    [
+      12,
+      "abs",
+      "abs",
+      "numeric/abs",
+      "1",
+      [
+        "number"
+      ],
+      "number",
+      "exactly-one",
+      [
+        "HK293"
+      ],
+      "deterministic-pinned",
+      false,
+      "derived-numeric-kernel",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-4-numeric",
+      2
+    ],
+    [
+      13,
+      "all?",
+      "all?",
+      "hof/all",
+      "2",
+      [
+        "procedure",
+        "proper-list"
+      ],
+      "boolean",
+      "exactly-one",
+      [
+        "HK300"
+      ],
+      "deterministic-pinned",
+      true,
+      "linear-collection-and-callbacks",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-3-guest-callback",
+      2
+    ],
+    [
+      14,
+      "any?",
+      "any?",
+      "hof/any",
+      "2",
+      [
+        "procedure",
+        "proper-list"
+      ],
+      "boolean",
+      "exactly-one",
+      [
+        "HK300"
+      ],
+      "deterministic-pinned",
+      true,
+      "linear-collection-and-callbacks",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-3-guest-callback",
+      2
+    ],
+    [
+      15,
+      "append",
+      "append",
+      "aggregate/append",
+      "0+",
+      [
+        "list...",
+        "value"
+      ],
+      "value",
+      "exactly-one",
+      [
+        "HK258"
+      ],
+      "deterministic-pinned",
+      false,
+      "linear-copied-spines",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-5-list-search",
+      2
+    ],
+    [
+      16,
+      "apply",
+      "apply",
+      "control/apply",
+      "2+",
+      [
+        "procedure",
+        "value...",
+        "proper-list"
+      ],
+      "value-packet",
+      "any-values",
+      [
+        "HK211",
+        "HK226"
+      ],
+      "deterministic-pinned",
+      true,
+      "linear-arguments-plus-machine-dispatch",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-3-guest-callback",
+      2
+    ],
+    [
+      17,
+      "assoc",
+      "assoc",
+      "search/assoc",
+      "2",
+      [
+        "value",
+        "alist"
+      ],
+      "pair-or-false",
+      "exactly-one",
+      [
+        "HK294"
+      ],
+      "deterministic-pinned",
+      false,
+      "linear-alist",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-5-list-search",
+      2
+    ],
+    [
+      18,
+      "assq",
+      "assq",
+      "search/assq",
+      "2",
+      [
+        "value",
+        "alist"
+      ],
+      "pair-or-false",
+      "exactly-one",
+      [
+        "HK294"
+      ],
+      "deterministic-pinned",
+      false,
+      "linear-alist",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-5-list-search",
+      2
+    ],
+    [
+      19,
+      "assv",
+      "assv",
+      "search/assv",
+      "2",
+      [
+        "value",
+        "alist"
+      ],
+      "pair-or-false",
+      "exactly-one",
+      [
+        "HK294"
+      ],
+      "deterministic-pinned",
+      false,
+      "linear-alist",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-5-list-search",
+      2
+    ],
+    [
+      20,
+      "boolean=?",
+      "boolean=?",
+      "equality/boolean",
+      "2+",
+      [
+        "boolean..."
+      ],
+      "boolean",
+      "exactly-one",
+      [
+        "HK293"
+      ],
+      "deterministic-pinned",
+      false,
+      "linear-arguments",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-6-remaining-primitive",
+      2
+    ],
+    [
+      21,
+      "boolean?",
+      "boolean?",
+      "predicate/boolean",
+      "1",
+      [
+        "value"
+      ],
+      "boolean",
+      "exactly-one",
+      [
+        "HK254"
+      ],
+      "deterministic-pinned",
+      false,
+      "constant",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-6-remaining-primitive",
+      2
+    ],
+    [
+      22,
+      "bytevector",
+      "bytevector",
+      "aggregate/bytevector",
+      "0+",
+      [
+        "byte..."
+      ],
+      "bytevector",
+      "exactly-one",
+      [
+        "HK266"
+      ],
+      "deterministic-pinned",
+      false,
+      "linear-arguments",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-6-remaining-primitive",
+      2
+    ],
+    [
+      23,
+      "bytevector-length",
+      "bytevector-length",
+      "aggregate/bytevector-length",
+      "1",
+      [
+        "bytevector"
+      ],
+      "exact-integer",
+      "exactly-one",
+      [
+        "HK267"
+      ],
+      "deterministic-pinned",
+      false,
+      "constant",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-6-remaining-primitive",
+      2
+    ],
+    [
+      24,
+      "bytevector-u8-ref",
+      "bytevector-u8-ref",
+      "aggregate/bytevector-ref",
+      "2",
+      [
+        "bytevector",
+        "exact-nonnegative-integer"
+      ],
+      "byte",
+      "exactly-one",
+      [
+        "HK268"
+      ],
+      "deterministic-pinned",
+      false,
+      "constant",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-6-remaining-primitive",
+      2
+    ],
+    [
+      25,
+      "bytevector?",
+      "bytevector?",
+      "predicate/bytevector",
+      "1",
+      [
+        "value"
+      ],
+      "boolean",
+      "exactly-one",
+      [
+        "HK254"
+      ],
+      "deterministic-pinned",
+      false,
+      "constant",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-6-remaining-primitive",
+      2
+    ],
+    [
+      26,
+      "caaaar",
+      "caaaar",
+      "aggregate/cxr/caaaar",
+      "1",
+      [
+        "pair-path"
+      ],
+      "value",
+      "exactly-one",
+      [
+        "HK292"
+      ],
+      "deterministic-pinned",
+      false,
+      "bounded-cxr-depth",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-5-list-search",
+      2
+    ],
+    [
+      27,
+      "caaadr",
+      "caaadr",
+      "aggregate/cxr/caaadr",
+      "1",
+      [
+        "pair-path"
+      ],
+      "value",
+      "exactly-one",
+      [
+        "HK292"
+      ],
+      "deterministic-pinned",
+      false,
+      "bounded-cxr-depth",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-5-list-search",
+      2
+    ],
+    [
+      28,
+      "caaar",
+      "caaar",
+      "aggregate/cxr/caaar",
+      "1",
+      [
+        "pair-path"
+      ],
+      "value",
+      "exactly-one",
+      [
+        "HK292"
+      ],
+      "deterministic-pinned",
+      false,
+      "bounded-cxr-depth",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-5-list-search",
+      2
+    ],
+    [
+      29,
+      "caadar",
+      "caadar",
+      "aggregate/cxr/caadar",
+      "1",
+      [
+        "pair-path"
+      ],
+      "value",
+      "exactly-one",
+      [
+        "HK292"
+      ],
+      "deterministic-pinned",
+      false,
+      "bounded-cxr-depth",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-5-list-search",
+      2
+    ],
+    [
+      30,
+      "caaddr",
+      "caaddr",
+      "aggregate/cxr/caaddr",
+      "1",
+      [
+        "pair-path"
+      ],
+      "value",
+      "exactly-one",
+      [
+        "HK292"
+      ],
+      "deterministic-pinned",
+      false,
+      "bounded-cxr-depth",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-5-list-search",
+      2
+    ],
+    [
+      31,
+      "caadr",
+      "caadr",
+      "aggregate/cxr/caadr",
+      "1",
+      [
+        "pair-path"
+      ],
+      "value",
+      "exactly-one",
+      [
+        "HK292"
+      ],
+      "deterministic-pinned",
+      false,
+      "bounded-cxr-depth",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-5-list-search",
+      2
+    ],
+    [
+      32,
+      "caar",
+      "caar",
+      "aggregate/cxr/caar",
+      "1",
+      [
+        "pair-path"
+      ],
+      "value",
+      "exactly-one",
+      [
+        "HK292"
+      ],
+      "deterministic-pinned",
+      false,
+      "bounded-cxr-depth",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-5-list-search",
+      2
+    ],
+    [
+      33,
+      "cadaar",
+      "cadaar",
+      "aggregate/cxr/cadaar",
+      "1",
+      [
+        "pair-path"
+      ],
+      "value",
+      "exactly-one",
+      [
+        "HK292"
+      ],
+      "deterministic-pinned",
+      false,
+      "bounded-cxr-depth",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-5-list-search",
+      2
+    ],
+    [
+      34,
+      "cadadr",
+      "cadadr",
+      "aggregate/cxr/cadadr",
+      "1",
+      [
+        "pair-path"
+      ],
+      "value",
+      "exactly-one",
+      [
+        "HK292"
+      ],
+      "deterministic-pinned",
+      false,
+      "bounded-cxr-depth",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-5-list-search",
+      2
+    ],
+    [
+      35,
+      "cadar",
+      "cadar",
+      "aggregate/cxr/cadar",
+      "1",
+      [
+        "pair-path"
+      ],
+      "value",
+      "exactly-one",
+      [
+        "HK292"
+      ],
+      "deterministic-pinned",
+      false,
+      "bounded-cxr-depth",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-5-list-search",
+      2
+    ],
+    [
+      36,
+      "caddar",
+      "caddar",
+      "aggregate/cxr/caddar",
+      "1",
+      [
+        "pair-path"
+      ],
+      "value",
+      "exactly-one",
+      [
+        "HK292"
+      ],
+      "deterministic-pinned",
+      false,
+      "bounded-cxr-depth",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-5-list-search",
+      2
+    ],
+    [
+      37,
+      "cadddr",
+      "cadddr",
+      "aggregate/cxr/cadddr",
+      "1",
+      [
+        "pair-path"
+      ],
+      "value",
+      "exactly-one",
+      [
+        "HK292"
+      ],
+      "deterministic-pinned",
+      false,
+      "bounded-cxr-depth",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-5-list-search",
+      2
+    ],
+    [
+      38,
+      "caddr",
+      "caddr",
+      "aggregate/cxr/caddr",
+      "1",
+      [
+        "pair-path"
+      ],
+      "value",
+      "exactly-one",
+      [
+        "HK292"
+      ],
+      "deterministic-pinned",
+      false,
+      "bounded-cxr-depth",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-5-list-search",
+      2
+    ],
+    [
+      39,
+      "cadr",
+      "cadr",
+      "aggregate/cadr",
+      "1",
+      [
+        "pair"
+      ],
+      "value",
+      "exactly-one",
+      [
+        "HK291"
+      ],
+      "deterministic-pinned",
+      false,
+      "constant",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "unsupported-loud"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "unsupported-loud"
+      },
+      "j57-5-list-search",
+      2
+    ],
+    [
+      40,
+      "call-with-current-continuation",
+      "call-with-current-continuation",
+      "control/upward-escape",
+      "1",
+      [
+        "procedure"
+      ],
+      "value-packet",
+      "any-values",
+      [
+        "E340",
+        "HK234"
+      ],
+      "deterministic-pinned",
+      true,
+      "machine-transfer",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-3-guest-callback",
+      2
+    ],
+    [
+      41,
+      "call-with-values",
+      "call-with-values",
+      "control/call-with-values",
+      "2",
+      [
+        "procedure",
+        "procedure"
+      ],
+      "value-packet",
+      "any-values",
+      [
+        "HK225"
+      ],
+      "deterministic-pinned",
+      true,
+      "machine-dispatch",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-3-guest-callback",
+      2
+    ],
+    [
+      42,
+      "call/cc",
+      "call-with-current-continuation",
+      "control/upward-escape",
+      "1",
+      [
+        "procedure"
+      ],
+      "value-packet",
+      "any-values",
+      [
+        "E340",
+        "HK234"
+      ],
+      "deterministic-pinned",
+      true,
+      "machine-transfer",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-3-guest-callback",
+      2
+    ],
+    [
+      43,
+      "car",
+      "car",
+      "aggregate/car",
+      "1",
+      [
+        "pair"
+      ],
+      "value",
+      "exactly-one",
+      [
+        "HK255"
+      ],
+      "deterministic-pinned",
+      false,
+      "constant",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-5-list-search",
+      2
+    ],
+    [
+      44,
+      "cdaaar",
+      "cdaaar",
+      "aggregate/cxr/cdaaar",
+      "1",
+      [
+        "pair-path"
+      ],
+      "value",
+      "exactly-one",
+      [
+        "HK292"
+      ],
+      "deterministic-pinned",
+      false,
+      "bounded-cxr-depth",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-5-list-search",
+      2
+    ],
+    [
+      45,
+      "cdaadr",
+      "cdaadr",
+      "aggregate/cxr/cdaadr",
+      "1",
+      [
+        "pair-path"
+      ],
+      "value",
+      "exactly-one",
+      [
+        "HK292"
+      ],
+      "deterministic-pinned",
+      false,
+      "bounded-cxr-depth",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-5-list-search",
+      2
+    ],
+    [
+      46,
+      "cdaar",
+      "cdaar",
+      "aggregate/cxr/cdaar",
+      "1",
+      [
+        "pair-path"
+      ],
+      "value",
+      "exactly-one",
+      [
+        "HK292"
+      ],
+      "deterministic-pinned",
+      false,
+      "bounded-cxr-depth",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-5-list-search",
+      2
+    ],
+    [
+      47,
+      "cdadar",
+      "cdadar",
+      "aggregate/cxr/cdadar",
+      "1",
+      [
+        "pair-path"
+      ],
+      "value",
+      "exactly-one",
+      [
+        "HK292"
+      ],
+      "deterministic-pinned",
+      false,
+      "bounded-cxr-depth",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-5-list-search",
+      2
+    ],
+    [
+      48,
+      "cdaddr",
+      "cdaddr",
+      "aggregate/cxr/cdaddr",
+      "1",
+      [
+        "pair-path"
+      ],
+      "value",
+      "exactly-one",
+      [
+        "HK292"
+      ],
+      "deterministic-pinned",
+      false,
+      "bounded-cxr-depth",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-5-list-search",
+      2
+    ],
+    [
+      49,
+      "cdadr",
+      "cdadr",
+      "aggregate/cxr/cdadr",
+      "1",
+      [
+        "pair-path"
+      ],
+      "value",
+      "exactly-one",
+      [
+        "HK292"
+      ],
+      "deterministic-pinned",
+      false,
+      "bounded-cxr-depth",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-5-list-search",
+      2
+    ],
+    [
+      50,
+      "cdar",
+      "cdar",
+      "aggregate/cxr/cdar",
+      "1",
+      [
+        "pair-path"
+      ],
+      "value",
+      "exactly-one",
+      [
+        "HK292"
+      ],
+      "deterministic-pinned",
+      false,
+      "bounded-cxr-depth",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-5-list-search",
+      2
+    ],
+    [
+      51,
+      "cddaar",
+      "cddaar",
+      "aggregate/cxr/cddaar",
+      "1",
+      [
+        "pair-path"
+      ],
+      "value",
+      "exactly-one",
+      [
+        "HK292"
+      ],
+      "deterministic-pinned",
+      false,
+      "bounded-cxr-depth",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-5-list-search",
+      2
+    ],
+    [
+      52,
+      "cddadr",
+      "cddadr",
+      "aggregate/cxr/cddadr",
+      "1",
+      [
+        "pair-path"
+      ],
+      "value",
+      "exactly-one",
+      [
+        "HK292"
+      ],
+      "deterministic-pinned",
+      false,
+      "bounded-cxr-depth",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-5-list-search",
+      2
+    ],
+    [
+      53,
+      "cddar",
+      "cddar",
+      "aggregate/cxr/cddar",
+      "1",
+      [
+        "pair-path"
+      ],
+      "value",
+      "exactly-one",
+      [
+        "HK292"
+      ],
+      "deterministic-pinned",
+      false,
+      "bounded-cxr-depth",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-5-list-search",
+      2
+    ],
+    [
+      54,
+      "cdddar",
+      "cdddar",
+      "aggregate/cxr/cdddar",
+      "1",
+      [
+        "pair-path"
+      ],
+      "value",
+      "exactly-one",
+      [
+        "HK292"
+      ],
+      "deterministic-pinned",
+      false,
+      "bounded-cxr-depth",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-5-list-search",
+      2
+    ],
+    [
+      55,
+      "cddddr",
+      "cddddr",
+      "aggregate/cxr/cddddr",
+      "1",
+      [
+        "pair-path"
+      ],
+      "value",
+      "exactly-one",
+      [
+        "HK292"
+      ],
+      "deterministic-pinned",
+      false,
+      "bounded-cxr-depth",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-5-list-search",
+      2
+    ],
+    [
+      56,
+      "cdddr",
+      "cdddr",
+      "aggregate/cxr/cdddr",
+      "1",
+      [
+        "pair-path"
+      ],
+      "value",
+      "exactly-one",
+      [
+        "HK292"
+      ],
+      "deterministic-pinned",
+      false,
+      "bounded-cxr-depth",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-5-list-search",
+      2
+    ],
+    [
+      57,
+      "cddr",
+      "cddr",
+      "aggregate/cxr/cddr",
+      "1",
+      [
+        "pair-path"
+      ],
+      "value",
+      "exactly-one",
+      [
+        "HK292"
+      ],
+      "deterministic-pinned",
+      false,
+      "bounded-cxr-depth",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-5-list-search",
+      2
+    ],
+    [
+      58,
+      "cdr",
+      "cdr",
+      "aggregate/cdr",
+      "1",
+      [
+        "pair"
+      ],
+      "value",
+      "exactly-one",
+      [
+        "HK256"
+      ],
+      "deterministic-pinned",
+      false,
+      "constant",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-5-list-search",
+      2
+    ],
+    [
+      59,
+      "ceiling",
+      "ceiling",
+      "numeric/ceiling",
+      "1",
+      [
+        "number"
+      ],
+      "integer-valued-number",
+      "exactly-one",
+      [
+        "HK298"
+      ],
+      "deterministic-pinned",
+      false,
+      "numeric-kernel",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "pinned-deterministic-host-primitive",
+        "lit": "pinned-deterministic-host-primitive"
+      },
+      "j57-4-numeric",
+      2
+    ],
+    [
+      60,
+      "char->integer",
+      "char->integer",
+      "char/codepoint",
+      "1",
+      [
+        "char"
+      ],
+      "exact-integer",
+      "exactly-one",
+      [
+        "HK274"
+      ],
+      "deterministic-pinned",
+      false,
+      "constant",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "pinned-deterministic-host-primitive",
+        "lit": "pinned-deterministic-host-primitive"
+      },
+      "j57-6-remaining-primitive",
+      2
+    ],
+    [
+      61,
+      "char-alphabetic?",
+      "char-alphabetic?",
+      "char/alphabetic",
+      "1",
+      [
+        "char"
+      ],
+      "boolean",
+      "exactly-one",
+      [
+        "HK280"
+      ],
+      "deterministic-pinned",
+      false,
+      "constant",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "pinned-deterministic-host-primitive",
+        "lit": "pinned-deterministic-host-primitive"
+      },
+      "j57-6-remaining-primitive",
+      2
+    ],
+    [
+      62,
+      "char-ci<=?",
+      "char-ci<=?",
+      "char/ci-less-or-equal",
+      "2+",
+      [
+        "char..."
+      ],
+      "boolean",
+      "exactly-one",
+      [
+        "HK297"
+      ],
+      "deterministic-pinned",
+      false,
+      "linear-arguments",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "pinned-deterministic-host-primitive",
+        "lit": "pinned-deterministic-host-primitive"
+      },
+      "j57-6-remaining-primitive",
+      2
+    ],
+    [
+      63,
+      "char-ci<?",
+      "char-ci<?",
+      "char/ci-less",
+      "2+",
+      [
+        "char..."
+      ],
+      "boolean",
+      "exactly-one",
+      [
+        "HK297"
+      ],
+      "deterministic-pinned",
+      false,
+      "linear-arguments",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "pinned-deterministic-host-primitive",
+        "lit": "pinned-deterministic-host-primitive"
+      },
+      "j57-6-remaining-primitive",
+      2
+    ],
+    [
+      64,
+      "char-ci=?",
+      "char-ci=?",
+      "char/ci-equal",
+      "2+",
+      [
+        "char..."
+      ],
+      "boolean",
+      "exactly-one",
+      [
+        "HK297"
+      ],
+      "deterministic-pinned",
+      false,
+      "linear-arguments",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "pinned-deterministic-host-primitive",
+        "lit": "pinned-deterministic-host-primitive"
+      },
+      "j57-6-remaining-primitive",
+      2
+    ],
+    [
+      65,
+      "char-ci>=?",
+      "char-ci>=?",
+      "char/ci-greater-or-equal",
+      "2+",
+      [
+        "char..."
+      ],
+      "boolean",
+      "exactly-one",
+      [
+        "HK297"
+      ],
+      "deterministic-pinned",
+      false,
+      "linear-arguments",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "pinned-deterministic-host-primitive",
+        "lit": "pinned-deterministic-host-primitive"
+      },
+      "j57-6-remaining-primitive",
+      2
+    ],
+    [
+      66,
+      "char-ci>?",
+      "char-ci>?",
+      "char/ci-greater",
+      "2+",
+      [
+        "char..."
+      ],
+      "boolean",
+      "exactly-one",
+      [
+        "HK297"
+      ],
+      "deterministic-pinned",
+      false,
+      "linear-arguments",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "pinned-deterministic-host-primitive",
+        "lit": "pinned-deterministic-host-primitive"
+      },
+      "j57-6-remaining-primitive",
+      2
+    ],
+    [
+      67,
+      "char-downcase",
+      "char-downcase",
+      "char/downcase",
+      "1",
+      [
+        "char"
+      ],
+      "char",
+      "exactly-one",
+      [
+        "HK297"
+      ],
+      "deterministic-pinned",
+      false,
+      "unicode-char",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "pinned-deterministic-host-primitive",
+        "lit": "pinned-deterministic-host-primitive"
+      },
+      "j57-6-remaining-primitive",
+      2
+    ],
+    [
+      68,
+      "char-foldcase",
+      "char-foldcase",
+      "char/foldcase",
+      "1",
+      [
+        "char"
+      ],
+      "char",
+      "exactly-one",
+      [
+        "HK297"
+      ],
+      "deterministic-pinned",
+      false,
+      "unicode-char",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "pinned-deterministic-host-primitive",
+        "lit": "pinned-deterministic-host-primitive"
+      },
+      "j57-6-remaining-primitive",
+      2
+    ],
+    [
+      69,
+      "char-lower-case?",
+      "char-lower-case?",
+      "char/lower-case",
+      "1",
+      [
+        "char"
+      ],
+      "boolean",
+      "exactly-one",
+      [
+        "HK297"
+      ],
+      "deterministic-pinned",
+      false,
+      "unicode-char",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "pinned-deterministic-host-primitive",
+        "lit": "pinned-deterministic-host-primitive"
+      },
+      "j57-6-remaining-primitive",
+      2
+    ],
+    [
+      70,
+      "char-numeric?",
+      "char-numeric?",
+      "char/numeric",
+      "1",
+      [
+        "char"
+      ],
+      "boolean",
+      "exactly-one",
+      [
+        "HK281"
+      ],
+      "deterministic-pinned",
+      false,
+      "constant",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "pinned-deterministic-host-primitive",
+        "lit": "pinned-deterministic-host-primitive"
+      },
+      "j57-6-remaining-primitive",
+      2
+    ],
+    [
+      71,
+      "char-upcase",
+      "char-upcase",
+      "char/upcase",
+      "1",
+      [
+        "char"
+      ],
+      "char",
+      "exactly-one",
+      [
+        "HK297"
+      ],
+      "deterministic-pinned",
+      false,
+      "unicode-char",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "pinned-deterministic-host-primitive",
+        "lit": "pinned-deterministic-host-primitive"
+      },
+      "j57-6-remaining-primitive",
+      2
+    ],
+    [
+      72,
+      "char-upper-case?",
+      "char-upper-case?",
+      "char/upper-case",
+      "1",
+      [
+        "char"
+      ],
+      "boolean",
+      "exactly-one",
+      [
+        "HK297"
+      ],
+      "deterministic-pinned",
+      false,
+      "unicode-char",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "pinned-deterministic-host-primitive",
+        "lit": "pinned-deterministic-host-primitive"
+      },
+      "j57-6-remaining-primitive",
+      2
+    ],
+    [
+      73,
+      "char-whitespace?",
+      "char-whitespace?",
+      "char/whitespace",
+      "1",
+      [
+        "char"
+      ],
+      "boolean",
+      "exactly-one",
+      [
+        "HK297"
+      ],
+      "deterministic-pinned",
+      false,
+      "unicode-char",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "pinned-deterministic-host-primitive",
+        "lit": "pinned-deterministic-host-primitive"
+      },
+      "j57-6-remaining-primitive",
+      2
+    ],
+    [
+      74,
+      "char<=?",
+      "char<=?",
+      "char/less-or-equal",
+      "2+",
+      [
+        "char..."
+      ],
+      "boolean",
+      "exactly-one",
+      [
+        "HK295"
+      ],
+      "deterministic-pinned",
+      false,
+      "linear-arguments",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-6-remaining-primitive",
+      2
+    ],
+    [
+      75,
+      "char<?",
+      "char<?",
+      "char/less",
+      "2+",
+      [
+        "char..."
+      ],
+      "boolean",
+      "exactly-one",
+      [
+        "HK295"
+      ],
+      "deterministic-pinned",
+      false,
+      "linear-arguments",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-6-remaining-primitive",
+      2
+    ],
+    [
+      76,
+      "char=?",
+      "char=?",
+      "char/equal",
+      "2+",
+      [
+        "char..."
+      ],
+      "boolean",
+      "exactly-one",
+      [
+        "HK282"
+      ],
+      "deterministic-pinned",
+      false,
+      "linear-arguments",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "pinned-deterministic-host-primitive",
+        "lit": "pinned-deterministic-host-primitive"
+      },
+      "j57-6-remaining-primitive",
+      2
+    ],
+    [
+      77,
+      "char>=?",
+      "char>=?",
+      "char/greater-or-equal",
+      "2+",
+      [
+        "char..."
+      ],
+      "boolean",
+      "exactly-one",
+      [
+        "HK295"
+      ],
+      "deterministic-pinned",
+      false,
+      "linear-arguments",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-6-remaining-primitive",
+      2
+    ],
+    [
+      78,
+      "char>?",
+      "char>?",
+      "char/greater",
+      "2+",
+      [
+        "char..."
+      ],
+      "boolean",
+      "exactly-one",
+      [
+        "HK295"
+      ],
+      "deterministic-pinned",
+      false,
+      "linear-arguments",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-6-remaining-primitive",
+      2
+    ],
+    [
+      79,
+      "char?",
+      "char?",
+      "predicate/char",
+      "1",
+      [
+        "value"
+      ],
+      "boolean",
+      "exactly-one",
+      [
+        "HK254"
+      ],
+      "deterministic-pinned",
+      false,
+      "constant",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "pinned-deterministic-host-primitive",
+        "lit": "pinned-deterministic-host-primitive"
+      },
+      "j57-6-remaining-primitive",
+      2
+    ],
+    [
+      80,
+      "complex?",
+      "complex?",
+      "predicate/complex",
+      "1",
+      [
+        "value"
+      ],
+      "boolean",
+      "exactly-one",
+      [
+        "HK294"
+      ],
+      "deterministic-pinned",
+      false,
+      "constant",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-4-numeric",
+      2
+    ],
+    [
+      81,
+      "cons",
+      "cons",
+      "aggregate/cons",
+      "2",
+      [
+        "value",
+        "value"
+      ],
+      "pair",
+      "exactly-one",
+      [
+        "HK223"
+      ],
+      "deterministic-pinned",
+      false,
+      "constant",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-5-list-search",
+      2
+    ],
+    [
+      82,
+      "display",
+      "display",
+      "io/display",
+      "1",
+      [
+        "value"
+      ],
+      "none",
+      "discard",
+      [
+        "HK310",
+        "HK901"
+      ],
+      "deterministic-pinned",
+      false,
+      "bounded-private-output-effect",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-6-remaining-primitive",
+      2
+    ],
+    [
+      83,
+      "dynamic-wind",
+      "dynamic-wind",
+      "control/dynamic-wind",
+      "3",
+      [
+        "procedure",
+        "procedure",
+        "procedure"
+      ],
+      "value-packet",
+      "any-values",
+      [
+        "HK235"
+      ],
+      "deterministic-pinned",
+      true,
+      "machine-transfer",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-3-guest-callback",
+      2
+    ],
+    [
+      84,
+      "empty?",
+      "empty?",
+      "predicate/null",
+      "1",
+      [
+        "value"
+      ],
+      "boolean",
+      "exactly-one",
+      [
+        "HK224"
+      ],
+      "deterministic-pinned",
+      false,
+      "constant",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-5-list-search",
+      2
+    ],
+    [
+      85,
+      "eq?",
+      "eq?",
+      "equality/eq",
+      "2",
+      [
+        "value",
+        "value"
+      ],
+      "boolean",
+      "exactly-one",
+      [
+        "HK261"
+      ],
+      "deterministic-pinned",
+      false,
+      "constant",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-6-remaining-primitive",
+      2
+    ],
+    [
+      86,
+      "equal?",
+      "==",
+      "equality/equal",
+      "2",
+      [
+        "value",
+        "value"
+      ],
+      "boolean",
+      "exactly-one",
+      [
+        "HK261"
+      ],
+      "deterministic-pinned",
+      false,
+      "cycle-safe-structural",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-6-remaining-primitive",
+      2
+    ],
+    [
+      87,
+      "eqv?",
+      "eqv?",
+      "equality/eqv",
+      "2",
+      [
+        "value",
+        "value"
+      ],
+      "boolean",
+      "exactly-one",
+      [
+        "HK261"
+      ],
+      "deterministic-pinned",
+      false,
+      "constant",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-6-remaining-primitive",
+      2
+    ],
+    [
+      88,
+      "error",
+      "error",
+      "control/error",
+      "1+",
+      [
+        "string",
+        "value..."
+      ],
+      "none",
+      "discard",
+      [
+        "E330",
+        "HK233"
+      ],
+      "deterministic-pinned",
+      false,
+      "machine-transfer",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-6-remaining-primitive",
+      2
+    ],
+    [
+      89,
+      "error-object-irritants",
+      "error-object-irritants",
+      "error-object/irritants",
+      "1",
+      [
+        "error-object"
+      ],
+      "list",
+      "exactly-one",
+      [
+        "HK244"
+      ],
+      "deterministic-pinned",
+      false,
+      "linear-irritants",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-6-remaining-primitive",
+      2
+    ],
+    [
+      90,
+      "error-object-message",
+      "error-object-message",
+      "error-object/message",
+      "1",
+      [
+        "error-object"
+      ],
+      "string",
+      "exactly-one",
+      [
+        "HK243"
+      ],
+      "deterministic-pinned",
+      false,
+      "constant",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-6-remaining-primitive",
+      2
+    ],
+    [
+      91,
+      "error-object?",
+      "error-object?",
+      "predicate/error-object",
+      "1",
+      [
+        "value"
+      ],
+      "boolean",
+      "exactly-one",
+      [
+        "HK239"
+      ],
+      "deterministic-pinned",
+      false,
+      "constant",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-6-remaining-primitive",
+      2
+    ],
+    [
+      92,
+      "even?",
+      "even?",
+      "predicate/even",
+      "1",
+      [
+        "integer"
+      ],
+      "boolean",
+      "exactly-one",
+      [
+        "HK298"
+      ],
+      "deterministic-pinned",
+      false,
+      "numeric-kernel",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "pinned-deterministic-host-primitive",
+        "lit": "pinned-deterministic-host-primitive"
+      },
+      "j57-4-numeric",
+      2
+    ],
+    [
+      93,
+      "exact",
+      "exact",
+      "numeric/to-exact",
+      "1",
+      [
+        "number"
+      ],
+      "exact-number",
+      "exactly-one",
+      [
+        "HK298"
+      ],
+      "deterministic-pinned",
+      false,
+      "numeric-kernel",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "pinned-deterministic-host-primitive",
+        "lit": "pinned-deterministic-host-primitive"
+      },
+      "j57-4-numeric",
+      2
+    ],
+    [
+      94,
+      "exact->inexact",
+      "exact->inexact",
+      "numeric/exact-to-inexact",
+      "1",
+      [
+        "number"
+      ],
+      "inexact-number",
+      "exactly-one",
+      [
+        "HK298"
+      ],
+      "deterministic-pinned",
+      false,
+      "numeric-kernel",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "pinned-deterministic-host-primitive",
+        "lit": "pinned-deterministic-host-primitive"
+      },
+      "j57-4-numeric",
+      2
+    ],
+    [
+      95,
+      "exact-integer-sqrt",
+      "exact-integer-sqrt",
+      "numeric/exact-integer-sqrt",
+      "1",
+      [
+        "exact-nonnegative-integer"
+      ],
+      "integer-pair",
+      "exactly-two",
+      [
+        "HK299"
+      ],
+      "deterministic-pinned",
+      false,
+      "integer-sqrt",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "pinned-deterministic-host-primitive",
+        "lit": "pinned-deterministic-host-primitive"
+      },
+      "j57-4-numeric",
+      2
+    ],
+    [
+      96,
+      "exact-integer?",
+      "exact-integer?",
+      "predicate/exact-integer",
+      "1",
+      [
+        "value"
+      ],
+      "boolean",
+      "exactly-one",
+      [
+        "HK254"
+      ],
+      "deterministic-pinned",
+      false,
+      "constant",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-4-numeric",
+      2
+    ],
+    [
+      97,
+      "exact?",
+      "exact?",
+      "numeric/exact",
+      "1",
+      [
+        "number"
+      ],
+      "boolean",
+      "exactly-one",
+      [
+        "HK283"
+      ],
+      "deterministic-pinned",
+      false,
+      "constant",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "pinned-deterministic-host-primitive",
+        "lit": "pinned-deterministic-host-primitive"
+      },
+      "j57-4-numeric",
+      2
+    ],
+    [
+      98,
+      "expt",
+      "expt",
+      "numeric/expt",
+      "2",
+      [
+        "number",
+        "exact-integer"
+      ],
+      "number",
+      "exactly-one",
+      [
+        "HK299"
+      ],
+      "deterministic-pinned",
+      false,
+      "exponentiation",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "pinned-deterministic-host-primitive",
+        "lit": "pinned-deterministic-host-primitive"
+      },
+      "j57-4-numeric",
+      2
+    ],
+    [
+      99,
+      "filter",
+      "filter",
+      "hof/filter",
+      "2",
+      [
+        "procedure",
+        "proper-list"
+      ],
+      "list",
+      "exactly-one",
+      [
+        "HK300"
+      ],
+      "deterministic-pinned",
+      true,
+      "linear-collection-and-callbacks",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-3-guest-callback",
+      2
+    ],
+    [
+      100,
+      "first",
+      "car",
+      "aggregate/car",
+      "1",
+      [
+        "pair"
+      ],
+      "value",
+      "exactly-one",
+      [
+        "HK255"
+      ],
+      "deterministic-pinned",
+      false,
+      "constant",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-5-list-search",
+      2
+    ],
+    [
+      101,
+      "floor",
+      "floor",
+      "numeric/floor",
+      "1",
+      [
+        "number"
+      ],
+      "integer-valued-number",
+      "exactly-one",
+      [
+        "HK298"
+      ],
+      "deterministic-pinned",
+      false,
+      "numeric-kernel",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "pinned-deterministic-host-primitive",
+        "lit": "pinned-deterministic-host-primitive"
+      },
+      "j57-4-numeric",
+      2
+    ],
+    [
+      102,
+      "floor-quotient",
+      "floor-quotient",
+      "numeric/floor-quotient",
+      "2",
+      [
+        "integer",
+        "integer"
+      ],
+      "integer",
+      "exactly-one",
+      [
+        "HK299"
+      ],
+      "deterministic-pinned",
+      false,
+      "exact-integer-arithmetic",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-4-numeric",
+      2
+    ],
+    [
+      103,
+      "floor-remainder",
+      "floor-remainder",
+      "numeric/floor-remainder",
+      "2",
+      [
+        "integer",
+        "integer"
+      ],
+      "integer",
+      "exactly-one",
+      [
+        "HK299"
+      ],
+      "deterministic-pinned",
+      false,
+      "exact-integer-arithmetic",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-4-numeric",
+      2
+    ],
+    [
+      104,
+      "floor/",
+      "floor/",
+      "numeric/floor-divide",
+      "2",
+      [
+        "integer",
+        "integer"
+      ],
+      "integer-pair",
+      "exactly-two",
+      [
+        "HK299"
+      ],
+      "deterministic-pinned",
+      false,
+      "exact-integer-arithmetic",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-4-numeric",
+      2
+    ],
+    [
+      105,
+      "fold-left",
+      "fold-left",
+      "hof/fold-left",
+      "3",
+      [
+        "procedure",
+        "value",
+        "proper-list"
+      ],
+      "value",
+      "exactly-one",
+      [
+        "HK300"
+      ],
+      "deterministic-pinned",
+      true,
+      "linear-collection-and-callbacks",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-3-guest-callback",
+      2
+    ],
+    [
+      106,
+      "fold-right",
+      "fold-right",
+      "hof/fold-right",
+      "3",
+      [
+        "procedure",
+        "value",
+        "proper-list"
+      ],
+      "value",
+      "exactly-one",
+      [
+        "HK300"
+      ],
+      "deterministic-pinned",
+      true,
+      "linear-collection-and-callbacks",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-3-guest-callback",
+      2
+    ],
+    [
+      107,
+      "for-each",
+      "for-each",
+      "hof/for-each",
+      "2",
+      [
+        "procedure",
+        "proper-list"
+      ],
+      "none",
+      "discard",
+      [
+        "HK300"
+      ],
+      "deterministic-pinned",
+      true,
+      "linear-collection-and-callbacks",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-3-guest-callback",
+      2
+    ],
+    [
+      108,
+      "gcd",
+      "gcd",
+      "numeric/gcd",
+      "0+",
+      [
+        "integer..."
+      ],
+      "nonnegative-integer",
+      "exactly-one",
+      [
+        "HK299"
+      ],
+      "deterministic-pinned",
+      false,
+      "linear-arguments",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-4-numeric",
+      2
+    ],
+    [
+      109,
+      "inexact",
+      "exact->inexact",
+      "numeric/to-inexact",
+      "1",
+      [
+        "number"
+      ],
+      "inexact-number",
+      "exactly-one",
+      [
+        "HK298"
+      ],
+      "deterministic-pinned",
+      false,
+      "numeric-kernel",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "pinned-deterministic-host-primitive",
+        "lit": "pinned-deterministic-host-primitive"
+      },
+      "j57-4-numeric",
+      2
+    ],
+    [
+      110,
+      "inexact->exact",
+      "exact",
+      "numeric/inexact-to-exact",
+      "1",
+      [
+        "number"
+      ],
+      "exact-number",
+      "exactly-one",
+      [
+        "HK298"
+      ],
+      "deterministic-pinned",
+      false,
+      "numeric-kernel",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "pinned-deterministic-host-primitive",
+        "lit": "pinned-deterministic-host-primitive"
+      },
+      "j57-4-numeric",
+      2
+    ],
+    [
+      111,
+      "inexact?",
+      "inexact?",
+      "numeric/inexact",
+      "1",
+      [
+        "number"
+      ],
+      "boolean",
+      "exactly-one",
+      [
+        "HK283"
+      ],
+      "deterministic-pinned",
+      false,
+      "constant",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "pinned-deterministic-host-primitive",
+        "lit": "pinned-deterministic-host-primitive"
+      },
+      "j57-4-numeric",
+      2
+    ],
+    [
+      112,
+      "integer->char",
+      "integer->char",
+      "char/from-codepoint",
+      "1",
+      [
+        "Unicode-scalar"
+      ],
+      "char",
+      "exactly-one",
+      [
+        "HK275"
+      ],
+      "deterministic-pinned",
+      false,
+      "constant",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "pinned-deterministic-host-primitive",
+        "lit": "pinned-deterministic-host-primitive"
+      },
+      "j57-6-remaining-primitive",
+      2
+    ],
+    [
+      113,
+      "integer?",
+      "integer?",
+      "predicate/integer",
+      "1",
+      [
+        "value"
+      ],
+      "boolean",
+      "exactly-one",
+      [
+        "HK254"
+      ],
+      "deterministic-pinned",
+      false,
+      "constant",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-4-numeric",
+      2
+    ],
+    [
+      114,
+      "lcm",
+      "lcm",
+      "numeric/lcm",
+      "0+",
+      [
+        "integer..."
+      ],
+      "nonnegative-integer",
+      "exactly-one",
+      [
+        "HK299"
+      ],
+      "deterministic-pinned",
+      false,
+      "linear-arguments",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-4-numeric",
+      2
+    ],
+    [
+      115,
+      "length",
+      "length",
+      "aggregate/length",
+      "1",
+      [
+        "proper-list"
+      ],
+      "exact-integer",
+      "exactly-one",
+      [
+        "HK257"
+      ],
+      "deterministic-pinned",
+      false,
+      "linear-spine",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-5-list-search",
+      2
+    ],
+    [
+      116,
+      "list",
+      "list",
+      "aggregate/list",
+      "0+",
+      [
+        "value..."
+      ],
+      "list",
+      "exactly-one",
+      [],
+      "deterministic-pinned",
+      false,
+      "linear-arguments",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-5-list-search",
+      2
+    ],
+    [
+      117,
+      "list->string",
+      "list->string",
+      "aggregate/list-to-string",
+      "1",
+      [
+        "proper-list-of-char"
+      ],
+      "string",
+      "exactly-one",
+      [
+        "HK284"
+      ],
+      "deterministic-pinned",
+      false,
+      "linear-list",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "pinned-deterministic-host-primitive",
+        "lit": "pinned-deterministic-host-primitive"
+      },
+      "j57-5-list-search",
+      2
+    ],
+    [
+      118,
+      "list->vector",
+      "list->vector",
+      "aggregate/list-to-vector",
+      "1",
+      [
+        "proper-list"
+      ],
+      "mutable-vector",
+      "exactly-one",
+      [
+        "HK264"
+      ],
+      "deterministic-pinned",
+      false,
+      "linear-spine",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-5-list-search",
+      2
+    ],
+    [
+      119,
+      "list-copy",
+      "list-copy",
+      "aggregate/list-copy",
+      "1",
+      [
+        "value"
+      ],
+      "value",
+      "exactly-one",
+      [
+        "HK296"
+      ],
+      "deterministic-pinned",
+      false,
+      "linear-pair-spine",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-5-list-search",
+      2
+    ],
+    [
+      120,
+      "list-first",
+      "list-first",
+      "compat/deprecated-list-first",
+      "1",
+      [
+        "pair"
+      ],
+      "value",
+      "exactly-one",
+      [
+        "W331",
+        "HK311"
+      ],
+      "deterministic-pinned",
+      false,
+      "constant-plus-warning",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-5-list-search",
+      2
+    ],
+    [
+      121,
+      "list-ref",
+      "list-ref",
+      "aggregate/list-ref",
+      "2",
+      [
+        "proper-list",
+        "exact-nonnegative-integer"
+      ],
+      "value",
+      "exactly-one",
+      [
+        "HK296"
+      ],
+      "deterministic-pinned",
+      false,
+      "linear-list",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-5-list-search",
+      2
+    ],
+    [
+      122,
+      "list-rest",
+      "list-rest",
+      "compat/deprecated-list-rest",
+      "1",
+      [
+        "pair"
+      ],
+      "value",
+      "exactly-one",
+      [
+        "W331",
+        "HK311"
+      ],
+      "deterministic-pinned",
+      false,
+      "constant-plus-warning",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-5-list-search",
+      2
+    ],
+    [
+      123,
+      "list-tail",
+      "list-tail",
+      "aggregate/list-tail",
+      "2",
+      [
+        "value",
+        "exact-nonnegative-integer"
+      ],
+      "value",
+      "exactly-one",
+      [
+        "HK296"
+      ],
+      "deterministic-pinned",
+      false,
+      "linear-index",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-5-list-search",
+      2
+    ],
+    [
+      124,
+      "list?",
+      "list?",
+      "predicate/list",
+      "1",
+      [
+        "value"
+      ],
+      "boolean",
+      "exactly-one",
+      [
+        "HK254"
+      ],
+      "deterministic-pinned",
+      false,
+      "linear-spine",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-5-list-search",
+      2
+    ],
+    [
+      125,
+      "make-bytevector",
+      "make-bytevector",
+      "aggregate/make-bytevector",
+      "1-or-2",
+      [
+        "exact-nonnegative-integer",
+        "byte?"
+      ],
+      "bytevector",
+      "exactly-one",
+      [
+        "HK265"
+      ],
+      "deterministic-pinned",
+      false,
+      "linear-size",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-6-remaining-primitive",
+      2
+    ],
+    [
+      126,
+      "make-list",
+      "make-list",
+      "aggregate/make-list",
+      "1-2",
+      [
+        "exact-nonnegative-integer",
+        "optional-value"
+      ],
+      "proper-list",
+      "exactly-one",
+      [
+        "HK296"
+      ],
+      "deterministic-pinned",
+      false,
+      "linear-result",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-5-list-search",
+      2
+    ],
+    [
+      127,
+      "make-string",
+      "make-string",
+      "string/make",
+      "1-2",
+      [
+        "exact-nonnegative-integer",
+        "optional-char"
+      ],
+      "string",
+      "exactly-one",
+      [
+        "HK296"
+      ],
+      "deterministic-pinned",
+      false,
+      "linear-result",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-6-remaining-primitive",
+      2
+    ],
+    [
+      128,
+      "make-vector",
+      "make-vector",
+      "aggregate/make-vector",
+      "1-or-2",
+      [
+        "exact-nonnegative-integer",
+        "value?"
+      ],
+      "mutable-vector",
+      "exactly-one",
+      [
+        "HK262"
+      ],
+      "deterministic-pinned",
+      false,
+      "linear-size",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-6-remaining-primitive",
+      2
+    ],
+    [
+      129,
+      "map",
+      "map",
+      "hof/map",
+      "2",
+      [
+        "procedure",
+        "proper-list"
+      ],
+      "list",
+      "exactly-one",
+      [
+        "HK300"
+      ],
+      "deterministic-pinned",
+      true,
+      "linear-collection-and-callbacks",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-3-guest-callback",
+      2
+    ],
+    [
+      130,
+      "max",
+      "max",
+      "numeric/max",
+      "1+",
+      [
+        "number..."
+      ],
+      "number",
+      "exactly-one",
+      [
+        "HK298"
+      ],
+      "deterministic-pinned",
+      false,
+      "linear-arguments",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-4-numeric",
+      2
+    ],
+    [
+      131,
+      "member",
+      "member",
+      "search/member",
+      "2",
+      [
+        "value",
+        "proper-list"
+      ],
+      "list-or-false",
+      "exactly-one",
+      [
+        "HK285"
+      ],
+      "deterministic-pinned",
+      false,
+      "linear-list",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-5-list-search",
+      2
+    ],
+    [
+      132,
+      "memq",
+      "memq",
+      "search/memq",
+      "2",
+      [
+        "value",
+        "proper-list"
+      ],
+      "list-or-false",
+      "exactly-one",
+      [
+        "HK285"
+      ],
+      "deterministic-pinned",
+      false,
+      "linear-list",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-5-list-search",
+      2
+    ],
+    [
+      133,
+      "memv",
+      "memv",
+      "search/memv",
+      "2",
+      [
+        "value",
+        "proper-list"
+      ],
+      "pair-or-false",
+      "exactly-one",
+      [
+        "HK294"
+      ],
+      "deterministic-pinned",
+      false,
+      "linear-list",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-5-list-search",
+      2
+    ],
+    [
+      134,
+      "min",
+      "min",
+      "numeric/min",
+      "1+",
+      [
+        "number..."
+      ],
+      "number",
+      "exactly-one",
+      [
+        "HK298"
+      ],
+      "deterministic-pinned",
+      false,
+      "linear-arguments",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-4-numeric",
+      2
+    ],
+    [
+      135,
+      "modulo",
+      "modulo",
+      "numeric/modulo",
+      "2",
+      [
+        "integer",
+        "integer"
+      ],
+      "integer",
+      "exactly-one",
+      [
+        "HK299"
+      ],
+      "deterministic-pinned",
+      false,
+      "exact-integer-arithmetic",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-4-numeric",
+      2
+    ],
+    [
+      136,
+      "negative?",
+      "negative?",
+      "predicate/negative",
+      "1",
+      [
+        "number"
+      ],
+      "boolean",
+      "exactly-one",
+      [
+        "HK293"
+      ],
+      "deterministic-pinned",
+      false,
+      "derived-numeric-kernel",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-4-numeric",
+      2
+    ],
+    [
+      137,
+      "newline",
+      "newline",
+      "io/newline",
+      "0",
+      [],
+      "none",
+      "discard",
+      [
+        "HK310",
+        "HK901"
+      ],
+      "deterministic-pinned",
+      false,
+      "bounded-private-output-effect",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-6-remaining-primitive",
+      2
+    ],
+    [
+      138,
+      "not",
+      "not",
+      "predicate/not",
+      "1",
+      [
+        "value"
+      ],
+      "boolean",
+      "exactly-one",
+      [
+        "HK254"
+      ],
+      "deterministic-pinned",
+      false,
+      "constant",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-6-remaining-primitive",
+      2
+    ],
+    [
+      139,
+      "nth",
+      "list-ref",
+      "aggregate/nth",
+      "2",
+      [
+        "proper-list",
+        "exact-nonnegative-integer"
+      ],
+      "value",
+      "exactly-one",
+      [
+        "HK296"
+      ],
+      "deterministic-pinned",
+      false,
+      "linear-list",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-5-list-search",
+      2
+    ],
+    [
+      140,
+      "null?",
+      "empty?",
+      "predicate/null",
+      "1",
+      [
+        "value"
+      ],
+      "boolean",
+      "exactly-one",
+      [
+        "HK224"
+      ],
+      "deterministic-pinned",
+      false,
+      "constant",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-5-list-search",
+      2
+    ],
+    [
+      141,
+      "number->string",
+      "number->string",
+      "numeric/canonical-format",
+      "1-2",
+      [
+        "number",
+        "optional-exact-integer"
+      ],
+      "string",
+      "exactly-one",
+      [
+        "HK276"
+      ],
+      "deterministic-pinned",
+      false,
+      "number-format-cost",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "pinned-deterministic-host-primitive",
+        "lit": "pinned-deterministic-host-primitive"
+      },
+      "j57-4-numeric",
+      2
+    ],
+    [
+      142,
+      "number?",
+      "number?",
+      "predicate/number",
+      "1",
+      [
+        "value"
+      ],
+      "boolean",
+      "exactly-one",
+      [
+        "HK254"
+      ],
+      "deterministic-pinned",
+      false,
+      "constant",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-4-numeric",
+      2
+    ],
+    [
+      143,
+      "odd?",
+      "odd?",
+      "predicate/odd",
+      "1",
+      [
+        "integer"
+      ],
+      "boolean",
+      "exactly-one",
+      [
+        "HK298"
+      ],
+      "deterministic-pinned",
+      false,
+      "numeric-kernel",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "pinned-deterministic-host-primitive",
+        "lit": "pinned-deterministic-host-primitive"
+      },
+      "j57-4-numeric",
+      2
+    ],
+    [
+      144,
+      "pair?",
+      "pair?",
+      "predicate/pair",
+      "1",
+      [
+        "value"
+      ],
+      "boolean",
+      "exactly-one",
+      [
+        "HK254"
+      ],
+      "deterministic-pinned",
+      false,
+      "constant",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-5-list-search",
+      2
+    ],
+    [
+      145,
+      "positive?",
+      "positive?",
+      "predicate/positive",
+      "1",
+      [
+        "number"
+      ],
+      "boolean",
+      "exactly-one",
+      [
+        "HK293"
+      ],
+      "deterministic-pinned",
+      false,
+      "derived-numeric-kernel",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-4-numeric",
+      2
+    ],
+    [
+      146,
+      "println",
+      "println",
+      "io/println",
+      "1",
+      [
+        "value"
+      ],
+      "none",
+      "discard",
+      [
+        "HK310",
+        "HK901"
+      ],
+      "deterministic-pinned",
+      false,
+      "bounded-private-output-effect",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-6-remaining-primitive",
+      2
+    ],
+    [
+      147,
+      "procedure?",
+      "procedure?",
+      "predicate/procedure",
+      "1",
+      [
+        "value"
+      ],
+      "boolean",
+      "exactly-one",
+      [
+        "HK254"
+      ],
+      "deterministic-pinned",
+      false,
+      "constant",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-6-remaining-primitive",
+      2
+    ],
+    [
+      148,
+      "quotient",
+      "quotient",
+      "numeric/quotient",
+      "2",
+      [
+        "integer",
+        "integer"
+      ],
+      "integer",
+      "exactly-one",
+      [
+        "HK299"
+      ],
+      "deterministic-pinned",
+      false,
+      "exact-integer-arithmetic",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-4-numeric",
+      2
+    ],
+    [
+      149,
+      "raise",
+      "raise",
+      "control/raise",
+      "1",
+      [
+        "value"
+      ],
+      "none",
+      "discard",
+      [
+        "E331",
+        "HK237"
+      ],
+      "deterministic-pinned",
+      false,
+      "machine-transfer",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-6-remaining-primitive",
+      2
+    ],
+    [
+      150,
+      "raise-continuable",
+      "raise-continuable",
+      "control/raise-continuable",
+      "1",
+      [
+        "value"
+      ],
+      "value-packet",
+      "any-values",
+      [
+        "E331",
+        "HK238"
+      ],
+      "deterministic-pinned",
+      false,
+      "machine-transfer",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-6-remaining-primitive",
+      2
+    ],
+    [
+      151,
+      "rational?",
+      "rational?",
+      "predicate/rational",
+      "1",
+      [
+        "value"
+      ],
+      "boolean",
+      "exactly-one",
+      [
+        "HK294"
+      ],
+      "deterministic-pinned",
+      false,
+      "constant",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-4-numeric",
+      2
+    ],
+    [
+      152,
+      "real?",
+      "real?",
+      "predicate/real",
+      "1",
+      [
+        "value"
+      ],
+      "boolean",
+      "exactly-one",
+      [
+        "HK294"
+      ],
+      "deterministic-pinned",
+      false,
+      "constant",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-4-numeric",
+      2
+    ],
+    [
+      153,
+      "reduce",
+      "fold-left",
+      "hof/fold-left",
+      "3",
+      [
+        "procedure",
+        "value",
+        "proper-list"
+      ],
+      "value",
+      "exactly-one",
+      [
+        "HK300"
+      ],
+      "deterministic-pinned",
+      true,
+      "linear-collection-and-callbacks",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-3-guest-callback",
+      2
+    ],
+    [
+      154,
+      "remainder",
+      "remainder",
+      "numeric/remainder",
+      "2",
+      [
+        "integer",
+        "integer"
+      ],
+      "integer",
+      "exactly-one",
+      [
+        "HK299"
+      ],
+      "deterministic-pinned",
+      false,
+      "exact-integer-arithmetic",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-4-numeric",
+      2
+    ],
+    [
+      155,
+      "rest",
+      "cdr",
+      "aggregate/cdr",
+      "1",
+      [
+        "pair"
+      ],
+      "value",
+      "exactly-one",
+      [
+        "HK256"
+      ],
+      "deterministic-pinned",
+      false,
+      "constant",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-5-list-search",
+      2
+    ],
+    [
+      156,
+      "reverse",
+      "reverse",
+      "aggregate/reverse",
+      "1",
+      [
+        "proper-list"
+      ],
+      "list",
+      "exactly-one",
+      [
+        "HK259"
+      ],
+      "deterministic-pinned",
+      false,
+      "linear-spine",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-5-list-search",
+      2
+    ],
+    [
+      157,
+      "round",
+      "round",
+      "numeric/round",
+      "1",
+      [
+        "number"
+      ],
+      "integer-valued-number",
+      "exactly-one",
+      [
+        "HK298"
+      ],
+      "deterministic-pinned",
+      false,
+      "numeric-kernel",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "pinned-deterministic-host-primitive",
+        "lit": "pinned-deterministic-host-primitive"
+      },
+      "j57-4-numeric",
+      2
+    ],
+    [
+      158,
+      "square",
+      "square",
+      "numeric/square",
+      "1",
+      [
+        "number"
+      ],
+      "number",
+      "exactly-one",
+      [
+        "HK293"
+      ],
+      "deterministic-pinned",
+      false,
+      "derived-numeric-kernel",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-4-numeric",
+      2
+    ],
+    [
+      159,
+      "string->list",
+      "string->list",
+      "aggregate/string-to-list",
+      "1",
+      [
+        "string"
+      ],
+      "list-of-char",
+      "exactly-one",
+      [
+        "HK286"
+      ],
+      "deterministic-pinned",
+      false,
+      "linear-string",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "pinned-deterministic-host-primitive",
+        "lit": "pinned-deterministic-host-primitive"
+      },
+      "j57-6-remaining-primitive",
+      2
+    ],
+    [
+      160,
+      "string->number",
+      "string->number",
+      "numeric/canonical-parse",
+      "1-2",
+      [
+        "string",
+        "optional-exact-integer"
+      ],
+      "number-or-false",
+      "exactly-one",
+      [
+        "HK277"
+      ],
+      "deterministic-pinned",
+      false,
+      "number-parse-cost",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "pinned-deterministic-host-primitive",
+        "lit": "pinned-deterministic-host-primitive"
+      },
+      "j57-6-remaining-primitive",
+      2
+    ],
+    [
+      161,
+      "string->symbol",
+      "string->symbol",
+      "symbol/intern",
+      "1",
+      [
+        "string"
+      ],
+      "symbol",
+      "exactly-one",
+      [
+        "HK272"
+      ],
+      "deterministic-pinned",
+      false,
+      "linear-bytes",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "pinned-deterministic-host-primitive",
+        "lit": "pinned-deterministic-host-primitive"
+      },
+      "j57-6-remaining-primitive",
+      2
+    ],
+    [
+      162,
+      "string->vector",
+      "string->vector",
+      "aggregate/string-to-vector",
+      "1-3",
+      [
+        "string",
+        "optional-exact-integer",
+        "optional-exact-integer"
+      ],
+      "vector",
+      "exactly-one",
+      [
+        "HK296"
+      ],
+      "deterministic-pinned",
+      false,
+      "linear-result",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-6-remaining-primitive",
+      2
+    ],
+    [
+      163,
+      "string-append",
+      "string-append",
+      "string/append",
+      "0+",
+      [
+        "string..."
+      ],
+      "string",
+      "exactly-one",
+      [
+        "HK269"
+      ],
+      "deterministic-pinned",
+      false,
+      "linear-bytes",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "pinned-deterministic-host-primitive",
+        "lit": "pinned-deterministic-host-primitive"
+      },
+      "j57-6-remaining-primitive",
+      2
+    ],
+    [
+      164,
+      "string-ci<=?",
+      "string-ci<=?",
+      "string/ci-less-or-equal",
+      "2+",
+      [
+        "string..."
+      ],
+      "boolean",
+      "exactly-one",
+      [
+        "HK297"
+      ],
+      "deterministic-pinned",
+      false,
+      "linear-arguments-and-string",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "pinned-deterministic-host-primitive",
+        "lit": "pinned-deterministic-host-primitive"
+      },
+      "j57-6-remaining-primitive",
+      2
+    ],
+    [
+      165,
+      "string-ci<?",
+      "string-ci<?",
+      "string/ci-less",
+      "2+",
+      [
+        "string..."
+      ],
+      "boolean",
+      "exactly-one",
+      [
+        "HK297"
+      ],
+      "deterministic-pinned",
+      false,
+      "linear-arguments-and-string",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "pinned-deterministic-host-primitive",
+        "lit": "pinned-deterministic-host-primitive"
+      },
+      "j57-6-remaining-primitive",
+      2
+    ],
+    [
+      166,
+      "string-ci=?",
+      "string-ci=?",
+      "string/ci-equal",
+      "2+",
+      [
+        "string..."
+      ],
+      "boolean",
+      "exactly-one",
+      [
+        "HK287"
+      ],
+      "deterministic-pinned",
+      false,
+      "linear-arguments-and-string",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "pinned-deterministic-host-primitive",
+        "lit": "pinned-deterministic-host-primitive"
+      },
+      "j57-6-remaining-primitive",
+      2
+    ],
+    [
+      167,
+      "string-ci>=?",
+      "string-ci>=?",
+      "string/ci-greater-or-equal",
+      "2+",
+      [
+        "string..."
+      ],
+      "boolean",
+      "exactly-one",
+      [
+        "HK297"
+      ],
+      "deterministic-pinned",
+      false,
+      "linear-arguments-and-string",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "pinned-deterministic-host-primitive",
+        "lit": "pinned-deterministic-host-primitive"
+      },
+      "j57-6-remaining-primitive",
+      2
+    ],
+    [
+      168,
+      "string-ci>?",
+      "string-ci>?",
+      "string/ci-greater",
+      "2+",
+      [
+        "string..."
+      ],
+      "boolean",
+      "exactly-one",
+      [
+        "HK297"
+      ],
+      "deterministic-pinned",
+      false,
+      "linear-arguments-and-string",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "pinned-deterministic-host-primitive",
+        "lit": "pinned-deterministic-host-primitive"
+      },
+      "j57-6-remaining-primitive",
+      2
+    ],
+    [
+      169,
+      "string-copy",
+      "string-copy",
+      "string/copy",
+      "1-3",
+      [
+        "string",
+        "optional-nonnegative-integer",
+        "optional-nonnegative-integer"
+      ],
+      "string",
+      "exactly-one",
+      [
+        "HK288"
+      ],
+      "deterministic-pinned",
+      false,
+      "linear-string",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "pinned-deterministic-host-primitive",
+        "lit": "pinned-deterministic-host-primitive"
+      },
+      "j57-6-remaining-primitive",
+      2
+    ],
+    [
+      170,
+      "string-downcase",
+      "string-downcase",
+      "string/downcase",
+      "1",
+      [
+        "string"
+      ],
+      "string",
+      "exactly-one",
+      [
+        "HK297"
+      ],
+      "deterministic-pinned",
+      false,
+      "linear-string",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "pinned-deterministic-host-primitive",
+        "lit": "pinned-deterministic-host-primitive"
+      },
+      "j57-6-remaining-primitive",
+      2
+    ],
+    [
+      171,
+      "string-foldcase",
+      "string-foldcase",
+      "string/foldcase",
+      "1",
+      [
+        "string"
+      ],
+      "string",
+      "exactly-one",
+      [
+        "HK297"
+      ],
+      "deterministic-pinned",
+      false,
+      "linear-string",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "pinned-deterministic-host-primitive",
+        "lit": "pinned-deterministic-host-primitive"
+      },
+      "j57-6-remaining-primitive",
+      2
+    ],
+    [
+      172,
+      "string-for-each",
+      "string-for-each",
+      "hof/string-for-each",
+      "2",
+      [
+        "procedure",
+        "string"
+      ],
+      "none",
+      "discard",
+      [
+        "HK300"
+      ],
+      "deterministic-pinned",
+      true,
+      "linear-collection-and-callbacks",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-3-guest-callback",
+      2
+    ],
+    [
+      173,
+      "string-length",
+      "string-length",
+      "string/length",
+      "1",
+      [
+        "string"
+      ],
+      "exact-integer",
+      "exactly-one",
+      [
+        "HK270"
+      ],
+      "deterministic-pinned",
+      false,
+      "linear-codepoints",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "pinned-deterministic-host-primitive",
+        "lit": "pinned-deterministic-host-primitive"
+      },
+      "j57-6-remaining-primitive",
+      2
+    ],
+    [
+      174,
+      "string-map",
+      "string-map",
+      "hof/string-map",
+      "2",
+      [
+        "procedure",
+        "string"
+      ],
+      "string",
+      "exactly-one",
+      [
+        "HK300"
+      ],
+      "deterministic-pinned",
+      true,
+      "linear-collection-and-callbacks",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-3-guest-callback",
+      2
+    ],
+    [
+      175,
+      "string-ref",
+      "string-ref",
+      "string/ref",
+      "2",
+      [
+        "string",
+        "exact-nonnegative-integer"
+      ],
+      "char",
+      "exactly-one",
+      [
+        "HK271"
+      ],
+      "deterministic-pinned",
+      false,
+      "linear-codepoints",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "pinned-deterministic-host-primitive",
+        "lit": "pinned-deterministic-host-primitive"
+      },
+      "j57-6-remaining-primitive",
+      2
+    ],
+    [
+      176,
+      "string-upcase",
+      "string-upcase",
+      "string/upcase",
+      "1",
+      [
+        "string"
+      ],
+      "string",
+      "exactly-one",
+      [
+        "HK297"
+      ],
+      "deterministic-pinned",
+      false,
+      "linear-string",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "pinned-deterministic-host-primitive",
+        "lit": "pinned-deterministic-host-primitive"
+      },
+      "j57-6-remaining-primitive",
+      2
+    ],
+    [
+      177,
+      "string<=?",
+      "string<=?",
+      "string/less-or-equal",
+      "2+",
+      [
+        "string..."
+      ],
+      "boolean",
+      "exactly-one",
+      [
+        "HK295"
+      ],
+      "deterministic-pinned",
+      false,
+      "linear-arguments-and-string",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-6-remaining-primitive",
+      2
+    ],
+    [
+      178,
+      "string<?",
+      "string<?",
+      "string/less",
+      "2+",
+      [
+        "string..."
+      ],
+      "boolean",
+      "exactly-one",
+      [
+        "HK295"
+      ],
+      "deterministic-pinned",
+      false,
+      "linear-arguments-and-string",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-6-remaining-primitive",
+      2
+    ],
+    [
+      179,
+      "string=?",
+      "string=?",
+      "string/equal",
+      "2+",
+      [
+        "string..."
+      ],
+      "boolean",
+      "exactly-one",
+      [
+        "HK287"
+      ],
+      "deterministic-pinned",
+      false,
+      "linear-arguments-and-string",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "pinned-deterministic-host-primitive",
+        "lit": "pinned-deterministic-host-primitive"
+      },
+      "j57-6-remaining-primitive",
+      2
+    ],
+    [
+      180,
+      "string>=?",
+      "string>=?",
+      "string/greater-or-equal",
+      "2+",
+      [
+        "string..."
+      ],
+      "boolean",
+      "exactly-one",
+      [
+        "HK295"
+      ],
+      "deterministic-pinned",
+      false,
+      "linear-arguments-and-string",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-6-remaining-primitive",
+      2
+    ],
+    [
+      181,
+      "string>?",
+      "string>?",
+      "string/greater",
+      "2+",
+      [
+        "string..."
+      ],
+      "boolean",
+      "exactly-one",
+      [
+        "HK295"
+      ],
+      "deterministic-pinned",
+      false,
+      "linear-arguments-and-string",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-6-remaining-primitive",
+      2
+    ],
+    [
+      182,
+      "string?",
+      "string?",
+      "predicate/string",
+      "1",
+      [
+        "value"
+      ],
+      "boolean",
+      "exactly-one",
+      [
+        "HK254"
+      ],
+      "deterministic-pinned",
+      false,
+      "constant",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-6-remaining-primitive",
+      2
+    ],
+    [
+      183,
+      "substring",
+      "substring",
+      "string/substring",
+      "3",
+      [
+        "string",
+        "nonnegative-integer",
+        "nonnegative-integer"
+      ],
+      "string",
+      "exactly-one",
+      [
+        "HK289"
+      ],
+      "deterministic-pinned",
+      false,
+      "linear-result",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "pinned-deterministic-host-primitive",
+        "lit": "pinned-deterministic-host-primitive"
+      },
+      "j57-6-remaining-primitive",
+      2
+    ],
+    [
+      184,
+      "symbol->string",
+      "symbol->string",
+      "symbol/name",
+      "1",
+      [
+        "symbol"
+      ],
+      "string",
+      "exactly-one",
+      [
+        "HK273"
+      ],
+      "deterministic-pinned",
+      false,
+      "linear-bytes",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "pinned-deterministic-host-primitive",
+        "lit": "pinned-deterministic-host-primitive"
+      },
+      "j57-6-remaining-primitive",
+      2
+    ],
+    [
+      185,
+      "symbol=?",
+      "symbol=?",
+      "equality/symbol",
+      "2+",
+      [
+        "symbol..."
+      ],
+      "boolean",
+      "exactly-one",
+      [
+        "HK293"
+      ],
+      "deterministic-pinned",
+      false,
+      "linear-arguments",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-6-remaining-primitive",
+      2
+    ],
+    [
+      186,
+      "symbol?",
+      "symbol?",
+      "predicate/symbol",
+      "1",
+      [
+        "value"
+      ],
+      "boolean",
+      "exactly-one",
+      [
+        "HK254"
+      ],
+      "deterministic-pinned",
+      false,
+      "constant",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-6-remaining-primitive",
+      2
+    ],
+    [
+      187,
+      "truncate",
+      "truncate",
+      "numeric/truncate",
+      "1",
+      [
+        "number"
+      ],
+      "integer-valued-number",
+      "exactly-one",
+      [
+        "HK298"
+      ],
+      "deterministic-pinned",
+      false,
+      "numeric-kernel",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "pinned-deterministic-host-primitive",
+        "lit": "pinned-deterministic-host-primitive"
+      },
+      "j57-4-numeric",
+      2
+    ],
+    [
+      188,
+      "truncate-quotient",
+      "truncate-quotient",
+      "numeric/truncate-quotient",
+      "2",
+      [
+        "integer",
+        "integer"
+      ],
+      "integer",
+      "exactly-one",
+      [
+        "HK299"
+      ],
+      "deterministic-pinned",
+      false,
+      "exact-integer-arithmetic",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-4-numeric",
+      2
+    ],
+    [
+      189,
+      "truncate-remainder",
+      "truncate-remainder",
+      "numeric/truncate-remainder",
+      "2",
+      [
+        "integer",
+        "integer"
+      ],
+      "integer",
+      "exactly-one",
+      [
+        "HK299"
+      ],
+      "deterministic-pinned",
+      false,
+      "exact-integer-arithmetic",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-4-numeric",
+      2
+    ],
+    [
+      190,
+      "truncate/",
+      "truncate/",
+      "numeric/truncate-divide",
+      "2",
+      [
+        "integer",
+        "integer"
+      ],
+      "integer-pair",
+      "exactly-two",
+      [
+        "HK299"
+      ],
+      "deterministic-pinned",
+      false,
+      "exact-integer-arithmetic",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-4-numeric",
+      2
+    ],
+    [
+      191,
+      "values",
+      "values",
+      "control/values",
+      "0+",
+      [
+        "value..."
+      ],
+      "value-packet",
+      "any-values",
+      [],
+      "deterministic-pinned",
+      false,
+      "linear-arguments",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-6-remaining-primitive",
+      2
+    ],
+    [
+      192,
+      "vector",
+      "vector",
+      "aggregate/vector",
+      "0+",
+      [
+        "value..."
+      ],
+      "mutable-vector",
+      "exactly-one",
+      [],
+      "deterministic-pinned",
+      false,
+      "linear-arguments",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-6-remaining-primitive",
+      2
+    ],
+    [
+      193,
+      "vector->list",
+      "vector->list",
+      "aggregate/vector-to-list",
+      "1",
+      [
+        "vector"
+      ],
+      "list",
+      "exactly-one",
+      [
+        "HK263"
+      ],
+      "deterministic-pinned",
+      false,
+      "linear-size",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-6-remaining-primitive",
+      2
+    ],
+    [
+      194,
+      "vector->string",
+      "vector->string",
+      "aggregate/vector-to-string",
+      "1-3",
+      [
+        "vector",
+        "optional-exact-integer",
+        "optional-exact-integer"
+      ],
+      "string",
+      "exactly-one",
+      [
+        "HK296"
+      ],
+      "deterministic-pinned",
+      false,
+      "linear-result",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-6-remaining-primitive",
+      2
+    ],
+    [
+      195,
+      "vector-copy",
+      "vector-copy",
+      "aggregate/vector-copy",
+      "1-3",
+      [
+        "vector",
+        "optional-nonnegative-integer",
+        "optional-nonnegative-integer"
+      ],
+      "vector",
+      "exactly-one",
+      [
+        "HK290"
+      ],
+      "deterministic-pinned",
+      false,
+      "linear-vector",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "pinned-deterministic-host-primitive",
+        "lit": "pinned-deterministic-host-primitive"
+      },
+      "j57-6-remaining-primitive",
+      2
+    ],
+    [
+      196,
+      "vector-for-each",
+      "vector-for-each",
+      "hof/vector-for-each",
+      "2",
+      [
+        "procedure",
+        "vector"
+      ],
+      "none",
+      "discard",
+      [
+        "HK300"
+      ],
+      "deterministic-pinned",
+      true,
+      "linear-collection-and-callbacks",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-3-guest-callback",
+      2
+    ],
+    [
+      197,
+      "vector-length",
+      "vector-length",
+      "aggregate/vector-length",
+      "1",
+      [
+        "vector"
+      ],
+      "exact-integer",
+      "exactly-one",
+      [
+        "HK263"
+      ],
+      "deterministic-pinned",
+      false,
+      "constant",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-6-remaining-primitive",
+      2
+    ],
+    [
+      198,
+      "vector-map",
+      "vector-map",
+      "hof/vector-map",
+      "2",
+      [
+        "procedure",
+        "vector"
+      ],
+      "vector",
+      "exactly-one",
+      [
+        "HK300"
+      ],
+      "deterministic-pinned",
+      true,
+      "linear-collection-and-callbacks",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-3-guest-callback",
+      2
+    ],
+    [
+      199,
+      "vector-ref",
+      "vector-ref",
+      "aggregate/vector-ref",
+      "2",
+      [
+        "vector",
+        "exact-nonnegative-integer"
+      ],
+      "value",
+      "exactly-one",
+      [
+        "HK227"
+      ],
+      "deterministic-pinned",
+      false,
+      "constant",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-6-remaining-primitive",
+      2
+    ],
+    [
+      200,
+      "vector-set!",
+      "vector-set!",
+      "aggregate/vector-set",
+      "3",
+      [
+        "mutable-vector",
+        "exact-nonnegative-integer",
+        "value"
+      ],
+      "value",
+      "exactly-one",
+      [
+        "HK228"
+      ],
+      "deterministic-pinned",
+      false,
+      "constant",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-6-remaining-primitive",
+      2
+    ],
+    [
+      201,
+      "vector?",
+      "vector?",
+      "predicate/vector",
+      "1",
+      [
+        "value"
+      ],
+      "boolean",
+      "exactly-one",
+      [
+        "HK254"
+      ],
+      "deterministic-pinned",
+      false,
+      "constant",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-6-remaining-primitive",
+      2
+    ],
+    [
+      202,
+      "with-exception-handler",
+      "with-exception-handler",
+      "control/exception-handler",
+      "2",
+      [
+        "procedure",
+        "procedure"
+      ],
+      "value-packet",
+      "any-values",
+      [
+        "E332",
+        "HK236"
+      ],
+      "deterministic-pinned",
+      true,
+      "machine-transfer",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-3-guest-callback",
+      2
+    ],
+    [
+      203,
+      "write",
+      "write",
+      "io/write",
+      "1",
+      [
+        "value"
+      ],
+      "none",
+      "discard",
+      [
+        "HK310",
+        "HK901"
+      ],
+      "deterministic-pinned",
+      false,
+      "bounded-private-output-effect",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-6-remaining-primitive",
+      2
+    ],
+    [
+      204,
+      "zero?",
+      "zero?",
+      "predicate/zero",
+      "1",
+      [
+        "number"
+      ],
+      "boolean",
+      "exactly-one",
+      [
+        "HK293"
+      ],
+      "deterministic-pinned",
+      false,
+      "derived-numeric-kernel",
+      {
+        "rust": "supported",
+        "lil": "supported",
+        "lit": "supported"
+      },
+      {
+        "rust": "rust-reference-interpreter",
+        "lil": "guest-machine-dispatch",
+        "lit": "guest-machine-dispatch"
+      },
+      "j57-4-numeric",
+      2
+    ]
+  ]
+}

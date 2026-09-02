@@ -1,0 +1,17 @@
+record Row derives Show { id: int, name: string }
+
+function ids(rows: Array<Row>) -> Array<int> {
+  [ for Row { id, name: _name } in rows if id > 0 => id ]
+}
+
+function keep<T>(values: Array<T>) -> Array<T> {
+  values
+}
+
+let rows = [
+  Row { id: 1, name: "a" },
+  Row { id: 2, name: "b" },
+  Row { id: 0, name: "skip" },
+]
+let values: Array<int> = keep(ids(rows))
+let count: int = values.length

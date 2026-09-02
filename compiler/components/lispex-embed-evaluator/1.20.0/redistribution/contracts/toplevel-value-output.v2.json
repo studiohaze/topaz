@@ -1,0 +1,76 @@
+{
+  "schema": "lispex.ratified-semantic-rule/v2",
+  "rule_id": "TOPLEVEL-VALUE-OUTPUT-1",
+  "decision_id": "L120-SDL-TOPLEVEL-VALUE-OUTPUT-20260812-01",
+  "authority": "owner",
+  "ratified_at": "2026-08-12",
+  "recording_correction_authority": "L120-SDL-R4-CONFIRM-20260813-01",
+  "recorded_at": "2026-08-13",
+  "semantic_change": false,
+  "supersedes": {
+    "path": "product/contracts/toplevel-value-output.v1.json",
+    "sha256": "37309ee3d39c5bc7c49ab876dfd024e4040df4890674652236ba564796ce5361"
+  },
+  "append_only_compliance": "The ratified v1 contract remains byte-for-byte preserved. This v2 successor adds the result-channel clarification and explicit interface scope required by L120-SDL-R4-CONFIRM-20260813-01.",
+  "interface_scope": "batch-campaign-evaluation-interface",
+  "scope_note": "This rule applies only to the batch/campaign interface. REPL/interactive behavior requires a separate future contract.",
+  "wording": [
+    "Campaign evaluation stdout contains only explicit output effects.",
+    "Ordinary top-level expression results are not rendered to stdout; zero, one, and multiple values all contribute no stdout bytes.",
+    "Intermediate and final top-level forms follow the same stdout rule.",
+    "Warnings are rendered outside stdout on the observation warning channel, with warning order governed by OBSERVATION-CONTRACT-1.",
+    "Suppression of top-level value rendering affects only the stdout projection. It does not discard or alter the semantic result-value channel."
+  ],
+  "question_answers": {
+    "campaign_request_mode": {
+      "question": "Does this campaign request use REPL/corpus auto-print or batch output?",
+      "answer": "batch-output"
+    },
+    "stdout_contribution": {
+      "question": "Does stdout include top-level result rendering, or only explicit output effects?",
+      "answer": "explicit-output-effects-only"
+    },
+    "value_count_rendering": {
+      "question": "What is the stdout representation for zero, one, and multiple values?",
+      "zero_values": "not-rendered",
+      "one_value": "not-rendered",
+      "multiple_values": "not-rendered"
+    },
+    "warning_rendering": {
+      "question": "Which channel renders warnings, and in what order relative to stdout?",
+      "channel": "observation-warning-channel",
+      "stdout_membership": "excluded",
+      "relative_to_stdout": "separate-channel",
+      "warning_order": "governed-by-OBSERVATION-CONTRACT-1"
+    },
+    "top_level_form_treatment": {
+      "question": "Are intermediate forms rendered, or only the final result of each top-level form?",
+      "intermediate_forms": "not-rendered",
+      "final_forms": "not-rendered",
+      "distinction": "none"
+    },
+    "L120_SDL_102": {
+      "question": "What exact stdout bytes and warning-code order govern L120-SDL-102?",
+      "case_id": "L120-SDL-102",
+      "stdout_utf8": "done\n",
+      "stdout_byte_len": 5,
+      "stdout_sha256": "d117fa006ba9208500b2930ce69cbde436c647afa917cb7396a9bc9111a46dd2",
+      "warning_codes": [
+        "W330",
+        "W331",
+        "W331"
+      ],
+      "exit_status": 0
+    }
+  },
+  "existing_warning_contract": {
+    "path": "product/contracts/lispex-observation-contract.v1.json",
+    "contract_id": "lispex-observation-contract/1",
+    "rule_id": "OBSERVATION-CONTRACT-1",
+    "sha256": "efb521008ae1077163b55bcb0f77e03fa586bd047ead2ee9b7f5fa25e4a6c7f8"
+  },
+  "owner_decision_artifact": {
+    "path": "docs/plans/1.20-trust/ledger-rework/toplevel-value-output-decision.v1.json",
+    "sha256": "766c9bd8b7d184522fcf7b11e61350a0dc7062881d8d4d1bac58db9e29e9b263"
+  }
+}

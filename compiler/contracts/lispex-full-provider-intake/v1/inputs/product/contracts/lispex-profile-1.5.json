@@ -1,0 +1,63 @@
+{
+  "schema": "lispex.product-profile/v1",
+  "id": "lispex-profile-1.5",
+  "product_version": "1.5.0",
+  "semantic_ssot": "LISPEX-RUNTIME.md",
+  "language_contract": "lispex-r7rs-small-pinned/v1.4",
+  "contracts": {
+    "capabilities": "lispex.primitive-capabilities/v2",
+    "source_frontend": "lispex.source-frontend/v1",
+    "diagnostics": "lispex.diagnostic-catalog/v1",
+    "observation": "lispex.observation-result/v1",
+    "external_backend_protocol": "lispex.external-backend-protocol/v1",
+    "resources": "lispex.resource-profiles/v1",
+    "lit_compatibility": "lispex.topaz-lit-compatibility/v1",
+    "joint_release": "lispex.joint-release-dependency/v1"
+  },
+  "denominator": {
+    "primitive_rows": 205,
+    "guest_calling_rows": 18,
+    "source_frontend": "complete-contract-required",
+    "diagnostics_and_warnings": "complete-catalog-required",
+    "output_and_exit": "byte-exact-required",
+    "tco_and_resource": "product-profile-required"
+  },
+  "release_gates": {
+    "supported_capabilities": "205/205",
+    "unsupported": 0,
+    "guest_dispatch": "18/18",
+    "corpus_all_family": "144/144",
+    "family_pair_agreement": "432/432",
+    "generated_nway": "11088/11088",
+    "generated_mismatch": 0,
+    "forbidden_fallback": 0
+  },
+  "public_api": {
+    "default_backend": "rust",
+    "explicit_backend_selection_is_strict": true,
+    "fallback": false,
+    "cli": [
+      "lispex run --backend rust <program.lspx>",
+      "lispex run --backend lil <program.lspx>",
+      "lispex run --backend lit <program.lspx>",
+      "lispex backends --json",
+      "lispex compare --backends rust,lil,lit --receipt <result.json> <program.lspx>"
+    ],
+    "rust_api": [
+      "Backend::Rust",
+      "Backend::Lil",
+      "Backend::Lit",
+      "run_source_with_backend",
+      "compare_source_backends"
+    ],
+    "npm_wasm_api": [
+      "runLispex",
+      "listLispexBackends",
+      "compareLispexBackends"
+    ],
+    "topaz_cli": [
+      "topaz lispex run <program.lspx>",
+      "topaz lispex info --json"
+    ]
+  }
+}

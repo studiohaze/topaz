@@ -1,0 +1,2 @@
+match Array.of(1, 2, 3) { case [head, ..tail] => head
+case _ => 0 }

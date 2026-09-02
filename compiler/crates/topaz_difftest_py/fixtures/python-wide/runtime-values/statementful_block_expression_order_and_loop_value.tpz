@@ -1,0 +1,14 @@
+
+function main() -> string {
+    let value = {
+        let mut n = 1
+        n += 2
+        let text = loop {
+            print("block")
+            break "{n}"
+        }
+        "v:{text}"
+    }
+    "{value}"
+}
+main()

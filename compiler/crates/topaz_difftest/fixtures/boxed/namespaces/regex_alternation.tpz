@@ -1,0 +1,2 @@
+match Regex.compile("a|b") { case Ok(re) => re.isMatch("b")
+case Err(e) => false }

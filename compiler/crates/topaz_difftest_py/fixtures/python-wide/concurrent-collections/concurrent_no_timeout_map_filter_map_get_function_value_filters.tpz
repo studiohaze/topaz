@@ -1,0 +1,25 @@
+
+function keep(key: string, value: int) -> bool {
+    let mut i = 0
+    while i < 200 {
+        i = i + 1
+    }
+    key != "a" && value > 1
+}
+
+let callbacks = map { "primary": keep }
+
+let r = concurrent {
+    slow: {
+        let values = map { "a": 2, "b": 3, "c": 1 }
+        match callbacks.get("primary") {
+            case Some(cb) => {
+                let kept = values.filter(cb)
+                kept.getOr("a", 0) + kept.getOr("b", 0) + kept.getOr("c", 0)
+            }
+            case None => -1
+        }
+    }
+    fast: 0
+}
+r.slow + r.fast

@@ -1,0 +1,2 @@
+let f = Hash.sha256
+f(Bytes.encodeUtf8("abc")).toHex()

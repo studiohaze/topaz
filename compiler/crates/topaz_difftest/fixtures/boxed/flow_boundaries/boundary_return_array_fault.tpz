@@ -1,0 +1,2 @@
+function bad() -> Array<int> { ["x"] }
+bad()

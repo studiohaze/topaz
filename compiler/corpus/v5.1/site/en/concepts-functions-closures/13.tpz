@@ -1,0 +1,18 @@
+// Tail recursive factorial
+function tailFactorial(n: int, accumulator: int = 1) -> int {
+    if n <= 1 {
+        return accumulator
+    }
+    return tailFactorial(n - 1, accumulator * n)  // Tail call
+}
+
+// Tail recursive fibonacci
+function tailFibonacci(n: int, a: int = 0, b: int = 1) -> int {
+    if n == 0 {
+        return a
+    }
+    return tailFibonacci(n - 1, b, a + b)  // Tail call
+}
+
+print("{tailFactorial(10)}")  // 3628800
+print("{tailFibonacci(10)}")  // 55

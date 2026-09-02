@@ -1,0 +1,6 @@
+
+enum Cell<T> { Value(T) }
+match JSON.parseAs<Cell<int>>("\{\"tag\":\"Value\",\"values\":[7]\}") {
+    case Ok(Value(value)) => value
+    case Err(_) => 0
+}

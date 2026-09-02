@@ -1,0 +1,2 @@
+export function getK() { K }
+export const K = 7

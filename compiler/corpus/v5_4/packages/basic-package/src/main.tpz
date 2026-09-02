@@ -1,0 +1,21 @@
+import std.http { HttpRequest, HttpResponse, text }
+
+record User derives Show { name: string }
+
+function handle(_req: HttpRequest) -> HttpResponse {
+  text(200, Show.show(User { name: "Ada" }))
+}
+
+function demo() -> Result<int, string> {
+  let url = URL.parse("https://example.test/")?
+  let req = HttpRequest {
+    method: "GET",
+    url: url,
+    headers: map {},
+    body: Bytes.encodeUtf8(""),
+  }
+  let res = handle(req)
+  Ok(res.status)
+}
+
+let status: Result<int, string> = demo()

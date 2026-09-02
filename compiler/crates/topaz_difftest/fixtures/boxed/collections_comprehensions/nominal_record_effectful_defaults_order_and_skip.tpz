@@ -1,0 +1,11 @@
+let mut order = 0
+function mark(label: int, value: int) -> int {
+  order = order * 10 + label
+  print("{label}")
+  value
+}
+record User { a: int = mark(1, 10), b: int = mark(2, 20) }
+let explicit = User { a: 7, b: 8 }
+let partial = User { a: 3 }
+let omitted = User {}
+order * 100000 + explicit.a * 10000 + explicit.b * 1000 + partial.a * 100 + partial.b * 10 + omitted.a + omitted.b

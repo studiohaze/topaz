@@ -1,0 +1,2 @@
+let f = Cli.option
+f(["--out", "file", "--flag"], "--out")

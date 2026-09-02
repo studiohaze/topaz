@@ -1,0 +1,40 @@
+
+function codeSix() -> int {
+    6
+}
+
+function codeFour() -> int {
+    4
+}
+
+function codeZero() -> int {
+    0
+}
+
+function main() -> int {
+    let mut order = 0
+
+    function tick(label: int, value: int) -> int {
+        order = order * 10 + label
+        value
+    }
+
+    let r = concurrent {
+        slow: {
+            let mut cbs = [codeZero, codeFour]
+            let i = 1
+            cbs[i] = codeSix
+            let values: Array<Option<int>> = [Some(1), None]
+            let out = values[tick(1, i)].okOrElse(f: cbs[tick(2, i)])
+            let payload = match out {
+                case Ok(_) => -1
+                case Err(code) => code
+            }
+            order * 100 + payload
+        }
+        fast: 0
+    }
+    r.slow + r.fast
+}
+
+main()

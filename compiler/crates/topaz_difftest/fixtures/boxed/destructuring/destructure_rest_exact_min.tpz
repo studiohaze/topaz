@@ -1,0 +1,2 @@
+let [a, ..rest] = [5]
+rest

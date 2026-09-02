@@ -1,0 +1,16 @@
+
+function keep(key: string, value: int) -> bool {
+    let mut i = 0
+    while i < 200 {
+        i = i + 1
+    }
+    (1 / 0) == 0
+}
+
+concurrent {
+    slow: {
+        let values = map { "a": 1 }
+        values.filter(keep)
+    }
+}
+0

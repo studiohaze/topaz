@@ -1,0 +1,7 @@
+export function canonicalTag(index: int) -> int {
+    index % 3
+}
+
+export function counted(label: string, count: int, outcome: string) -> string {
+    "{label}:{count}:{outcome}"
+}

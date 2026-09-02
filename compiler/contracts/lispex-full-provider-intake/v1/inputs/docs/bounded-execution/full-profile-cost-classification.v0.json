@@ -1,0 +1,3846 @@
+{
+  "schema": "lispex.full-profile-cost-classification/v0",
+  "status": "private-zero-deferred-design-runtime-integration-complete",
+  "semantic_profile": "lispex-profile-1.5",
+  "generated_from": {
+    "authority": {
+      "path": "docs/bounded-execution/full-profile-cost-authority.v0.json",
+      "sha256": "cdfd292a09722d3cabb3b57a284b6b5adfa3ad5612773484afeb2ffa3c4bd29b"
+    },
+    "restricted_classification": {
+      "path": "docs/bounded-execution/primitive-cost-classification.v0.json",
+      "sha256": "3e0c76401be5053e55e1aea6d4b26b70a1f8c2a0a280181d96b39b7da8081b8e"
+    }
+  },
+  "immutable_predecessor": {
+    "artifact_sha256": "fa6e52559e1f5a43e50a3b7ac0cc5add6930cff0aed8aaff462cff4609362870",
+    "deferred_rows": [
+      "exact-integer-sqrt",
+      "expt",
+      "number->string",
+      "string->number"
+    ],
+    "changed": false
+  },
+  "summary": {
+    "rows": 205,
+    "restricted_class_counts": {
+      "Deferred": 4,
+      "Fixed": 70,
+      "GuestCalling": 18,
+      "Incremental": 98,
+      "Precharged": 15
+    },
+    "full_design_class_counts": {
+      "Fixed": 70,
+      "GuestCalling": 18,
+      "Incremental": 98,
+      "Precharged": 19
+    },
+    "former_deferred_designs_closed": 4,
+    "full_design_deferred_rows": 0,
+    "runtime_integration_counts": {
+      "collection-runtime-permit-integrated": 34,
+      "effect-runtime-permit-integrated": 10,
+      "fixed-runtime-permit-integrated": 70,
+      "guest-control-permit-integrated": 18,
+      "numeric-runtime-permit-integrated": 41,
+      "text-runtime-permit-integrated": 32
+    },
+    "fixed_runtime_rows": 70,
+    "numeric_runtime_rows": 41
+  },
+  "claims": {
+    "tariff_design_closed": true,
+    "runtime_integration_complete": true,
+    "fixed_runtime_integration_complete": true,
+    "full_profile_ready": false,
+    "public_identity_assigned": false,
+    "restricted_component_changed": false
+  },
+  "portable_value_encoding": {
+    "codec_id": "lispex.embed-value/v1",
+    "reuse_disposition": "private-candidate-not-frozen",
+    "full_encoder_symbol": "encode_full_profile_outcomes",
+    "restricted_encoder_unchanged": true,
+    "implemented_tags": {
+      "nil": "0x00",
+      "false": "0x01",
+      "true": "0x02",
+      "integer": "0x03",
+      "rational": "0x04",
+      "finite_real": "0x05",
+      "character": "0x06",
+      "symbol": "0x07",
+      "string": "0x08",
+      "proper_sequence": "0x09",
+      "improper_list": "0x0a",
+      "vector": "0x0b",
+      "bytevector": "0x0c"
+    },
+    "record_tag": "input-host-record-only-0x0d",
+    "cycle_rule": "cyclic-vector-refused-before-result-visibility",
+    "repeated_acyclic_vector_rule": "structural-repetition-no-object-identity",
+    "execution_only_rule": "refused"
+  },
+  "rows": [
+    {
+      "id": 0,
+      "name": "!=",
+      "restricted_cost_class": "Incremental",
+      "full_cost_class": "Incremental",
+      "dynamic_measure": "structural-equality",
+      "arity": "2",
+      "argument_codecs": [
+        "value",
+        "value"
+      ],
+      "result_codec": "boolean",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "collection-runtime-permit-integrated",
+      "meter_site_id": "primitive/000"
+    },
+    {
+      "id": 1,
+      "name": "%",
+      "restricted_cost_class": "Incremental",
+      "full_cost_class": "Incremental",
+      "dynamic_measure": "exact-integer-arithmetic-plus-warning",
+      "arity": "2",
+      "argument_codecs": [
+        "integer",
+        "integer"
+      ],
+      "result_codec": "integer",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "effect-runtime-permit-integrated",
+      "meter_site_id": "primitive/001"
+    },
+    {
+      "id": 2,
+      "name": "*",
+      "restricted_cost_class": "Precharged",
+      "full_cost_class": "Precharged",
+      "dynamic_measure": "linear-arguments",
+      "arity": "0+",
+      "argument_codecs": [
+        "number..."
+      ],
+      "result_codec": "number",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "numeric-runtime-permit-integrated",
+      "meter_site_id": "primitive/002"
+    },
+    {
+      "id": 3,
+      "name": "+",
+      "restricted_cost_class": "Precharged",
+      "full_cost_class": "Precharged",
+      "dynamic_measure": "linear-arguments",
+      "arity": "0+",
+      "argument_codecs": [
+        "number..."
+      ],
+      "result_codec": "number",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "numeric-runtime-permit-integrated",
+      "meter_site_id": "primitive/003"
+    },
+    {
+      "id": 4,
+      "name": "-",
+      "restricted_cost_class": "Incremental",
+      "full_cost_class": "Incremental",
+      "dynamic_measure": "linear-arguments",
+      "arity": "1+",
+      "argument_codecs": [
+        "number..."
+      ],
+      "result_codec": "number",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "numeric-runtime-permit-integrated",
+      "meter_site_id": "primitive/004"
+    },
+    {
+      "id": 5,
+      "name": "/",
+      "restricted_cost_class": "Incremental",
+      "full_cost_class": "Incremental",
+      "dynamic_measure": "linear-arguments",
+      "arity": "1+",
+      "argument_codecs": [
+        "number..."
+      ],
+      "result_codec": "number",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "numeric-runtime-permit-integrated",
+      "meter_site_id": "primitive/005"
+    },
+    {
+      "id": 6,
+      "name": "<",
+      "restricted_cost_class": "Precharged",
+      "full_cost_class": "Precharged",
+      "dynamic_measure": "linear-arguments",
+      "arity": "2+",
+      "argument_codecs": [
+        "number..."
+      ],
+      "result_codec": "boolean",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "numeric-runtime-permit-integrated",
+      "meter_site_id": "primitive/006"
+    },
+    {
+      "id": 7,
+      "name": "<=",
+      "restricted_cost_class": "Incremental",
+      "full_cost_class": "Incremental",
+      "dynamic_measure": "linear-arguments",
+      "arity": "2+",
+      "argument_codecs": [
+        "number..."
+      ],
+      "result_codec": "boolean",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "numeric-runtime-permit-integrated",
+      "meter_site_id": "primitive/007"
+    },
+    {
+      "id": 8,
+      "name": "=",
+      "restricted_cost_class": "Precharged",
+      "full_cost_class": "Precharged",
+      "dynamic_measure": "linear-arguments",
+      "arity": "2+",
+      "argument_codecs": [
+        "number..."
+      ],
+      "result_codec": "boolean",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "numeric-runtime-permit-integrated",
+      "meter_site_id": "primitive/008"
+    },
+    {
+      "id": 9,
+      "name": "==",
+      "restricted_cost_class": "Incremental",
+      "full_cost_class": "Incremental",
+      "dynamic_measure": "cycle-safe-structural",
+      "arity": "2",
+      "argument_codecs": [
+        "value",
+        "value"
+      ],
+      "result_codec": "boolean",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "collection-runtime-permit-integrated",
+      "meter_site_id": "primitive/009"
+    },
+    {
+      "id": 10,
+      "name": ">",
+      "restricted_cost_class": "Incremental",
+      "full_cost_class": "Incremental",
+      "dynamic_measure": "linear-arguments",
+      "arity": "2+",
+      "argument_codecs": [
+        "number..."
+      ],
+      "result_codec": "boolean",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "numeric-runtime-permit-integrated",
+      "meter_site_id": "primitive/010"
+    },
+    {
+      "id": 11,
+      "name": ">=",
+      "restricted_cost_class": "Incremental",
+      "full_cost_class": "Incremental",
+      "dynamic_measure": "linear-arguments",
+      "arity": "2+",
+      "argument_codecs": [
+        "number..."
+      ],
+      "result_codec": "boolean",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "numeric-runtime-permit-integrated",
+      "meter_site_id": "primitive/011"
+    },
+    {
+      "id": 12,
+      "name": "abs",
+      "restricted_cost_class": "Incremental",
+      "full_cost_class": "Incremental",
+      "dynamic_measure": "derived-numeric-kernel",
+      "arity": "1",
+      "argument_codecs": [
+        "number"
+      ],
+      "result_codec": "number",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "numeric-runtime-permit-integrated",
+      "meter_site_id": "primitive/012"
+    },
+    {
+      "id": 13,
+      "name": "all?",
+      "restricted_cost_class": "GuestCalling",
+      "full_cost_class": "GuestCalling",
+      "dynamic_measure": "linear-collection-and-callbacks",
+      "arity": "2",
+      "argument_codecs": [
+        "procedure",
+        "proper-list"
+      ],
+      "result_codec": "boolean",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "guest-control-permit-integrated",
+      "meter_site_id": "primitive/013"
+    },
+    {
+      "id": 14,
+      "name": "any?",
+      "restricted_cost_class": "GuestCalling",
+      "full_cost_class": "GuestCalling",
+      "dynamic_measure": "linear-collection-and-callbacks",
+      "arity": "2",
+      "argument_codecs": [
+        "procedure",
+        "proper-list"
+      ],
+      "result_codec": "boolean",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "guest-control-permit-integrated",
+      "meter_site_id": "primitive/014"
+    },
+    {
+      "id": 15,
+      "name": "append",
+      "restricted_cost_class": "Incremental",
+      "full_cost_class": "Incremental",
+      "dynamic_measure": "linear-copied-spines",
+      "arity": "0+",
+      "argument_codecs": [
+        "list...",
+        "value"
+      ],
+      "result_codec": "value",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "collection-runtime-permit-integrated",
+      "meter_site_id": "primitive/015"
+    },
+    {
+      "id": 16,
+      "name": "apply",
+      "restricted_cost_class": "GuestCalling",
+      "full_cost_class": "GuestCalling",
+      "dynamic_measure": "linear-arguments-plus-machine-dispatch",
+      "arity": "2+",
+      "argument_codecs": [
+        "procedure",
+        "value...",
+        "proper-list"
+      ],
+      "result_codec": "value-packet",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "guest-control-permit-integrated",
+      "meter_site_id": "primitive/016"
+    },
+    {
+      "id": 17,
+      "name": "assoc",
+      "restricted_cost_class": "Incremental",
+      "full_cost_class": "Incremental",
+      "dynamic_measure": "linear-alist",
+      "arity": "2",
+      "argument_codecs": [
+        "value",
+        "alist"
+      ],
+      "result_codec": "pair-or-false",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "collection-runtime-permit-integrated",
+      "meter_site_id": "primitive/017"
+    },
+    {
+      "id": 18,
+      "name": "assq",
+      "restricted_cost_class": "Incremental",
+      "full_cost_class": "Incremental",
+      "dynamic_measure": "linear-alist",
+      "arity": "2",
+      "argument_codecs": [
+        "value",
+        "alist"
+      ],
+      "result_codec": "pair-or-false",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "collection-runtime-permit-integrated",
+      "meter_site_id": "primitive/018"
+    },
+    {
+      "id": 19,
+      "name": "assv",
+      "restricted_cost_class": "Incremental",
+      "full_cost_class": "Incremental",
+      "dynamic_measure": "linear-alist",
+      "arity": "2",
+      "argument_codecs": [
+        "value",
+        "alist"
+      ],
+      "result_codec": "pair-or-false",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "collection-runtime-permit-integrated",
+      "meter_site_id": "primitive/019"
+    },
+    {
+      "id": 20,
+      "name": "boolean=?",
+      "restricted_cost_class": "Incremental",
+      "full_cost_class": "Incremental",
+      "dynamic_measure": "linear-arguments",
+      "arity": "2+",
+      "argument_codecs": [
+        "boolean..."
+      ],
+      "result_codec": "boolean",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "collection-runtime-permit-integrated",
+      "meter_site_id": "primitive/020"
+    },
+    {
+      "id": 21,
+      "name": "boolean?",
+      "restricted_cost_class": "Fixed",
+      "full_cost_class": "Fixed",
+      "dynamic_measure": "constant",
+      "arity": "1",
+      "argument_codecs": [
+        "value"
+      ],
+      "result_codec": "boolean",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "fixed-runtime-permit-integrated",
+      "meter_site_id": "primitive/021"
+    },
+    {
+      "id": 22,
+      "name": "bytevector",
+      "restricted_cost_class": "Precharged",
+      "full_cost_class": "Precharged",
+      "dynamic_measure": "linear-arguments",
+      "arity": "0+",
+      "argument_codecs": [
+        "byte..."
+      ],
+      "result_codec": "bytevector",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "collection-runtime-permit-integrated",
+      "meter_site_id": "primitive/022"
+    },
+    {
+      "id": 23,
+      "name": "bytevector-length",
+      "restricted_cost_class": "Fixed",
+      "full_cost_class": "Fixed",
+      "dynamic_measure": "constant",
+      "arity": "1",
+      "argument_codecs": [
+        "bytevector"
+      ],
+      "result_codec": "exact-integer",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "fixed-runtime-permit-integrated",
+      "meter_site_id": "primitive/023"
+    },
+    {
+      "id": 24,
+      "name": "bytevector-u8-ref",
+      "restricted_cost_class": "Fixed",
+      "full_cost_class": "Fixed",
+      "dynamic_measure": "constant",
+      "arity": "2",
+      "argument_codecs": [
+        "bytevector",
+        "exact-nonnegative-integer"
+      ],
+      "result_codec": "byte",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "fixed-runtime-permit-integrated",
+      "meter_site_id": "primitive/024"
+    },
+    {
+      "id": 25,
+      "name": "bytevector?",
+      "restricted_cost_class": "Fixed",
+      "full_cost_class": "Fixed",
+      "dynamic_measure": "constant",
+      "arity": "1",
+      "argument_codecs": [
+        "value"
+      ],
+      "result_codec": "boolean",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "fixed-runtime-permit-integrated",
+      "meter_site_id": "primitive/025"
+    },
+    {
+      "id": 26,
+      "name": "caaaar",
+      "restricted_cost_class": "Fixed",
+      "full_cost_class": "Fixed",
+      "dynamic_measure": "bounded-cxr-depth",
+      "arity": "1",
+      "argument_codecs": [
+        "pair-path"
+      ],
+      "result_codec": "value",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "fixed-runtime-permit-integrated",
+      "meter_site_id": "primitive/026"
+    },
+    {
+      "id": 27,
+      "name": "caaadr",
+      "restricted_cost_class": "Fixed",
+      "full_cost_class": "Fixed",
+      "dynamic_measure": "bounded-cxr-depth",
+      "arity": "1",
+      "argument_codecs": [
+        "pair-path"
+      ],
+      "result_codec": "value",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "fixed-runtime-permit-integrated",
+      "meter_site_id": "primitive/027"
+    },
+    {
+      "id": 28,
+      "name": "caaar",
+      "restricted_cost_class": "Fixed",
+      "full_cost_class": "Fixed",
+      "dynamic_measure": "bounded-cxr-depth",
+      "arity": "1",
+      "argument_codecs": [
+        "pair-path"
+      ],
+      "result_codec": "value",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "fixed-runtime-permit-integrated",
+      "meter_site_id": "primitive/028"
+    },
+    {
+      "id": 29,
+      "name": "caadar",
+      "restricted_cost_class": "Fixed",
+      "full_cost_class": "Fixed",
+      "dynamic_measure": "bounded-cxr-depth",
+      "arity": "1",
+      "argument_codecs": [
+        "pair-path"
+      ],
+      "result_codec": "value",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "fixed-runtime-permit-integrated",
+      "meter_site_id": "primitive/029"
+    },
+    {
+      "id": 30,
+      "name": "caaddr",
+      "restricted_cost_class": "Fixed",
+      "full_cost_class": "Fixed",
+      "dynamic_measure": "bounded-cxr-depth",
+      "arity": "1",
+      "argument_codecs": [
+        "pair-path"
+      ],
+      "result_codec": "value",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "fixed-runtime-permit-integrated",
+      "meter_site_id": "primitive/030"
+    },
+    {
+      "id": 31,
+      "name": "caadr",
+      "restricted_cost_class": "Fixed",
+      "full_cost_class": "Fixed",
+      "dynamic_measure": "bounded-cxr-depth",
+      "arity": "1",
+      "argument_codecs": [
+        "pair-path"
+      ],
+      "result_codec": "value",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "fixed-runtime-permit-integrated",
+      "meter_site_id": "primitive/031"
+    },
+    {
+      "id": 32,
+      "name": "caar",
+      "restricted_cost_class": "Fixed",
+      "full_cost_class": "Fixed",
+      "dynamic_measure": "bounded-cxr-depth",
+      "arity": "1",
+      "argument_codecs": [
+        "pair-path"
+      ],
+      "result_codec": "value",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "fixed-runtime-permit-integrated",
+      "meter_site_id": "primitive/032"
+    },
+    {
+      "id": 33,
+      "name": "cadaar",
+      "restricted_cost_class": "Fixed",
+      "full_cost_class": "Fixed",
+      "dynamic_measure": "bounded-cxr-depth",
+      "arity": "1",
+      "argument_codecs": [
+        "pair-path"
+      ],
+      "result_codec": "value",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "fixed-runtime-permit-integrated",
+      "meter_site_id": "primitive/033"
+    },
+    {
+      "id": 34,
+      "name": "cadadr",
+      "restricted_cost_class": "Fixed",
+      "full_cost_class": "Fixed",
+      "dynamic_measure": "bounded-cxr-depth",
+      "arity": "1",
+      "argument_codecs": [
+        "pair-path"
+      ],
+      "result_codec": "value",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "fixed-runtime-permit-integrated",
+      "meter_site_id": "primitive/034"
+    },
+    {
+      "id": 35,
+      "name": "cadar",
+      "restricted_cost_class": "Fixed",
+      "full_cost_class": "Fixed",
+      "dynamic_measure": "bounded-cxr-depth",
+      "arity": "1",
+      "argument_codecs": [
+        "pair-path"
+      ],
+      "result_codec": "value",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "fixed-runtime-permit-integrated",
+      "meter_site_id": "primitive/035"
+    },
+    {
+      "id": 36,
+      "name": "caddar",
+      "restricted_cost_class": "Fixed",
+      "full_cost_class": "Fixed",
+      "dynamic_measure": "bounded-cxr-depth",
+      "arity": "1",
+      "argument_codecs": [
+        "pair-path"
+      ],
+      "result_codec": "value",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "fixed-runtime-permit-integrated",
+      "meter_site_id": "primitive/036"
+    },
+    {
+      "id": 37,
+      "name": "cadddr",
+      "restricted_cost_class": "Fixed",
+      "full_cost_class": "Fixed",
+      "dynamic_measure": "bounded-cxr-depth",
+      "arity": "1",
+      "argument_codecs": [
+        "pair-path"
+      ],
+      "result_codec": "value",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "fixed-runtime-permit-integrated",
+      "meter_site_id": "primitive/037"
+    },
+    {
+      "id": 38,
+      "name": "caddr",
+      "restricted_cost_class": "Fixed",
+      "full_cost_class": "Fixed",
+      "dynamic_measure": "bounded-cxr-depth",
+      "arity": "1",
+      "argument_codecs": [
+        "pair-path"
+      ],
+      "result_codec": "value",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "fixed-runtime-permit-integrated",
+      "meter_site_id": "primitive/038"
+    },
+    {
+      "id": 39,
+      "name": "cadr",
+      "restricted_cost_class": "Fixed",
+      "full_cost_class": "Fixed",
+      "dynamic_measure": "constant",
+      "arity": "1",
+      "argument_codecs": [
+        "pair"
+      ],
+      "result_codec": "value",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "fixed-runtime-permit-integrated",
+      "meter_site_id": "primitive/039"
+    },
+    {
+      "id": 40,
+      "name": "call-with-current-continuation",
+      "restricted_cost_class": "GuestCalling",
+      "full_cost_class": "GuestCalling",
+      "dynamic_measure": "machine-transfer",
+      "arity": "1",
+      "argument_codecs": [
+        "procedure"
+      ],
+      "result_codec": "value-packet",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "guest-control-permit-integrated",
+      "meter_site_id": "primitive/040"
+    },
+    {
+      "id": 41,
+      "name": "call-with-values",
+      "restricted_cost_class": "GuestCalling",
+      "full_cost_class": "GuestCalling",
+      "dynamic_measure": "machine-dispatch",
+      "arity": "2",
+      "argument_codecs": [
+        "procedure",
+        "procedure"
+      ],
+      "result_codec": "value-packet",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "guest-control-permit-integrated",
+      "meter_site_id": "primitive/041"
+    },
+    {
+      "id": 42,
+      "name": "call/cc",
+      "restricted_cost_class": "GuestCalling",
+      "full_cost_class": "GuestCalling",
+      "dynamic_measure": "machine-transfer",
+      "arity": "1",
+      "argument_codecs": [
+        "procedure"
+      ],
+      "result_codec": "value-packet",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "guest-control-permit-integrated",
+      "meter_site_id": "primitive/042"
+    },
+    {
+      "id": 43,
+      "name": "car",
+      "restricted_cost_class": "Fixed",
+      "full_cost_class": "Fixed",
+      "dynamic_measure": "constant",
+      "arity": "1",
+      "argument_codecs": [
+        "pair"
+      ],
+      "result_codec": "value",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "fixed-runtime-permit-integrated",
+      "meter_site_id": "primitive/043"
+    },
+    {
+      "id": 44,
+      "name": "cdaaar",
+      "restricted_cost_class": "Fixed",
+      "full_cost_class": "Fixed",
+      "dynamic_measure": "bounded-cxr-depth",
+      "arity": "1",
+      "argument_codecs": [
+        "pair-path"
+      ],
+      "result_codec": "value",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "fixed-runtime-permit-integrated",
+      "meter_site_id": "primitive/044"
+    },
+    {
+      "id": 45,
+      "name": "cdaadr",
+      "restricted_cost_class": "Fixed",
+      "full_cost_class": "Fixed",
+      "dynamic_measure": "bounded-cxr-depth",
+      "arity": "1",
+      "argument_codecs": [
+        "pair-path"
+      ],
+      "result_codec": "value",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "fixed-runtime-permit-integrated",
+      "meter_site_id": "primitive/045"
+    },
+    {
+      "id": 46,
+      "name": "cdaar",
+      "restricted_cost_class": "Fixed",
+      "full_cost_class": "Fixed",
+      "dynamic_measure": "bounded-cxr-depth",
+      "arity": "1",
+      "argument_codecs": [
+        "pair-path"
+      ],
+      "result_codec": "value",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "fixed-runtime-permit-integrated",
+      "meter_site_id": "primitive/046"
+    },
+    {
+      "id": 47,
+      "name": "cdadar",
+      "restricted_cost_class": "Fixed",
+      "full_cost_class": "Fixed",
+      "dynamic_measure": "bounded-cxr-depth",
+      "arity": "1",
+      "argument_codecs": [
+        "pair-path"
+      ],
+      "result_codec": "value",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "fixed-runtime-permit-integrated",
+      "meter_site_id": "primitive/047"
+    },
+    {
+      "id": 48,
+      "name": "cdaddr",
+      "restricted_cost_class": "Fixed",
+      "full_cost_class": "Fixed",
+      "dynamic_measure": "bounded-cxr-depth",
+      "arity": "1",
+      "argument_codecs": [
+        "pair-path"
+      ],
+      "result_codec": "value",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "fixed-runtime-permit-integrated",
+      "meter_site_id": "primitive/048"
+    },
+    {
+      "id": 49,
+      "name": "cdadr",
+      "restricted_cost_class": "Fixed",
+      "full_cost_class": "Fixed",
+      "dynamic_measure": "bounded-cxr-depth",
+      "arity": "1",
+      "argument_codecs": [
+        "pair-path"
+      ],
+      "result_codec": "value",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "fixed-runtime-permit-integrated",
+      "meter_site_id": "primitive/049"
+    },
+    {
+      "id": 50,
+      "name": "cdar",
+      "restricted_cost_class": "Fixed",
+      "full_cost_class": "Fixed",
+      "dynamic_measure": "bounded-cxr-depth",
+      "arity": "1",
+      "argument_codecs": [
+        "pair-path"
+      ],
+      "result_codec": "value",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "fixed-runtime-permit-integrated",
+      "meter_site_id": "primitive/050"
+    },
+    {
+      "id": 51,
+      "name": "cddaar",
+      "restricted_cost_class": "Fixed",
+      "full_cost_class": "Fixed",
+      "dynamic_measure": "bounded-cxr-depth",
+      "arity": "1",
+      "argument_codecs": [
+        "pair-path"
+      ],
+      "result_codec": "value",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "fixed-runtime-permit-integrated",
+      "meter_site_id": "primitive/051"
+    },
+    {
+      "id": 52,
+      "name": "cddadr",
+      "restricted_cost_class": "Fixed",
+      "full_cost_class": "Fixed",
+      "dynamic_measure": "bounded-cxr-depth",
+      "arity": "1",
+      "argument_codecs": [
+        "pair-path"
+      ],
+      "result_codec": "value",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "fixed-runtime-permit-integrated",
+      "meter_site_id": "primitive/052"
+    },
+    {
+      "id": 53,
+      "name": "cddar",
+      "restricted_cost_class": "Fixed",
+      "full_cost_class": "Fixed",
+      "dynamic_measure": "bounded-cxr-depth",
+      "arity": "1",
+      "argument_codecs": [
+        "pair-path"
+      ],
+      "result_codec": "value",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "fixed-runtime-permit-integrated",
+      "meter_site_id": "primitive/053"
+    },
+    {
+      "id": 54,
+      "name": "cdddar",
+      "restricted_cost_class": "Fixed",
+      "full_cost_class": "Fixed",
+      "dynamic_measure": "bounded-cxr-depth",
+      "arity": "1",
+      "argument_codecs": [
+        "pair-path"
+      ],
+      "result_codec": "value",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "fixed-runtime-permit-integrated",
+      "meter_site_id": "primitive/054"
+    },
+    {
+      "id": 55,
+      "name": "cddddr",
+      "restricted_cost_class": "Fixed",
+      "full_cost_class": "Fixed",
+      "dynamic_measure": "bounded-cxr-depth",
+      "arity": "1",
+      "argument_codecs": [
+        "pair-path"
+      ],
+      "result_codec": "value",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "fixed-runtime-permit-integrated",
+      "meter_site_id": "primitive/055"
+    },
+    {
+      "id": 56,
+      "name": "cdddr",
+      "restricted_cost_class": "Fixed",
+      "full_cost_class": "Fixed",
+      "dynamic_measure": "bounded-cxr-depth",
+      "arity": "1",
+      "argument_codecs": [
+        "pair-path"
+      ],
+      "result_codec": "value",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "fixed-runtime-permit-integrated",
+      "meter_site_id": "primitive/056"
+    },
+    {
+      "id": 57,
+      "name": "cddr",
+      "restricted_cost_class": "Fixed",
+      "full_cost_class": "Fixed",
+      "dynamic_measure": "bounded-cxr-depth",
+      "arity": "1",
+      "argument_codecs": [
+        "pair-path"
+      ],
+      "result_codec": "value",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "fixed-runtime-permit-integrated",
+      "meter_site_id": "primitive/057"
+    },
+    {
+      "id": 58,
+      "name": "cdr",
+      "restricted_cost_class": "Fixed",
+      "full_cost_class": "Fixed",
+      "dynamic_measure": "constant",
+      "arity": "1",
+      "argument_codecs": [
+        "pair"
+      ],
+      "result_codec": "value",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "fixed-runtime-permit-integrated",
+      "meter_site_id": "primitive/058"
+    },
+    {
+      "id": 59,
+      "name": "ceiling",
+      "restricted_cost_class": "Incremental",
+      "full_cost_class": "Incremental",
+      "dynamic_measure": "numeric-kernel",
+      "arity": "1",
+      "argument_codecs": [
+        "number"
+      ],
+      "result_codec": "integer-valued-number",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "numeric-runtime-permit-integrated",
+      "meter_site_id": "primitive/059"
+    },
+    {
+      "id": 60,
+      "name": "char->integer",
+      "restricted_cost_class": "Fixed",
+      "full_cost_class": "Fixed",
+      "dynamic_measure": "constant",
+      "arity": "1",
+      "argument_codecs": [
+        "char"
+      ],
+      "result_codec": "exact-integer",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "fixed-runtime-permit-integrated",
+      "meter_site_id": "primitive/060"
+    },
+    {
+      "id": 61,
+      "name": "char-alphabetic?",
+      "restricted_cost_class": "Fixed",
+      "full_cost_class": "Fixed",
+      "dynamic_measure": "constant",
+      "arity": "1",
+      "argument_codecs": [
+        "char"
+      ],
+      "result_codec": "boolean",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "fixed-runtime-permit-integrated",
+      "meter_site_id": "primitive/061"
+    },
+    {
+      "id": 62,
+      "name": "char-ci<=?",
+      "restricted_cost_class": "Incremental",
+      "full_cost_class": "Incremental",
+      "dynamic_measure": "linear-arguments",
+      "arity": "2+",
+      "argument_codecs": [
+        "char..."
+      ],
+      "result_codec": "boolean",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "text-runtime-permit-integrated",
+      "meter_site_id": "primitive/062"
+    },
+    {
+      "id": 63,
+      "name": "char-ci<?",
+      "restricted_cost_class": "Incremental",
+      "full_cost_class": "Incremental",
+      "dynamic_measure": "linear-arguments",
+      "arity": "2+",
+      "argument_codecs": [
+        "char..."
+      ],
+      "result_codec": "boolean",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "text-runtime-permit-integrated",
+      "meter_site_id": "primitive/063"
+    },
+    {
+      "id": 64,
+      "name": "char-ci=?",
+      "restricted_cost_class": "Incremental",
+      "full_cost_class": "Incremental",
+      "dynamic_measure": "linear-arguments",
+      "arity": "2+",
+      "argument_codecs": [
+        "char..."
+      ],
+      "result_codec": "boolean",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "text-runtime-permit-integrated",
+      "meter_site_id": "primitive/064"
+    },
+    {
+      "id": 65,
+      "name": "char-ci>=?",
+      "restricted_cost_class": "Incremental",
+      "full_cost_class": "Incremental",
+      "dynamic_measure": "linear-arguments",
+      "arity": "2+",
+      "argument_codecs": [
+        "char..."
+      ],
+      "result_codec": "boolean",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "text-runtime-permit-integrated",
+      "meter_site_id": "primitive/065"
+    },
+    {
+      "id": 66,
+      "name": "char-ci>?",
+      "restricted_cost_class": "Incremental",
+      "full_cost_class": "Incremental",
+      "dynamic_measure": "linear-arguments",
+      "arity": "2+",
+      "argument_codecs": [
+        "char..."
+      ],
+      "result_codec": "boolean",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "text-runtime-permit-integrated",
+      "meter_site_id": "primitive/066"
+    },
+    {
+      "id": 67,
+      "name": "char-downcase",
+      "restricted_cost_class": "Fixed",
+      "full_cost_class": "Fixed",
+      "dynamic_measure": "unicode-char",
+      "arity": "1",
+      "argument_codecs": [
+        "char"
+      ],
+      "result_codec": "char",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "fixed-runtime-permit-integrated",
+      "meter_site_id": "primitive/067"
+    },
+    {
+      "id": 68,
+      "name": "char-foldcase",
+      "restricted_cost_class": "Fixed",
+      "full_cost_class": "Fixed",
+      "dynamic_measure": "unicode-char",
+      "arity": "1",
+      "argument_codecs": [
+        "char"
+      ],
+      "result_codec": "char",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "fixed-runtime-permit-integrated",
+      "meter_site_id": "primitive/068"
+    },
+    {
+      "id": 69,
+      "name": "char-lower-case?",
+      "restricted_cost_class": "Fixed",
+      "full_cost_class": "Fixed",
+      "dynamic_measure": "unicode-char",
+      "arity": "1",
+      "argument_codecs": [
+        "char"
+      ],
+      "result_codec": "boolean",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "fixed-runtime-permit-integrated",
+      "meter_site_id": "primitive/069"
+    },
+    {
+      "id": 70,
+      "name": "char-numeric?",
+      "restricted_cost_class": "Fixed",
+      "full_cost_class": "Fixed",
+      "dynamic_measure": "constant",
+      "arity": "1",
+      "argument_codecs": [
+        "char"
+      ],
+      "result_codec": "boolean",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "fixed-runtime-permit-integrated",
+      "meter_site_id": "primitive/070"
+    },
+    {
+      "id": 71,
+      "name": "char-upcase",
+      "restricted_cost_class": "Fixed",
+      "full_cost_class": "Fixed",
+      "dynamic_measure": "unicode-char",
+      "arity": "1",
+      "argument_codecs": [
+        "char"
+      ],
+      "result_codec": "char",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "fixed-runtime-permit-integrated",
+      "meter_site_id": "primitive/071"
+    },
+    {
+      "id": 72,
+      "name": "char-upper-case?",
+      "restricted_cost_class": "Fixed",
+      "full_cost_class": "Fixed",
+      "dynamic_measure": "unicode-char",
+      "arity": "1",
+      "argument_codecs": [
+        "char"
+      ],
+      "result_codec": "boolean",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "fixed-runtime-permit-integrated",
+      "meter_site_id": "primitive/072"
+    },
+    {
+      "id": 73,
+      "name": "char-whitespace?",
+      "restricted_cost_class": "Fixed",
+      "full_cost_class": "Fixed",
+      "dynamic_measure": "unicode-char",
+      "arity": "1",
+      "argument_codecs": [
+        "char"
+      ],
+      "result_codec": "boolean",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "fixed-runtime-permit-integrated",
+      "meter_site_id": "primitive/073"
+    },
+    {
+      "id": 74,
+      "name": "char<=?",
+      "restricted_cost_class": "Incremental",
+      "full_cost_class": "Incremental",
+      "dynamic_measure": "linear-arguments",
+      "arity": "2+",
+      "argument_codecs": [
+        "char..."
+      ],
+      "result_codec": "boolean",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "text-runtime-permit-integrated",
+      "meter_site_id": "primitive/074"
+    },
+    {
+      "id": 75,
+      "name": "char<?",
+      "restricted_cost_class": "Incremental",
+      "full_cost_class": "Incremental",
+      "dynamic_measure": "linear-arguments",
+      "arity": "2+",
+      "argument_codecs": [
+        "char..."
+      ],
+      "result_codec": "boolean",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "text-runtime-permit-integrated",
+      "meter_site_id": "primitive/075"
+    },
+    {
+      "id": 76,
+      "name": "char=?",
+      "restricted_cost_class": "Incremental",
+      "full_cost_class": "Incremental",
+      "dynamic_measure": "linear-arguments",
+      "arity": "2+",
+      "argument_codecs": [
+        "char..."
+      ],
+      "result_codec": "boolean",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "text-runtime-permit-integrated",
+      "meter_site_id": "primitive/076"
+    },
+    {
+      "id": 77,
+      "name": "char>=?",
+      "restricted_cost_class": "Incremental",
+      "full_cost_class": "Incremental",
+      "dynamic_measure": "linear-arguments",
+      "arity": "2+",
+      "argument_codecs": [
+        "char..."
+      ],
+      "result_codec": "boolean",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "text-runtime-permit-integrated",
+      "meter_site_id": "primitive/077"
+    },
+    {
+      "id": 78,
+      "name": "char>?",
+      "restricted_cost_class": "Incremental",
+      "full_cost_class": "Incremental",
+      "dynamic_measure": "linear-arguments",
+      "arity": "2+",
+      "argument_codecs": [
+        "char..."
+      ],
+      "result_codec": "boolean",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "text-runtime-permit-integrated",
+      "meter_site_id": "primitive/078"
+    },
+    {
+      "id": 79,
+      "name": "char?",
+      "restricted_cost_class": "Fixed",
+      "full_cost_class": "Fixed",
+      "dynamic_measure": "constant",
+      "arity": "1",
+      "argument_codecs": [
+        "value"
+      ],
+      "result_codec": "boolean",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "fixed-runtime-permit-integrated",
+      "meter_site_id": "primitive/079"
+    },
+    {
+      "id": 80,
+      "name": "complex?",
+      "restricted_cost_class": "Fixed",
+      "full_cost_class": "Fixed",
+      "dynamic_measure": "constant",
+      "arity": "1",
+      "argument_codecs": [
+        "value"
+      ],
+      "result_codec": "boolean",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "fixed-runtime-permit-integrated",
+      "meter_site_id": "primitive/080"
+    },
+    {
+      "id": 81,
+      "name": "cons",
+      "restricted_cost_class": "Precharged",
+      "full_cost_class": "Precharged",
+      "dynamic_measure": "constant",
+      "arity": "2",
+      "argument_codecs": [
+        "value",
+        "value"
+      ],
+      "result_codec": "pair",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "collection-runtime-permit-integrated",
+      "meter_site_id": "primitive/081"
+    },
+    {
+      "id": 82,
+      "name": "display",
+      "restricted_cost_class": "Incremental",
+      "full_cost_class": "Incremental",
+      "dynamic_measure": "bounded-private-output-effect",
+      "arity": "1",
+      "argument_codecs": [
+        "value"
+      ],
+      "result_codec": "none",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "effect-runtime-permit-integrated",
+      "meter_site_id": "primitive/082"
+    },
+    {
+      "id": 83,
+      "name": "dynamic-wind",
+      "restricted_cost_class": "GuestCalling",
+      "full_cost_class": "GuestCalling",
+      "dynamic_measure": "machine-transfer",
+      "arity": "3",
+      "argument_codecs": [
+        "procedure",
+        "procedure",
+        "procedure"
+      ],
+      "result_codec": "value-packet",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "guest-control-permit-integrated",
+      "meter_site_id": "primitive/083"
+    },
+    {
+      "id": 84,
+      "name": "empty?",
+      "restricted_cost_class": "Fixed",
+      "full_cost_class": "Fixed",
+      "dynamic_measure": "constant",
+      "arity": "1",
+      "argument_codecs": [
+        "value"
+      ],
+      "result_codec": "boolean",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "fixed-runtime-permit-integrated",
+      "meter_site_id": "primitive/084"
+    },
+    {
+      "id": 85,
+      "name": "eq?",
+      "restricted_cost_class": "Fixed",
+      "full_cost_class": "Fixed",
+      "dynamic_measure": "constant",
+      "arity": "2",
+      "argument_codecs": [
+        "value",
+        "value"
+      ],
+      "result_codec": "boolean",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "fixed-runtime-permit-integrated",
+      "meter_site_id": "primitive/085"
+    },
+    {
+      "id": 86,
+      "name": "equal?",
+      "restricted_cost_class": "Incremental",
+      "full_cost_class": "Incremental",
+      "dynamic_measure": "cycle-safe-structural",
+      "arity": "2",
+      "argument_codecs": [
+        "value",
+        "value"
+      ],
+      "result_codec": "boolean",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "collection-runtime-permit-integrated",
+      "meter_site_id": "primitive/086"
+    },
+    {
+      "id": 87,
+      "name": "eqv?",
+      "restricted_cost_class": "Fixed",
+      "full_cost_class": "Fixed",
+      "dynamic_measure": "constant",
+      "arity": "2",
+      "argument_codecs": [
+        "value",
+        "value"
+      ],
+      "result_codec": "boolean",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "fixed-runtime-permit-integrated",
+      "meter_site_id": "primitive/087"
+    },
+    {
+      "id": 88,
+      "name": "error",
+      "restricted_cost_class": "Incremental",
+      "full_cost_class": "Incremental",
+      "dynamic_measure": "machine-transfer",
+      "arity": "1+",
+      "argument_codecs": [
+        "string",
+        "value..."
+      ],
+      "result_codec": "none",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "effect-runtime-permit-integrated",
+      "meter_site_id": "primitive/088"
+    },
+    {
+      "id": 89,
+      "name": "error-object-irritants",
+      "restricted_cost_class": "Incremental",
+      "full_cost_class": "Incremental",
+      "dynamic_measure": "linear-irritants",
+      "arity": "1",
+      "argument_codecs": [
+        "error-object"
+      ],
+      "result_codec": "list",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "collection-runtime-permit-integrated",
+      "meter_site_id": "primitive/089"
+    },
+    {
+      "id": 90,
+      "name": "error-object-message",
+      "restricted_cost_class": "Fixed",
+      "full_cost_class": "Fixed",
+      "dynamic_measure": "constant",
+      "arity": "1",
+      "argument_codecs": [
+        "error-object"
+      ],
+      "result_codec": "string",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "fixed-runtime-permit-integrated",
+      "meter_site_id": "primitive/090"
+    },
+    {
+      "id": 91,
+      "name": "error-object?",
+      "restricted_cost_class": "Fixed",
+      "full_cost_class": "Fixed",
+      "dynamic_measure": "constant",
+      "arity": "1",
+      "argument_codecs": [
+        "value"
+      ],
+      "result_codec": "boolean",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "fixed-runtime-permit-integrated",
+      "meter_site_id": "primitive/091"
+    },
+    {
+      "id": 92,
+      "name": "even?",
+      "restricted_cost_class": "Incremental",
+      "full_cost_class": "Incremental",
+      "dynamic_measure": "numeric-kernel",
+      "arity": "1",
+      "argument_codecs": [
+        "integer"
+      ],
+      "result_codec": "boolean",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "numeric-runtime-permit-integrated",
+      "meter_site_id": "primitive/092"
+    },
+    {
+      "id": 93,
+      "name": "exact",
+      "restricted_cost_class": "Incremental",
+      "full_cost_class": "Incremental",
+      "dynamic_measure": "numeric-kernel",
+      "arity": "1",
+      "argument_codecs": [
+        "number"
+      ],
+      "result_codec": "exact-number",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "numeric-runtime-permit-integrated",
+      "meter_site_id": "primitive/093"
+    },
+    {
+      "id": 94,
+      "name": "exact->inexact",
+      "restricted_cost_class": "Incremental",
+      "full_cost_class": "Incremental",
+      "dynamic_measure": "numeric-kernel",
+      "arity": "1",
+      "argument_codecs": [
+        "number"
+      ],
+      "result_codec": "inexact-number",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "numeric-runtime-permit-integrated",
+      "meter_site_id": "primitive/094"
+    },
+    {
+      "id": 95,
+      "name": "exact-integer-sqrt",
+      "restricted_cost_class": "Deferred",
+      "full_cost_class": "Precharged",
+      "dynamic_measure": "exact-integer-sqrt-32-bit-limbs-v0",
+      "arity": "1",
+      "argument_codecs": [
+        "exact-nonnegative-integer"
+      ],
+      "result_codec": "integer-pair",
+      "work_formula": "8 + 4*n + n*n",
+      "allocation_formula": "4 + n + ceil(n/2)",
+      "effect_order": "arity,type,nonnegative,charge,compute,two-values",
+      "source_operation": "BigInt::sqrt plus exact remainder",
+      "runtime_integration": "numeric-runtime-permit-integrated",
+      "meter_site_id": "primitive/095"
+    },
+    {
+      "id": 96,
+      "name": "exact-integer?",
+      "restricted_cost_class": "Fixed",
+      "full_cost_class": "Fixed",
+      "dynamic_measure": "constant",
+      "arity": "1",
+      "argument_codecs": [
+        "value"
+      ],
+      "result_codec": "boolean",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "fixed-runtime-permit-integrated",
+      "meter_site_id": "primitive/096"
+    },
+    {
+      "id": 97,
+      "name": "exact?",
+      "restricted_cost_class": "Fixed",
+      "full_cost_class": "Fixed",
+      "dynamic_measure": "constant",
+      "arity": "1",
+      "argument_codecs": [
+        "number"
+      ],
+      "result_codec": "boolean",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "fixed-runtime-permit-integrated",
+      "meter_site_id": "primitive/097"
+    },
+    {
+      "id": 98,
+      "name": "expt",
+      "restricted_cost_class": "Deferred",
+      "full_cost_class": "Precharged",
+      "dynamic_measure": "exact-or-finite-expt-32-bit-limbs-v0",
+      "arity": "2",
+      "argument_codecs": [
+        "number",
+        "exact-integer"
+      ],
+      "result_codec": "number",
+      "work_formula": "trivial:8+base_limbs+exp_limbs; finite:72+exp_limbs; exact:16+exp_limbs+(magnitude+1)*(base_limbs+1)^2",
+      "allocation_formula": "trivial:2; finite:2; exact:4+(magnitude+1)*(base_limbs+1)",
+      "effect_order": "arity,base-type,exponent-type,trivial-or-range,charge,compute",
+      "source_operation": "pinned integer exponentiation with exact rational contagion",
+      "runtime_integration": "numeric-runtime-permit-integrated",
+      "meter_site_id": "primitive/098"
+    },
+    {
+      "id": 99,
+      "name": "filter",
+      "restricted_cost_class": "GuestCalling",
+      "full_cost_class": "GuestCalling",
+      "dynamic_measure": "linear-collection-and-callbacks",
+      "arity": "2",
+      "argument_codecs": [
+        "procedure",
+        "proper-list"
+      ],
+      "result_codec": "list",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "guest-control-permit-integrated",
+      "meter_site_id": "primitive/099"
+    },
+    {
+      "id": 100,
+      "name": "first",
+      "restricted_cost_class": "Fixed",
+      "full_cost_class": "Fixed",
+      "dynamic_measure": "constant",
+      "arity": "1",
+      "argument_codecs": [
+        "pair"
+      ],
+      "result_codec": "value",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "fixed-runtime-permit-integrated",
+      "meter_site_id": "primitive/100"
+    },
+    {
+      "id": 101,
+      "name": "floor",
+      "restricted_cost_class": "Incremental",
+      "full_cost_class": "Incremental",
+      "dynamic_measure": "numeric-kernel",
+      "arity": "1",
+      "argument_codecs": [
+        "number"
+      ],
+      "result_codec": "integer-valued-number",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "numeric-runtime-permit-integrated",
+      "meter_site_id": "primitive/101"
+    },
+    {
+      "id": 102,
+      "name": "floor-quotient",
+      "restricted_cost_class": "Incremental",
+      "full_cost_class": "Incremental",
+      "dynamic_measure": "exact-integer-arithmetic",
+      "arity": "2",
+      "argument_codecs": [
+        "integer",
+        "integer"
+      ],
+      "result_codec": "integer",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "numeric-runtime-permit-integrated",
+      "meter_site_id": "primitive/102"
+    },
+    {
+      "id": 103,
+      "name": "floor-remainder",
+      "restricted_cost_class": "Incremental",
+      "full_cost_class": "Incremental",
+      "dynamic_measure": "exact-integer-arithmetic",
+      "arity": "2",
+      "argument_codecs": [
+        "integer",
+        "integer"
+      ],
+      "result_codec": "integer",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "numeric-runtime-permit-integrated",
+      "meter_site_id": "primitive/103"
+    },
+    {
+      "id": 104,
+      "name": "floor/",
+      "restricted_cost_class": "Incremental",
+      "full_cost_class": "Incremental",
+      "dynamic_measure": "exact-integer-arithmetic",
+      "arity": "2",
+      "argument_codecs": [
+        "integer",
+        "integer"
+      ],
+      "result_codec": "integer-pair",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "numeric-runtime-permit-integrated",
+      "meter_site_id": "primitive/104"
+    },
+    {
+      "id": 105,
+      "name": "fold-left",
+      "restricted_cost_class": "GuestCalling",
+      "full_cost_class": "GuestCalling",
+      "dynamic_measure": "linear-collection-and-callbacks",
+      "arity": "3",
+      "argument_codecs": [
+        "procedure",
+        "value",
+        "proper-list"
+      ],
+      "result_codec": "value",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "guest-control-permit-integrated",
+      "meter_site_id": "primitive/105"
+    },
+    {
+      "id": 106,
+      "name": "fold-right",
+      "restricted_cost_class": "GuestCalling",
+      "full_cost_class": "GuestCalling",
+      "dynamic_measure": "linear-collection-and-callbacks",
+      "arity": "3",
+      "argument_codecs": [
+        "procedure",
+        "value",
+        "proper-list"
+      ],
+      "result_codec": "value",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "guest-control-permit-integrated",
+      "meter_site_id": "primitive/106"
+    },
+    {
+      "id": 107,
+      "name": "for-each",
+      "restricted_cost_class": "GuestCalling",
+      "full_cost_class": "GuestCalling",
+      "dynamic_measure": "linear-collection-and-callbacks",
+      "arity": "2",
+      "argument_codecs": [
+        "procedure",
+        "proper-list"
+      ],
+      "result_codec": "none",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "guest-control-permit-integrated",
+      "meter_site_id": "primitive/107"
+    },
+    {
+      "id": 108,
+      "name": "gcd",
+      "restricted_cost_class": "Incremental",
+      "full_cost_class": "Incremental",
+      "dynamic_measure": "linear-arguments",
+      "arity": "0+",
+      "argument_codecs": [
+        "integer..."
+      ],
+      "result_codec": "nonnegative-integer",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "numeric-runtime-permit-integrated",
+      "meter_site_id": "primitive/108"
+    },
+    {
+      "id": 109,
+      "name": "inexact",
+      "restricted_cost_class": "Incremental",
+      "full_cost_class": "Incremental",
+      "dynamic_measure": "numeric-kernel",
+      "arity": "1",
+      "argument_codecs": [
+        "number"
+      ],
+      "result_codec": "inexact-number",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "numeric-runtime-permit-integrated",
+      "meter_site_id": "primitive/109"
+    },
+    {
+      "id": 110,
+      "name": "inexact->exact",
+      "restricted_cost_class": "Incremental",
+      "full_cost_class": "Incremental",
+      "dynamic_measure": "numeric-kernel",
+      "arity": "1",
+      "argument_codecs": [
+        "number"
+      ],
+      "result_codec": "exact-number",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "numeric-runtime-permit-integrated",
+      "meter_site_id": "primitive/110"
+    },
+    {
+      "id": 111,
+      "name": "inexact?",
+      "restricted_cost_class": "Fixed",
+      "full_cost_class": "Fixed",
+      "dynamic_measure": "constant",
+      "arity": "1",
+      "argument_codecs": [
+        "number"
+      ],
+      "result_codec": "boolean",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "fixed-runtime-permit-integrated",
+      "meter_site_id": "primitive/111"
+    },
+    {
+      "id": 112,
+      "name": "integer->char",
+      "restricted_cost_class": "Fixed",
+      "full_cost_class": "Fixed",
+      "dynamic_measure": "constant",
+      "arity": "1",
+      "argument_codecs": [
+        "Unicode-scalar"
+      ],
+      "result_codec": "char",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "fixed-runtime-permit-integrated",
+      "meter_site_id": "primitive/112"
+    },
+    {
+      "id": 113,
+      "name": "integer?",
+      "restricted_cost_class": "Fixed",
+      "full_cost_class": "Fixed",
+      "dynamic_measure": "constant",
+      "arity": "1",
+      "argument_codecs": [
+        "value"
+      ],
+      "result_codec": "boolean",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "fixed-runtime-permit-integrated",
+      "meter_site_id": "primitive/113"
+    },
+    {
+      "id": 114,
+      "name": "lcm",
+      "restricted_cost_class": "Incremental",
+      "full_cost_class": "Incremental",
+      "dynamic_measure": "linear-arguments",
+      "arity": "0+",
+      "argument_codecs": [
+        "integer..."
+      ],
+      "result_codec": "nonnegative-integer",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "numeric-runtime-permit-integrated",
+      "meter_site_id": "primitive/114"
+    },
+    {
+      "id": 115,
+      "name": "length",
+      "restricted_cost_class": "Incremental",
+      "full_cost_class": "Incremental",
+      "dynamic_measure": "linear-spine",
+      "arity": "1",
+      "argument_codecs": [
+        "proper-list"
+      ],
+      "result_codec": "exact-integer",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "collection-runtime-permit-integrated",
+      "meter_site_id": "primitive/115"
+    },
+    {
+      "id": 116,
+      "name": "list",
+      "restricted_cost_class": "Precharged",
+      "full_cost_class": "Precharged",
+      "dynamic_measure": "linear-arguments",
+      "arity": "0+",
+      "argument_codecs": [
+        "value..."
+      ],
+      "result_codec": "list",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "collection-runtime-permit-integrated",
+      "meter_site_id": "primitive/116"
+    },
+    {
+      "id": 117,
+      "name": "list->string",
+      "restricted_cost_class": "Incremental",
+      "full_cost_class": "Incremental",
+      "dynamic_measure": "linear-list",
+      "arity": "1",
+      "argument_codecs": [
+        "proper-list-of-char"
+      ],
+      "result_codec": "string",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "collection-runtime-permit-integrated",
+      "meter_site_id": "primitive/117"
+    },
+    {
+      "id": 118,
+      "name": "list->vector",
+      "restricted_cost_class": "Incremental",
+      "full_cost_class": "Incremental",
+      "dynamic_measure": "linear-spine",
+      "arity": "1",
+      "argument_codecs": [
+        "proper-list"
+      ],
+      "result_codec": "mutable-vector",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "collection-runtime-permit-integrated",
+      "meter_site_id": "primitive/118"
+    },
+    {
+      "id": 119,
+      "name": "list-copy",
+      "restricted_cost_class": "Incremental",
+      "full_cost_class": "Incremental",
+      "dynamic_measure": "linear-pair-spine",
+      "arity": "1",
+      "argument_codecs": [
+        "value"
+      ],
+      "result_codec": "value",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "collection-runtime-permit-integrated",
+      "meter_site_id": "primitive/119"
+    },
+    {
+      "id": 120,
+      "name": "list-first",
+      "restricted_cost_class": "Incremental",
+      "full_cost_class": "Incremental",
+      "dynamic_measure": "constant-plus-warning",
+      "arity": "1",
+      "argument_codecs": [
+        "pair"
+      ],
+      "result_codec": "value",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "effect-runtime-permit-integrated",
+      "meter_site_id": "primitive/120"
+    },
+    {
+      "id": 121,
+      "name": "list-ref",
+      "restricted_cost_class": "Incremental",
+      "full_cost_class": "Incremental",
+      "dynamic_measure": "linear-list",
+      "arity": "2",
+      "argument_codecs": [
+        "proper-list",
+        "exact-nonnegative-integer"
+      ],
+      "result_codec": "value",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "collection-runtime-permit-integrated",
+      "meter_site_id": "primitive/121"
+    },
+    {
+      "id": 122,
+      "name": "list-rest",
+      "restricted_cost_class": "Incremental",
+      "full_cost_class": "Incremental",
+      "dynamic_measure": "constant-plus-warning",
+      "arity": "1",
+      "argument_codecs": [
+        "pair"
+      ],
+      "result_codec": "value",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "effect-runtime-permit-integrated",
+      "meter_site_id": "primitive/122"
+    },
+    {
+      "id": 123,
+      "name": "list-tail",
+      "restricted_cost_class": "Incremental",
+      "full_cost_class": "Incremental",
+      "dynamic_measure": "linear-index",
+      "arity": "2",
+      "argument_codecs": [
+        "value",
+        "exact-nonnegative-integer"
+      ],
+      "result_codec": "value",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "collection-runtime-permit-integrated",
+      "meter_site_id": "primitive/123"
+    },
+    {
+      "id": 124,
+      "name": "list?",
+      "restricted_cost_class": "Incremental",
+      "full_cost_class": "Incremental",
+      "dynamic_measure": "linear-spine",
+      "arity": "1",
+      "argument_codecs": [
+        "value"
+      ],
+      "result_codec": "boolean",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "collection-runtime-permit-integrated",
+      "meter_site_id": "primitive/124"
+    },
+    {
+      "id": 125,
+      "name": "make-bytevector",
+      "restricted_cost_class": "Precharged",
+      "full_cost_class": "Precharged",
+      "dynamic_measure": "linear-size",
+      "arity": "1-or-2",
+      "argument_codecs": [
+        "exact-nonnegative-integer",
+        "byte?"
+      ],
+      "result_codec": "bytevector",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "collection-runtime-permit-integrated",
+      "meter_site_id": "primitive/125"
+    },
+    {
+      "id": 126,
+      "name": "make-list",
+      "restricted_cost_class": "Precharged",
+      "full_cost_class": "Precharged",
+      "dynamic_measure": "linear-result",
+      "arity": "1-2",
+      "argument_codecs": [
+        "exact-nonnegative-integer",
+        "optional-value"
+      ],
+      "result_codec": "proper-list",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "collection-runtime-permit-integrated",
+      "meter_site_id": "primitive/126"
+    },
+    {
+      "id": 127,
+      "name": "make-string",
+      "restricted_cost_class": "Precharged",
+      "full_cost_class": "Precharged",
+      "dynamic_measure": "linear-result",
+      "arity": "1-2",
+      "argument_codecs": [
+        "exact-nonnegative-integer",
+        "optional-char"
+      ],
+      "result_codec": "string",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "text-runtime-permit-integrated",
+      "meter_site_id": "primitive/127"
+    },
+    {
+      "id": 128,
+      "name": "make-vector",
+      "restricted_cost_class": "Precharged",
+      "full_cost_class": "Precharged",
+      "dynamic_measure": "linear-size",
+      "arity": "1-or-2",
+      "argument_codecs": [
+        "exact-nonnegative-integer",
+        "value?"
+      ],
+      "result_codec": "mutable-vector",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "collection-runtime-permit-integrated",
+      "meter_site_id": "primitive/128"
+    },
+    {
+      "id": 129,
+      "name": "map",
+      "restricted_cost_class": "GuestCalling",
+      "full_cost_class": "GuestCalling",
+      "dynamic_measure": "linear-collection-and-callbacks",
+      "arity": "2",
+      "argument_codecs": [
+        "procedure",
+        "proper-list"
+      ],
+      "result_codec": "list",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "guest-control-permit-integrated",
+      "meter_site_id": "primitive/129"
+    },
+    {
+      "id": 130,
+      "name": "max",
+      "restricted_cost_class": "Incremental",
+      "full_cost_class": "Incremental",
+      "dynamic_measure": "linear-arguments",
+      "arity": "1+",
+      "argument_codecs": [
+        "number..."
+      ],
+      "result_codec": "number",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "numeric-runtime-permit-integrated",
+      "meter_site_id": "primitive/130"
+    },
+    {
+      "id": 131,
+      "name": "member",
+      "restricted_cost_class": "Incremental",
+      "full_cost_class": "Incremental",
+      "dynamic_measure": "linear-list",
+      "arity": "2",
+      "argument_codecs": [
+        "value",
+        "proper-list"
+      ],
+      "result_codec": "list-or-false",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "collection-runtime-permit-integrated",
+      "meter_site_id": "primitive/131"
+    },
+    {
+      "id": 132,
+      "name": "memq",
+      "restricted_cost_class": "Incremental",
+      "full_cost_class": "Incremental",
+      "dynamic_measure": "linear-list",
+      "arity": "2",
+      "argument_codecs": [
+        "value",
+        "proper-list"
+      ],
+      "result_codec": "list-or-false",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "collection-runtime-permit-integrated",
+      "meter_site_id": "primitive/132"
+    },
+    {
+      "id": 133,
+      "name": "memv",
+      "restricted_cost_class": "Incremental",
+      "full_cost_class": "Incremental",
+      "dynamic_measure": "linear-list",
+      "arity": "2",
+      "argument_codecs": [
+        "value",
+        "proper-list"
+      ],
+      "result_codec": "pair-or-false",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "collection-runtime-permit-integrated",
+      "meter_site_id": "primitive/133"
+    },
+    {
+      "id": 134,
+      "name": "min",
+      "restricted_cost_class": "Incremental",
+      "full_cost_class": "Incremental",
+      "dynamic_measure": "linear-arguments",
+      "arity": "1+",
+      "argument_codecs": [
+        "number..."
+      ],
+      "result_codec": "number",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "numeric-runtime-permit-integrated",
+      "meter_site_id": "primitive/134"
+    },
+    {
+      "id": 135,
+      "name": "modulo",
+      "restricted_cost_class": "Incremental",
+      "full_cost_class": "Incremental",
+      "dynamic_measure": "exact-integer-arithmetic",
+      "arity": "2",
+      "argument_codecs": [
+        "integer",
+        "integer"
+      ],
+      "result_codec": "integer",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "numeric-runtime-permit-integrated",
+      "meter_site_id": "primitive/135"
+    },
+    {
+      "id": 136,
+      "name": "negative?",
+      "restricted_cost_class": "Incremental",
+      "full_cost_class": "Incremental",
+      "dynamic_measure": "derived-numeric-kernel",
+      "arity": "1",
+      "argument_codecs": [
+        "number"
+      ],
+      "result_codec": "boolean",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "numeric-runtime-permit-integrated",
+      "meter_site_id": "primitive/136"
+    },
+    {
+      "id": 137,
+      "name": "newline",
+      "restricted_cost_class": "Incremental",
+      "full_cost_class": "Incremental",
+      "dynamic_measure": "bounded-private-output-effect",
+      "arity": "0",
+      "argument_codecs": [],
+      "result_codec": "none",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "effect-runtime-permit-integrated",
+      "meter_site_id": "primitive/137"
+    },
+    {
+      "id": 138,
+      "name": "not",
+      "restricted_cost_class": "Fixed",
+      "full_cost_class": "Fixed",
+      "dynamic_measure": "constant",
+      "arity": "1",
+      "argument_codecs": [
+        "value"
+      ],
+      "result_codec": "boolean",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "fixed-runtime-permit-integrated",
+      "meter_site_id": "primitive/138"
+    },
+    {
+      "id": 139,
+      "name": "nth",
+      "restricted_cost_class": "Incremental",
+      "full_cost_class": "Incremental",
+      "dynamic_measure": "linear-list",
+      "arity": "2",
+      "argument_codecs": [
+        "proper-list",
+        "exact-nonnegative-integer"
+      ],
+      "result_codec": "value",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "collection-runtime-permit-integrated",
+      "meter_site_id": "primitive/139"
+    },
+    {
+      "id": 140,
+      "name": "null?",
+      "restricted_cost_class": "Fixed",
+      "full_cost_class": "Fixed",
+      "dynamic_measure": "constant",
+      "arity": "1",
+      "argument_codecs": [
+        "value"
+      ],
+      "result_codec": "boolean",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "fixed-runtime-permit-integrated",
+      "meter_site_id": "primitive/140"
+    },
+    {
+      "id": 141,
+      "name": "number->string",
+      "restricted_cost_class": "Deferred",
+      "full_cost_class": "Precharged",
+      "dynamic_measure": "canonical-number-format-bytes-v0",
+      "arity": "1-2",
+      "argument_codecs": [
+        "number",
+        "optional-exact-integer"
+      ],
+      "result_codec": "string",
+      "work_formula": "8 + input_limbs + output_bound + input_limbs*output_bound",
+      "allocation_formula": "4 + output_bound",
+      "effect_order": "arity,radix,type,charge,format,string",
+      "source_operation": "canonical exact radix formatting or pinned finite-real positional formatting",
+      "runtime_integration": "numeric-runtime-permit-integrated",
+      "meter_site_id": "primitive/141"
+    },
+    {
+      "id": 142,
+      "name": "number?",
+      "restricted_cost_class": "Fixed",
+      "full_cost_class": "Fixed",
+      "dynamic_measure": "constant",
+      "arity": "1",
+      "argument_codecs": [
+        "value"
+      ],
+      "result_codec": "boolean",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "fixed-runtime-permit-integrated",
+      "meter_site_id": "primitive/142"
+    },
+    {
+      "id": 143,
+      "name": "odd?",
+      "restricted_cost_class": "Incremental",
+      "full_cost_class": "Incremental",
+      "dynamic_measure": "numeric-kernel",
+      "arity": "1",
+      "argument_codecs": [
+        "integer"
+      ],
+      "result_codec": "boolean",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "numeric-runtime-permit-integrated",
+      "meter_site_id": "primitive/143"
+    },
+    {
+      "id": 144,
+      "name": "pair?",
+      "restricted_cost_class": "Fixed",
+      "full_cost_class": "Fixed",
+      "dynamic_measure": "constant",
+      "arity": "1",
+      "argument_codecs": [
+        "value"
+      ],
+      "result_codec": "boolean",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "fixed-runtime-permit-integrated",
+      "meter_site_id": "primitive/144"
+    },
+    {
+      "id": 145,
+      "name": "positive?",
+      "restricted_cost_class": "Incremental",
+      "full_cost_class": "Incremental",
+      "dynamic_measure": "derived-numeric-kernel",
+      "arity": "1",
+      "argument_codecs": [
+        "number"
+      ],
+      "result_codec": "boolean",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "numeric-runtime-permit-integrated",
+      "meter_site_id": "primitive/145"
+    },
+    {
+      "id": 146,
+      "name": "println",
+      "restricted_cost_class": "Incremental",
+      "full_cost_class": "Incremental",
+      "dynamic_measure": "bounded-private-output-effect",
+      "arity": "1",
+      "argument_codecs": [
+        "value"
+      ],
+      "result_codec": "none",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "effect-runtime-permit-integrated",
+      "meter_site_id": "primitive/146"
+    },
+    {
+      "id": 147,
+      "name": "procedure?",
+      "restricted_cost_class": "Fixed",
+      "full_cost_class": "Fixed",
+      "dynamic_measure": "constant",
+      "arity": "1",
+      "argument_codecs": [
+        "value"
+      ],
+      "result_codec": "boolean",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "fixed-runtime-permit-integrated",
+      "meter_site_id": "primitive/147"
+    },
+    {
+      "id": 148,
+      "name": "quotient",
+      "restricted_cost_class": "Incremental",
+      "full_cost_class": "Incremental",
+      "dynamic_measure": "exact-integer-arithmetic",
+      "arity": "2",
+      "argument_codecs": [
+        "integer",
+        "integer"
+      ],
+      "result_codec": "integer",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "numeric-runtime-permit-integrated",
+      "meter_site_id": "primitive/148"
+    },
+    {
+      "id": 149,
+      "name": "raise",
+      "restricted_cost_class": "Incremental",
+      "full_cost_class": "Incremental",
+      "dynamic_measure": "machine-transfer",
+      "arity": "1",
+      "argument_codecs": [
+        "value"
+      ],
+      "result_codec": "none",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "effect-runtime-permit-integrated",
+      "meter_site_id": "primitive/149"
+    },
+    {
+      "id": 150,
+      "name": "raise-continuable",
+      "restricted_cost_class": "Incremental",
+      "full_cost_class": "Incremental",
+      "dynamic_measure": "machine-transfer",
+      "arity": "1",
+      "argument_codecs": [
+        "value"
+      ],
+      "result_codec": "value-packet",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "effect-runtime-permit-integrated",
+      "meter_site_id": "primitive/150"
+    },
+    {
+      "id": 151,
+      "name": "rational?",
+      "restricted_cost_class": "Fixed",
+      "full_cost_class": "Fixed",
+      "dynamic_measure": "constant",
+      "arity": "1",
+      "argument_codecs": [
+        "value"
+      ],
+      "result_codec": "boolean",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "fixed-runtime-permit-integrated",
+      "meter_site_id": "primitive/151"
+    },
+    {
+      "id": 152,
+      "name": "real?",
+      "restricted_cost_class": "Fixed",
+      "full_cost_class": "Fixed",
+      "dynamic_measure": "constant",
+      "arity": "1",
+      "argument_codecs": [
+        "value"
+      ],
+      "result_codec": "boolean",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "fixed-runtime-permit-integrated",
+      "meter_site_id": "primitive/152"
+    },
+    {
+      "id": 153,
+      "name": "reduce",
+      "restricted_cost_class": "GuestCalling",
+      "full_cost_class": "GuestCalling",
+      "dynamic_measure": "linear-collection-and-callbacks",
+      "arity": "3",
+      "argument_codecs": [
+        "procedure",
+        "value",
+        "proper-list"
+      ],
+      "result_codec": "value",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "guest-control-permit-integrated",
+      "meter_site_id": "primitive/153"
+    },
+    {
+      "id": 154,
+      "name": "remainder",
+      "restricted_cost_class": "Incremental",
+      "full_cost_class": "Incremental",
+      "dynamic_measure": "exact-integer-arithmetic",
+      "arity": "2",
+      "argument_codecs": [
+        "integer",
+        "integer"
+      ],
+      "result_codec": "integer",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "numeric-runtime-permit-integrated",
+      "meter_site_id": "primitive/154"
+    },
+    {
+      "id": 155,
+      "name": "rest",
+      "restricted_cost_class": "Fixed",
+      "full_cost_class": "Fixed",
+      "dynamic_measure": "constant",
+      "arity": "1",
+      "argument_codecs": [
+        "pair"
+      ],
+      "result_codec": "value",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "fixed-runtime-permit-integrated",
+      "meter_site_id": "primitive/155"
+    },
+    {
+      "id": 156,
+      "name": "reverse",
+      "restricted_cost_class": "Incremental",
+      "full_cost_class": "Incremental",
+      "dynamic_measure": "linear-spine",
+      "arity": "1",
+      "argument_codecs": [
+        "proper-list"
+      ],
+      "result_codec": "list",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "collection-runtime-permit-integrated",
+      "meter_site_id": "primitive/156"
+    },
+    {
+      "id": 157,
+      "name": "round",
+      "restricted_cost_class": "Incremental",
+      "full_cost_class": "Incremental",
+      "dynamic_measure": "numeric-kernel",
+      "arity": "1",
+      "argument_codecs": [
+        "number"
+      ],
+      "result_codec": "integer-valued-number",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "numeric-runtime-permit-integrated",
+      "meter_site_id": "primitive/157"
+    },
+    {
+      "id": 158,
+      "name": "square",
+      "restricted_cost_class": "Incremental",
+      "full_cost_class": "Incremental",
+      "dynamic_measure": "derived-numeric-kernel",
+      "arity": "1",
+      "argument_codecs": [
+        "number"
+      ],
+      "result_codec": "number",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "numeric-runtime-permit-integrated",
+      "meter_site_id": "primitive/158"
+    },
+    {
+      "id": 159,
+      "name": "string->list",
+      "restricted_cost_class": "Incremental",
+      "full_cost_class": "Incremental",
+      "dynamic_measure": "linear-string",
+      "arity": "1",
+      "argument_codecs": [
+        "string"
+      ],
+      "result_codec": "list-of-char",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "collection-runtime-permit-integrated",
+      "meter_site_id": "primitive/159"
+    },
+    {
+      "id": 160,
+      "name": "string->number",
+      "restricted_cost_class": "Deferred",
+      "full_cost_class": "Precharged",
+      "dynamic_measure": "canonical-number-parse-utf8-bytes-v0",
+      "arity": "1-2",
+      "argument_codecs": [
+        "string",
+        "optional-exact-integer"
+      ],
+      "result_codec": "number-or-false",
+      "work_formula": "8 + 3*n + n*n",
+      "allocation_formula": "4 + 2*n",
+      "effect_order": "arity,string-type,radix,charge,parse,result-or-false",
+      "source_operation": "pinned decimal grammar or validated signed radix integer",
+      "runtime_integration": "numeric-runtime-permit-integrated",
+      "meter_site_id": "primitive/160"
+    },
+    {
+      "id": 161,
+      "name": "string->symbol",
+      "restricted_cost_class": "Incremental",
+      "full_cost_class": "Incremental",
+      "dynamic_measure": "linear-bytes",
+      "arity": "1",
+      "argument_codecs": [
+        "string"
+      ],
+      "result_codec": "symbol",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "text-runtime-permit-integrated",
+      "meter_site_id": "primitive/161"
+    },
+    {
+      "id": 162,
+      "name": "string->vector",
+      "restricted_cost_class": "Incremental",
+      "full_cost_class": "Incremental",
+      "dynamic_measure": "linear-result",
+      "arity": "1-3",
+      "argument_codecs": [
+        "string",
+        "optional-exact-integer",
+        "optional-exact-integer"
+      ],
+      "result_codec": "vector",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "collection-runtime-permit-integrated",
+      "meter_site_id": "primitive/162"
+    },
+    {
+      "id": 163,
+      "name": "string-append",
+      "restricted_cost_class": "Precharged",
+      "full_cost_class": "Precharged",
+      "dynamic_measure": "linear-bytes",
+      "arity": "0+",
+      "argument_codecs": [
+        "string..."
+      ],
+      "result_codec": "string",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "text-runtime-permit-integrated",
+      "meter_site_id": "primitive/163"
+    },
+    {
+      "id": 164,
+      "name": "string-ci<=?",
+      "restricted_cost_class": "Incremental",
+      "full_cost_class": "Incremental",
+      "dynamic_measure": "linear-arguments-and-string",
+      "arity": "2+",
+      "argument_codecs": [
+        "string..."
+      ],
+      "result_codec": "boolean",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "text-runtime-permit-integrated",
+      "meter_site_id": "primitive/164"
+    },
+    {
+      "id": 165,
+      "name": "string-ci<?",
+      "restricted_cost_class": "Incremental",
+      "full_cost_class": "Incremental",
+      "dynamic_measure": "linear-arguments-and-string",
+      "arity": "2+",
+      "argument_codecs": [
+        "string..."
+      ],
+      "result_codec": "boolean",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "text-runtime-permit-integrated",
+      "meter_site_id": "primitive/165"
+    },
+    {
+      "id": 166,
+      "name": "string-ci=?",
+      "restricted_cost_class": "Incremental",
+      "full_cost_class": "Incremental",
+      "dynamic_measure": "linear-arguments-and-string",
+      "arity": "2+",
+      "argument_codecs": [
+        "string..."
+      ],
+      "result_codec": "boolean",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "text-runtime-permit-integrated",
+      "meter_site_id": "primitive/166"
+    },
+    {
+      "id": 167,
+      "name": "string-ci>=?",
+      "restricted_cost_class": "Incremental",
+      "full_cost_class": "Incremental",
+      "dynamic_measure": "linear-arguments-and-string",
+      "arity": "2+",
+      "argument_codecs": [
+        "string..."
+      ],
+      "result_codec": "boolean",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "text-runtime-permit-integrated",
+      "meter_site_id": "primitive/167"
+    },
+    {
+      "id": 168,
+      "name": "string-ci>?",
+      "restricted_cost_class": "Incremental",
+      "full_cost_class": "Incremental",
+      "dynamic_measure": "linear-arguments-and-string",
+      "arity": "2+",
+      "argument_codecs": [
+        "string..."
+      ],
+      "result_codec": "boolean",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "text-runtime-permit-integrated",
+      "meter_site_id": "primitive/168"
+    },
+    {
+      "id": 169,
+      "name": "string-copy",
+      "restricted_cost_class": "Incremental",
+      "full_cost_class": "Incremental",
+      "dynamic_measure": "linear-string",
+      "arity": "1-3",
+      "argument_codecs": [
+        "string",
+        "optional-nonnegative-integer",
+        "optional-nonnegative-integer"
+      ],
+      "result_codec": "string",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "text-runtime-permit-integrated",
+      "meter_site_id": "primitive/169"
+    },
+    {
+      "id": 170,
+      "name": "string-downcase",
+      "restricted_cost_class": "Incremental",
+      "full_cost_class": "Incremental",
+      "dynamic_measure": "linear-string",
+      "arity": "1",
+      "argument_codecs": [
+        "string"
+      ],
+      "result_codec": "string",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "text-runtime-permit-integrated",
+      "meter_site_id": "primitive/170"
+    },
+    {
+      "id": 171,
+      "name": "string-foldcase",
+      "restricted_cost_class": "Incremental",
+      "full_cost_class": "Incremental",
+      "dynamic_measure": "linear-string",
+      "arity": "1",
+      "argument_codecs": [
+        "string"
+      ],
+      "result_codec": "string",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "text-runtime-permit-integrated",
+      "meter_site_id": "primitive/171"
+    },
+    {
+      "id": 172,
+      "name": "string-for-each",
+      "restricted_cost_class": "GuestCalling",
+      "full_cost_class": "GuestCalling",
+      "dynamic_measure": "linear-collection-and-callbacks",
+      "arity": "2",
+      "argument_codecs": [
+        "procedure",
+        "string"
+      ],
+      "result_codec": "none",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "guest-control-permit-integrated",
+      "meter_site_id": "primitive/172"
+    },
+    {
+      "id": 173,
+      "name": "string-length",
+      "restricted_cost_class": "Incremental",
+      "full_cost_class": "Incremental",
+      "dynamic_measure": "linear-codepoints",
+      "arity": "1",
+      "argument_codecs": [
+        "string"
+      ],
+      "result_codec": "exact-integer",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "text-runtime-permit-integrated",
+      "meter_site_id": "primitive/173"
+    },
+    {
+      "id": 174,
+      "name": "string-map",
+      "restricted_cost_class": "GuestCalling",
+      "full_cost_class": "GuestCalling",
+      "dynamic_measure": "linear-collection-and-callbacks",
+      "arity": "2",
+      "argument_codecs": [
+        "procedure",
+        "string"
+      ],
+      "result_codec": "string",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "guest-control-permit-integrated",
+      "meter_site_id": "primitive/174"
+    },
+    {
+      "id": 175,
+      "name": "string-ref",
+      "restricted_cost_class": "Incremental",
+      "full_cost_class": "Incremental",
+      "dynamic_measure": "linear-codepoints",
+      "arity": "2",
+      "argument_codecs": [
+        "string",
+        "exact-nonnegative-integer"
+      ],
+      "result_codec": "char",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "text-runtime-permit-integrated",
+      "meter_site_id": "primitive/175"
+    },
+    {
+      "id": 176,
+      "name": "string-upcase",
+      "restricted_cost_class": "Incremental",
+      "full_cost_class": "Incremental",
+      "dynamic_measure": "linear-string",
+      "arity": "1",
+      "argument_codecs": [
+        "string"
+      ],
+      "result_codec": "string",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "text-runtime-permit-integrated",
+      "meter_site_id": "primitive/176"
+    },
+    {
+      "id": 177,
+      "name": "string<=?",
+      "restricted_cost_class": "Incremental",
+      "full_cost_class": "Incremental",
+      "dynamic_measure": "linear-arguments-and-string",
+      "arity": "2+",
+      "argument_codecs": [
+        "string..."
+      ],
+      "result_codec": "boolean",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "text-runtime-permit-integrated",
+      "meter_site_id": "primitive/177"
+    },
+    {
+      "id": 178,
+      "name": "string<?",
+      "restricted_cost_class": "Incremental",
+      "full_cost_class": "Incremental",
+      "dynamic_measure": "linear-arguments-and-string",
+      "arity": "2+",
+      "argument_codecs": [
+        "string..."
+      ],
+      "result_codec": "boolean",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "text-runtime-permit-integrated",
+      "meter_site_id": "primitive/178"
+    },
+    {
+      "id": 179,
+      "name": "string=?",
+      "restricted_cost_class": "Incremental",
+      "full_cost_class": "Incremental",
+      "dynamic_measure": "linear-arguments-and-string",
+      "arity": "2+",
+      "argument_codecs": [
+        "string..."
+      ],
+      "result_codec": "boolean",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "text-runtime-permit-integrated",
+      "meter_site_id": "primitive/179"
+    },
+    {
+      "id": 180,
+      "name": "string>=?",
+      "restricted_cost_class": "Incremental",
+      "full_cost_class": "Incremental",
+      "dynamic_measure": "linear-arguments-and-string",
+      "arity": "2+",
+      "argument_codecs": [
+        "string..."
+      ],
+      "result_codec": "boolean",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "text-runtime-permit-integrated",
+      "meter_site_id": "primitive/180"
+    },
+    {
+      "id": 181,
+      "name": "string>?",
+      "restricted_cost_class": "Incremental",
+      "full_cost_class": "Incremental",
+      "dynamic_measure": "linear-arguments-and-string",
+      "arity": "2+",
+      "argument_codecs": [
+        "string..."
+      ],
+      "result_codec": "boolean",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "text-runtime-permit-integrated",
+      "meter_site_id": "primitive/181"
+    },
+    {
+      "id": 182,
+      "name": "string?",
+      "restricted_cost_class": "Fixed",
+      "full_cost_class": "Fixed",
+      "dynamic_measure": "constant",
+      "arity": "1",
+      "argument_codecs": [
+        "value"
+      ],
+      "result_codec": "boolean",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "fixed-runtime-permit-integrated",
+      "meter_site_id": "primitive/182"
+    },
+    {
+      "id": 183,
+      "name": "substring",
+      "restricted_cost_class": "Incremental",
+      "full_cost_class": "Incremental",
+      "dynamic_measure": "linear-result",
+      "arity": "3",
+      "argument_codecs": [
+        "string",
+        "nonnegative-integer",
+        "nonnegative-integer"
+      ],
+      "result_codec": "string",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "text-runtime-permit-integrated",
+      "meter_site_id": "primitive/183"
+    },
+    {
+      "id": 184,
+      "name": "symbol->string",
+      "restricted_cost_class": "Incremental",
+      "full_cost_class": "Incremental",
+      "dynamic_measure": "linear-bytes",
+      "arity": "1",
+      "argument_codecs": [
+        "symbol"
+      ],
+      "result_codec": "string",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "text-runtime-permit-integrated",
+      "meter_site_id": "primitive/184"
+    },
+    {
+      "id": 185,
+      "name": "symbol=?",
+      "restricted_cost_class": "Incremental",
+      "full_cost_class": "Incremental",
+      "dynamic_measure": "linear-arguments",
+      "arity": "2+",
+      "argument_codecs": [
+        "symbol..."
+      ],
+      "result_codec": "boolean",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "text-runtime-permit-integrated",
+      "meter_site_id": "primitive/185"
+    },
+    {
+      "id": 186,
+      "name": "symbol?",
+      "restricted_cost_class": "Fixed",
+      "full_cost_class": "Fixed",
+      "dynamic_measure": "constant",
+      "arity": "1",
+      "argument_codecs": [
+        "value"
+      ],
+      "result_codec": "boolean",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "fixed-runtime-permit-integrated",
+      "meter_site_id": "primitive/186"
+    },
+    {
+      "id": 187,
+      "name": "truncate",
+      "restricted_cost_class": "Incremental",
+      "full_cost_class": "Incremental",
+      "dynamic_measure": "numeric-kernel",
+      "arity": "1",
+      "argument_codecs": [
+        "number"
+      ],
+      "result_codec": "integer-valued-number",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "numeric-runtime-permit-integrated",
+      "meter_site_id": "primitive/187"
+    },
+    {
+      "id": 188,
+      "name": "truncate-quotient",
+      "restricted_cost_class": "Incremental",
+      "full_cost_class": "Incremental",
+      "dynamic_measure": "exact-integer-arithmetic",
+      "arity": "2",
+      "argument_codecs": [
+        "integer",
+        "integer"
+      ],
+      "result_codec": "integer",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "numeric-runtime-permit-integrated",
+      "meter_site_id": "primitive/188"
+    },
+    {
+      "id": 189,
+      "name": "truncate-remainder",
+      "restricted_cost_class": "Incremental",
+      "full_cost_class": "Incremental",
+      "dynamic_measure": "exact-integer-arithmetic",
+      "arity": "2",
+      "argument_codecs": [
+        "integer",
+        "integer"
+      ],
+      "result_codec": "integer",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "numeric-runtime-permit-integrated",
+      "meter_site_id": "primitive/189"
+    },
+    {
+      "id": 190,
+      "name": "truncate/",
+      "restricted_cost_class": "Incremental",
+      "full_cost_class": "Incremental",
+      "dynamic_measure": "exact-integer-arithmetic",
+      "arity": "2",
+      "argument_codecs": [
+        "integer",
+        "integer"
+      ],
+      "result_codec": "integer-pair",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "numeric-runtime-permit-integrated",
+      "meter_site_id": "primitive/190"
+    },
+    {
+      "id": 191,
+      "name": "values",
+      "restricted_cost_class": "Precharged",
+      "full_cost_class": "Precharged",
+      "dynamic_measure": "linear-arguments",
+      "arity": "0+",
+      "argument_codecs": [
+        "value..."
+      ],
+      "result_codec": "value-packet",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "collection-runtime-permit-integrated",
+      "meter_site_id": "primitive/191"
+    },
+    {
+      "id": 192,
+      "name": "vector",
+      "restricted_cost_class": "Precharged",
+      "full_cost_class": "Precharged",
+      "dynamic_measure": "linear-arguments",
+      "arity": "0+",
+      "argument_codecs": [
+        "value..."
+      ],
+      "result_codec": "mutable-vector",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "collection-runtime-permit-integrated",
+      "meter_site_id": "primitive/192"
+    },
+    {
+      "id": 193,
+      "name": "vector->list",
+      "restricted_cost_class": "Precharged",
+      "full_cost_class": "Precharged",
+      "dynamic_measure": "linear-size",
+      "arity": "1",
+      "argument_codecs": [
+        "vector"
+      ],
+      "result_codec": "list",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "collection-runtime-permit-integrated",
+      "meter_site_id": "primitive/193"
+    },
+    {
+      "id": 194,
+      "name": "vector->string",
+      "restricted_cost_class": "Incremental",
+      "full_cost_class": "Incremental",
+      "dynamic_measure": "linear-result",
+      "arity": "1-3",
+      "argument_codecs": [
+        "vector",
+        "optional-exact-integer",
+        "optional-exact-integer"
+      ],
+      "result_codec": "string",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "collection-runtime-permit-integrated",
+      "meter_site_id": "primitive/194"
+    },
+    {
+      "id": 195,
+      "name": "vector-copy",
+      "restricted_cost_class": "Incremental",
+      "full_cost_class": "Incremental",
+      "dynamic_measure": "linear-vector",
+      "arity": "1-3",
+      "argument_codecs": [
+        "vector",
+        "optional-nonnegative-integer",
+        "optional-nonnegative-integer"
+      ],
+      "result_codec": "vector",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "collection-runtime-permit-integrated",
+      "meter_site_id": "primitive/195"
+    },
+    {
+      "id": 196,
+      "name": "vector-for-each",
+      "restricted_cost_class": "GuestCalling",
+      "full_cost_class": "GuestCalling",
+      "dynamic_measure": "linear-collection-and-callbacks",
+      "arity": "2",
+      "argument_codecs": [
+        "procedure",
+        "vector"
+      ],
+      "result_codec": "none",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "guest-control-permit-integrated",
+      "meter_site_id": "primitive/196"
+    },
+    {
+      "id": 197,
+      "name": "vector-length",
+      "restricted_cost_class": "Fixed",
+      "full_cost_class": "Fixed",
+      "dynamic_measure": "constant",
+      "arity": "1",
+      "argument_codecs": [
+        "vector"
+      ],
+      "result_codec": "exact-integer",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "fixed-runtime-permit-integrated",
+      "meter_site_id": "primitive/197"
+    },
+    {
+      "id": 198,
+      "name": "vector-map",
+      "restricted_cost_class": "GuestCalling",
+      "full_cost_class": "GuestCalling",
+      "dynamic_measure": "linear-collection-and-callbacks",
+      "arity": "2",
+      "argument_codecs": [
+        "procedure",
+        "vector"
+      ],
+      "result_codec": "vector",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "guest-control-permit-integrated",
+      "meter_site_id": "primitive/198"
+    },
+    {
+      "id": 199,
+      "name": "vector-ref",
+      "restricted_cost_class": "Fixed",
+      "full_cost_class": "Fixed",
+      "dynamic_measure": "constant",
+      "arity": "2",
+      "argument_codecs": [
+        "vector",
+        "exact-nonnegative-integer"
+      ],
+      "result_codec": "value",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "fixed-runtime-permit-integrated",
+      "meter_site_id": "primitive/199"
+    },
+    {
+      "id": 200,
+      "name": "vector-set!",
+      "restricted_cost_class": "Fixed",
+      "full_cost_class": "Fixed",
+      "dynamic_measure": "constant",
+      "arity": "3",
+      "argument_codecs": [
+        "mutable-vector",
+        "exact-nonnegative-integer",
+        "value"
+      ],
+      "result_codec": "value",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "fixed-runtime-permit-integrated",
+      "meter_site_id": "primitive/200"
+    },
+    {
+      "id": 201,
+      "name": "vector?",
+      "restricted_cost_class": "Fixed",
+      "full_cost_class": "Fixed",
+      "dynamic_measure": "constant",
+      "arity": "1",
+      "argument_codecs": [
+        "value"
+      ],
+      "result_codec": "boolean",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "fixed-runtime-permit-integrated",
+      "meter_site_id": "primitive/201"
+    },
+    {
+      "id": 202,
+      "name": "with-exception-handler",
+      "restricted_cost_class": "GuestCalling",
+      "full_cost_class": "GuestCalling",
+      "dynamic_measure": "machine-transfer",
+      "arity": "2",
+      "argument_codecs": [
+        "procedure",
+        "procedure"
+      ],
+      "result_codec": "value-packet",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "guest-control-permit-integrated",
+      "meter_site_id": "primitive/202"
+    },
+    {
+      "id": 203,
+      "name": "write",
+      "restricted_cost_class": "Incremental",
+      "full_cost_class": "Incremental",
+      "dynamic_measure": "bounded-private-output-effect",
+      "arity": "1",
+      "argument_codecs": [
+        "value"
+      ],
+      "result_codec": "none",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "effect-runtime-permit-integrated",
+      "meter_site_id": "primitive/203"
+    },
+    {
+      "id": 204,
+      "name": "zero?",
+      "restricted_cost_class": "Incremental",
+      "full_cost_class": "Incremental",
+      "dynamic_measure": "derived-numeric-kernel",
+      "arity": "1",
+      "argument_codecs": [
+        "number"
+      ],
+      "result_codec": "boolean",
+      "work_formula": null,
+      "allocation_formula": null,
+      "effect_order": null,
+      "source_operation": null,
+      "runtime_integration": "numeric-runtime-permit-integrated",
+      "meter_site_id": "primitive/204"
+    }
+  ]
+}

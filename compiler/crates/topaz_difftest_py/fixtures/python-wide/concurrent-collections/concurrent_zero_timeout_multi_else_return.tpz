@@ -1,0 +1,11 @@
+
+function main() -> int {
+    let r = concurrent(timeout: 0ms) {
+        x: 1 + 1
+        y: 2 * 3
+    } else {
+        return 99
+    }
+    r.x
+}
+main()

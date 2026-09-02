@@ -1,0 +1,8 @@
+// Types are automatically inferred
+let number = 42              // int
+let text = "hello"           // string
+let array = [1, 2, 3, 4]     // Array<int>
+let object = {               // { name: string, age: int }
+    name: "Alice",
+    age: 25
+}

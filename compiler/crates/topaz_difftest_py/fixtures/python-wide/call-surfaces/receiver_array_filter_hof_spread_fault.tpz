@@ -1,0 +1,9 @@
+
+function mark(label: string, xs: Array<int>) -> Array<int> {
+    print(label)
+    xs
+}
+function main() -> Array<int> {
+    [1].filter(...mark("array-filter", [0]))
+}
+main()

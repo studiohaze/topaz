@@ -1,0 +1,2 @@
+record Box<T> derives Show { value: T }
+0

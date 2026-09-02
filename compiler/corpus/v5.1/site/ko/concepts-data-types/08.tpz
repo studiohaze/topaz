@@ -1,0 +1,14 @@
+// 여러 타입 중 하나를 가질 수 있는 타입
+type ID = int | string
+type 상태 = "대기중" | "진행중" | "완료" | "실패"
+
+let 사용자ID: ID = 12345
+let 작업상태: 상태 = "진행중"
+
+// 패턴 매칭으로 타입별 처리
+function ID표시(id: ID) -> string {
+    match id {
+        case 숫자값: int => "숫자 ID: {숫자값}"
+        case 텍스트값: string => "문자 ID: {텍스트값}"
+    }
+}

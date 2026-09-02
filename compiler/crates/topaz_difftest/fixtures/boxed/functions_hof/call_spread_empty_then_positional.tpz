@@ -1,0 +1,2 @@
+function f(a: int, ...xs: int) -> string { "{a}/{xs.length}/{xs[0]}" }
+f(1, ...[], 2)

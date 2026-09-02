@@ -1,0 +1,1 @@
+Html.Element(Element { tag: button, attrs: [Attr { name: id, value: save }, Attr { name: type, value: button }], events: [Event { name: click, message: Msg.SaveClicked }], children: [Html.Text(Save)] })|Command.SetText(#status, Msg.Toggle(true));Command.AddClass(#status, ok);Command.Dispatch(Msg.Toggle(true))

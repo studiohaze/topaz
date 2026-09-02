@@ -1,0 +1,1059 @@
+// Exact guest integer, rational, and numeric conversion operations.
+// Representation details stay below primitive dispatch so arithmetic families
+// share overflow, division, comparison, and rendering behavior.
+
+import lit.model {
+  GuestInt,
+  GuestRational,
+  MagnitudeDivision,
+  GuestIntDivision,
+  GuestIntegerOperand,
+  ErrorObjectRow,
+  GuestValue,
+  ValuePacket,
+}
+
+function normalizeMagnitude(limbs: Array<int>) -> Array<int> {
+  let mut end = limbs.length
+  while end > 1 && limbs[end - 1] == 0 { end -= 1 }
+  let mut result: Array<int> = []
+  let mut index = 0
+  while index < end {
+    result.push(limbs[index])
+    index += 1
+  }
+  if result.length == 0 { result.push(0) }
+  result
+}
+
+function magnitudeZero() -> Array<int> { [0] }
+
+function magnitudeIsZero(limbs: Array<int>) -> bool {
+  let normalized = normalizeMagnitude(limbs)
+  normalized.length == 1 && normalized[0] == 0
+}
+
+function magnitudeCompare(left: Array<int>, right: Array<int>) -> int {
+  let a = normalizeMagnitude(left)
+  let b = normalizeMagnitude(right)
+  if a.length < b.length { return -1 }
+  if a.length > b.length { return 1 }
+  let mut index = a.length - 1
+  while index >= 0 {
+    if a[index] < b[index] { return -1 }
+    if a[index] > b[index] { return 1 }
+    index -= 1
+  }
+  0
+}
+
+function magnitudeAdd(left: Array<int>, right: Array<int>) -> Array<int> {
+  let mut result: Array<int> = []
+  let length = if left.length > right.length { left.length } else { right.length }
+  let mut carry = 0
+  let mut index = 0
+  while index < length {
+    let a = if index < left.length { left[index] } else { 0 }
+    let b = if index < right.length { right[index] } else { 0 }
+    let total = a + b + carry
+    result.push(total % 10000)
+    carry = total / 10000
+    index += 1
+  }
+  if carry > 0 { result.push(carry) }
+  normalizeMagnitude(result)
+}
+
+function magnitudeSubtract(left: Array<int>, right: Array<int>) -> Array<int> {
+  let mut result: Array<int> = []
+  let mut borrow = 0
+  let mut index = 0
+  while index < left.length {
+    let b = if index < right.length { right[index] } else { 0 }
+    let mut value = left[index] - b - borrow
+    if value < 0 {
+      value += 10000
+      borrow = 1
+    } else {
+      borrow = 0
+    }
+    result.push(value)
+    index += 1
+  }
+  normalizeMagnitude(result)
+}
+
+function magnitudeMultiplySmall(limbs: Array<int>, factor: int) -> Array<int> {
+  if factor == 0 || magnitudeIsZero(limbs) { return magnitudeZero() }
+  let mut result: Array<int> = []
+  let mut carry = 0
+  let mut index = 0
+  while index < limbs.length {
+    let total = limbs[index] * factor + carry
+    result.push(total % 10000)
+    carry = total / 10000
+    index += 1
+  }
+  while carry > 0 {
+    result.push(carry % 10000)
+    carry = carry / 10000
+  }
+  normalizeMagnitude(result)
+}
+
+function magnitudeMultiplyAddSmall(limbs: Array<int>, factor: int, addend: int) -> Array<int> {
+  let mut result = magnitudeMultiplySmall(limbs, factor)
+  let mut carry = addend
+  let mut index = 0
+  while carry > 0 {
+    if index >= result.length { result.push(0) }
+    let total = result[index] + carry
+    result[index] = total % 10000
+    carry = total / 10000
+    index += 1
+  }
+  normalizeMagnitude(result)
+}
+
+function magnitudeMultiply(left: Array<int>, right: Array<int>) -> Array<int> {
+  if magnitudeIsZero(left) || magnitudeIsZero(right) { return magnitudeZero() }
+  let mut result: Array<int> = []
+  let mut slots = 0
+  while slots < left.length + right.length + 1 {
+    result.push(0)
+    slots += 1
+  }
+  let mut leftIndex = 0
+  while leftIndex < left.length {
+    let mut carry = 0
+    let mut rightIndex = 0
+    while rightIndex < right.length {
+      let slot = leftIndex + rightIndex
+      let total = result[slot] + left[leftIndex] * right[rightIndex] + carry
+      result[slot] = total % 10000
+      carry = total / 10000
+      rightIndex += 1
+    }
+    let mut slot = leftIndex + right.length
+    while carry > 0 {
+      let total = result[slot] + carry
+      result[slot] = total % 10000
+      carry = total / 10000
+      slot += 1
+    }
+    leftIndex += 1
+  }
+  normalizeMagnitude(result)
+}
+
+function magnitudeShiftAdd(limbs: Array<int>, digit: int) -> Array<int> {
+  let mut result: Array<int> = [digit]
+  for limb in limbs { result.push(limb) }
+  normalizeMagnitude(result)
+}
+
+function magnitudeDivide(dividend: Array<int>, divisor: Array<int>) -> Result<MagnitudeDivision, string> {
+  let normalizedDivisor = normalizeMagnitude(divisor)
+  if magnitudeIsZero(normalizedDivisor) { return Err("LIT200 internal division by zero") }
+  let normalizedDividend = normalizeMagnitude(dividend)
+  if magnitudeCompare(normalizedDividend, normalizedDivisor) < 0 {
+    return Ok(MagnitudeDivision { quotient: magnitudeZero(), remainder: normalizedDividend })
+  }
+  let mut quotient: Array<int> = []
+  let mut quotientSlot = 0
+  while quotientSlot < normalizedDividend.length {
+    quotient.push(0)
+    quotientSlot += 1
+  }
+  let mut remainder = magnitudeZero()
+  let mut index = normalizedDividend.length - 1
+  while index >= 0 {
+    remainder = magnitudeShiftAdd(remainder, normalizedDividend[index])
+    let mut low = 0
+    let mut high = 9999
+    while low < high {
+      let middle = (low + high + 1) / 2
+      let product = magnitudeMultiplySmall(normalizedDivisor, middle)
+      if magnitudeCompare(product, remainder) <= 0 { low = middle } else { high = middle - 1 }
+    }
+    quotient[index] = low
+    if low > 0 {
+      remainder = magnitudeSubtract(remainder, magnitudeMultiplySmall(normalizedDivisor, low))
+    }
+    index -= 1
+  }
+  Ok(MagnitudeDivision {
+    quotient: normalizeMagnitude(quotient),
+    remainder: normalizeMagnitude(remainder),
+  })
+}
+
+function magnitudeExactDivide(dividend: Array<int>, divisor: Array<int>) -> Result<Array<int>, string> {
+  let division = magnitudeDivide(dividend, divisor)?
+  if !magnitudeIsZero(division.remainder) { return Err("LIT200 internal non-exact division") }
+  Ok(division.quotient)
+}
+
+function magnitudeGcd(left: Array<int>, right: Array<int>) -> Result<Array<int>, string> {
+  let mut a = normalizeMagnitude(left)
+  let mut b = normalizeMagnitude(right)
+  while !magnitudeIsZero(b) {
+    let division = magnitudeDivide(a, b)?
+    a = b
+    b = division.remainder
+  }
+  Ok(a)
+}
+
+export function guestInt(negative: bool, limbs: Array<int>) -> GuestInt {
+  let normalized = normalizeMagnitude(limbs)
+  GuestInt {
+    negative: negative && !magnitudeIsZero(normalized),
+    limbs: normalized,
+  }
+}
+
+export function guestIntZero() -> GuestInt { guestInt(false, magnitudeZero()) }
+
+export function guestIntOne() -> GuestInt { guestInt(false, [1]) }
+
+export function guestIntIsZero(value: GuestInt) -> bool { magnitudeIsZero(value.limbs) }
+
+export function guestIntIsOne(value: GuestInt) -> bool {
+  !value.negative && value.limbs.length == 1 && value.limbs[0] == 1
+}
+
+function guestIntNegate(value: GuestInt) -> GuestInt {
+  guestInt(!value.negative, value.limbs)
+}
+
+function guestIntAdd(left: GuestInt, right: GuestInt) -> GuestInt {
+  if left.negative == right.negative {
+    return guestInt(left.negative, magnitudeAdd(left.limbs, right.limbs))
+  }
+  let ordering = magnitudeCompare(left.limbs, right.limbs)
+  if ordering == 0 { return guestIntZero() }
+  if ordering > 0 {
+    guestInt(left.negative, magnitudeSubtract(left.limbs, right.limbs))
+  } else {
+    guestInt(right.negative, magnitudeSubtract(right.limbs, left.limbs))
+  }
+}
+
+function guestIntSubtract(left: GuestInt, right: GuestInt) -> GuestInt {
+  guestIntAdd(left, guestIntNegate(right))
+}
+
+function guestIntMultiply(left: GuestInt, right: GuestInt) -> GuestInt {
+  guestInt(left.negative != right.negative, magnitudeMultiply(left.limbs, right.limbs))
+}
+
+export function guestIntEqual(left: GuestInt, right: GuestInt) -> bool {
+  left.negative == right.negative && magnitudeCompare(left.limbs, right.limbs) == 0
+}
+
+export function parseGuestInt(text: string) -> Result<GuestInt, string> {
+  let scalars = text.scalars()
+  if scalars.length == 0 { return Err("invalid integer") }
+  let negative = scalars[0] == "-"
+  let start = if negative { 1 } else { 0 }
+  if start >= scalars.length { return Err("invalid integer") }
+  if scalars[start] == "0" && start + 1 < scalars.length { return Err("noncanonical integer") }
+  let mut magnitude = magnitudeZero()
+  let mut index = start
+  while index < scalars.length {
+    let digit = match toInt(scalars[index]) {
+      case Some(value) => value
+      case None => return Err("invalid integer")
+    }
+    if digit < 0 || digit > 9 { return Err("invalid integer") }
+    magnitude = magnitudeMultiplyAddSmall(magnitude, 10, digit)
+    index += 1
+  }
+  if negative && magnitudeIsZero(magnitude) { return Err("noncanonical integer") }
+  Ok(guestInt(negative, magnitude))
+}
+
+function padLimb(value: int) -> string {
+  let text = "{value}"
+  if text.byteLength() == 1 { return "000{text}" }
+  if text.byteLength() == 2 { return "00{text}" }
+  if text.byteLength() == 3 { return "0{text}" }
+  text
+}
+
+export function renderGuestInt(value: GuestInt) -> string {
+  let limbs = normalizeMagnitude(value.limbs)
+  let mut result = "{limbs[limbs.length - 1]}"
+  let mut index = limbs.length - 2
+  while index >= 0 {
+    result += padLimb(limbs[index])
+    index -= 1
+  }
+  if value.negative && !magnitudeIsZero(limbs) { "-{result}" } else { result }
+}
+
+function normalizeRational(numerator: GuestInt, denominator: GuestInt) -> Result<GuestRational, string> {
+  if guestIntIsZero(denominator) { return Err("E313 rational denominator is zero") }
+  if guestIntIsZero(numerator) {
+    return Ok(GuestRational { numerator: guestIntZero(), denominator: guestIntOne() })
+  }
+  let divisor = magnitudeGcd(numerator.limbs, denominator.limbs)?
+  let reducedNumerator = magnitudeExactDivide(numerator.limbs, divisor)?
+  let reducedDenominator = magnitudeExactDivide(denominator.limbs, divisor)?
+  Ok(GuestRational {
+    numerator: guestInt(numerator.negative != denominator.negative, reducedNumerator),
+    denominator: guestInt(false, reducedDenominator),
+  })
+}
+
+function rationalFromInt(value: GuestInt) -> GuestRational {
+  GuestRational { numerator: value, denominator: guestIntOne() }
+}
+
+export function valueFromRational(value: GuestRational) -> GuestValue {
+  if guestIntIsOne(value.denominator) {
+    GuestValue.VInt(value.numerator)
+  } else {
+    GuestValue.VRational(value)
+  }
+}
+
+export function renderRational(value: GuestRational) -> string {
+  if guestIntIsOne(value.denominator) { return renderGuestInt(value.numerator) }
+  "{renderGuestInt(value.numerator)}/{renderGuestInt(value.denominator)}"
+}
+
+export function parseGuestRational(text: string) -> Result<GuestRational, string> {
+  let parts = text.split("/")
+  if parts.length != 2 { return Err("invalid rational") }
+  let denominatorText = parts[1]
+  let denominatorScalars = denominatorText.scalars()
+  if denominatorScalars.length > 0 && denominatorScalars[0] == "-" { return Err("invalid rational") }
+  let numerator = parseGuestInt(parts[0])?
+  let denominator = parseGuestInt(denominatorText)?
+  let normalized = normalizeRational(numerator, denominator)?
+  if guestIntIsOne(normalized.denominator) || renderRational(normalized) != text {
+    return Err("noncanonical rational")
+  }
+  Ok(normalized)
+}
+
+function rationalAdd(left: GuestRational, right: GuestRational) -> Result<GuestRational, string> {
+  let numerator = guestIntAdd(
+    guestIntMultiply(left.numerator, right.denominator),
+    guestIntMultiply(right.numerator, left.denominator),
+  )
+  normalizeRational(numerator, guestIntMultiply(left.denominator, right.denominator))
+}
+
+function rationalSubtract(left: GuestRational, right: GuestRational) -> Result<GuestRational, string> {
+  let numerator = guestIntSubtract(
+    guestIntMultiply(left.numerator, right.denominator),
+    guestIntMultiply(right.numerator, left.denominator),
+  )
+  normalizeRational(numerator, guestIntMultiply(left.denominator, right.denominator))
+}
+
+function rationalMultiply(left: GuestRational, right: GuestRational) -> Result<GuestRational, string> {
+  normalizeRational(
+    guestIntMultiply(left.numerator, right.numerator),
+    guestIntMultiply(left.denominator, right.denominator),
+  )
+}
+
+function rationalDivide(left: GuestRational, right: GuestRational) -> Result<GuestRational, string> {
+  if guestIntIsZero(right.numerator) { return Err("E313 /: division by zero") }
+  normalizeRational(
+    guestIntMultiply(left.numerator, right.denominator),
+    guestIntMultiply(left.denominator, right.numerator),
+  )
+}
+
+function guestIntCompare(left: GuestInt, right: GuestInt) -> int {
+  if left.negative && !right.negative { return -1 }
+  if !left.negative && right.negative { return 1 }
+  let ordering = magnitudeCompare(left.limbs, right.limbs)
+  if left.negative { -ordering } else { ordering }
+}
+
+function rationalCompare(left: GuestRational, right: GuestRational) -> int {
+  guestIntCompare(
+    guestIntMultiply(left.numerator, right.denominator),
+    guestIntMultiply(right.numerator, left.denominator),
+  )
+}
+
+export function rationalEqual(left: GuestRational, right: GuestRational) -> bool {
+  guestIntEqual(left.numerator, right.numerator) && guestIntEqual(left.denominator, right.denominator)
+}
+
+export function renderReal(value: float) -> string {
+  let rendered = "{value}"
+  if rendered.contains(".") { rendered } else { "{rendered}.0" }
+}
+
+export function parseGuestReal(text: string) -> Result<float, string> {
+  let value = match Math.parseFloat(text) {
+    case Ok(number) => number
+    case Err(_) => return Err("invalid real")
+  }
+  if !Math.isFinite(value) { return Err("E314 real is not finite") }
+  if renderReal(value) != text { return Err("noncanonical real") }
+  Ok(value)
+}
+
+function decimalDigit(scalar: string) -> bool {
+  scalar >= "0" && scalar <= "9"
+}
+
+export function parseGuestNumberToken(text: string) -> Result<Option<GuestValue>, string> {
+  if text.contains("/") {
+    let parts = text.split("/")
+    if parts.length != 2 { return Ok(None) }
+    let denominator = parts[1].scalars()
+    if denominator.length == 0 || denominator[0] < "1" || denominator[0] > "9" {
+      return Ok(None)
+    }
+    for scalar in denominator {
+      if !decimalDigit(scalar) { return Ok(None) }
+    }
+    let numerator = match parseGuestInt(parts[0]) {
+      case Ok(value) => value
+      case Err(_) => return Ok(None)
+    }
+    let denominatorValue = match parseGuestInt(parts[1]) {
+      case Ok(value) => value
+      case Err(_) => return Ok(None)
+    }
+    return Ok(Some(valueFromRational(normalizeRational(numerator, denominatorValue)?)))
+  }
+
+  let scalars = text.scalars()
+  if scalars.length == 0 { return Ok(None) }
+  let mut index = if scalars[0] == "-" { 1 } else { 0 }
+  if index >= scalars.length || !decimalDigit(scalars[index]) { return Ok(None) }
+  let integerStart = index
+  while index < scalars.length && decimalDigit(scalars[index]) { index += 1 }
+  if index - integerStart > 1 && scalars[integerStart] == "0" { return Ok(None) }
+  let mut hasRealMarker = false
+  if index < scalars.length && scalars[index] == "." {
+    hasRealMarker = true
+    index += 1
+    let fractionStart = index
+    while index < scalars.length && decimalDigit(scalars[index]) { index += 1 }
+    if index == fractionStart { return Ok(None) }
+  }
+  if index < scalars.length && (scalars[index] == "e" || scalars[index] == "E") {
+    hasRealMarker = true
+    index += 1
+    if index < scalars.length && (scalars[index] == "+" || scalars[index] == "-") { index += 1 }
+    let exponentStart = index
+    while index < scalars.length && decimalDigit(scalars[index]) { index += 1 }
+    if index == exponentStart { return Ok(None) }
+  }
+  if index != scalars.length { return Ok(None) }
+  if !hasRealMarker {
+    return match parseGuestInt(text) {
+      case Ok(value) => Ok(Some(GuestValue.VInt(value)))
+      case Err(_) => Ok(None)
+    }
+  }
+  let real = match Math.parseFloat(text) {
+    case Ok(value) => value
+    case Err(_) => return Ok(None)
+  }
+  if !Math.isFinite(real) { return Err("E314 string->number: inexact result is not finite") }
+  Ok(Some(GuestValue.VReal(real)))
+}
+
+export function realToRational(value: float) -> Result<GuestRational, string> {
+  if !Math.isFinite(value) { return Err("E314 real is not finite") }
+  if value == 0.0 { return Ok(rationalFromInt(guestIntZero())) }
+  let negative = value < 0.0
+  let mut normalized = Math.abs(value)
+  let mut exponent = 0
+  while normalized >= 2.0 {
+    normalized = normalized / 2.0
+    exponent += 1
+    if exponent > 1023 { return Err("E314 binary64 exponent overflow") }
+  }
+  while normalized < 1.0 {
+    normalized = normalized * 2.0
+    exponent -= 1
+    if exponent < -1074 { return Err("E314 binary64 exponent underflow") }
+  }
+  let mut significand = magnitudeZero()
+  let mut remaining = normalized
+  let mut bit = 0
+  while bit < 53 {
+    significand = magnitudeMultiplySmall(significand, 2)
+    if remaining >= 1.0 {
+      significand = magnitudeMultiplyAddSmall(significand, 1, 1)
+      remaining = remaining - 1.0
+    }
+    if bit + 1 < 53 { remaining = remaining * 2.0 }
+    bit += 1
+  }
+  if remaining != 0.0 { return Err("E314 binary64 decomposition did not terminate") }
+  let mut numerator = guestInt(negative, significand)
+  let mut denominator = guestIntOne()
+  let mut binaryExponent = exponent - 52
+  while binaryExponent > 0 {
+    numerator = guestInt(numerator.negative, magnitudeMultiplySmall(numerator.limbs, 2))
+    binaryExponent -= 1
+  }
+  while binaryExponent < 0 {
+    denominator = guestInt(false, magnitudeMultiplySmall(denominator.limbs, 2))
+    binaryExponent += 1
+  }
+  normalizeRational(numerator, denominator)
+}
+
+export function exactRational(value: GuestValue, name: string) -> Result<GuestRational, string> {
+  match value {
+    case VInt(number) => Ok(rationalFromInt(number))
+    case VRational(number) => Ok(number)
+    case VReal(number) => realToRational(number)
+    case _ => Err("E312 {name}: number required")
+  }
+}
+
+function magnitudeDecimalDigits(value: Array<int>) -> int {
+  let normalized = normalizeMagnitude(value)
+  let highest = normalized[normalized.length - 1]
+  let leading = if highest >= 1000 { 4 } else if highest >= 100 { 3 } else if highest >= 10 { 2 } else { 1 }
+  (normalized.length - 1) * 4 + leading
+}
+
+function magnitudePowerTwo(value: Array<int>, exponent: int) -> Array<int> {
+  let mut result = normalizeMagnitude(value)
+  let mut remaining = exponent
+  while remaining > 0 {
+    result = magnitudeMultiplySmall(result, 2)
+    remaining -= 1
+  }
+  result
+}
+
+function compareRatioPowerTwo(numerator: Array<int>, denominator: Array<int>, exponent: int) -> int {
+  if exponent >= 0 {
+    magnitudeCompare(numerator, magnitudePowerTwo(denominator, exponent))
+  } else {
+    magnitudeCompare(magnitudePowerTwo(numerator, -exponent), denominator)
+  }
+}
+
+function roundedScaledQuotient(
+  numerator: Array<int>,
+  denominator: Array<int>,
+  binaryShift: int,
+) -> Result<Array<int>, string> {
+  let scaledNumerator = if binaryShift >= 0 { magnitudePowerTwo(numerator, binaryShift) } else { numerator }
+  let scaledDenominator = if binaryShift < 0 { magnitudePowerTwo(denominator, -binaryShift) } else { denominator }
+  let division = magnitudeDivide(scaledNumerator, scaledDenominator)?
+  let comparison = magnitudeCompare(
+    magnitudeMultiplySmall(division.remainder, 2),
+    scaledDenominator,
+  )
+  let roundUp = comparison > 0 || (comparison == 0 && division.quotient[0] % 2 != 0)
+  if roundUp {
+    Ok(magnitudeAdd(division.quotient, [1]))
+  } else {
+    Ok(division.quotient)
+  }
+}
+
+function exactRationalToFloat(value: GuestRational) -> Result<float, string> {
+  if guestIntIsZero(value.numerator) {
+    return Ok(if value.numerator.negative { -0.0 } else { 0.0 })
+  }
+  let numerator = value.numerator.limbs
+  let denominator = value.denominator.limbs
+  let decimalDelta = magnitudeDecimalDigits(numerator) - magnitudeDecimalDigits(denominator)
+  let approximateExponent = (decimalDelta * 3321928095) / 1000000000
+  if approximateExponent > 1028 { return Err("E314 exact value is not finitely representable") }
+  if approximateExponent < -1080 {
+    return Ok(if value.numerator.negative { -0.0 } else { 0.0 })
+  }
+  let mut exponent = approximateExponent
+  while compareRatioPowerTwo(numerator, denominator, exponent) < 0 { exponent -= 1 }
+  while compareRatioPowerTwo(numerator, denominator, exponent + 1) >= 0 { exponent += 1 }
+  if exponent > 1023 { return Err("E314 exact value is not finitely representable") }
+  if exponent < -1075 {
+    return Ok(if value.numerator.negative { -0.0 } else { 0.0 })
+  }
+
+  let mut significand = if exponent >= -1022 {
+    roundedScaledQuotient(numerator, denominator, 52 - exponent)?
+  } else {
+    roundedScaledQuotient(numerator, denominator, 1074)?
+  }
+  let mut outputExponent = if exponent >= -1022 { exponent - 52 } else { -1074 }
+  let significandText = renderGuestInt(guestInt(false, significand))
+  let mut significandInt = match toInt(significandText) {
+    case Some(number) => number
+    case None => return Err("LIT200 exact-to-binary64 significand overflow")
+  }
+  if exponent >= -1022 && significandInt == 9007199254740992 {
+    let halved = magnitudeDivide(significand, [2])?
+    significand = halved.quotient
+    significandInt = 4503599627370496
+    outputExponent += 1
+    if exponent + 1 > 1023 { return Err("E314 exact value is not finitely representable") }
+  }
+  let mut result = match Math.parseFloat("{significandInt}") {
+    case Ok(number) => number
+    case Err(_) => return Err("LIT200 exact-to-binary64 significand parse failure")
+  }
+  while outputExponent > 0 {
+    result = result * 2.0
+    outputExponent -= 1
+  }
+  while outputExponent < 0 {
+    result = result / 2.0
+    outputExponent += 1
+  }
+  if !Math.isFinite(result) { return Err("E314 exact value is not finitely representable") }
+  Ok(if value.numerator.negative { -result } else { result })
+}
+
+export function guestNumberToFloat(value: GuestValue, name: string) -> Result<float, string> {
+  match value {
+    case VReal(number) => Ok(number)
+    case VInt(number) => exactRationalToFloat(rationalFromInt(number))
+    case VRational(number) => exactRationalToFloat(number)
+    case _ => Err("E312 {name}: number required")
+  }
+}
+
+function isRealValue(value: GuestValue) -> bool {
+  match value {
+    case VReal(_) => true
+    case _ => false
+  }
+}
+
+export function numericAdd(left: GuestValue, right: GuestValue) -> Result<GuestValue, string> {
+  match left {
+    case VInt(leftInt) => match right {
+      case VInt(rightInt) => return Ok(GuestValue.VInt(guestIntAdd(leftInt, rightInt)))
+      case _ => {}
+    }
+    case _ => {}
+  }
+  if isRealValue(left) || isRealValue(right) {
+    let result = guestNumberToFloat(left, "+")? + guestNumberToFloat(right, "+")?
+    if !Math.isFinite(result) { return Err("E314 +: inexact result is not finite") }
+    return Ok(GuestValue.VReal(result))
+  }
+  Ok(valueFromRational(rationalAdd(exactRational(left, "+")?, exactRational(right, "+")?)?))
+}
+
+export function numericSubtract(left: GuestValue, right: GuestValue) -> Result<GuestValue, string> {
+  match left {
+    case VInt(leftInt) => match right {
+      case VInt(rightInt) => return Ok(GuestValue.VInt(guestIntSubtract(leftInt, rightInt)))
+      case _ => {}
+    }
+    case _ => {}
+  }
+  if isRealValue(left) || isRealValue(right) {
+    let result = guestNumberToFloat(left, "-")? - guestNumberToFloat(right, "-")?
+    if !Math.isFinite(result) { return Err("E314 -: inexact result is not finite") }
+    return Ok(GuestValue.VReal(result))
+  }
+  Ok(valueFromRational(rationalSubtract(exactRational(left, "-")?, exactRational(right, "-")?)?))
+}
+
+export function numericMultiply(left: GuestValue, right: GuestValue) -> Result<GuestValue, string> {
+  match left {
+    case VInt(leftInt) => match right {
+      case VInt(rightInt) => return Ok(GuestValue.VInt(guestIntMultiply(leftInt, rightInt)))
+      case _ => {}
+    }
+    case _ => {}
+  }
+  if isRealValue(left) || isRealValue(right) {
+    let result = guestNumberToFloat(left, "*")? * guestNumberToFloat(right, "*")?
+    if !Math.isFinite(result) { return Err("E314 *: inexact result is not finite") }
+    return Ok(GuestValue.VReal(result))
+  }
+  Ok(valueFromRational(rationalMultiply(exactRational(left, "*")?, exactRational(right, "*")?)?))
+}
+
+export function numericDivide(left: GuestValue, right: GuestValue) -> Result<GuestValue, string> {
+  if isRealValue(left) || isRealValue(right) {
+    let divisor = guestNumberToFloat(right, "/")?
+    if divisor == 0.0 { return Err("E313 /: division by zero") }
+    let result = guestNumberToFloat(left, "/")? / divisor
+    if !Math.isFinite(result) { return Err("E314 /: inexact result is not finite") }
+    return Ok(GuestValue.VReal(result))
+  }
+  Ok(valueFromRational(rationalDivide(exactRational(left, "/")?, exactRational(right, "/")?)?))
+}
+
+function numericCompare(left: GuestValue, right: GuestValue, name: string) -> Result<int, string> {
+  Ok(rationalCompare(exactRational(left, name)?, exactRational(right, name)?))
+}
+
+export function numericComparisonChain(arguments: Array<GuestValue>, name: string) -> Result<bool, string> {
+  if arguments.length < 2 {
+    return Err("E302 {name}: expected at least 2 arguments, got {arguments.length}")
+  }
+  let mut answer = true
+  let mut index = 0
+  while index + 1 < arguments.length {
+    let ordering = numericCompare(arguments[index], arguments[index + 1], name)?
+    let pairAnswer = if name == "<" { ordering < 0 }
+      else if name == ">" { ordering > 0 }
+      else if name == "<=" { ordering <= 0 }
+      else { ordering >= 0 }
+    if !pairAnswer { answer = false }
+    index += 1
+  }
+  Ok(answer)
+}
+
+export function numericNegate(value: GuestValue) -> Result<GuestValue, string> {
+  match value {
+    case VInt(number) => Ok(GuestValue.VInt(guestIntNegate(number)))
+    case VRational(number) => Ok(GuestValue.VRational(GuestRational {
+      numerator: guestIntNegate(number.numerator),
+      denominator: number.denominator,
+    }))
+    case VReal(number) => Ok(GuestValue.VReal(-number))
+    case _ => Err("E312 -: number required")
+  }
+}
+
+export function numericEqual(left: GuestValue, right: GuestValue) -> Result<bool, string> {
+  match left {
+    case VInt(leftInt) => match right {
+      case VInt(rightInt) => return Ok(guestIntEqual(leftInt, rightInt))
+      case _ => {}
+    }
+    case VReal(leftReal) => match right {
+      case VReal(rightReal) => return Ok(leftReal == rightReal)
+      case _ => {}
+    }
+    case _ => {}
+  }
+  Ok(rationalEqual(exactRational(left, "=")?, exactRational(right, "=")?))
+}
+
+function guestIntegerOperand(value: GuestValue, name: string) -> Result<GuestIntegerOperand, string> {
+  match value {
+    case VInt(number) => Ok(GuestIntegerOperand { value: number, inexact: false })
+    case VReal(number) => {
+      let rational = realToRational(number)?
+      if !guestIntIsOne(rational.denominator) {
+        return Err("E312 {name}: integer required")
+      }
+      Ok(GuestIntegerOperand { value: rational.numerator, inexact: true })
+    }
+    case _ => Err("E312 {name}: integer required")
+  }
+}
+
+function guestIntegerResult(value: GuestInt, inexact: bool, name: string) -> Result<GuestValue, string> {
+  if !inexact { return Ok(GuestValue.VInt(value)) }
+  let real = match exactRationalToFloat(rationalFromInt(value)) {
+    case Ok(number) => number
+    case Err(_) => return Err("E314 {name}: inexact result is not finite")
+  }
+  if !Math.isFinite(real) { return Err("E314 {name}: inexact result is not finite") }
+  Ok(GuestValue.VReal(real))
+}
+
+function guestIntTruncatedDivide(left: GuestInt, right: GuestInt) -> Result<GuestIntDivision, string> {
+  if guestIntIsZero(right) { return Err("LIT200 internal division by zero") }
+  let division = magnitudeDivide(left.limbs, right.limbs)?
+  Ok(GuestIntDivision {
+    quotient: guestInt(left.negative != right.negative, division.quotient),
+    remainder: guestInt(left.negative, division.remainder),
+  })
+}
+
+function guestIntFlooredDivide(left: GuestInt, right: GuestInt) -> Result<GuestIntDivision, string> {
+  let truncated = guestIntTruncatedDivide(left, right)?
+  if guestIntIsZero(truncated.remainder) || left.negative == right.negative {
+    return Ok(truncated)
+  }
+  let quotient = guestIntSubtract(truncated.quotient, guestIntOne())
+  Ok(GuestIntDivision {
+    quotient: quotient,
+    remainder: guestIntSubtract(left, guestIntMultiply(right, quotient)),
+  })
+}
+
+export function numericIntegerDivision(
+  left: GuestValue,
+  right: GuestValue,
+  name: string,
+  floored: bool,
+  result: string,
+) -> Result<ValuePacket, string> {
+  let dividend = guestIntegerOperand(left, name)?
+  let divisor = guestIntegerOperand(right, name)?
+  if guestIntIsZero(divisor.value) { return Err("E313 {name}: division by zero") }
+  let division = if floored {
+    guestIntFlooredDivide(dividend.value, divisor.value)?
+  } else {
+    guestIntTruncatedDivide(dividend.value, divisor.value)?
+  }
+  let inexact = dividend.inexact || divisor.inexact
+  let quotient = guestIntegerResult(division.quotient, inexact, name)?
+  let remainder = guestIntegerResult(division.remainder, inexact, name)?
+  if result == "quotient" { return Ok(ValuePacket.One(quotient)) }
+  if result == "remainder" { return Ok(ValuePacket.One(remainder)) }
+  Ok(ValuePacket.Many([quotient, remainder]))
+}
+
+export function numericAbs(value: GuestValue, name: string) -> Result<GuestValue, string> {
+  match value {
+    case VInt(number) => Ok(GuestValue.VInt(guestInt(false, number.limbs)))
+    case VRational(number) => Ok(GuestValue.VRational(GuestRational {
+      numerator: guestInt(false, number.numerator.limbs),
+      denominator: number.denominator,
+    }))
+    case VReal(number) => Ok(GuestValue.VReal(Math.abs(number)))
+    case _ => Err("E312 {name}: number required")
+  }
+}
+
+export function numericSquare(value: GuestValue) -> Result<GuestValue, string> {
+  match value {
+    case VInt(number) => Ok(GuestValue.VInt(guestIntMultiply(number, number)))
+    case VRational(number) => Ok(valueFromRational(rationalMultiply(number, number)?))
+    case VReal(number) => {
+      let result = number * number
+      if !Math.isFinite(result) { return Err("E314 square: inexact result is not finite") }
+      Ok(GuestValue.VReal(result))
+    }
+    case _ => Err("E312 square: number required")
+  }
+}
+
+export function numericRounded(value: GuestValue, name: string) -> Result<GuestValue, string> {
+  match value {
+    case VInt(_) => Ok(value)
+    case VReal(number) => {
+      let rounded = if name == "floor" { Math.floor(number) }
+        else if name == "ceiling" { Math.ceil(number) }
+        else if name == "truncate" {
+          if number < 0.0 { Math.ceil(number) } else { Math.floor(number) }
+        } else {
+          let lower = Math.floor(number)
+          let distance = number - lower
+          if distance < 0.5 { lower }
+          else if distance > 0.5 { lower + 1.0 }
+          else if Math.floor(lower / 2.0) * 2.0 == lower { lower }
+          else { lower + 1.0 }
+        }
+      Ok(GuestValue.VReal(rounded))
+    }
+    case VRational(number) => {
+      let floored = guestIntFlooredDivide(number.numerator, number.denominator)?
+      let truncated = guestIntTruncatedDivide(number.numerator, number.denominator)?
+      if name == "floor" { return Ok(GuestValue.VInt(floored.quotient)) }
+      if name == "truncate" { return Ok(GuestValue.VInt(truncated.quotient)) }
+      if name == "ceiling" {
+        return Ok(GuestValue.VInt(if guestIntIsZero(truncated.remainder) {
+          truncated.quotient
+        } else if number.numerator.negative {
+          truncated.quotient
+        } else {
+          guestIntAdd(truncated.quotient, guestIntOne())
+        }))
+      }
+      let doubled = magnitudeMultiplySmall(floored.remainder.limbs, 2)
+      let comparison = magnitudeCompare(doubled, number.denominator.limbs)
+      let odd = floored.quotient.limbs[0] % 2 != 0
+      Ok(GuestValue.VInt(if comparison > 0 || (comparison == 0 && odd) {
+        guestIntAdd(floored.quotient, guestIntOne())
+      } else {
+        floored.quotient
+      }))
+    }
+    case _ => Err("E312 {name}: number required")
+  }
+}
+
+export function numericSignPredicate(value: GuestValue, name: string) -> Result<bool, string> {
+  let comparison = numericCompare(value, GuestValue.VInt(guestIntZero()), name)?
+  if name == "zero?" { Ok(comparison == 0) }
+  else if name == "positive?" { Ok(comparison > 0) }
+  else { Ok(comparison < 0) }
+}
+
+export function numericTowerPredicate(value: GuestValue) -> bool {
+  match value {
+    case VInt(_) | VRational(_) | VReal(_) => true
+    case _ => false
+  }
+}
+
+export function numericEvenOdd(value: GuestValue, name: string) -> Result<bool, string> {
+  let integer = guestIntegerOperand(value, name)?
+  let even = integer.value.limbs[0] % 2 == 0
+  if name == "even?" { Ok(even) } else { Ok(!even) }
+}
+
+export function numericMinMax(arguments: Array<GuestValue>, name: string) -> Result<GuestValue, string> {
+  if arguments.length == 0 { return Err("E302 {name}: expected at least 1 argument, got 0") }
+  let mut best = arguments[0]
+  let mut inexact = isRealValue(best)
+  let mut index = 1
+  while index < arguments.length {
+    let candidate = arguments[index]
+    if isRealValue(candidate) { inexact = true }
+    let ordering = numericCompare(candidate, best, name)?
+    if (name == "min" && ordering < 0) || (name == "max" && ordering > 0) {
+      best = candidate
+    }
+    index += 1
+  }
+  if inexact && !isRealValue(best) {
+    return Ok(GuestValue.VReal(guestNumberToFloat(best, name)?))
+  }
+  Ok(best)
+}
+
+function guestIntLcm(left: GuestInt, right: GuestInt) -> Result<GuestInt, string> {
+  if guestIntIsZero(left) || guestIntIsZero(right) { return Ok(guestIntZero()) }
+  let divisor = magnitudeGcd(left.limbs, right.limbs)?
+  let reduced = magnitudeExactDivide(left.limbs, divisor)?
+  Ok(guestInt(false, magnitudeMultiply(reduced, right.limbs)))
+}
+
+export function numericGcdLcm(arguments: Array<GuestValue>, name: string) -> Result<GuestValue, string> {
+  let mut accumulator = if name == "gcd" { guestIntZero() } else { guestIntOne() }
+  let mut inexact = false
+  for argument in arguments {
+    let integer = guestIntegerOperand(argument, name)?
+    if integer.inexact { inexact = true }
+    accumulator = if name == "gcd" {
+      guestInt(false, magnitudeGcd(accumulator.limbs, integer.value.limbs)?)
+    } else {
+      guestIntLcm(accumulator, integer.value)?
+    }
+  }
+  guestIntegerResult(accumulator, inexact, name)
+}
+
+function guestIntPower(base: GuestInt, exponent: int) -> GuestInt {
+  let mut result = guestIntOne()
+  let mut factor = base
+  let mut remaining = exponent
+  while remaining > 0 {
+    if remaining % 2 != 0 { result = guestIntMultiply(result, factor) }
+    remaining = remaining / 2
+    if remaining > 0 { factor = guestIntMultiply(factor, factor) }
+  }
+  result
+}
+
+function numericExponentMagnitude(exponent: GuestInt, inexactBase: bool) -> Result<int, string> {
+  let limit = if inexactBase { [3647, 4748, 21] } else { [7295, 9496, 42] }
+  if magnitudeCompare(exponent.limbs, limit) > 0 {
+    return Err("E314 expt: result is not finite")
+  }
+  match toInt(renderGuestInt(guestInt(false, exponent.limbs))) {
+    case Some(value) => Ok(value)
+    case None => Err("E314 expt: result is not finite")
+  }
+}
+
+export function numericExpt(base: GuestValue, exponentValue: GuestValue) -> Result<GuestValue, string> {
+  let exponent = match exponentValue {
+    case VInt(value) => value
+    case _ => return Err("E312 expt: exact integer required")
+  }
+  if guestIntIsZero(exponent) {
+    return Ok(if isRealValue(base) { GuestValue.VReal(1.0) } else { GuestValue.VInt(guestIntOne()) })
+  }
+  match base {
+    case VInt(number) => {
+      if guestIntIsZero(number) {
+        if exponent.negative { return Err("E313 expt: division by zero") }
+        return Ok(GuestValue.VInt(guestIntZero()))
+      }
+      if magnitudeCompare(number.limbs, [1]) == 0 {
+        let negative = number.negative && exponent.limbs[0] % 2 != 0
+        return Ok(GuestValue.VInt(guestInt(negative, [1])))
+      }
+      let magnitude = numericExponentMagnitude(exponent, false)?
+      let powered = guestIntPower(number, magnitude)
+      if exponent.negative {
+        return Ok(valueFromRational(normalizeRational(guestIntOne(), powered)?))
+      }
+      Ok(GuestValue.VInt(powered))
+    }
+    case VRational(number) => {
+      let magnitude = numericExponentMagnitude(exponent, false)?
+      let numerator = guestIntPower(number.numerator, magnitude)
+      let denominator = guestIntPower(number.denominator, magnitude)
+      Ok(valueFromRational(if exponent.negative {
+        normalizeRational(denominator, numerator)?
+      } else {
+        normalizeRational(numerator, denominator)?
+      }))
+    }
+    case VReal(number) => {
+      if number == 0.0 {
+        if exponent.negative { return Err("E314 expt: inexact result is not finite") }
+        return Ok(GuestValue.VReal(0.0))
+      }
+      if number == 1.0 { return Ok(GuestValue.VReal(1.0)) }
+      if number == -1.0 {
+        return Ok(GuestValue.VReal(if exponent.limbs[0] % 2 == 0 { 1.0 } else { -1.0 }))
+      }
+      let magnitude = numericExponentMagnitude(exponent, true)?
+      let mut result = 1.0
+      let mut factor = number
+      let mut remaining = magnitude
+      while remaining > 0 {
+        if remaining % 2 != 0 { result = result * factor }
+        remaining = remaining / 2
+        if remaining > 0 { factor = factor * factor }
+      }
+      if exponent.negative { result = 1.0 / result }
+      if !Math.isFinite(result) { return Err("E314 expt: inexact result is not finite") }
+      Ok(GuestValue.VReal(result))
+    }
+    case _ => Err("E312 expt: number required")
+  }
+}
+
+export function exactIntegerSqrt(value: GuestValue) -> Result<ValuePacket, string> {
+  let integer = match value {
+    case VInt(number) => number
+    case _ => return Err("E312 exact-integer-sqrt: exact integer required")
+  }
+  if integer.negative { return Err("E312 exact-integer-sqrt: non-negative integer required") }
+  let mut low = guestIntZero()
+  let mut high = guestIntAdd(integer, guestIntOne())
+  while magnitudeCompare(guestIntSubtract(high, low).limbs, [1]) > 0 {
+    let midpointDivision = magnitudeDivide(magnitudeAdd(low.limbs, high.limbs), [2])?
+    let midpointMagnitude = midpointDivision.quotient
+    let midpoint = guestInt(false, midpointMagnitude)
+    if magnitudeCompare(guestIntMultiply(midpoint, midpoint).limbs, integer.limbs) <= 0 {
+      low = midpoint
+    } else {
+      high = midpoint
+    }
+  }
+  let remainder = guestIntSubtract(integer, guestIntMultiply(low, low))
+  Ok(ValuePacket.Many([GuestValue.VInt(low), GuestValue.VInt(remainder)]))
+}
+
+export function guestIndex(value: GuestValue, name: string) -> Result<int, string> {
+  match value {
+    case VInt(number) => match toInt(renderGuestInt(number)) {
+      case Some(index) => Ok(index)
+      case None => Err("E311 {name}: index out of range")
+    }
+    case _ => Err("E312 {name}: exact integer required")
+  }
+}

@@ -1,0 +1,17 @@
+function divide(a: float, b: float) -> Result<float, string> {
+    if b == 0.0 {
+        Err("divide by zero")
+    } else {
+        Ok(a / b)
+    }
+}
+
+function compute(a: float, b: float) -> Result<float, string> {
+    let quotient = divide(a, b)?
+    Ok(quotient + 1.0)
+}
+
+match compute(10.0, 2.0) {
+    case Ok(value) => print("Result: {value}")
+    case Err(error) => print("Error: {error}")
+}

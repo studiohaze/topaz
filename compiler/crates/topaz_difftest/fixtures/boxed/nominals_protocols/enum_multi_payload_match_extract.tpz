@@ -1,0 +1,4 @@
+enum Pair { P(int, int) }
+match Pair.P(7, 5) {
+  case P(a, b) => a - b
+}

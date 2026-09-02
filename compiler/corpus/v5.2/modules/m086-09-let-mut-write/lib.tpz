@@ -1,0 +1,6 @@
+function bump() -> int {
+    counter = 1
+    1
+}
+export let a = bump()
+let mut counter = 0

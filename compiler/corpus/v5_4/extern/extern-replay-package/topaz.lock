@@ -1,0 +1,15 @@
+[[package]]
+name = "extern_replay_package"
+version = "0.1.0"
+source = "root"
+manifest_hash = "sha256:85986ca157313cd6407eeba04b4581ea24e1e16b7cac94ca1403342cea4139cd"
+
+[[extern]]
+module = "host.math"
+hash = "sha256:39587311db2c06b2b2e2a038ddeefa717a74f4f991a023770a54002366d94d49"
+abi_hash = "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+artifact_path = "artifacts/host-math.wasm"
+sandbox = "wasm"
+fuel = 1000
+memory_bytes = 65536
+replay_hash = "sha256:d6057b2f039a9cecbc4e254d28f47458653e5b750655c46e10d6e4ae0f7a9969"

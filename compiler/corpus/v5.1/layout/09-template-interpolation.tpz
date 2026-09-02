@@ -1,0 +1,6 @@
+let region = "east"
+let report = sql"""
+    SELECT name
+    WHERE region = {region
+        |> normalize}
+    """

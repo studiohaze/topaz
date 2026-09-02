@@ -1,0 +1,10 @@
+enum Message {
+    Empty,
+    Text(string),
+}
+
+let empty: Message = Message.Empty
+let text: Message = Message.Text("hello")
+let encodedEmpty: Result<string, string> = JSON.stringify(empty)
+let encodedText: Result<string, string> = JSON.stringify(text)
+print("{encodedEmpty}:{encodedText}")

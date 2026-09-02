@@ -1,0 +1,13 @@
+
+let some: Option<int> = Some(7)
+let none: Option<int> = None
+let skipped = some ?? loop {
+    print("coalesce-skip")
+    break 9
+}
+let hit = none ?? loop {
+    print("coalesce-hit")
+    break 11
+}
+print("{skipped}:{hit}")
+hit

@@ -1,0 +1,94 @@
+export const STAGE1_EXCHANGE_SCHEMA = "topaz.compiler.stage1-exchange/v2"
+export const STAGE1_IR_SCHEMA = "topaz.compiler.stage1-ir/v1"
+const STAGE1_PROVENANCE_SCHEMA = "topaz.compiler.stage1-provenance/v1"
+
+export record Stage1Module derives JSON {
+  schema: string,
+  identity: string,
+  path: string,
+  sourceOrdinal: int,
+  initializationOrdinal: int,
+  entry: bool,
+  extern: bool,
+  operationIds: Array<string>,
+}
+
+export record Stage1Operation derives JSON {
+  schema: string,
+  id: string,
+  module: string,
+  lo: int,
+  hi: int,
+  parentId: string,
+  role: string,
+  kind: string,
+  detail: string,
+  operands: Array<string>,
+  operandLabels: Array<string>,
+  semanticType: string,
+  representation: string,
+  referenceIdentity: string,
+  bindingName: string,
+  bindingMutable: bool,
+  bindingStorage: string,
+  declarationIdentity: string,
+  controlKind: string,
+  controlTarget: string,
+  cleanupIds: Array<string>,
+  callTarget: string,
+  callCalleeKind: string,
+  callMethod: string,
+  callMethodClass: string,
+  callOptional: bool,
+  callShadowFirst: bool,
+  callStageMethod: string,
+  callArguments: Array<string>,
+  callEvaluations: Array<string>,
+  runtimeLeaf: string,
+  generatedNameSeed: string,
+}
+
+export record Stage1Provenance derives JSON {
+  schema: string,
+  engine: string,
+  producerStage: int,
+  resultStage: int,
+  defaultEngine: string,
+  exchangeSchema: string,
+  irSchema: string,
+  sourceSetId: string,
+  fixedPoint: string,
+}
+
+export record Stage1Response derives JSON {
+  schema: string,
+  status: string,
+  frontEnd: string,
+  loweredModules: Array<Stage1Module>,
+  loweredOperations: Array<Stage1Operation>,
+  generatedRust: string,
+  unsupported: Array<string>,
+  provenance: Stage1Provenance,
+}
+
+export function decodeStage1Response(text: string) -> Result<Stage1Response, string> {
+  JSON.parseAs<Stage1Response>(text)
+}
+
+export function compilerProvenance(
+  sourceSetId: string,
+  producer: string,
+  producerStage: int,
+) -> Stage1Provenance {
+  Stage1Provenance {
+    schema: STAGE1_PROVENANCE_SCHEMA,
+    engine: producer,
+    producerStage: producerStage,
+    resultStage: producerStage,
+    defaultEngine: "rust-stage0",
+    exchangeSchema: STAGE1_EXCHANGE_SCHEMA,
+    irSchema: STAGE1_IR_SCHEMA,
+    sourceSetId: sourceSetId,
+    fixedPoint: "not-run",
+  }
+}

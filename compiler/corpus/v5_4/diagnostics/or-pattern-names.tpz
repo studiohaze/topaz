@@ -1,0 +1,7 @@
+function pick(r: Result<int, int>) -> int {
+    match r {
+        case Ok(x) | Err(y) => x + 1
+    }
+}
+
+pick(Ok(1))

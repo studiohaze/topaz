@@ -1,0 +1,18 @@
+# corpus/exec/templates — §16 tagged-template values (CDR-003 §8/§11)
+
+[totals]
+recorded = 2
+runnable = 2
+pending = 0
+
+[[fixture]]
+file = "path-normalize.tpz"
+phase = "exec"
+versions = "5.2"
+result = "ok"
+
+[[fixture]]
+file = "sql-parts.tpz"
+phase = "exec"
+versions = "5.2"
+result = "ok"

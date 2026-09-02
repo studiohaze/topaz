@@ -1,0 +1,18 @@
+
+function main() {
+    let mut xs: Option<Array<int>> = Some([3, 1, 2])
+    let sortResult = ((x) => x) |> xs?.sortBy()
+    let mut kept: Option<Array<int>> = Some([1, 2, 3, 4])
+    let retainResult = ((x) => x > 2) |> kept?.retain()
+    let mut noneXs: Option<Array<int>> = None
+    let skippedResult = ((x) => x / 0 == 0) |> noneXs?.retain()
+    {
+        sorted: xs,
+        sortResult: sortResult,
+        retained: kept,
+        retainResult: retainResult,
+        skipped: noneXs,
+        skippedResult: skippedResult,
+    }
+}
+main()

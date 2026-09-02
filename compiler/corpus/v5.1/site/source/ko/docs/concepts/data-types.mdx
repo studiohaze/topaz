@@ -1,0 +1,304 @@
+---
+title: '토파즈 데이터 타입'
+description: '토파즈 타입 시스템 마스터: v5.2 명세에 잠긴 기본 타입, 컬렉션, 레코드, 옵셔널, 리터럴 타입.'
+covers: '§3, §6, §7, §8, §9, §12, §13, §22'
+---
+
+> **라이브러리 이름 안내**: 표준 라이브러리 최소 표면을 벗어나는 도우미·멤버 호출(`파일존재함`, `파일내용읽기`, `fetch`, `.ok`, `.json`, `.status`, `toUpperCase`, `Date` 등)은 설명용 placeholder이며 canonical API가 아닙니다.
+
+토파즈는 **강력한 정적 타입 시스템**과 **똑똑한 타입 추론**을 결합하여 안전하면서도 간결한 코드 작성을 가능하게 합니다. 타입을 명시하지 않아도 컴파일러가 알아서 추론해주지만, 필요할 때는 명확하게 지정할 수 있습니다. 
+
+##  기본 타입 (Primitive Types)
+
+### 정수와 실수
+
+```topaz
+// 정수
+let 나이: int = 25
+let 큰개수: int = 9999999999
+
+// 실수
+let 가격: float = 19.99
+let 원주율: float = 3.141592653589793
+
+// 타입 추론
+let 점수 = 95        // int로 추론
+let 평균 = 87.5      // float로 추론
+```
+
+> Topaz primitive는 `int`(64비트 부호 있는 정수), `float`(IEEE-754 binary64), `string`, `bool`, `()`이며 — `()`는 유닛 타입의 유일한 값인 표현식이기도 합니다. 임의 정밀도 정수는 Topaz v5.2에 명시되어 있지 않고, 산술에서 `int`/`float`는 암묵적으로 섞이지 않습니다.
+
+### 불리언 (Boolean)
+
+```topaz
+let 활성화됨 = true
+let 관리자권한 = false
+
+// 조건문에서 사용
+if 활성화됨 {
+    print("서비스가 활성화되었습니다")
+}
+```
+
+### 문자열
+
+```topaz
+// 문자열 (한 글자 또는 더 긴 텍스트)
+let 등급: string = "A"
+let 이모지: string = "😀"
+let 이름 = "김토파즈"
+let 긴문장 = "말하는 방법은 하나 — Topaz에 오신 것을 환영합니다!"
+
+// 문자열 보간
+let 인사말 = "안녕하세요, {이름}님! 오늘 날씨가 좋네요."
+print(인사말)  // "안녕하세요, 김토파즈님! 오늘 날씨가 좋네요."
+```
+
+> 작은따옴표 문자열과 문자 리터럴(`'A'`, `''`)은 canonical Topaz syntax가 아닙니다. 한 글자와 긴 텍스트 모두 double-quoted string을 사용하세요. 문자열은 인덱싱할 수 없고 `.length`를 노출하지 않습니다 — 스칼라 수준 접근은 `s.scalars()`를 사용합니다.
+
+##  컬렉션 타입 (Collection Types)
+
+### 배열 (Array)
+
+```topaz
+// 배열 선언과 초기화
+let mut 숫자들: Array<int> = [1, 2, 3, 4, 5]
+let 이름들 = ["김철수", "이영희", "박민수"]  // Array<string>으로 추론
+
+// 배열 조작
+let 첫번째 = 숫자들[0]           // 1 — 직접 인덱싱은 범위 밖이면 폴트
+let 안전값 = 숫자들.get(0)       // Some(1) — 폴트 없는 읽기, Option<int> 반환
+숫자들.push(6)                   // [1, 2, 3, 4, 5, 6]
+let 길이 = 숫자들.length         // 6
+
+// 함수형 스타일 연산
+let 제곱들 = map(숫자들, x => x * x)
+let 짝수들 = filter(숫자들, x => x % 2 == 0)
+```
+
+### 레코드 (Record)
+
+```topaz
+// 레코드 정의
+let 사용자 = {
+    이름: "김토파즈",
+    나이: 28,
+    이메일: "topaz@example.com",
+    활성화됨: true
+}
+
+// 프로퍼티 접근
+print(사용자.이름)               // "김토파즈"
+
+// record literal을 사용한 불변 업데이트
+let 계산기 = { 값: 0 }
+let 더한후 = 계산기{ 값: 계산기.값 + 10 }
+let 곱한후 = 더한후{ 값: 더한후.값 * 2 }
+
+print("{곱한후.값}")              // 20
+print("{계산기.값}")              // 0 (원본은 그대로 유지)
+
+// 재사용 가능한 동작은 일반 함수로 작성할 수 있습니다
+function 계산기더하기(상태: { 값: int }, x: int) -> { 값: int } {
+    상태{ 값: 상태.값 + x }
+}
+
+function 계산기곱하기(상태: { 값: int }, x: int) -> { 값: int } {
+    상태{ 값: 상태.값 * x }
+}
+```
+
+##  고급 타입 (Advanced Types)
+
+### 옵션 타입 (Option)
+
+```topaz
+// null 안전성을 위한 Option 타입
+let 검색결과: Option<string> = None
+let 사용자이름: Option<string> = Some("admin")
+
+// 패턴 매칭으로 안전하게 처리
+match 사용자이름 {
+    case Some(이름) => print("환영합니다, {이름}님!")
+    case None => print("로그인이 필요합니다")
+}
+
+// ?. 와 ?? 를 조합한 안전한 처리 (문자열은 .length를 노출하지
+// 않으므로 스칼라 개수는 s.scalars()를 거칩니다)
+let 이름길이 = 사용자이름?.scalars()?.length ?? 0
+let 표시이름 = 사용자이름 ?? "guest"
+```
+
+### 결과 타입 (Result)
+
+```topaz
+// 에러 처리를 위한 Result 타입
+function 파일읽기(경로: string) -> Result<string, string> {
+    if 파일존재함(경로) {
+        Ok(파일내용읽기(경로))
+    } else {
+        Err("파일을 찾을 수 없습니다")
+    }
+}
+
+// 안전한 에러 처리
+match 파일읽기("data.txt") {
+    case Ok(내용) => print("파일 내용: {내용}")
+    case Err(에러메시지) => print("에러 발생: {에러메시지}")
+}
+```
+
+### 유니온 타입 (Union Types)
+
+```topaz
+// 여러 타입 중 하나를 가질 수 있는 타입
+type ID = int | string
+type 상태 = "대기중" | "진행중" | "완료" | "실패"
+
+let 사용자ID: ID = 12345
+let 작업상태: 상태 = "진행중"
+
+// 패턴 매칭으로 타입별 처리
+function ID표시(id: ID) -> string {
+    match id {
+        case 숫자값: int => "숫자 ID: {숫자값}"
+        case 텍스트값: string => "문자 ID: {텍스트값}"
+    }
+}
+```
+
+##  제네릭 타입 사용
+
+```topaz
+let 숫자들: Array<int> = [1, 2, 3]
+let 이름옵션: Option<string> = Some("Alice")
+let 파싱결과: Result<사용자, string> = 사용자파싱(rawJson)
+let 캐시: Map<string, int> = Map.new()
+```
+
+##  제네릭 함수와 별칭
+
+Topaz는 랭크-1 제네릭 함수 선언과 제네릭 타입 별칭을 지원합니다. 타입
+파라미터는 각 호출 지점에서 추론됩니다. `f<int>(x)` 같은 명시적 호출
+지점 타입 인자는 Topaz v5.2에 없습니다 — 주석 달린 바인딩·파라미터·반환
+위치로 타입을 고정하세요.
+
+```topaz
+function 첫원소<T>(xs: Array<T>) -> Option<T> {
+    match xs {
+        case [] => None
+        case [첫, ..] => Some(첫)
+    }
+}
+
+let 첫번째: Option<int> = 첫원소([1, 2, 3])
+
+type 쌍<T> = { 첫: T, 둘: T }
+let 범위: 쌍<int> = { 첫: 0, 둘: 100 }
+```
+
+제네릭 경계, 제약, 인터페이스는 계속 deferred 상태입니다.
+
+##  타입 별칭 (Type Aliases)
+
+```topaz
+// 복잡한 타입에 간단한 이름 부여
+type 사용자정보 = {
+    이름: string,
+    나이: int,
+    이메일: string,
+    권한들: Array<string>
+}
+
+type 콜백함수 = (string) -> ()
+
+// 사용 예시
+let 관리자: 사용자정보 = {
+    이름: "김관리자",
+    나이: 35,
+    이메일: "admin@topaz.ooo",
+    권한들: ["읽기", "쓰기", "삭제"]
+}
+```
+
+##  타입 변환 (Type Conversion)
+
+```topaz
+let 문자숫자 = "123"
+
+// toInt는 Option<int>를 반환합니다 — None 경우를 명시적으로 처리하세요
+let 파싱됨 = match toInt(문자숫자) {
+    case Some(값) => 값
+    case None => 0
+}
+```
+
+> Topaz 표준 라이브러리는 `toInt(text: string) -> Option<int>`를 canonical 변환 helper로 정의합니다 — 조용히 실패하지 않습니다. 레거시 예시의 다른 변환 형식(`float(...)`, `string(...)`, `tryInt(...)`)은 설명용 placeholder이며 canonical API가 아닙니다.
+
+##  고급 패턴
+
+### 구조 분해 할당
+
+```topaz
+// 배열 구조 분해
+let [첫번째, 두번째, ..나머지] = [1, 2, 3, 4, 5]
+print("{첫번째}")    // 1
+print("{나머지}")    // [3, 4, 5]
+
+// 객체 구조 분해
+let { 이름, 나이 } = 사용자
+print("이름: {이름}, 나이: {나이}")
+
+// 함수 본문 안에서 구조 분해
+function 인사하기(사용자: { 이름: string, 나이: int }) {
+    let { 이름, 나이 } = 사용자
+    print("안녕하세요, {이름}님! {나이}세이시군요.")
+}
+```
+
+### 타입 가드
+
+> Topaz는 `is`/`as`/`any`가 아니라 `match` + TypePattern으로 타입을 좁힙니다. `any` 타입과 `is`/`as` 연산자는 canonical Topaz syntax가 아닙니다. match 기반 narrowing 예시는 제어 흐름 페이지를 참고하세요.
+
+##  실전 활용
+
+```topaz
+// 실제 프로젝트에서 사용할 만한 타입 정의
+type 사용자 = {
+    id: int,
+    이름: string,
+    이메일: string,
+    생성일시: string
+}
+
+type 사용자응답 = {
+    성공: bool,
+    데이터: Option<사용자>,
+    에러: Option<string>,
+    상태코드: int
+}
+
+// 사용자 조회 API
+function 사용자가져오기(id: int) -> 사용자응답 {
+    let 응답 = fetch("/api/users/{id}")
+    
+    if 응답.ok {
+        let 사용자데이터 = 응답.json()
+        return {
+            성공: true,
+            데이터: Some(사용자데이터),
+            에러: None,
+            상태코드: 응답.status
+        }
+    } else {
+        return {
+            성공: false,
+            데이터: None,
+            에러: Some("사용자를 찾을 수 없습니다"),
+            상태코드: 응답.status
+        }
+    }
+}
+```
+
+토파즈의 타입 시스템은 **안전성**과 **작고 예측 가능한 표면**을 함께 제공합니다. 타입 추론 덕분에 간결하게 코드를 작성할 수 있으면서도, 필요할 때는 정확한 타입 지정으로 버그를 사전에 방지할 수 있습니다.

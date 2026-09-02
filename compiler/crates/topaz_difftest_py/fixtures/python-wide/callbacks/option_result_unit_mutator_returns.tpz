@@ -1,0 +1,13 @@
+
+function main() -> string {
+    let mut m = map { "a": 1 }
+    let mut s = Set.of(1)
+    let mut xs = [2, 1]
+    let a = m.insert("b", 2)
+    let b = m.clear()
+    let c = s.add(2)
+    let d = s.clear()
+    let e = xs.sort()
+    "{a}|{b}|{c}|{d}|{e}|{xs[0]}:{xs.length}"
+}
+main()

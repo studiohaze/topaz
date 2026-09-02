@@ -1,0 +1,165 @@
+[workspace]
+resolver = "3"
+members = [
+    "crates/topaz_diag",
+    "crates/topaz_syntax",
+    "crates/topaz_lexer",
+    "crates/topaz_parser",
+    "crates/topaz_resolve",
+    "crates/topaz_value",
+    "crates/topaz_package",
+    "crates/topaz_check",
+    "crates/topaz_hir",
+    "crates/topaz_lower",
+    "crates/topaz_kernel",
+    "crates/topaz_interp",
+    "crates/topaz_product_runtime",
+    "crates/topaz_stage1_runtime",
+    "crates/topaz_self_frontend",
+    "crates/topaz_host_none",
+    "crates/topaz_execution_sandbox",
+    "crates/topaz_execution_supervisor",
+    "crates/topaz_mcp",
+    "crates/topaz_mcp_worker",
+    "crates/topaz_lispex_embed",
+    "crates/topaz_lispex_product",
+    "crates/topaz_lispex_embed_probe",
+    "crates/topaz_lispex_contract_suite",
+    "crates/topaz_lispex_h1_oracle",
+    "crates/topaz_host_native",
+    "crates/topaz_host_http",
+    "crates/topaz_rt",
+    "crates/topaz_emit",
+    "crates/topaz_emit_py",
+    "crates/topaz_cli",
+    "tools/corpus-extract",
+    "tools/program-image-extract",
+    "tools/unicode-gen",
+]
+
+# The generated differential harnesses live in the separate `difftest/`
+# workspace. Keeping them outside this workspace prevents routine `--workspace`
+# commands and rust-analyzer from expanding thousands of generated functions.
+# Run them only through `node scripts/run-difftest.mjs`.
+exclude = [
+    "crates/topaz_difftest",
+    "crates/topaz_difftest_native",
+    "crates/topaz_difftest_py",
+    "crates/topaz_lispex_heldout_suite",
+    "crates/topaz_lispex_heldout_suite_v2",
+    "crates/topaz_lispex_profile_suite",
+]
+
+default-members = [
+    "crates/topaz_diag",
+    "crates/topaz_syntax",
+    "crates/topaz_lexer",
+    "crates/topaz_parser",
+    "crates/topaz_resolve",
+    "crates/topaz_value",
+    "crates/topaz_package",
+    "crates/topaz_check",
+    "crates/topaz_hir",
+    "crates/topaz_lower",
+    "crates/topaz_kernel",
+    "crates/topaz_interp",
+    "crates/topaz_self_frontend",
+    "crates/topaz_lispex_embed",
+    "crates/topaz_lispex_product",
+    "crates/topaz_host_native",
+    "crates/topaz_host_http",
+    "crates/topaz_rt",
+    "crates/topaz_emit",
+    "crates/topaz_emit_py",
+    "crates/topaz_cli",
+    "tools/corpus-extract",
+    "tools/program-image-extract",
+    "tools/unicode-gen",
+]
+
+[workspace.package]
+# Product version line (CDR-Release strategy): crate versions track the Topaz
+# product release. Patch releases retain their major.minor language mode; a
+# minor release advances the toolchain and language mode together.
+# v5.2.0 was the genesis tag; v5.2.1 was the first host
+# release; v5.3.0 was the v5.3 language cut (modules + user enums); v5.3.1 shipped
+# the native (monomorphized) emit backend. v5.4.0 is the v5.4 language cut
+# (generic nominal identity, std/data expansion, deterministic extern replay,
+# web target, package/runtime release gates). v5.5.0 promoted Python backend
+# parity as a first-class design-verification backend without adding grammar
+# over the v5.4 surface. v5.6.0 activates the frozen v5.6 authority and seals
+# accepted-surface closure as a local RC before any owner-gated promotion.
+# v5.7.0 unified the installed native/Python and checked Web Application Loops;
+# v5.8.0 added the Local Data Application Loop, v5.9.0 added the bounded HTTP
+# service, and v5.10.0 added the stock binary-media kernel. The
+# Post-Self-Hosting Program has source-activated v5.17.0 / topaz-5.17 for the
+# installed bounded Lispex product. Language meaning exactly inherits
+# topaz-5.16. Installed C2 remains the default on admitted current-mode routes
+# and Rust Stage 0 remains the explicit recovery and compatibility compiler.
+version = "5.20.0"
+license = "Apache-2.0"
+authors = ["Studio Haze Inc."]
+repository = "https://github.com/studiohaze/topaz"
+edition = "2024"
+rust-version = "1.96.0"
+
+[workspace.dependencies]
+topaz_diag = { path = "crates/topaz_diag" }
+topaz_syntax = { path = "crates/topaz_syntax" }
+topaz_lexer = { path = "crates/topaz_lexer" }
+topaz_parser = { path = "crates/topaz_parser" }
+topaz_resolve = { path = "crates/topaz_resolve" }
+topaz_value = { path = "crates/topaz_value" }
+topaz_package = { path = "crates/topaz_package" }
+topaz_check = { path = "crates/topaz_check" }
+topaz_hir = { path = "crates/topaz_hir" }
+topaz_lower = { path = "crates/topaz_lower" }
+topaz_kernel = { path = "crates/topaz_kernel" }
+topaz_interp = { path = "crates/topaz_interp" }
+topaz_product_runtime = { path = "crates/topaz_product_runtime" }
+topaz_stage1_runtime = { path = "crates/topaz_stage1_runtime" }
+topaz_self_frontend = { path = "crates/topaz_self_frontend" }
+topaz_host_none = { path = "crates/topaz_host_none" }
+topaz_execution_sandbox = { path = "crates/topaz_execution_sandbox" }
+topaz_execution_supervisor = { path = "crates/topaz_execution_supervisor" }
+topaz_mcp = { path = "crates/topaz_mcp" }
+topaz_mcp_worker = { path = "crates/topaz_mcp_worker" }
+topaz_lispex_embed = { path = "crates/topaz_lispex_embed" }
+topaz_lispex_product = { path = "crates/topaz_lispex_product" }
+topaz_host_native = { path = "crates/topaz_host_native" }
+topaz_host_http = { path = "crates/topaz_host_http" }
+topaz_rt = { path = "crates/topaz_rt" }
+topaz_emit = { path = "crates/topaz_emit" }
+topaz_emit_py = { path = "crates/topaz_emit_py" }
+http-body-util = { version = "=0.1.4", default-features = false }
+hyper = { version = "=1.11.0", default-features = false, features = ["server", "http1"] }
+hyper-util = { version = "=0.1.20", default-features = false, features = ["tokio"] }
+tokio = { version = "=1.53.1", default-features = false, features = ["rt", "net", "time", "sync", "signal"] }
+tokio-util = { version = "=0.7.18", default-features = false }
+rmcp = { version = "=1.5.0", default-features = false, features = ["server", "transport-io"] }
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = "=1.0.140"
+sha2 = { version = "=0.10.9", default-features = false }
+rustix = { version = "=1.1.4", default-features = false, features = ["fs"] }
+wasmtime = { version = "=38.0.4", default-features = false, features = ["cranelift", "runtime"] }
+num-bigint = { version = "=0.4.6", default-features = false }
+num-integer = { version = "=0.1.46", default-features = false }
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+all = "warn"
+
+# Debug builds default to full debuginfo, which on this workspace produced
+# multi-hundred-MB rlibs and query-caches (target/ reached 61GB). Line tables
+# keep backtraces and profiler symbols while dropping the bulk of the weight.
+[profile.dev]
+debug = "line-tables-only"
+split-debuginfo = "unpacked"
+incremental = false
+
+[profile.test]
+debug = "line-tables-only"
+split-debuginfo = "unpacked"
+incremental = false

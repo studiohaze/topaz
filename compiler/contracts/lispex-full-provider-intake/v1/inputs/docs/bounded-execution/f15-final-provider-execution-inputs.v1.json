@@ -1,0 +1,79 @@
+{
+  "schema": "lispex.f15-final-provider-execution-inputs/v1",
+  "status": "exact-committed-qualification-input",
+  "revisions": {
+    "evaluator_source": "e3909e56491b53c61a63efaff51b6093019d8b27",
+    "product_snapshot": "d255c37d5d6789e1b0ea5b924365163e67edead8",
+    "provider_wire": "451027beb8daff90c09364a1fd38a2a9f3790e55",
+    "qualification": "8e7d4bf2a1bc550b5e1315449002cf2938952ec4",
+    "cross_architecture_workflow": "baf0907c229283e6706a6ceb91dcaef41e225a37"
+  },
+  "subject": {
+    "component_id": "lispex-evaluator/rust-vm-current-profile/1",
+    "evaluator_sha256": "dd4cde2976d825ae99b542d308d87489ac96848e0710329dbb9173664d8c5ad8",
+    "evaluator_bytes": 1484873,
+    "imports": 0
+  },
+  "local_qualification": {
+    "revision": "8e7d4bf2a1bc550b5e1315449002cf2938952ec4",
+    "commands": [
+      "cargo test -p lispex f15_final_provider_runtime_qualification --lib",
+      "node scripts/check-f15-full-provider-mutations.mjs",
+      "node scripts/check-f15-final-provider.mjs"
+    ],
+    "result": {
+      "runtime_qualification": "passed",
+      "generated_mutations": 253,
+      "detected_mutations": 253,
+      "mutation_survivors": 0,
+      "source_free_installed_journey": true,
+      "fresh_instance_per_operation": true,
+      "concurrent_evaluations": 4,
+      "byte_identical_concurrent_results": true,
+      "safety_precedence_count": 0,
+      "fallback_count": 0,
+      "vouch_eligible": false
+    }
+  },
+  "cross_architecture": {
+    "workflow_path": ".github/workflows/f15-final-provider-cross-architecture.yml",
+    "workflow_revision": "baf0907c229283e6706a6ceb91dcaef41e225a37",
+    "run_id": 30646266047,
+    "run_url": "https://github.com/clavef/lispex/actions/runs/30646266047",
+    "status": "passed",
+    "jobs": [
+      {
+        "id": 91208284061,
+        "name": "macOS ARM64 final provider court",
+        "execution_class": "macos-arm64",
+        "status": "passed"
+      },
+      {
+        "id": 91210111599,
+        "name": "Linux x64 final provider peer court",
+        "execution_class": "linux-x64",
+        "status": "passed"
+      }
+    ],
+    "artifact": {
+      "id": 8799734413,
+      "name": "f15-portable-core-baf0907c229283e6706a6ceb91dcaef41e225a37",
+      "archive_bytes": 2090,
+      "portable_core_bytes": 1930,
+      "portable_core_raw_sha256": "3cbd38dc840902d4e606431545bf9cadb584fafe6c023add26745a49a9da7dd0"
+    },
+    "result": {
+      "portable_core_byte_equal": true,
+      "concurrent_evaluations": 4,
+      "byte_identical_concurrent_results": true,
+      "safety_precedence_count": 0,
+      "fallback_count": 0
+    }
+  },
+  "claim_boundary": {
+    "qualifies_final_generated_provider_closure": false,
+    "topaz_admission": false,
+    "public_release": false,
+    "external_witness": false
+  }
+}

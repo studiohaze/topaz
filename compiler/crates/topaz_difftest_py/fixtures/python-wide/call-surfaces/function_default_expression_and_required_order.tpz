@@ -1,0 +1,8 @@
+
+function add(a: int = 1 + 2, b: int) -> int {
+    a + b
+}
+function mix(a: int = 1, b: int, c: int = 2) -> int {
+    a * 100 + b * 10 + c
+}
+add(4, 5) + add(b: 6) + mix(1, 2, 3) + mix(b: 4)

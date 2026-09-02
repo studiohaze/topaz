@@ -1,0 +1,9 @@
+record Fixed { base: int }
+record Bag { base: int }
+impl Fixed { function total(self, value: int) -> int { self.base + value } }
+impl Bag { function total(self, ...values: int) -> int { let mut result = self.base
+for value in values { result += value }
+result } }
+let fixed: Fixed = Fixed { base: 10 }
+let bag: Bag = Bag { base: 20 }
+fixed.total(3) * 100 + bag.total(...[1, 2])

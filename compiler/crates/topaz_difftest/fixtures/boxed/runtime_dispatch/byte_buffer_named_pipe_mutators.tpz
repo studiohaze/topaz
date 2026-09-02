@@ -1,0 +1,6 @@
+let mut source = ByteBuffer.allocate(2)
+8 |> source.fill(start: 0, length: 2, value: _)
+let mut target = ByteBuffer.allocate(4)
+9 |> target.set(index: 0, value: _)
+source |> target.copy(source: _, sourceStart: 0, targetStart: 1, length: 2)
+target.toBytes().toHex()

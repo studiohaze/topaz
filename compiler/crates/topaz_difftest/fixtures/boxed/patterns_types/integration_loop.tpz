@@ -1,0 +1,6 @@
+let mut sum = 0
+let mut count = 0
+for i in 1..10 { if i % 2 == 0 { sum = sum + i
+count = count + 1 } }
+print("evens in 1..10: sum {sum} over {count} numbers")
+sum

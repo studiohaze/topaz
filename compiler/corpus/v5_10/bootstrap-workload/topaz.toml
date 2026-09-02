@@ -1,0 +1,12 @@
+[package]
+name = "topaz_bootstrap_workload"
+version = "0.1.0"
+language = "5.20"
+entry = "src/main.tpz"
+
+[build]
+target = "native"
+deterministic = true
+
+[dependencies]
+std = "5.20"

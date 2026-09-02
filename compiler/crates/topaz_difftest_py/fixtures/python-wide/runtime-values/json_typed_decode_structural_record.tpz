@@ -1,0 +1,8 @@
+
+match JSON.parse("\{\"name\":\"Ada\",\"age\":37\}") {
+    case Ok(json) => match JSON.decode<{ name: string, age: int }>(json) {
+        case Ok(value) => value.age
+        case Err(_) => 0
+    }
+    case Err(_) => 0
+}

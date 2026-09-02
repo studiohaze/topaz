@@ -1,0 +1,1 @@
+Codec.deflateCompress(Bytes.encodeUtf8("topaz")).flatMap((df) => Codec.deflateDecompress(df)).flatMap((b) => b.decodeUtf8())

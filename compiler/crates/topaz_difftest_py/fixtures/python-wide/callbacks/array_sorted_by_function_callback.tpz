@@ -1,0 +1,10 @@
+
+function neg(x: int) -> int {
+    0 - x
+}
+function main() -> int {
+    let xs = [3, 1, 2]
+    let out = xs.sortedBy(neg)
+    out[0] + out[2]
+}
+main()

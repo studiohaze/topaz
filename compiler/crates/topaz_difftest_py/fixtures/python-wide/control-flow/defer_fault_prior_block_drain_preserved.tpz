@@ -1,0 +1,12 @@
+
+function f() -> int {
+    {
+        defer print("block-clean")
+        print("block-body")
+    }
+    defer print("pending")
+    print("after-block")
+    let z = 0
+    1 / z
+}
+f()

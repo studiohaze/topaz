@@ -1,0 +1,17 @@
+import data_lens_core { DataRow, LensResult, SortMode, Summary, applyLens }
+
+let rows = [
+  DataRow { name: "서울", category: "city", value: 12, active: true },
+  DataRow { name: "Topaz", category: "language", value: 21, active: true },
+  DataRow { name: "Казань", category: "city", value: 8, active: false },
+]
+
+let cities = applyLens(rows, "city", false, SortMode.ByValue)
+assert(cities.rows.length == 2, "category filter")
+assert(cities.rows[0].name == "Казань", "value sort")
+assert(cities.summary.totalValue == 20, "aggregate total")
+assert(cities.summary.activeRows == 1, "aggregate active")
+
+let active = applyLens(rows, "", true, SortMode.ByName)
+assert(active.rows.length == 2, "active filter")
+assert(active.rows[0].name == "Topaz", "Unicode name sort is deterministic")

@@ -1,0 +1,9 @@
+let point = {
+    x: 1,
+    y: 2
+}
+
+let value = {
+    prepare()
+    finish()
+}

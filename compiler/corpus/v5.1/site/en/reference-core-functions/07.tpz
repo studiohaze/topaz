@@ -1,0 +1,8 @@
+let mut scores: Map<string, int> = Map.new()
+scores.insert("alice", 10)
+scores.insert("bob", 20)
+
+let aliceScore = scores.get("alice")     // Some(10) — None when the key is absent
+let removed = scores.remove("bob")       // Some(20) — Some(old) if present, else None
+let knowsAlice = "alice" in scores.keys  // membership goes through the keys view
+print("Has alice: {knowsAlice}")

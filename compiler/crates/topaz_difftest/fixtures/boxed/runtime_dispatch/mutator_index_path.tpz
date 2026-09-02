@@ -1,0 +1,3 @@
+let mut arrs = [[1, 2]]
+arrs[0].push(3)
+arrs[0]

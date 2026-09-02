@@ -1,0 +1,28 @@
+
+function main() -> int {
+    let mut order = 0
+
+    function tick(label: int, value: int) -> int {
+        order = order * 10 + label
+        value
+    }
+
+    function add(a: int, b: int = 2, c: int = 4) -> int {
+        order = order * 10 + 4
+        a + b + c
+    }
+
+    function sub(a: int, b: int = 10, c: int = 20) -> int {
+        order = order * 10 + 5
+        a - b - c
+    }
+
+    let callbacks = [sub, add]
+    let value = loop {
+        break tick(1, 1)
+    } |> callbacks[tick(2, 1)](c: loop {
+        break tick(3, 5)
+    }, a: _)
+    order * 100 + value
+}
+main()

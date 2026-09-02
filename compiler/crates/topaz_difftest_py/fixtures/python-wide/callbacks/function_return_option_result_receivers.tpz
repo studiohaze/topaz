@@ -1,0 +1,38 @@
+
+function inc(x: int) -> int {
+    x + 1
+}
+function makeOption() -> Option<int> {
+    Some(4)
+}
+function makeOptionArray() -> Option<Array<int>> {
+    Some([1, 2])
+}
+function makeResult() -> Result<int, string> {
+    Ok(5)
+}
+function main() -> int {
+    let direct = makeOption().map(inc)
+    let letBound = makeOptionArray()
+    let mappedLet = letBound?.map(inc)
+    let mappedCall = makeOptionArray()?.map(inc)
+    let result = makeResult().map(inc)
+    let a = match direct {
+        case Some(n) => n
+        case None => 0
+    }
+    let b = match mappedLet {
+        case Some(xs) => xs[0] + xs[1]
+        case None => 0
+    }
+    let c = match mappedCall {
+        case Some(xs) => xs[0] + xs[1]
+        case None => 0
+    }
+    let d = match result {
+        case Ok(n) => n
+        case Err(_) => 0
+    }
+    a + b + c + d
+}
+main()

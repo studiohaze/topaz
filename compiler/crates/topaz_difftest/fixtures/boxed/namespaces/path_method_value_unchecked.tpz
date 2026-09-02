@@ -1,0 +1,3 @@
+match Path.from("a/b.txt") { case Ok(p) => { let f = p.fileName
+f() }
+case Err(e) => None }

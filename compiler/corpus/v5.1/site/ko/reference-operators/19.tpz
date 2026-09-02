@@ -1,0 +1,12 @@
+// 명시적 변환으로 안전성 확보 — toInt는 Option<int>를 반환합니다
+let 문자열숫자 = "123"
+let 실제숫자 = match toInt(문자열숫자) {
+    case Some(값) => 값
+    case None => {
+        print("숫자 변환 실패")
+        0
+    }
+}
+
+let 결과 = 실제숫자 + 100
+print("안전한 계산 결과: {결과}")

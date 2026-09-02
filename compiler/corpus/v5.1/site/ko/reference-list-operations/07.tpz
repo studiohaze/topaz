@@ -1,0 +1,9 @@
+let mut 태그들 = Set.of("docs")
+태그들.add("v5")
+
+let 문서있음 = "docs" in 태그들
+let 레거시있음 = "legacy" in 태그들
+let 삭제됨 = 태그들.remove("docs")      // 원소가 제거된 경우에만 true
+
+print("docs 있음: {문서있음}")
+print("legacy 있음: {레거시있음}")

@@ -1,0 +1,10 @@
+
+import facade { callbacks, handlers, base }
+function local(a: int, b: int = 2) -> int {
+    a - b
+}
+function main() -> int {
+    let spread = [...base, local]
+    callbacks[0](a: 5) + callbacks[1](b: 3, a: 10) + handlers.primary(a: 7) + handlers.second(b: 2, a: 4) + spread[1](a: 6) + spread[2](a: 9)
+}
+main()

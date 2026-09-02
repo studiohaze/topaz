@@ -1,0 +1,9 @@
+record Point { x: int }
+
+impl Point {
+    function doubled(self) { self.x * 2 }
+}
+
+let point: Point = Point { x: 2 }
+let value = point.doubled()
+print("{value}")

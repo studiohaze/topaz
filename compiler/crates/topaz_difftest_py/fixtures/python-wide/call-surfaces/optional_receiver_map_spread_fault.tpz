@@ -1,0 +1,10 @@
+
+function mark(label: string, xs: Array<string>) -> Array<string> {
+    print(label)
+    xs
+}
+function main() -> Option<bool> {
+    let m: Option<Map<string, int>> = Some(map { "x": 1 })
+    m?.containsKey(...mark("map", ["x"]))
+}
+main()

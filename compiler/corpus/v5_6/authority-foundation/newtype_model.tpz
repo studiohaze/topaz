@@ -1,0 +1,5 @@
+export newtype UserId = int
+
+export function make() -> UserId {
+    UserId(7)
+}

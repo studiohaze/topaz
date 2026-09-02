@@ -1,0 +1,7 @@
+import record_model { User as Person }
+
+let person: Person = Person { name: "Ada" }
+let name = match person {
+    case Person { name, } => name
+}
+print(name)

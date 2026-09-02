@@ -1,0 +1,17 @@
+
+function spin(x: int) -> int {
+    x
+}
+
+let mut callbacks = [spin]
+let mut marker = ()
+marker = (callbacks).clear()
+
+concurrent {
+    slow: {
+        let xs = [1]
+        xs.map(callbacks[0])
+    }
+    fast: 0
+}
+0

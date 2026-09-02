@@ -1,0 +1,12 @@
+
+function mark(label: string, xs: Array<(int) -> bool>) -> Array<(int) -> bool> {
+    print(label)
+    xs
+}
+function keep(x: int) -> bool { x > 0 }
+function main() -> Array<int> {
+    let mut xs = [1]
+    xs.retain(...mark("array-retain", [keep]))
+    xs
+}
+main()

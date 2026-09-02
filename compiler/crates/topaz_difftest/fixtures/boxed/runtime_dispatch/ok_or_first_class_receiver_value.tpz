@@ -1,0 +1,5 @@
+let present: Option<int> = Some(4)
+let absent: Option<int> = None
+let presentBridge = present.okOr
+let absentBridge = absent.okOr
+{ present: presentBridge(error: "bad"), absent: absentBridge(error: "bad") }

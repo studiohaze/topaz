@@ -1,0 +1,8 @@
+
+function normalize(r: Result<int, string>) -> Result<int, string> {
+    match r {
+        case Ok(n) => Ok(n + 1)
+        case Err(e) => Err(e)
+    }
+}
+normalize(Err("bad"))

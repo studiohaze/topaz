@@ -1,0 +1,6 @@
+
+function main() -> int {
+    let xs = [1, 2, 3]
+    xs.reduce(0, (acc, x) => acc + x)
+}
+main()

@@ -1,0 +1,909 @@
+// Entry admission, module loading, dependency order, and cycle diagnosis.
+// Host queries are derived from explicit facts; scope tables and initializer
+// validation are left to sibling resolver leaves.
+
+import layout { normalize }
+import parser { parse }
+import raw { lex }
+import types {
+  PreviewGeneratedStdModule,
+  PreviewHostQuery,
+  PreviewImportEdge,
+  PreviewModuleResult,
+  PreviewResolvedDiagnostic,
+  ResolveResult,
+}
+import unicode { caseFold, nfd }
+import resolver.model_facts {
+  DiscoveredGraph,
+  EdgeDraft,
+  ImportDraft,
+  ImportPathDisposition,
+  ModuleDependencyCatalog,
+  ModuleDraft,
+  PreparedImport,
+  ResolverHostFactCatalog,
+  ResolverInputs,
+  addQuery,
+  appendModuleDiagnostics,
+  contains,
+  diagnostic,
+  hasParentPathSegment,
+  pathJoin,
+  sortQueries,
+  sourceFact,
+  stringJoin,
+}
+import resolver.modules_tables { importDrafts }
+
+function generatedStdModule(
+  modules: Array<PreviewGeneratedStdModule>,
+  identity: string,
+) -> Option<PreviewGeneratedStdModule> {
+  for module in modules {
+    if module.identity == identity {
+      return Some(module)
+    }
+  }
+  None
+}
+
+function modulePath(root: string, segments: Array<string>) -> string {
+  pathJoin(root, "{stringJoin(segments, "/")}.tpz")
+}
+
+export function moduleIdentity(entry: string, root: string) -> string {
+  let mut relative = entry
+  if root != "" && entry.startsWith("{root}/") {
+    let bytes = Bytes.encodeUtf8(entry)
+    match bytes.slice(Bytes.encodeUtf8(root).length() + 1, bytes.length()).decodeUtf8() {
+      case Ok(value) => {
+        relative = value
+      }
+      case Err(_) => ()
+    }
+  }
+  if relative.endsWith(".tpz") {
+    let bytes = Bytes.encodeUtf8(relative)
+    match bytes.slice(0, bytes.length() - 4).decodeUtf8() {
+      case Ok(value) => {
+        relative = value
+      }
+      case Err(_) => ()
+    }
+  }
+  relative.replace("/", ".")
+}
+
+export function parseModule(
+  sourceOrdinal: int,
+  identity: string,
+  path: string,
+  source: string,
+  entry: bool,
+  externModule: bool,
+  generatedStd: bool,
+  maxAstNodes: int,
+  maxAstDepth: int,
+) -> Result<ModuleDraft, string> {
+  let raw = lex(source)
+  let layout = normalize(raw.tokens, source)
+  let parsed = parse(layout.tokens, source, maxAstNodes, maxAstDepth)?
+  let mut diagnostics = raw.diagnostics
+  for found in layout.diagnostics {
+    diagnostics.push(found)
+  }
+  for found in parsed.diagnostics {
+    diagnostics.push(found)
+  }
+  let sourceBytes = Bytes.encodeUtf8(source)
+  Ok(ModuleDraft {
+    result: PreviewModuleResult {
+      sourceOrdinal: sourceOrdinal,
+      identity: identity,
+      path: path,
+      source: source,
+      entry: entry,
+      extern: externModule,
+      generatedStd: generatedStd,
+      raw: raw.tokens,
+      layout: layout.tokens,
+      ast: parsed.nodes,
+    },
+    source: sourceBytes,
+    root: parsed.root,
+    imports: importDrafts(parsed.root, sourceBytes),
+    diagnostics: diagnostics,
+  })
+}
+
+function isExtern(externModules: Array<string>, identity: string) -> bool {
+  contains(externModules, identity)
+}
+
+function isExternNamespace(externModules: Array<string>, identity: string) -> bool {
+  let root = match identity.split(".").get(0) {
+    case Some(value) => value
+    case None => identity
+  }
+  for module in externModules {
+    if module == root || module.startsWith("{root}.") {
+      return true
+    }
+  }
+  false
+}
+
+function validateSegment(
+  facts: ResolverHostFactCatalog,
+  dir: string,
+  name: string,
+  directory: bool,
+) -> ImportPathDisposition {
+  let fact = match sourceFact(facts, "list-directory", dir) {
+    case Some(value) => value
+    case None => return ImportPathDisposition { kind: "pending", collisionDetail: "" }
+  }
+  if fact.status == "unreadable" {
+    return ImportPathDisposition {
+      kind: "unreadable",
+      collisionDetail: fact.reasonCode,
+    }
+  }
+  if fact.status != "present" {
+    return ImportPathDisposition { kind: "missing", collisionDetail: "" }
+  }
+  let mut exact = false
+  let mut matches: Array<string> = []
+  let normalized = nfd(name)
+  let folded = caseFold(normalized)
+  for entry in fact.entries {
+    let sameKind = (directory && entry.kind == "directory") ||
+      (!directory && entry.kind == "file")
+    if sameKind {
+      if entry.name == name {
+        exact = true
+      }
+      let candidate = nfd(entry.name)
+      if candidate == normalized || caseFold(candidate) == folded {
+        matches.push(entry.name)
+      }
+    }
+  }
+  if matches.length > 1 {
+    ImportPathDisposition {
+      kind: "collision",
+      collisionDetail: ": {stringJoin(matches, " / ")}",
+    }
+  } else if exact {
+    ImportPathDisposition { kind: "ok", collisionDetail: "" }
+  } else {
+    ImportPathDisposition { kind: "missing", collisionDetail: "" }
+  }
+}
+
+function prepareImport(
+  inputs: ResolverInputs,
+  import: ImportDraft,
+  generated: Option<PreviewGeneratedStdModule>,
+  queries: Array<PreviewHostQuery>,
+) -> Result<PreparedImport, ImportPathDisposition> {
+  match generated {
+    case Some(value) => return Ok(PreparedImport {
+      path: value.path,
+      source: value.source,
+      physicalAlias: "",
+      generatedStd: true,
+    })
+    case None => ()
+  }
+  let first = match import.segments.get(0) {
+    case Some(value) => value
+    case None => return Err(ImportPathDisposition {
+      kind: "missing",
+      collisionDetail: "",
+    })
+  }
+  let path = modulePath(if first == "std" { "" } else { inputs.root }, import.segments)
+  if first == "std" {
+    addQuery(queries, inputs.hostFacts, "read-source", path)
+    return match sourceFact(inputs.hostFacts, "read-source", path) {
+      case Some(value) => if value.status == "present" {
+        Ok(PreparedImport {
+          path: path,
+          source: value.source,
+          physicalAlias: "",
+          generatedStd: false,
+        })
+      } else if value.status == "unreadable" {
+        Err(ImportPathDisposition {
+          kind: "source-unreadable",
+          collisionDetail: value.reasonCode,
+        })
+      } else if value.status == "invalid-utf8" {
+        Err(ImportPathDisposition {
+          kind: "source-invalid-utf8",
+          collisionDetail: "",
+        })
+      } else {
+        Err(ImportPathDisposition { kind: "missing", collisionDetail: "" })
+      }
+      case None => Err(ImportPathDisposition {
+        kind: "pending",
+        collisionDetail: "",
+      })
+    }
+  }
+  addQuery(queries, inputs.hostFacts, "physical-containment", path)
+  let containment = match sourceFact(inputs.hostFacts, "physical-containment", path) {
+    case Some(value) => if value.status == "outside" {
+      return Err(ImportPathDisposition { kind: "outside", collisionDetail: "" })
+    } else {
+      value
+    }
+    case None => return Err(ImportPathDisposition {
+      kind: "pending",
+      collisionDetail: "",
+    })
+  }
+  let mut dir = inputs.root
+  let mut index = 0
+  for segment in import.segments {
+    addQuery(queries, inputs.hostFacts, "list-directory", dir)
+    let name = if index + 1 == import.segments.length {
+      "{segment}.tpz"
+    } else {
+      segment
+    }
+    let disposition = validateSegment(
+      inputs.hostFacts,
+      dir,
+      name,
+      index + 1 < import.segments.length,
+    )
+    if disposition.kind != "ok" {
+      return Err(disposition)
+    }
+    if index + 1 < import.segments.length {
+      dir = pathJoin(dir, segment)
+    }
+    index += 1
+  }
+  addQuery(queries, inputs.hostFacts, "read-source", path)
+  match sourceFact(inputs.hostFacts, "read-source", path) {
+    case Some(value) => if value.status == "present" {
+      Ok(PreparedImport {
+        path: path,
+        source: value.source,
+        physicalAlias: if containment.status == "inside" {
+          containment.aliasClass
+        } else {
+          ""
+        },
+        generatedStd: false,
+      })
+    } else if value.status == "unreadable" {
+      Err(ImportPathDisposition {
+        kind: "source-unreadable",
+        collisionDetail: value.reasonCode,
+      })
+    } else if value.status == "invalid-utf8" {
+      Err(ImportPathDisposition {
+        kind: "source-invalid-utf8",
+        collisionDetail: "",
+      })
+    } else {
+      Err(ImportPathDisposition { kind: "missing", collisionDetail: "" })
+    }
+    case None => Err(ImportPathDisposition {
+      kind: "pending",
+      collisionDetail: "",
+    })
+  }
+}
+
+export function dependencyOrder(
+  modules: Array<ModuleDraft>,
+  catalog: ModuleDependencyCatalog,
+) -> Array<ModuleDraft> {
+  let mut remaining: Set<string> = set {}
+  for identity in catalog.identities {
+    remaining.add(identity)
+  }
+  let mut done: Set<string> = set {}
+  let mut output: Array<ModuleDraft> = []
+  while output.length < modules.length {
+    let mut ready: Option<int> = None
+    for identity in catalog.identities {
+      if !remaining.contains(identity) {
+        continue
+      }
+      let mut blocked = false
+      match catalog.dependencies.get(identity) {
+        case Some(targets) => for target in targets {
+          if !done.contains(target) {
+            blocked = true
+          }
+        }
+        case None => ()
+      }
+      if !blocked {
+        ready = catalog.moduleIndexes.get(identity)
+        break
+      }
+    }
+    let selected = match ready {
+      case Some(index) => modules[index]
+      case None => return modules
+    }
+    remaining.remove(selected.result.identity)
+    output.push(selected)
+    done.add(selected.result.identity)
+  }
+  output
+}
+
+export function moduleDependencyCatalog(
+  modules: Array<ModuleDraft>,
+  edges: Array<EdgeDraft>,
+) -> ModuleDependencyCatalog {
+  let mut identities: Array<string> = []
+  let mut moduleIndexes: Map<string, int> = Map.new()
+  let mut dependencies: Map<string, Set<string>> = Map.new()
+  let mut dependents: Map<string, Set<string>> = Map.new()
+  let mut publicEdges: Array<PreviewImportEdge> = []
+  let mut moduleIndexValue = 0
+  for module in modules {
+    identities.push(module.result.identity)
+    moduleIndexes.insert(module.result.identity, moduleIndexValue)
+    dependencies.insert(module.result.identity, set {})
+    dependents.insert(module.result.identity, set {})
+    moduleIndexValue += 1
+  }
+  identities.sort()
+  for edge in edges {
+    if moduleIndexes.containsKey(edge.from) && moduleIndexes.containsKey(edge.to) {
+      publicEdges.push(PreviewImportEdge { from: edge.from, to: edge.to })
+      match dependencies.get(edge.from) {
+        case Some(found) => {
+          let mut targets = found
+          targets.add(edge.to)
+        }
+        case None => ()
+      }
+      match dependents.get(edge.to) {
+        case Some(found) => {
+          let mut sources = found
+          sources.add(edge.from)
+        }
+        case None => ()
+      }
+    }
+  }
+  ModuleDependencyCatalog {
+    identities: identities,
+    moduleIndexes: moduleIndexes,
+    dependencies: dependencies,
+    dependents: dependents,
+    publicEdges: publicEdges,
+  }
+}
+
+function cycleFrom(
+  start: string,
+  current: string,
+  catalog: ModuleDependencyCatalog,
+  path: Array<string>,
+  visited: Set<string>,
+) -> Option<Array<string>> {
+  let mut targets = match catalog.dependencies.get(current) {
+    case Some(found) => found.toArray()
+    case None => []
+  }
+  targets.sort()
+  let mut activePath = path
+  let mut activeVisited = visited
+  for target in targets {
+    if target == start {
+      if path.length == 1 {
+        continue
+      }
+      let mut result: Array<string> = []
+      for item in path {
+        result.push(item)
+      }
+      result.push(start)
+      return Some(result)
+    }
+    if activeVisited.contains(target) {
+      continue
+    }
+    activePath.push(target)
+    activeVisited.add(target)
+    let found = cycleFrom(start, target, catalog, activePath, activeVisited)
+    activePath.pop()
+    activeVisited.remove(target)
+    match found {
+      case Some(result) => return Some(result)
+      case None => ()
+    }
+  }
+  None
+}
+
+function collectReachable(
+  current: string,
+  graph: Map<string, Set<string>>,
+  visited: Set<string>,
+) -> () {
+  let targets = match graph.get(current) {
+    case Some(found) => found
+    case None => return ()
+  }
+  let mut activeVisited = visited
+  for next in targets {
+    if !activeVisited.contains(next) {
+      activeVisited.add(next)
+      let _ = collectReachable(next, graph, activeVisited)
+    }
+  }
+  ()
+}
+
+function reachableFrom(
+  start: string,
+  graph: Map<string, Set<string>>,
+) -> Set<string> {
+  let mut reachable: Set<string> = set {}
+  reachable.add(start)
+  collectReachable(start, graph, reachable)
+  reachable
+}
+
+export function diagnoseCycles(
+  catalog: ModuleDependencyCatalog,
+  edges: Array<EdgeDraft>,
+  diagnostics: Array<PreviewResolvedDiagnostic>,
+) -> () {
+  let mut covered: Set<string> = set {}
+  for identity in catalog.identities {
+    if covered.contains(identity) {
+      continue
+    }
+    let mut pathVisited: Set<string> = set {}
+    pathVisited.add(identity)
+    match cycleFrom(identity, identity, catalog, [identity], pathVisited) {
+      case Some(path) => {
+        let next = path[1]
+        let cycleText = stringJoin(path, " -> ")
+        for edge in edges {
+          if edge.from == identity && edge.to == next {
+            diagnostic(
+              diagnostics,
+              edge.moduleIndex,
+              "TPZ3006",
+              "import cycle: {cycleText}",
+              edge.lo,
+              edge.hi,
+            )
+            break
+          }
+          ()
+        }
+        let forward = reachableFrom(identity, catalog.dependencies)
+        let reverse = reachableFrom(identity, catalog.dependents)
+        for candidate in catalog.identities {
+          if forward.contains(candidate) && reverse.contains(candidate) {
+            covered.add(candidate)
+          }
+        }
+        ()
+      }
+      case None => {
+        for edge in edges {
+          if edge.from == identity && edge.to == identity {
+            diagnostic(
+              diagnostics,
+              edge.moduleIndex,
+              "TPZ3006",
+              "module imports itself: `{identity}`",
+              edge.lo,
+              edge.hi,
+            )
+            covered.add(identity)
+            break
+          }
+          ()
+        }
+        ()
+      }
+    }
+    ()
+  }
+  ()
+}
+
+export function pendingResult(queries: Array<PreviewHostQuery>) -> ResolveResult {
+  ResolveResult {
+    queries: sortQueries(queries),
+    modules: [],
+    edges: [],
+    scopes: [],
+    declarations: [],
+    references: [],
+    exports: [],
+    diagnostics: [],
+  }
+}
+
+export function validateEntryPath(
+  entry: string,
+  root: string,
+  diagnostics: Array<PreviewResolvedDiagnostic>,
+) -> bool {
+  let parentSegment = hasParentPathSegment(entry) || hasParentPathSegment(root)
+  let rootIsEntry = root != "" && entry == root
+  if parentSegment ||
+    rootIsEntry ||
+    (root != "" && !entry.startsWith("{root}/")) {
+    diagnostic(
+      diagnostics,
+      0,
+      "TPZ3002",
+      if parentSegment {
+        "entry and root paths must not contain parent (`..`) segments"
+      } else if rootIsEntry {
+        "the source root `{root}` must be a directory containing the entry, not the entry file itself"
+      } else {
+        "the root `{root}` does not contain the entry `{entry}`"
+      },
+      0,
+      0,
+    )
+    return false
+  }
+  true
+}
+
+export function validateEntryPhysicalContainment(
+  entry: string,
+  facts: ResolverHostFactCatalog,
+  diagnostics: Array<PreviewResolvedDiagnostic>,
+) -> bool {
+  match sourceFact(facts, "physical-containment", entry) {
+    case Some(value) => if value.status == "outside" {
+      diagnostic(
+        diagnostics,
+        0,
+        "TPZ3005",
+        "the entry `{entry}` resolves outside the root (symlink/alias containment)",
+        0,
+        0,
+      )
+      false
+    } else {
+      true
+    }
+    case None => true
+  }
+}
+
+export function readEntrySource(
+  entry: string,
+  facts: ResolverHostFactCatalog,
+  diagnostics: Array<PreviewResolvedDiagnostic>,
+) -> Option<string> {
+  match sourceFact(facts, "read-source", entry) {
+    case Some(value) => if value.status == "present" {
+      Some(value.source)
+    } else if value.status == "unreadable" {
+      diagnostic(
+        diagnostics,
+        0,
+        "TPZ3003",
+        "cannot load entry `{entry}`: {value.reasonCode}",
+        0,
+        0,
+      )
+      None
+    } else if value.status == "invalid-utf8" {
+      diagnostic(
+        diagnostics,
+        0,
+        "TPZ3003",
+        "cannot load entry `{entry}`: source is not valid UTF-8",
+        0,
+        0,
+      )
+      None
+    } else {
+      diagnostic(
+        diagnostics,
+        0,
+        "TPZ3001",
+        "entry file `{entry}` does not exist",
+        0,
+        0,
+      )
+      None
+    }
+    case None => {
+      diagnostic(
+        diagnostics,
+        0,
+        "TPZ3001",
+        "entry file `{entry}` does not exist",
+        0,
+        0,
+      )
+      None
+    }
+  }
+}
+
+function validateImportedTopLevel(
+  module: ModuleDraft,
+  target: string,
+  moduleIndexValue: int,
+  diagnostics: Array<PreviewResolvedDiagnostic>,
+) -> () {
+  for statement in module.root.children {
+    let allowed = statement.kind == "statement/import" ||
+      statement.kind == "statement/export" ||
+      statement.kind == "statement/function" ||
+      statement.kind == "statement/impl" ||
+      statement.kind == "statement/protocol" ||
+      statement.kind == "statement/type-alias" ||
+      statement.kind == "statement/enum" ||
+      statement.kind == "statement/record" ||
+      statement.kind == "statement/newtype" ||
+      statement.kind == "statement/let" ||
+      statement.kind == "statement/const"
+    if !allowed {
+      diagnostic(
+        diagnostics,
+        moduleIndexValue,
+        "TPZ3007",
+        "imported module `{target}` contains a top-level free statement; free statements are entry-only (the same file is valid as an entry)",
+        statement.lo,
+        statement.hi,
+      )
+    }
+  }
+  ()
+}
+
+function recordImportEdge(
+  module: ModuleDraft,
+  moduleIndexValue: int,
+  import: ImportDraft,
+  importedHere: Array<string>,
+  edges: Array<EdgeDraft>,
+  diagnostics: Array<PreviewResolvedDiagnostic>,
+) -> bool {
+  let firstSegment = match import.segments.get(0) {
+    case Some(value) => value
+    case None => ""
+  }
+  if firstSegment == "topaz" {
+    diagnostic(
+      diagnostics,
+      moduleIndexValue,
+      "TPZ3016",
+      "the module path root `topaz` is reserved; user modules cannot live under it",
+      import.pathLo,
+      import.pathHi,
+    )
+    return false
+  }
+  let mut graphEdges = edges
+  graphEdges.push(EdgeDraft {
+    from: module.result.identity,
+    to: import.target,
+    moduleIndex: moduleIndexValue,
+    lo: import.pathLo,
+    hi: import.pathHi,
+  })
+  if contains(importedHere, import.target) {
+    diagnostic(
+      diagnostics,
+      moduleIndexValue,
+      "TPZ3017",
+      "`{import.target}` is already imported by this module; a logical module may appear in at most one import item",
+      import.pathLo,
+      import.pathHi,
+    )
+    return false
+  }
+  let mut admitted = importedHere
+  admitted.push(import.target)
+  true
+}
+
+function reportImportDisposition(
+  inputs: ResolverInputs,
+  import: ImportDraft,
+  disposition: ImportPathDisposition,
+  moduleIndexValue: int,
+  diagnostics: Array<PreviewResolvedDiagnostic>,
+) -> () {
+  if disposition.kind == "pending" {
+    return ()
+  }
+  if disposition.kind == "outside" {
+    diagnostic(
+      diagnostics,
+      moduleIndexValue,
+      "TPZ3005",
+      "`{import.target}` resolves outside the root (symlink/alias containment)",
+      import.pathLo,
+      import.pathHi,
+    )
+    return ()
+  }
+  if disposition.kind == "collision" {
+    diagnostic(
+      diagnostics,
+      moduleIndexValue,
+      "TPZ3004",
+      "the path `{import.target}` collides with another candidate under the module name keys{disposition.collisionDetail}",
+      import.pathLo,
+      import.pathHi,
+    )
+    return ()
+  }
+  if disposition.kind == "unreadable" {
+    diagnostic(
+      diagnostics,
+      moduleIndexValue,
+      "TPZ3003",
+      "cannot inspect module path for `{import.target}`: {disposition.collisionDetail}",
+      import.pathLo,
+      import.pathHi,
+    )
+    return ()
+  }
+  if disposition.kind == "source-unreadable" ||
+    disposition.kind == "source-invalid-utf8" {
+    diagnostic(
+      diagnostics,
+      moduleIndexValue,
+      "TPZ3003",
+      if disposition.kind == "source-invalid-utf8" {
+        "cannot load module `{import.target}`: source is not valid UTF-8"
+      } else {
+        "cannot load module `{import.target}`: {disposition.collisionDetail}"
+      },
+      import.pathLo,
+      import.pathHi,
+    )
+    return ()
+  }
+  if disposition.kind == "missing" {
+    let standard = match import.segments.get(0) {
+      case Some(value) => value == "std"
+      case None => false
+    }
+    let externNamespace = !standard &&
+      isExternNamespace(inputs.externModules, import.target)
+    diagnostic(
+      diagnostics,
+      moduleIndexValue,
+      if externNamespace { "TPZ5030" } else { "TPZ3001" },
+      if externNamespace {
+        "extern module `{import.target}` is not declared in topaz.toml"
+      } else if standard {
+        "no std module for `{import.target}` (expected virtual `{stringJoin(import.segments, "/")}.tpz`)"
+      } else {
+        "no module file for `{import.target}` (expected `{modulePath(inputs.root, import.segments)}` by exact scalars)"
+      },
+      import.pathLo,
+      import.pathHi,
+    )
+  }
+  ()
+}
+
+function loadImportedModule(
+  inputs: ResolverInputs,
+  import: ImportDraft,
+  prepared: PreparedImport,
+  moduleIndexValue: int,
+) -> Result<ModuleDraft, string> {
+  parseModule(
+    moduleIndexValue,
+    import.target,
+    prepared.path,
+    prepared.source,
+    false,
+    isExtern(inputs.externModules, import.target),
+    prepared.generatedStd,
+    inputs.maxAstNodes,
+    inputs.maxAstDepth,
+  )
+}
+
+export function discoverModuleGraph(
+  entryDraft: ModuleDraft,
+  inputs: ResolverInputs,
+  queries: Array<PreviewHostQuery>,
+  diagnostics: Array<PreviewResolvedDiagnostic>,
+) -> Result<DiscoveredGraph, string> {
+  let mut discovered: Array<ModuleDraft> = [entryDraft]
+  let mut queued: Set<string> = set { entryDraft.result.identity }
+  let mut physicalIdentities: Map<string, string> = Map.new()
+  match sourceFact(inputs.hostFacts, "physical-containment", entryDraft.result.path) {
+    case Some(fact) => if fact.status == "inside" && fact.aliasClass != "" {
+      physicalIdentities.insert(fact.aliasClass, entryDraft.result.identity)
+    }
+    case None => ()
+  }
+  appendModuleDiagnostics(diagnostics, 0, entryDraft.diagnostics)
+  let mut edges: Array<EdgeDraft> = []
+  let mut next = 0
+  while next < discovered.length {
+    let module = discovered[next]
+    let mut importedHere: Array<string> = []
+    for import in module.imports {
+      if !recordImportEdge(
+        module,
+        next,
+        import,
+        importedHere,
+        edges,
+        diagnostics,
+      ) {
+        continue
+      }
+      if queued.contains(import.target) {
+        continue
+      }
+      queued.add(import.target)
+      let generated = generatedStdModule(inputs.generatedStdModules, import.target)
+      match prepareImport(inputs, import, generated, queries) {
+        case Ok(prepared) => {
+          if prepared.physicalAlias != "" {
+            match physicalIdentities.get(prepared.physicalAlias) {
+              case Some(existing) => {
+                diagnostic(
+                  diagnostics,
+                  next,
+                  "TPZ3004",
+                  "the modules `{existing}` and `{import.target}` resolve to the same physical file; one physical file cannot have two module identities",
+                  import.pathLo,
+                  import.pathHi,
+                )
+                continue
+              }
+              case None => physicalIdentities.insert(prepared.physicalAlias, import.target)
+            }
+          }
+          let imported = loadImportedModule(
+            inputs,
+            import,
+            prepared,
+            discovered.length,
+          )?
+          let importedIndex = discovered.length
+          appendModuleDiagnostics(diagnostics, importedIndex, imported.diagnostics)
+          validateImportedTopLevel(imported, import.target, importedIndex, diagnostics)
+          discovered.push(imported)
+        }
+        case Err(disposition) => {
+          reportImportDisposition(
+            inputs,
+            import,
+            disposition,
+            next,
+            diagnostics,
+          )
+        }
+      }
+    }
+    next += 1
+  }
+  Ok(DiscoveredGraph {
+    modules: discovered,
+    edges: edges,
+  })
+}

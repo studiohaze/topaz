@@ -1,0 +1,11 @@
+match open("input.txt") {
+case Ok(f) => {
+  f.write(s: "direct")
+  let of = Some(f)
+  of?.write(s: "optional")
+  "pipe" |> f.write(s: _)
+  "final" |> of?.write(s: _)
+  0
+}
+case Err(e) => 1
+}

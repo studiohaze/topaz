@@ -1,0 +1,2 @@
+function g(y: float = -2.5) -> float { y }
+g()

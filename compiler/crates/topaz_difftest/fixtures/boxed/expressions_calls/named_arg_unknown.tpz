@@ -1,0 +1,2 @@
+function f(a: int) { a }
+f(a: 1, z: 2)

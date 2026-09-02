@@ -1,0 +1,5 @@
+match xs {
+  case [] => useEmpty()
+  case [head, ..tail] => useHead(head, tail)
+  case [x, y, ..rest] if rest.length > 0 => handle(x, y, rest)
+}

@@ -1,0 +1,2 @@
+record Point { x: int, y: int }
+JSON.stringify([Point { x: 1, y: 2 }, Point { x: 5, y: 6 }])

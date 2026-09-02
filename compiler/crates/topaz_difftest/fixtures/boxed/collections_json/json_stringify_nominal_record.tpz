@@ -1,0 +1,3 @@
+record User { name: string, age: int }
+let u = User { name: "Ada", age: 36 }
+JSON.stringify(u)

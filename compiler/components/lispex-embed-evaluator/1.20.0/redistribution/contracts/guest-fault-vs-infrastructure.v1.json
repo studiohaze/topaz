@@ -1,0 +1,28 @@
+{
+  "schema": "lispex.ratified-semantic-rule/v1",
+  "rule_id": "GUEST-FAULT-VS-INFRASTRUCTURE-1",
+  "decision_id": "L120-SDL-R3-20260812-01",
+  "ratified_at": "2026-08-12",
+  "wording": [
+    "An admitted guest computation that reaches language evaluation and detects a deterministic primitive-domain violation, including a proper-list requirement failure, terminates as runtime-error with exit status 1.",
+    "Infrastructure-error is reserved for failures of the host, engine, transport, sandbox, harness, artifact loading, or observation production that prevent the specified guest semantic result from being obtained.",
+    "Output effects committed before the guest semantic fault remain in stdout."
+  ],
+  "normative_fields": {
+    "outcome": "runtime-error",
+    "exit_status": 1
+  },
+  "not_ratified": [
+    "diagnostic_code",
+    "diagnostic_phase",
+    "primary_span",
+    "diagnostic_prose"
+  ],
+  "case_application": {
+    "case_id": "L120-SDL-041",
+    "committed_stdout_byte_len": 24,
+    "rust": "conforming",
+    "lil": "conforming",
+    "lit": "nonconforming"
+  }
+}

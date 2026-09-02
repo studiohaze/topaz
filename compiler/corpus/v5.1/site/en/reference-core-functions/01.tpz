@@ -1,0 +1,8 @@
+print("Hello, Topaz!")
+
+// toInt returns Option<int>
+let answer = match toInt("42") {
+    case Some(value) => value
+    case None => 0
+}
+print("Parsed answer: {answer}")

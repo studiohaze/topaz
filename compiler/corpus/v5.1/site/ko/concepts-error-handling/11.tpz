@@ -1,0 +1,50 @@
+// 여러 작업 중 일부 실패 허용
+function 배치처리(파일목록: Array<string>) -> { 성공: Array<string>, 실패: Array<{ 파일: string, 오류: string }> } {
+    let mut 성공목록: Array<string> = []
+    let mut 실패목록: Array<{ 파일: string, 오류: string }> = []
+    
+    for 파일 in 파일목록 {
+        match 파일처리(파일) {
+            case Ok(결과) => {
+                성공목록.push(결과)
+                print("성공: {파일}")
+            }
+            case Err(오류) => {
+                실패목록.push({ 파일: 파일, 오류: 오류 })
+                print("실패: {파일} - {오류}")
+            }
+        }
+    }
+    
+    return { 성공: 성공목록, 실패: 실패목록 }
+}
+
+// Result 배열 처리
+function 실수결과수집(결과들: Array<Result<float, string>>) -> Result<Array<float>, Array<string>> {
+    let mut 성공값들: Array<float> = []
+    let mut 오류들: Array<string> = []
+    
+    for 결과 in 결과들 {
+        match 결과 {
+            case Ok(값) => 성공값들.push(값)
+            case Err(오류) => 오류들.push(오류)
+        }
+    }
+    
+    if 오류들.length > 0 {
+        Err(오류들)
+    } else {
+        Ok(성공값들)
+    }
+}
+
+let 계산결과들 = [
+    나누기(10.0, 2.0),   // Ok(5.0)
+    나누기(8.0, 4.0),    // Ok(2.0)
+    나누기(6.0, 0.0)     // Err("0으로 나눌 수 없습니다")
+]
+
+match 실수결과수집(계산결과들) {
+    case Ok(값들) => print("모든 계산 성공: {값들}")
+    case Err(오류들) => print("일부 계산 실패: {오류들}")
+}

@@ -1,0 +1,3 @@
+let inner = p"x\\y"
+let outer = sql"${inner}"
+"${outer}"

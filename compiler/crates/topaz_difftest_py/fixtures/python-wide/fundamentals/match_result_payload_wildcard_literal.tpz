@@ -1,0 +1,9 @@
+
+function main() -> int {
+    match Ok(7) {
+        case Ok(8) => 0
+        case Ok(_) => 1
+        case _ => -1
+    }
+}
+main()

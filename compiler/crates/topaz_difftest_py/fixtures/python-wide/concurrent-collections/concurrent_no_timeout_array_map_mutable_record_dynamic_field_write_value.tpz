@@ -1,0 +1,24 @@
+
+function one(x: int) -> int {
+    1
+}
+function two(x: int) -> int {
+    2
+}
+function three(x: int) -> int {
+    3
+}
+
+let mut callbacks = { primary: one, secondary: three }
+let field = "primary"
+callbacks[field] = two
+
+let result = concurrent {
+    value: {
+        let xs = [1]
+        let ys = xs.map(callbacks.primary)
+        ys[0]
+    }
+    idle: 0
+}
+result.value

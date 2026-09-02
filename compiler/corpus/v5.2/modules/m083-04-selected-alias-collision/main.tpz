@@ -1,0 +1,2 @@
+import utils.strings { trim as normalize }
+let normalize = 1

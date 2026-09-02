@@ -1,0 +1,699 @@
+// Admission of legacy, source, artifact, and protocol-v1 request envelopes.
+// Candidate recognition is kept separate from strict decoding so the root
+// facade can select a route without partially accepting malformed input.
+
+import lit.model {
+  Request,
+  FrontendRequest,
+  SourceRequest,
+  V1ArtifactIdentity,
+  V1ArtifactExpectation,
+  V1Cancellation,
+  V1ProductRequest,
+  V1HostBinding,
+  V1HostFrame,
+  V1ResourceProfile,
+  DecodedRequest,
+  SpanRow,
+  Kernel,
+  KernelRequest,
+  decodeV1ProductRequestJson,
+  decodeV1HostFrameJson,
+}
+import lit.kernel_decode {
+  expectArray,
+  expectString,
+  expectInt,
+  expectBool,
+  requireLength,
+  validSha256,
+  pathNeutral,
+  decodeKernelRequest,
+  decodeByteVector,
+  bytesValue,
+  bytesSha256,
+}
+
+function v1RequestFields() -> Array<string> {
+  [
+    "schema",
+    "invocation_id",
+    "profile",
+    "logical_source_id",
+    "source_bytes_base64",
+    "source_sha256",
+    "resource_profile",
+    "limits",
+    "artifact_expectation",
+    "cancellation",
+  ]
+}
+
+function v1JsonWhitespace(scalar: string) -> bool {
+  scalar == " " || scalar == "\t"
+}
+
+function v1SkipJsonWhitespace(scalars: Array<string>, start: int) -> int {
+  let mut index = start
+  while index < scalars.length && v1JsonWhitespace(scalars[index]) { index += 1 }
+  index
+}
+
+function v1ScanRequestFieldOrder(body: string) -> Result<(), string> {
+  let scalars = body.scalars()
+  let expected = v1RequestFields()
+  let mut index = v1SkipJsonWhitespace(scalars, 0)
+  if index >= scalars.length || scalars[index] != "\{" {
+    return Err("protocol root must be a JSON object")
+  }
+  index += 1
+  let mut fieldIndex = 0
+  while fieldIndex < expected.length {
+    index = v1SkipJsonWhitespace(scalars, index)
+    if index >= scalars.length || scalars[index] != "\"" {
+      return Err("protocol request fields are missing, extra, or reordered")
+    }
+    index += 1
+    let mut key = ""
+    let mut closed = false
+    while index < scalars.length {
+      let scalar = scalars[index]
+      index += 1
+      if scalar == "\"" {
+        closed = true
+        break
+      }
+      if scalar == "\\" {
+        return Err("protocol request field names must use their exact spelling")
+      }
+      key += scalar
+    }
+    if !closed || key != expected[fieldIndex] {
+      return Err("protocol request fields are missing, extra, or reordered")
+    }
+    index = v1SkipJsonWhitespace(scalars, index)
+    if index >= scalars.length || scalars[index] != ":" {
+      return Err("protocol request field is missing its value separator")
+    }
+    index += 1
+    index = v1SkipJsonWhitespace(scalars, index)
+    let mut depth = 0
+    let mut inString = false
+    let mut escaped = false
+    while index < scalars.length {
+      let scalar = scalars[index]
+      if inString {
+        index += 1
+        if escaped { escaped = false }
+        else if scalar == "\\" { escaped = true }
+        else if scalar == "\"" { inString = false }
+      } else if scalar == "\"" {
+        inString = true
+        index += 1
+      } else if scalar == "\{" || scalar == "[" {
+        depth += 1
+        index += 1
+      } else if scalar == "\}" || scalar == "]" {
+        if scalar == "\}" && depth == 0 { break }
+        depth -= 1
+        index += 1
+      } else if scalar == "," && depth == 0 {
+        break
+      } else {
+        index += 1
+      }
+    }
+    index = v1SkipJsonWhitespace(scalars, index)
+    fieldIndex += 1
+    if fieldIndex < expected.length {
+      if index >= scalars.length || scalars[index] != "," {
+        return Err("protocol request fields are missing, extra, or reordered")
+      }
+      index += 1
+    }
+  }
+  index = v1SkipJsonWhitespace(scalars, index)
+  if index >= scalars.length || scalars[index] != "\}" {
+    return Err("protocol request fields are missing, extra, or reordered")
+  }
+  index += 1
+  index = v1SkipJsonWhitespace(scalars, index)
+  if index != scalars.length {
+    return Err("protocol request has trailing JSON data")
+  }
+  Ok(())
+}
+
+function v1ExactObjectFields(value: JSONValue, fields: Array<string>) -> bool {
+  match value.keys() {
+    case None => false
+    case Some(keys) => {
+      if keys.length != fields.length { return false }
+      let mut index = 0
+      while index < fields.length {
+        if keys[index] != fields[index] { return false }
+        index += 1
+      }
+      true
+    }
+  }
+}
+
+function v1NestedFieldsAreExact(value: JSONValue) -> bool {
+  if !v1ExactObjectFields(value, [
+    "artifact_expectation",
+    "cancellation",
+    "invocation_id",
+    "limits",
+    "logical_source_id",
+    "profile",
+    "resource_profile",
+    "schema",
+    "source_bytes_base64",
+    "source_sha256",
+  ]) { return false }
+  let expectation = match value.get("artifact_expectation") {
+    case Some(item) => item
+    case None => return false
+  }
+  if !v1ExactObjectFields(expectation, [
+    "artifact",
+    "backend_id",
+    "capability_schema",
+    "observation_schema",
+    "profile",
+  ]) { return false }
+  let artifact = match expectation.get("artifact") {
+    case Some(item) => item
+    case None => return false
+  }
+  if !v1ExactObjectFields(artifact, ["byte_len", "identity_kind", "path", "sha256"]) {
+    return false
+  }
+  let cancellation = match value.get("cancellation") {
+    case Some(item) => item
+    case None => return false
+  }
+  v1ExactObjectFields(cancellation, ["abort_requested", "deadline_unix_millis"])
+}
+
+export function v1ResourceProfile(id: string) -> Option<V1ResourceProfile> {
+  if id == "lispex-product-native/v1" {
+    return Some(V1ResourceProfile {
+      id: id,
+      purpose: "installed-product",
+      publicSelectable: true,
+      limits: [20000000, 2000000, 20000000, 100000000, 16777216],
+    })
+  }
+  if id == "lispex-product-web/v1" {
+    return Some(V1ResourceProfile {
+      id: id,
+      purpose: "installed-product",
+      publicSelectable: true,
+      limits: [5000000, 500000, 5000000, 20000000, 4194304],
+    })
+  }
+  if id == "lispex-receipt-144/v1" {
+    return Some(V1ResourceProfile {
+      id: id,
+      purpose: "bounded-evidence",
+      publicSelectable: false,
+      limits: [2000000, 100000, 2000000, 5000000, 1048576],
+    })
+  }
+  if id == "lispex-generated-11088/v1" {
+    return Some(V1ResourceProfile {
+      id: id,
+      purpose: "bounded-evidence",
+      publicSelectable: false,
+      limits: [400000, 16384, 400000, 400000, 65536],
+    })
+  }
+  None
+}
+
+function v1ResourceProfileIsRetired(id: string) -> bool {
+  id == "hosted-h6d-tco-bounded"
+    || id == "hosted-h6d-resource-bounded"
+}
+
+function v1IntArraysEqual(left: Array<int>, right: Array<int>) -> bool {
+  if left.length != right.length { return false }
+  let mut index = 0
+  while index < left.length {
+    if left[index] != right[index] { return false }
+    index += 1
+  }
+  true
+}
+
+function v1InstallRelativePath(path: string) -> bool {
+  if path.byteLength() == 0 || path.byteLength() > 512 || !pathNeutral(path) {
+    return false
+  }
+  for part in path.split("/") {
+    if part == "" || part == "." || part == ".." { return false }
+  }
+  true
+}
+
+function v1ArtifactIdentityIsValid(identity: V1ArtifactIdentity) -> bool {
+  identity.identity_kind == "topaz-lit-product-artifact-bytes"
+    && v1InstallRelativePath(identity.path)
+    && identity.byte_len > 0
+    && validSha256(identity.sha256)
+}
+
+function v1JsonBody(text: string) -> Result<string, string> {
+  if text.byteLength() > 8388608 {
+    return Err("protocol request exceeds the 8388608-byte limit")
+  }
+  let scalars = text.scalars()
+  if scalars.length == 0 || scalars[scalars.length - 1] != "\n" {
+    return Err("protocol requires exactly one JSON object and one terminal LF")
+  }
+  let mut bodyScalars: Array<string> = []
+  let mut index = 0
+  while index + 1 < scalars.length {
+    if scalars[index] == "\n" || scalars[index] == "\r" {
+      return Err("protocol requires exactly one JSON object and one terminal LF")
+    }
+    bodyScalars.push(scalars[index])
+    index += 1
+  }
+  Ok(bodyScalars.join(""))
+}
+
+export function decodeV1ProductRequestEnvelope(text: string) -> Result<V1ProductRequest, string> {
+  let body = v1JsonBody(text)?
+  v1ScanRequestFieldOrder(body)?
+  let parsed = match JSON.parse(body) {
+    case Ok(value) => value
+    case Err(error) => return Err("protocol JSON is invalid at {error.line}:{error.column}: {error.message}")
+  }
+  if !v1NestedFieldsAreExact(parsed) {
+    return Err("protocol request object has missing or unknown fields")
+  }
+  let request = match decodeV1ProductRequestJson(parsed) {
+    case Ok(value) => value
+    case Err(error) => return Err(error)
+  }
+  if request.schema != "lispex.backend-run-request/v1"
+    || request.profile != "lispex-profile-1.5"
+    || request.artifact_expectation.backend_id != "lit"
+    || request.artifact_expectation.profile != "lispex-profile-1.5"
+    || request.artifact_expectation.capability_schema != "lispex.primitive-capabilities/v2"
+    || request.artifact_expectation.observation_schema != "lispex.observation-result/v1" {
+    return Err("protocol, profile, backend, capability, or observation binding is incompatible")
+  }
+  if request.invocation_id.byteLength() == 0 || request.invocation_id.byteLength() > 512 {
+    return Err("protocol invocation id is invalid")
+  }
+  if !v1InstallRelativePath(request.logical_source_id) {
+    return Err("protocol logical source id is invalid or host-path-shaped")
+  }
+  let source = match Bytes.fromBase64(request.source_bytes_base64) {
+    case Ok(value) => value
+    case Err(_) => return Err("protocol source base64 is invalid")
+  }
+  if source.toBase64() != request.source_bytes_base64 {
+    return Err("protocol source base64 is not canonical")
+  }
+  if source.length() > 4194304 {
+    return Err("protocol source exceeds the 4194304-byte product limit")
+  }
+  if !validSha256(request.source_sha256)
+    || Hash.sha256(source).toHex() != request.source_sha256 {
+    return Err("protocol source bytes do not match source_sha256")
+  }
+  if v1ResourceProfileIsRetired(request.resource_profile) {
+    return Err("resource-profile-retired: retired resource profile `{request.resource_profile}`")
+  }
+  let resource = match v1ResourceProfile(request.resource_profile) {
+    case Some(value) => value
+    case None => return Err("protocol resource profile is unknown")
+  }
+  if !v1IntArraysEqual(resource.limits, request.limits) {
+    return Err("protocol limits do not match the named resource profile")
+  }
+  if !v1ArtifactIdentityIsValid(request.artifact_expectation.artifact) {
+    return Err("protocol artifact expectation is invalid")
+  }
+  if request.cancellation.abort_requested {
+    return Err("protocol request was cancelled before source execution")
+  }
+  Ok(request)
+}
+
+export function decodeV1ProductRequest(text: string) -> Result<V1ProductRequest, string> {
+  let request = decodeV1ProductRequestEnvelope(text)?
+  match request.cancellation.deadline_unix_millis {
+    case Some(_) => return Err("protocol deadline requires host verification before source execution")
+    case None => {}
+  }
+  Ok(request)
+}
+
+function v1HostVariantIsValid(value: string) -> bool {
+  value == "topaz-interpreter"
+    || value == "generated-rust"
+    || value == "generated-python"
+    || value == "web"
+}
+
+function v1ArtifactIdentitiesEqual(left: V1ArtifactIdentity, right: V1ArtifactIdentity) -> bool {
+  left.identity_kind == right.identity_kind
+    && left.path == right.path
+    && left.byte_len == right.byte_len
+    && left.sha256 == right.sha256
+}
+
+function v1OptionalIntsEqual(left: Option<int>, right: Option<int>) -> bool {
+  match left {
+    case None => match right {
+      case None => true
+      case Some(_) => false
+    }
+    case Some(leftValue) => match right {
+      case None => false
+      case Some(rightValue) => leftValue == rightValue
+    }
+  }
+}
+
+export function decodeV1HostFrame(text: string) -> Result<V1HostFrame, string> {
+  let body = v1JsonBody(text)?
+  let parsed = match JSON.parse(body) {
+    case Ok(value) => value
+    case Err(error) => return Err("host frame JSON is invalid at {error.line}:{error.column}: {error.message}")
+  }
+  if !v1ExactObjectFields(parsed, ["binding", "request_jsonl", "schema"]) {
+    return Err("host frame fields are missing or unknown")
+  }
+  let binding = match parsed.get("binding") {
+    case Some(value) => value
+    case None => return Err("host frame binding is missing")
+  }
+  if !v1ExactObjectFields(binding, [
+    "artifact",
+    "binary_stdio",
+    "deadline_state",
+    "deadline_unix_millis",
+    "fresh_process",
+    "host_variant",
+    "process_control",
+    "schema",
+  ]) {
+    return Err("host binding fields are missing or unknown")
+  }
+  let artifact = match binding.get("artifact") {
+    case Some(value) => value
+    case None => return Err("host binding artifact is missing")
+  }
+  if !v1ExactObjectFields(artifact, ["byte_len", "identity_kind", "path", "sha256"]) {
+    return Err("host binding artifact fields are missing or unknown")
+  }
+  let frame = match decodeV1HostFrameJson(parsed) {
+    case Ok(value) => value
+    case Err(error) => return Err(error)
+  }
+  if frame.schema != "topaz.lit-host-frame/v1"
+    || frame.binding.schema != "topaz.lit-host-binding/v1"
+    || !v1HostVariantIsValid(frame.binding.host_variant)
+    || !v1ArtifactIdentityIsValid(frame.binding.artifact)
+    || !frame.binding.binary_stdio
+    || !frame.binding.fresh_process
+    || !frame.binding.process_control {
+    return Err("host binding is incompatible")
+  }
+  Ok(frame)
+}
+
+export function validateV1HostBinding(
+  request: V1ProductRequest,
+  binding: V1HostBinding,
+) -> Result<(), string> {
+  if !v1ArtifactIdentitiesEqual(request.artifact_expectation.artifact, binding.artifact) {
+    return Err("host artifact bytes do not match the request expectation")
+  }
+  if !v1OptionalIntsEqual(request.cancellation.deadline_unix_millis, binding.deadline_unix_millis) {
+    return Err("host deadline binding does not match the request")
+  }
+  match request.cancellation.deadline_unix_millis {
+    case None => if binding.deadline_state != "none" {
+      return Err("host deadline state is incompatible")
+    }
+    case Some(_) => {
+      if binding.deadline_state == "expired" {
+        return Err("protocol request deadline expired before source execution")
+      }
+      if binding.deadline_state != "active" {
+        return Err("host deadline state is incompatible")
+      }
+    }
+  }
+  Ok(())
+}
+
+export function isV1HostFrameCandidate(text: string) -> bool {
+  text.startsWith("\{\"schema\":\"topaz.lit-host-frame/v1\"")
+}
+
+export function isV1ProtocolCandidate(text: string) -> bool {
+  for scalar in text.scalars() {
+    if v1JsonWhitespace(scalar) || scalar == "\r" || scalar == "\n" { continue }
+    return scalar == "\{"
+  }
+  false
+}
+
+function canonicalJsonLine(text: string) -> Result<JSONValue, string> {
+  let scalars = text.scalars()
+  if scalars.length == 0 || scalars[scalars.length - 1] != "\n" {
+    return Err("LIT181 request: expected one canonical JSON line")
+  }
+  let mut bodyScalars: Array<string> = []
+  let mut index = 0
+  while index + 1 < scalars.length {
+    if scalars[index] == "\n" || scalars[index] == "\r" {
+      return Err("LIT181 request: embedded line break")
+    }
+    bodyScalars.push(scalars[index])
+    index += 1
+  }
+  let body = bodyScalars.join("")
+  let parsed = match JSON.parse(body) {
+    case Ok(value) => value
+    case Err(error) => return Err("LIT100 json:{error.line}:{error.column}:{error.message}")
+  }
+  let canonical = match JSON.stringify(parsed) {
+    case Ok(value) => value
+    case Err(error) => return Err("LIT181 request: cannot canonicalize JSON: {error}")
+  }
+  if canonical != body { return Err("LIT181 request: JSON line is not compact canonical form") }
+  Ok(parsed)
+}
+
+function canonicalJsonBytes(bytes: Array<int>) -> Result<JSONValue, string> {
+  let rawBytes = bytesValue(bytes, "request.workload-bytes")?
+  let text = match rawBytes.decodeUtf8() {
+    case Ok(value) => value
+    case Err(error) => return Err("LIT182 request.workload-bytes: invalid UTF-8: {error}")
+  }
+  let parsed = match JSON.parse(text) {
+    case Ok(value) => value
+    case Err(error) => return Err("LIT182 workload-json:{error.line}:{error.column}:{error.message}")
+  }
+  let canonical = match JSON.stringify(parsed) {
+    case Ok(value) => value
+    case Err(error) => return Err("LIT182 request.workload-bytes: cannot canonicalize JSON: {error}")
+  }
+  if canonical != text { return Err("LIT182 request.workload-bytes: JSON is not compact canonical form") }
+  Ok(parsed)
+}
+
+function decodeSourceRequest(request: Array<JSONValue>) -> Result<SourceRequest, string> {
+  requireLength(request, 9, "source-request")?
+  let invocationId = expectString(request[1], "source-request.invocation-id")?
+  if invocationId.byteLength() == 0 || invocationId.byteLength() > 128 {
+    return Err("LIT184 source-request: invalid invocation id length")
+  }
+  let profileId = expectString(request[2], "source-request.profile-id")?
+  if profileId != "lispex-r7rs-small-pinned/v1.4" {
+    return Err("LIT187 source-request: unsupported executable profile")
+  }
+  let sourceId = expectString(request[3], "source-request.logical-source-id")?
+  if !pathNeutral(sourceId) || sourceId.byteLength() > 256 {
+    return Err("LIT186 source-request: logical source id is invalid or host-path-shaped")
+  }
+  let sourceSha = expectString(request[4], "source-request.source-sha256")?
+  let sourceBytes = decodeByteVector(request[5], "source-request.source-utf8-bytes")?
+  if sourceBytes.length > 16777216 {
+    return Err("LIT189 source-request: source byte hard limit exceeded")
+  }
+  if !validSha256(sourceSha) || bytesSha256(sourceBytes, "source-request.source-utf8-bytes")? != sourceSha {
+    return Err("LIT186 source-request: source digest mismatch")
+  }
+  let limits = expectArray(request[6], "source-request.limits")?
+  requireLength(limits, 5, "source-request.limits")?
+  let tokenizerTransitionLimit = expectInt(limits[0], "source-request.limits.tokenizer-transitions")?
+  let tokenLimit = expectInt(limits[1], "source-request.limits.token-count")?
+  let normalizationLimit = expectInt(limits[2], "source-request.limits.normalization-steps")?
+  let machineTransitionLimit = expectInt(limits[3], "source-request.limits.machine-transitions")?
+  let outputLimit = expectInt(limits[4], "source-request.limits.output-bytes")?
+  if tokenizerTransitionLimit <= 0 || tokenLimit <= 0 || normalizationLimit <= 0 || machineTransitionLimit <= 0 || outputLimit <= 0 {
+    return Err("LIT188 source-request: logical limits must be positive")
+  }
+  let artifacts = expectArray(request[7], "source-request.artifact-expectations")?
+  requireLength(artifacts, 3, "source-request.artifact-expectations")?
+  let litSourceSha = expectString(artifacts[0], "source-request.artifact-expectations.lit-source")?
+  let capabilityContractSha = expectString(artifacts[1], "source-request.artifact-expectations.capability-contract")?
+  let capabilityRowsSha = expectString(artifacts[2], "source-request.artifact-expectations.capability-rows")?
+  if !validSha256(litSourceSha)
+    || capabilityContractSha != "7252cc91ce3685d1085e127777977ee9938f092e015bd37d7e56b4fc556df1ee"
+    || capabilityRowsSha != "72bc588742e499cd47dc8f9b01751743535e0ed97bb2969527b00a1291695840" {
+    return Err("LIT186 source-request: artifact expectation mismatch")
+  }
+  let nesting = expectArray(request[8], "source-request.nesting-context")?
+  requireLength(nesting, 2, "source-request.nesting-context")?
+  let nestingDepth = expectInt(nesting[0], "source-request.nesting-context.depth")?
+  if nestingDepth != 1 || expectBool(nesting[1], "source-request.nesting-context.parent")? {
+    return Err("LIT186 source-request: H5 requires exact depth-one false-parent nesting")
+  }
+  Ok(SourceRequest {
+    invocationId: invocationId,
+    profileId: profileId,
+    sourceId: sourceId,
+    sourceSha: sourceSha,
+    sourceBytes: sourceBytes,
+    tokenizerTransitionLimit: tokenizerTransitionLimit,
+    tokenLimit: tokenLimit,
+    normalizationLimit: normalizationLimit,
+    machineTransitionLimit: machineTransitionLimit,
+    outputLimit: outputLimit,
+    litSourceSha: litSourceSha,
+    capabilityContractSha: capabilityContractSha,
+    capabilityRowsSha: capabilityRowsSha,
+    nestingDepth: nestingDepth,
+    parentReceiptSha: "",
+  })
+}
+
+export function decodeRequest(text: string) -> Result<DecodedRequest, string> {
+  let parsed = canonicalJsonLine(text)?
+  let request = expectArray(parsed, "lit-request")?
+  if request.length == 0 { return Err("LIT183 lit-request: empty request row") }
+  let tag = expectString(request[0], "lit-request.tag")?
+  if tag == "lispex.hosted-source-backend-request/v0" {
+    return Ok(DecodedRequest.SourceMode(decodeSourceRequest(request)?))
+  }
+  requireLength(request, 11, "lit-request")?
+  if tag != "lispex.lit-runner-request/v0" {
+    return Err("LIT183 lit-request: unsupported version")
+  }
+  let invocationId = expectString(request[1], "lit-request.invocation-id")?
+  if invocationId.byteLength() == 0 || invocationId.byteLength() > 128 {
+    return Err("LIT184 lit-request: invalid invocation id length")
+  }
+  let mode = expectString(request[2], "lit-request.mode")?
+  if mode != "hosted-kernel-v0" && mode != "frontend-v0" {
+    return Err("LIT185 lit-request: unsupported mode {mode}")
+  }
+  let sourceId = expectString(request[3], "lit-request.source-id")?
+  if !pathNeutral(sourceId) || sourceId.byteLength() > 256 {
+    return Err("LIT186 lit-request: source id is invalid or host-path-shaped")
+  }
+  if expectString(request[4], "lit-request.profile")? != "lispex-r7rs-small-pinned/v1.4" {
+    return Err("LIT187 lit-request: unsupported executable profile")
+  }
+  let sourceBytes = decodeByteVector(request[5], "lit-request.source-bytes")?
+  let sourceSha = expectString(request[6], "lit-request.source-sha256")?
+  let workloadBytes = decodeByteVector(request[7], "lit-request.workload-bytes")?
+  let workloadSha = expectString(request[8], "lit-request.workload-sha256")?
+  let limits = expectArray(request[9], "lit-request.limits")?
+  requireLength(limits, 4, "lit-request.limits")?
+  let transitionLimit = expectInt(limits[0], "lit-request.limits.transition")?
+  let inputLimit = expectInt(limits[1], "lit-request.limits.input")?
+  let outputLimit = expectInt(limits[2], "lit-request.limits.output")?
+  let tokenLimit = expectInt(limits[3], "lit-request.limits.token")?
+  if transitionLimit <= 0 || inputLimit <= 0 || inputLimit > 16777216 || outputLimit < 2048 || tokenLimit <= 0 {
+    return Err("LIT188 lit-request: invalid logical limits")
+  }
+  if sourceBytes.length > inputLimit || workloadBytes.length > inputLimit {
+    return Err("LIT189 lit-request: input byte limit exceeded")
+  }
+  if !validSha256(sourceSha) || bytesSha256(sourceBytes, "lit-request.source-bytes")? != sourceSha {
+    return Err("LIT186 lit-request: source digest mismatch")
+  }
+  if !validSha256(workloadSha) || bytesSha256(workloadBytes, "lit-request.workload-bytes")? != workloadSha {
+    return Err("LIT186 lit-request: workload digest mismatch")
+  }
+  let identities = expectArray(request[10], "lit-request.identities")?
+  requireLength(identities, 2, "lit-request.identities")?
+  let litSourceSha = expectString(identities[0], "lit-request.identities.lit-source")?
+  let capabilitySha = expectString(identities[1], "lit-request.identities.capability")?
+  if !validSha256(litSourceSha) || !validSha256(capabilitySha) {
+    return Err("LIT186 lit-request: invalid artifact or capability identity")
+  }
+  if mode == "frontend-v0" {
+    if workloadBytes.length != 0 || workloadSha != "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855" {
+      return Err("LIT186 lit-request: frontend workload must be the exact empty bytevector")
+    }
+    if capabilitySha != "187a0b3de2abcc416da4e90bdbaf781bb8e7e093ef452d6780237478be44ba24" {
+      return Err("LIT186 lit-request: frontend capability identity mismatch")
+    }
+    return Ok(DecodedRequest.FrontendMode(FrontendRequest {
+      invocationId: invocationId,
+      mode: mode,
+      sourceId: sourceId,
+      sourceSha: sourceSha,
+      sourceBytes: sourceBytes,
+      workloadSha: workloadSha,
+      litSourceSha: litSourceSha,
+      capabilitySha: capabilitySha,
+      transitionLimit: transitionLimit,
+      normalizationLimit: transitionLimit,
+      inputLimit: inputLimit,
+      outputLimit: outputLimit,
+      tokenLimit: tokenLimit,
+    }))
+  }
+  let inner = decodeKernelRequest(canonicalJsonBytes(workloadBytes)?)?
+  let expectedCapabilitySha = if inner.kernel.feature == "hosted-kernel-h0/v0" {
+    "841c269e6f95e0c985c49211d68d4e27f9d3a17220c6f64062fc202a68bb7627"
+  } else if inner.kernel.feature == "hosted-kernel-h3/v0" {
+    "7909ba47b54631ca75409e92510e01476a37ab28b5025b7930a8429c65389348"
+  } else {
+    "187a0b3de2abcc416da4e90bdbaf781bb8e7e093ef452d6780237478be44ba24"
+  }
+  if capabilitySha != expectedCapabilitySha {
+    return Err("LIT186 lit-request: capability identity mismatch")
+  }
+  if inner.invocationId != invocationId || inner.kernel.sourceId != sourceId || inner.kernel.sourceSha != sourceSha {
+    return Err("LIT186 lit-request: outer/inner identity mismatch")
+  }
+  if inner.transitionLimit != transitionLimit || inner.outputLimit != outputLimit {
+    return Err("LIT188 lit-request: outer/inner limit mismatch")
+  }
+  for span in inner.kernel.spans {
+    if span.endByte > sourceBytes.length {
+      return Err("LIT186 lit-request: kernel span exceeds exact source bytes")
+    }
+  }
+  Ok(DecodedRequest.KernelMode(Request {
+    invocationId: invocationId,
+    mode: mode,
+    sourceId: sourceId,
+    sourceSha: sourceSha,
+    sourceBytes: sourceBytes,
+    workloadSha: workloadSha,
+    litSourceSha: litSourceSha,
+    capabilitySha: capabilitySha,
+    kernel: inner.kernel,
+    transitionLimit: transitionLimit,
+    inputLimit: inputLimit,
+    outputLimit: outputLimit,
+    tokenLimit: tokenLimit,
+  }))
+}

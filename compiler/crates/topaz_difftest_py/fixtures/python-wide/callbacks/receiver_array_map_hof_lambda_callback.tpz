@@ -1,0 +1,7 @@
+
+function main() -> int {
+    let xs = [1, 2]
+    let ys = xs.map((x) => x + 1)
+    ys[0] + ys[1]
+}
+main()

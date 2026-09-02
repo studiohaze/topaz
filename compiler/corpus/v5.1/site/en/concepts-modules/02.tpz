@@ -1,0 +1,6 @@
+// utils/strings.tpz
+export function shout(s: string) -> string {
+    return "{s}!"
+}
+
+export let greeting = "hello"

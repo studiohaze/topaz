@@ -1,0 +1,5 @@
+let r = concurrent {
+    a: 1 + 1
+    b: "x" + "y"
+}
+print("{r.a} {r.b}")

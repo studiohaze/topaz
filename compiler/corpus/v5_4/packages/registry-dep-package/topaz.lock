@@ -1,0 +1,11 @@
+[[package]]
+name = "registry_dep_root"
+version = "0.1.0"
+source = "root"
+manifest_hash = "sha256:beb83300025e42c9ffd77efd03b23eef7bc6165b7bec40305c3e6b58f922da74"
+
+[[package]]
+name = "greeter"
+version = "1.0.0"
+source = "registry"
+hash = "sha256:ff600cc783fbdfbcf56651ceb6b5e600bf36728114d02d5685043bd782abe456"

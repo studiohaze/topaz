@@ -1,0 +1,10 @@
+
+function main() -> string {
+    let entries = [{ key: "a", value: 1 }, { key: "b", value: 2 }, { key: "a", value: 9 }]
+    let mut m: Map<string, int> = Map.ofEntries(entries: entries)
+    let snap = m.entries
+    m.insert("a", 10)
+    let restored: Map<string, int> = Map.ofEntries(entries: snap)
+    "{m.length}:{m.keys[0]}:{m.values[0]}:{snap[0].key}:{snap[0].value}:{m.entries[0].value}:{restored.getOr("a", 0)}"
+}
+main()

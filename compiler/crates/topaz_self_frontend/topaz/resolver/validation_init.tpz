@@ -1,0 +1,876 @@
+// Public type-surface checks and top-level initialization analysis.
+// It consumes completed module and scope catalogs, then assembles accepted or
+// rejected resolver outputs for the facade.
+
+import types {
+  PreviewImportEdge,
+  PreviewModuleResult,
+  PreviewResolvedDeclaration,
+  PreviewResolvedDiagnostic,
+  PreviewResolvedExport,
+  PreviewResolvedReference,
+  PreviewResolvedScope,
+  ResolveResult,
+  SyntaxNode,
+}
+import unicode { didYouMean }
+import resolver.model_facts {
+  InitViolation,
+  LocalScope,
+  ModuleDraft,
+  ModuleTable,
+  ModuleTableCatalog,
+  ResolverOutputs,
+  ResolverWalkContext,
+  attribute,
+  child,
+  children,
+  diagnostic,
+  isNone,
+  spanText,
+  stringJoin,
+  text,
+}
+import resolver.modules_tables {
+  catalogTable,
+  effectiveNamespace,
+  exportedBinding,
+  exportedNames,
+  tableBinding,
+  unwrapExport,
+}
+import resolver.scopes_walk {
+  addDeclaration,
+  appendModuleExports,
+  walkNode,
+}
+
+function privatePublicSurfaceTypeBinding(
+  table: ModuleTable,
+  name: string,
+) -> bool {
+  let binding = match tableBinding(table, name) {
+    case Some(found) => found
+    case None => return false
+  }
+  binding.namespace == "type" &&
+    !binding.exported &&
+    (binding.declarationKind == "type-alias" ||
+      binding.declarationKind == "nominal-type")
+}
+
+function validatePublicTypeTree(
+  source: Bytes,
+  nodeValue: SyntaxNode,
+  table: ModuleTable,
+  diagnostics: Array<PreviewResolvedDiagnostic>,
+) -> () {
+  if nodeValue.kind == "type/named" {
+    match child(nodeValue, "name") {
+      case Some(name) => {
+        let nameText = text(source, name)
+        if privatePublicSurfaceTypeBinding(table, nameText) {
+          diagnostic(
+            diagnostics,
+            table.moduleIndex,
+            "TPZ3014",
+            "`{nameText}` is a module-private type and may not appear in an exported public surface; export the type or use an inline structural type",
+            name.lo,
+            name.hi,
+          )
+        }
+      }
+      case None => ()
+    }
+  }
+  for found in nodeValue.children {
+    validatePublicTypeTree(source, found, table, diagnostics)
+  }
+  ()
+}
+
+function validateExportSignature(
+  source: Bytes,
+  statement: SyntaxNode,
+  table: ModuleTable,
+  diagnostics: Array<PreviewResolvedDiagnostic>,
+) -> () {
+  if statement.kind != "statement/export" {
+    return ()
+  }
+  let item = unwrapExport(statement)
+  if item.kind == "statement/function" {
+    match child(item, "declaration") {
+      case Some(declaration) => {
+        for parameter in children(declaration, "parameters") {
+          match child(parameter, "type") {
+            case Some(typeNode) =>
+              validatePublicTypeTree(source, typeNode, table, diagnostics)
+            case None => ()
+          }
+        }
+        match child(declaration, "returnType") {
+          case Some(typeNode) =>
+            validatePublicTypeTree(source, typeNode, table, diagnostics)
+          case None => ()
+        }
+      }
+      case None => ()
+    }
+    return ()
+  }
+  if item.kind == "statement/type-alias" {
+    match child(item, "type") {
+      case Some(typeNode) => validatePublicTypeTree(source, typeNode, table, diagnostics)
+      case None => ()
+    }
+    return ()
+  }
+  if item.kind == "statement/enum" {
+    for variant in children(item, "variants") {
+      for typeNode in children(variant, "payload") {
+        validatePublicTypeTree(source, typeNode, table, diagnostics)
+      }
+    }
+    return ()
+  }
+  if item.kind == "statement/record" {
+    for field in children(item, "fields") {
+      match child(field, "type") {
+        case Some(typeNode) => validatePublicTypeTree(source, typeNode, table, diagnostics)
+        case None => ()
+      }
+    }
+    return ()
+  }
+  if item.kind == "statement/newtype" {
+    match child(item, "base") {
+      case Some(typeNode) => validatePublicTypeTree(source, typeNode, table, diagnostics)
+      case None => ()
+    }
+    return ()
+  }
+  if item.kind == "statement/let" {
+    match child(item, "type") {
+      case Some(typeNode) => validatePublicTypeTree(source, typeNode, table, diagnostics)
+      case None => ()
+    }
+  }
+  ()
+}
+
+function validateExportSignatures(
+  module: ModuleDraft,
+  table: ModuleTable,
+  diagnostics: Array<PreviewResolvedDiagnostic>,
+) -> () {
+  let source = module.source
+  for statement in module.root.children {
+    validateExportSignature(source, statement, table, diagnostics)
+  }
+  ()
+}
+
+export function validateImportSurfaces(
+  modules: Array<ModuleDraft>,
+  tables: ModuleTableCatalog,
+  diagnostics: Array<PreviewResolvedDiagnostic>,
+) -> () {
+  let mut importingIndex = 0
+  for module in modules {
+    for import in module.imports {
+      match catalogTable(tables, import.target) {
+        case Some(targetTable) => if targetTable.exportedNames.length == 0 {
+          diagnostic(
+            diagnostics,
+            importingIndex,
+            "TPZ3010",
+            "`{import.target}` exports nothing; v5.2 has no side-effect-only imports",
+            import.pathLo,
+            import.pathHi,
+          )
+        } else {
+          let mut selectedIndex = 0
+          for selected in import.selectedNames {
+            if isNone(exportedBinding(targetTable, selected)) {
+              let hint = didYouMean(
+                selected,
+                exportedNames(targetTable, ""),
+              )
+              diagnostic(
+                diagnostics,
+                importingIndex,
+                "TPZ3009",
+                "`{selected}` is not exported by `{import.target}`{hint}",
+                import.selectedLos[selectedIndex],
+                import.selectedHis[selectedIndex],
+              )
+            }
+            selectedIndex += 1
+          }
+        }
+        case None => ()
+      }
+    }
+    validateExportSignatures(module, tables.tables[importingIndex], diagnostics)
+    importingIndex += 1
+  }
+  ()
+}
+
+function resolveModuleFacts(
+  module: ModuleDraft,
+  index: int,
+  tables: ModuleTableCatalog,
+  outputs: ResolverOutputs,
+  diagnostics: Array<PreviewResolvedDiagnostic>,
+) -> () {
+  let mut moduleResults = outputs.modules
+  moduleResults.push(module.result)
+  let mut scopes = outputs.scopes
+  scopes.push(PreviewResolvedScope {
+    moduleIndex: index,
+    ordinal: 0,
+    parentOrdinal: -1,
+    kind: "module",
+    lo: module.root.lo,
+    hi: module.root.hi,
+  })
+  let table = tables.tables[index]
+  for binding in table.bindings {
+    if binding.declarationKind != "protocol" {
+      addDeclaration(
+        outputs.declarations,
+        binding,
+        effectiveNamespace(binding, tables),
+        !isNone(exportedBinding(table, binding.name)),
+      )
+    }
+  }
+  appendModuleExports(outputs.exports, index, table)
+  let mut localScopes: Array<LocalScope> = []
+  let mut nextScope: Array<int> = [1]
+  let walkContext = ResolverWalkContext {
+    moduleIndex: index,
+    source: module.source,
+    table: table,
+    tables: tables,
+    nextScope: nextScope,
+    scopeOutput: outputs.scopes,
+    declarationOutput: outputs.declarations,
+    referenceOutput: outputs.references,
+    diagnostics: diagnostics,
+    recordDefaultStack: [],
+  }
+  for statement in module.root.children {
+    let item = unwrapExport(statement)
+    if item.kind != "statement/import" {
+      walkNode(walkContext, item, localScopes)
+    }
+  }
+  ()
+}
+
+function initPatternNames(
+  pattern: SyntaxNode,
+  source: Bytes,
+  output: Array<string>,
+) -> () {
+  if pattern.kind == "pattern/binding" || pattern.kind == "pattern/typed" {
+    match child(pattern, "name") {
+      case Some(name) => {
+        let mut names = output
+        names.push(text(source, name))
+      }
+      case None => ()
+    }
+    return ()
+  }
+  if pattern.kind == "pattern/or" {
+    for alternative in children(pattern, "alternatives") {
+      initPatternNames(alternative, source, output)
+    }
+    return ()
+  }
+  if pattern.kind == "pattern/constructor" {
+    for argument in children(pattern, "arguments") {
+      initPatternNames(argument, source, output)
+    }
+    return ()
+  }
+  if pattern.kind == "pattern/list" {
+    for element in children(pattern, "elements") {
+      if element.kind == "list-pattern/rest" {
+        match element.children.get(0) {
+          case Some(binding) => initPatternNames(binding, source, output)
+          case None => ()
+        }
+      } else {
+        initPatternNames(element, source, output)
+      }
+    }
+    return ()
+  }
+  if pattern.kind == "pattern/record" ||
+    pattern.kind == "pattern/nominal-record" {
+    for field in children(pattern, "fields") {
+      match child(field, "pattern") {
+        case Some(found) => initPatternNames(found, source, output)
+        case None => match child(field, "name") {
+          case Some(name) => {
+            let mut names = output
+            names.push(text(source, name))
+          }
+          case None => ()
+        }
+      }
+    }
+  }
+  ()
+}
+
+function initItemNames(item: SyntaxNode, source: Bytes) -> Array<string> {
+  let mut output: Array<string> = []
+  if item.kind == "statement/let" {
+    match child(item, "pattern") {
+      case Some(pattern) => initPatternNames(pattern, source, output)
+      case None => ()
+    }
+  } else if item.kind == "statement/function" {
+    match child(item, "declaration") {
+      case Some(declaration) => match child(declaration, "name") {
+        case Some(name) => output.push(text(source, name))
+        case None => ()
+      }
+      case None => ()
+    }
+  }
+  output
+}
+
+function initLocalContains(locals: Array<string>, name: string) -> bool {
+  for local in locals {
+    if local == name {
+      return true
+    }
+  }
+  false
+}
+
+function initObserveReference(
+  node: SyntaxNode,
+  source: Bytes,
+  table: ModuleTable,
+  itemLo: int,
+  locals: Array<string>,
+  violation: Array<InitViolation>,
+) -> () {
+  if violation.length > 0 {
+    return ()
+  }
+  let name = text(source, node)
+  if initLocalContains(locals, name) {
+    return ()
+  }
+  // ModuleTable already owns every unique top-level binding. Since item spans
+  // are ordered and non-overlapping, declaration byte >= current item byte is
+  // the self-host form of Stage 0's textual binding index >= item index rule.
+  let binding = match tableBinding(table, name) {
+    case Some(found) => found
+    case None => return ()
+  }
+  if (binding.declarationKind == "let" ||
+    binding.declarationKind == "function") && binding.lo >= itemLo {
+    let mut found = violation
+    found.push(InitViolation { name: name, lo: node.lo, hi: node.hi })
+  }
+  ()
+}
+
+function initScanChild(
+  owner: SyntaxNode,
+  field: string,
+  source: Bytes,
+  table: ModuleTable,
+  itemLo: int,
+  locals: Array<string>,
+  violation: Array<InitViolation>,
+) -> () {
+  match child(owner, field) {
+    case Some(found) => initScanExpression(
+      found,
+      source,
+      table,
+      itemLo,
+      locals,
+      violation,
+    )
+    case None => ()
+  }
+  ()
+}
+
+function initScanTwoChildren(
+  owner: SyntaxNode,
+  first: string,
+  second: string,
+  source: Bytes,
+  table: ModuleTable,
+  itemLo: int,
+  locals: Array<string>,
+  violation: Array<InitViolation>,
+) -> () {
+  initScanChild(owner, first, source, table, itemLo, locals, violation)
+  initScanChild(owner, second, source, table, itemLo, locals, violation)
+  ()
+}
+
+function initScanThreeChildren(
+  owner: SyntaxNode,
+  first: string,
+  second: string,
+  third: string,
+  source: Bytes,
+  table: ModuleTable,
+  itemLo: int,
+  locals: Array<string>,
+  violation: Array<InitViolation>,
+) -> () {
+  initScanTwoChildren(
+    owner,
+    first,
+    second,
+    source,
+    table,
+    itemLo,
+    locals,
+    violation,
+  )
+  initScanChild(owner, third, source, table, itemLo, locals, violation)
+  ()
+}
+
+function initScanExpression(
+  expression: SyntaxNode,
+  source: Bytes,
+  table: ModuleTable,
+  itemLo: int,
+  locals: Array<string>,
+  violation: Array<InitViolation>,
+) -> () {
+  if expression.kind == "expression/identifier" {
+    return initObserveReference(
+      expression,
+      source,
+      table,
+      itemLo,
+      locals,
+      violation,
+    )
+  }
+  if expression.kind == "expression/call" {
+    let mut argumentsImmediate = true
+    match child(expression, "callee") {
+      case Some(callee) => {
+        if callee.kind == "expression/optional-access" {
+          argumentsImmediate = false
+        }
+        if callee.kind == "expression/identifier" {
+          initObserveReference(callee, source, table, itemLo, locals, violation)
+        } else if callee.kind != "expression/lambda" {
+          initScanExpression(callee, source, table, itemLo, locals, violation)
+        }
+      }
+      case None => ()
+    }
+    if argumentsImmediate {
+      for argument in children(expression, "arguments") {
+        if argument.kind == "call-argument/spread" ||
+          argument.kind == "call-argument/named" {
+          initScanChild(argument, "value", source, table, itemLo, locals, violation)
+        } else {
+          initScanExpression(argument, source, table, itemLo, locals, violation)
+        }
+      }
+    }
+    return ()
+  }
+  if expression.kind == "expression/lambda" {
+    return ()
+  }
+  if expression.kind == "expression/block" {
+    match child(expression, "block") {
+      case Some(block) => initScanBlock(block, source, table, itemLo, locals, violation)
+      case None => ()
+    }
+    return ()
+  }
+  let immediateField = match expression.kind {
+    case "expression/if" => "condition"
+    case "expression/match" => "scrutinee"
+    case "expression/for" => "iterator"
+    case "expression/concurrent" => "timeout"
+    case "expression/unary" | "expression/try" => "operand"
+    case "expression/member" | "expression/optional-access" => "object"
+    case _ => ""
+  }
+  if immediateField != "" {
+    initScanChild(
+      expression,
+      immediateField,
+      source,
+      table,
+      itemLo,
+      locals,
+      violation,
+    )
+    return ()
+  }
+  if expression.kind == "expression/comprehension" {
+    match children(expression, "clauses").get(0) {
+      case Some(clause) => if clause.kind == "comprehension-clause/for" {
+        initScanChild(clause, "iterator", source, table, itemLo, locals, violation)
+      }
+      case None => ()
+    }
+    return ()
+  }
+  if expression.kind == "expression/parenthesized" {
+    match expression.children.get(0) {
+      case Some(inner) => initScanExpression(
+        inner,
+        source,
+        table,
+        itemLo,
+        locals,
+        violation,
+      )
+      case None => ()
+    }
+    return ()
+  }
+  if expression.kind == "expression/index" {
+    initScanTwoChildren(
+      expression,
+      "object",
+      "index",
+      source,
+      table,
+      itemLo,
+      locals,
+      violation,
+    )
+    return ()
+  }
+  if expression.kind == "expression/binary" {
+    initScanChild(expression, "left", source, table, itemLo, locals, violation)
+    let operator = attribute(expression, "operator")
+    if operator != "and" && operator != "or" && operator != "coalesce" {
+      initScanChild(expression, "right", source, table, itemLo, locals, violation)
+    }
+    return ()
+  }
+  if expression.kind == "expression/compose" {
+    initScanTwoChildren(
+      expression,
+      "left",
+      "right",
+      source,
+      table,
+      itemLo,
+      locals,
+      violation,
+    )
+    return ()
+  }
+  if expression.kind == "expression/range" {
+    initScanThreeChildren(
+      expression,
+      "low",
+      "high",
+      "step",
+      source,
+      table,
+      itemLo,
+      locals,
+      violation,
+    )
+    return ()
+  }
+  if expression.kind == "expression/pipe" {
+    initScanTwoChildren(
+      expression,
+      "left",
+      "right",
+      source,
+      table,
+      itemLo,
+      locals,
+      violation,
+    )
+    return ()
+  }
+  if expression.kind == "expression/record-update" {
+    initScanTwoChildren(
+      expression,
+      "base",
+      "spread",
+      source,
+      table,
+      itemLo,
+      locals,
+      violation,
+    )
+  }
+  if expression.kind == "expression/record-literal" ||
+    expression.kind == "expression/record-update" {
+    for field in children(expression, "fields") {
+      initScanChild(field, "value", source, table, itemLo, locals, violation)
+    }
+    return ()
+  }
+  if expression.kind == "expression/array" || expression.kind == "expression/set" {
+    for element in children(expression, "elements") {
+      if element.kind == "array-element/spread" {
+        initScanChild(element, "value", source, table, itemLo, locals, violation)
+      } else {
+        initScanExpression(element, source, table, itemLo, locals, violation)
+      }
+    }
+    return ()
+  }
+  if expression.kind == "expression/map" {
+    for entry in children(expression, "entries") {
+      initScanTwoChildren(
+        entry,
+        "key",
+        "value",
+        source,
+        table,
+        itemLo,
+        locals,
+        violation,
+      )
+    }
+    return ()
+  }
+  if expression.kind == "expression/string" || expression.kind == "expression/template" {
+    for part in children(expression, "parts") {
+      if part.kind == "string-part/interpolation" {
+        initScanChild(part, "value", source, table, itemLo, locals, violation)
+      }
+    }
+  }
+  ()
+}
+
+function initBindPattern(
+  pattern: SyntaxNode,
+  source: Bytes,
+  locals: Array<string>,
+) -> () {
+  let mut bound: Array<string> = []
+  initPatternNames(pattern, source, bound)
+  let mut active = locals
+  for name in bound {
+    active.push(name)
+  }
+  ()
+}
+
+function initScanBlock(
+  block: SyntaxNode,
+  source: Bytes,
+  table: ModuleTable,
+  itemLo: int,
+  locals: Array<string>,
+  violation: Array<InitViolation>,
+) -> () {
+  let priorLocalCount = locals.length
+  let mut active = locals
+  for statement in children(block, "statements") {
+    if statement.kind == "statement/function" {
+      match child(statement, "declaration") {
+        case Some(declaration) => match child(declaration, "name") {
+          case Some(name) => active.push(text(source, name))
+          case None => ()
+        }
+        case None => ()
+      }
+    } else if statement.kind == "statement/let" {
+      initScanChild(statement, "value", source, table, itemLo, active, violation)
+      match child(statement, "pattern") {
+        case Some(pattern) => initBindPattern(pattern, source, active)
+        case None => ()
+      }
+    } else if statement.kind == "statement/const" {
+      initScanChild(statement, "value", source, table, itemLo, active, violation)
+      match child(statement, "name") {
+        case Some(name) => active.push(text(source, name))
+        case None => ()
+      }
+    } else if statement.kind == "statement/using" {
+      initScanChild(statement, "value", source, table, itemLo, active, violation)
+      let priorUsingLocalCount = active.length
+      match child(statement, "name") {
+        case Some(name) => active.push(text(source, name))
+        case None => ()
+      }
+      match child(statement, "body") {
+        case Some(body) => initScanBlock(
+          body,
+          source,
+          table,
+          itemLo,
+          active,
+          violation,
+        )
+        case None => ()
+      }
+      while active.length > priorUsingLocalCount {
+        active.pop()
+      }
+    } else if statement.kind == "statement/assign" {
+      match child(statement, "target") {
+        case Some(target) => if target.kind == "expression/identifier" {
+          initObserveReference(target, source, table, itemLo, active, violation)
+        } else {
+          initScanExpression(target, source, table, itemLo, active, violation)
+        }
+        case None => ()
+      }
+      initScanChild(statement, "value", source, table, itemLo, active, violation)
+    } else if statement.kind == "statement/return" ||
+      statement.kind == "statement/expression" {
+      initScanChild(statement, "value", source, table, itemLo, active, violation)
+    } else if statement.kind == "statement/while" {
+      initScanChild(statement, "condition", source, table, itemLo, active, violation)
+    }
+  }
+  initScanChild(block, "tail", source, table, itemLo, active, violation)
+  while active.length > priorLocalCount {
+    active.pop()
+  }
+  ()
+}
+
+function initScanItem(
+  item: SyntaxNode,
+  source: Bytes,
+  table: ModuleTable,
+  violation: Array<InitViolation>,
+) -> () {
+  let mut locals: Array<string> = []
+  if item.kind == "statement/let" || item.kind == "statement/expression" ||
+    item.kind == "statement/return" {
+    initScanChild(item, "value", source, table, item.lo, locals, violation)
+  } else if item.kind == "statement/assign" {
+    initScanTwoChildren(
+      item,
+      "target",
+      "value",
+      source,
+      table,
+      item.lo,
+      locals,
+      violation,
+    )
+  } else if item.kind == "statement/while" {
+    initScanChild(item, "condition", source, table, item.lo, locals, violation)
+  }
+  ()
+}
+
+function validateImportedInitializers(
+  modules: Array<ModuleDraft>,
+  tables: ModuleTableCatalog,
+  diagnostics: Array<PreviewResolvedDiagnostic>,
+) -> () {
+  let mut moduleIndexValue = 0
+  for module in modules {
+    if !module.result.entry {
+      let source = module.source
+      let table = tables.tables[moduleIndexValue]
+      for statement in module.root.children {
+        let item = unwrapExport(statement)
+        let mut violation: Array<InitViolation> = []
+        initScanItem(item, source, table, violation)
+        match violation.get(0) {
+          case Some(found) => {
+            let owners = initItemNames(item, source)
+            let owner = if owners.length == 0 {
+              spanText(source, found.lo, found.hi)
+            } else {
+              stringJoin(owners, ", ")
+            }
+            diagnostic(
+              diagnostics,
+              moduleIndexValue,
+              "TPZ3018",
+              "the initializer of `{owner}` reaches `{found.name}`, whose initializer has not completed (v5.2 defines no partially initialized module binding)",
+              found.lo,
+              found.hi,
+            )
+          }
+          case None => ()
+        }
+      }
+    }
+    moduleIndexValue += 1
+  }
+  ()
+}
+
+export function resolvedResult(
+  modules: Array<ModuleDraft>,
+  publicEdges: Array<PreviewImportEdge>,
+  tables: ModuleTableCatalog,
+  diagnostics: Array<PreviewResolvedDiagnostic>,
+) -> Result<ResolveResult, string> {
+  let outputs = ResolverOutputs {
+    modules: [],
+    scopes: [],
+    declarations: [],
+    references: [],
+    exports: [],
+  }
+  let mut index = 0
+  for module in modules {
+    resolveModuleFacts(module, index, tables, outputs, diagnostics)
+    index += 1
+  }
+  if diagnostics.length == 0 {
+    validateImportedInitializers(modules, tables, diagnostics)
+  }
+  Ok(ResolveResult {
+    queries: [],
+    modules: outputs.modules,
+    edges: publicEdges,
+    scopes: outputs.scopes,
+    declarations: outputs.declarations,
+    references: outputs.references,
+    exports: outputs.exports,
+    diagnostics: diagnostics,
+  })
+}
+
+export function rejectedResult(
+  modules: Array<ModuleDraft>,
+  publicEdges: Array<PreviewImportEdge>,
+  diagnostics: Array<PreviewResolvedDiagnostic>,
+) -> ResolveResult {
+  let mut moduleResults: Array<PreviewModuleResult> = []
+  for module in modules {
+    moduleResults.push(module.result)
+  }
+  ResolveResult {
+    queries: [],
+    modules: moduleResults,
+    edges: publicEdges,
+    scopes: [],
+    declarations: [],
+    references: [],
+    exports: [],
+    diagnostics: diagnostics,
+  }
+}

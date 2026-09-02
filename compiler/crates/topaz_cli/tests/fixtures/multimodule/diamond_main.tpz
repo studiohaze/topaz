@@ -1,0 +1,4 @@
+import dleft
+import dright
+print("diamond {dleft.left() + dright.right()}")
+0

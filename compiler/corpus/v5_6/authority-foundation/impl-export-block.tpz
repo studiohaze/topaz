@@ -1,0 +1,3 @@
+record Point { x: int }
+export impl Point { function value(self) -> int { self.x } }
+0

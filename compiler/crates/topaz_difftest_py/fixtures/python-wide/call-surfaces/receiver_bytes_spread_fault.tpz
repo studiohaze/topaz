@@ -1,0 +1,9 @@
+
+function mark(label: string, xs: Array<string>) -> Array<string> {
+    print(label)
+    xs
+}
+function main() -> Result<string, string> {
+    Bytes.encodeUtf8("x").decodeUtf8(...mark("bytes", []))
+}
+main()

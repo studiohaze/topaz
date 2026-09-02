@@ -1,0 +1,26 @@
+
+import alias_model { User as Person, Admin }
+import model
+function main() -> string {
+    let p = Person { name: "Ada", age: 36 }
+    let q = Admin { name: "Root", age: 40 }
+    let m = model.make()
+    let selected = match p {
+        case person: Person if person.age > 30 => "{person.name}:{person.age}"
+        case _ => "no"
+    }
+    let qualified = match m {
+        case user: model.User => "{user.name}:{user.age}"
+        case _ => "no"
+    }
+    let negative = match q {
+        case user: Person => "bad"
+        case _ => "ok"
+    }
+    let crossModule = match p {
+        case user: model.User => "same-id"
+        case _ => "ok"
+    }
+    "{selected}:{qualified}:{negative}:{crossModule}"
+}
+main()

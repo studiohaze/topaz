@@ -1,0 +1,28 @@
+
+function add(a: int, b: int) -> int {
+    a + b
+}
+function label(prefix: string, value: int) -> string {
+    "{prefix}:{value}"
+}
+function identity(value: int) -> int {
+    value
+}
+function main() -> string {
+    let direct = 1 |> add(_, 10 + _)
+    let repeated = 3 |> add(_, _ + 4)
+    let named = 1 |> add(b: 10 + _, a: 2)
+    let nested = 5 |> add(_, 1 + (2 |> add(_, 3)))
+    let innerLhs = 7 |> add(_, (_ |> add(_, 1)))
+    let block = 9 |> identity({ _ })
+    let branch = 10 |> identity(if true { _ } else { 0 })
+    let isolated = 11 |> add(100 |> add(_, 1))
+    let lowered = loop {
+        break 4
+    } |> add(_, loop {
+        break 6
+    } + _)
+    let text = 8 |> label("value {_}", _)
+    "{direct}:{repeated}:{named}:{nested}:{innerLhs}:{block}:{branch}:{isolated}:{lowered}:{text}"
+}
+main()

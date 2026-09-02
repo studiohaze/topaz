@@ -1,0 +1,2 @@
+match open("nope.txt") { case Ok(f) => "opened"
+case Err(e) => e }

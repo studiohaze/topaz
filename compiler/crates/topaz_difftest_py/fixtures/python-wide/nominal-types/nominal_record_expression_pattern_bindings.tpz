@@ -1,0 +1,8 @@
+
+record User { name: string, age: int }
+let u = User { name: "Ada", age: 36 }
+let label = match u {
+    case User { name: n, age } => "{n}:{age}"
+}
+print(label)
+label

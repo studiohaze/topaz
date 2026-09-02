@@ -1,0 +1,2 @@
+let er: Result<int, string> = Err("bad")
+er.map((x) => x / 0)

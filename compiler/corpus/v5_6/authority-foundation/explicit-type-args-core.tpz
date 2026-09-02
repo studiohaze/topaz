@@ -1,0 +1,3 @@
+function first<T>(values: Array<T>) -> T { values[0] }
+let alias = first
+alias<int>([1, 2])

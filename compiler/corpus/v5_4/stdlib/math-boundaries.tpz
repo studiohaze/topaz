@@ -1,0 +1,15 @@
+import std.math
+
+function floatResult(value: Result<float, string>) -> string {
+  match value {
+    case Ok(n) => "{n}"
+    case Err(error) => error
+  }
+}
+
+let sqrtOk = floatResult(math.sqrt(2.25))
+let sqrtBad = floatResult(math.sqrt(-1.0))
+let parsed = floatResult(math.parseFloat("  -2.5  "))
+let badParse = floatResult(math.parseFloat("1e309"))
+
+print("{sqrtOk}|{sqrtBad}|{math.abs(-0.0)}|{math.ceil(3.1)}|{math.round(2.5)}|{math.tan(0.7853981633974483)}|{math.min(-2.0, 4.0)}|{math.max(-2.0, 4.0)}|{math.isFinite(42.0)}|{math.isNaN(42.0)}|{parsed}|{badParse}")

@@ -1,0 +1,14 @@
+
+function sum(seed: int, ...xs: int) -> int {
+    let mut total = seed
+    for x in xs {
+        total = total + x
+    }
+    total
+}
+function main() -> string {
+    let a = 1 |> sum(...[2, 3])
+    let b = 10 |> sum(1, ...[2, 3])
+    "{a}:{b}"
+}
+main()

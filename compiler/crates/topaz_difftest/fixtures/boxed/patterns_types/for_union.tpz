@@ -1,0 +1,2 @@
+let a = [1, "a"]
+for x: int | string in a { x }

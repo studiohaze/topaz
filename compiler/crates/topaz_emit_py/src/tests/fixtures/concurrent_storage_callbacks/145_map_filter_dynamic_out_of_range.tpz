@@ -1,0 +1,21 @@
+
+function keep(key: string, value: int) -> bool {
+    value > 1
+}
+
+function drop(key: string, value: int) -> bool {
+    false
+}
+
+let seeds = [2]
+let i = seeds[0]
+let callbacks = [drop, keep]
+
+concurrent {
+    slow: {
+        let values = map { "a": 1, "b": 2 }
+        values.filter(callbacks[i])
+    }
+    fast: 0
+}
+0

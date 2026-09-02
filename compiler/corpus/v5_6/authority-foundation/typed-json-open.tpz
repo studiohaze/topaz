@@ -1,0 +1,4 @@
+function decodeMany<T: JSON>(text: string) -> Result<Array<T>, string> {
+    JSON.parseAs<Array<T>>(text)
+}
+0

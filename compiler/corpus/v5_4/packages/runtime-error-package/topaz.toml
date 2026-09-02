@@ -1,0 +1,9 @@
+[package]
+name = "runtime_error_package"
+version = "0.1.0"
+language = "5.4"
+entry = "src/main.tpz"
+
+[build]
+target = "native"
+deterministic = true

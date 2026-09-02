@@ -1,0 +1,5 @@
+newtype Money = int
+let a = Money(5) < Money(9)
+let b = Money(9) < Money(5)
+print("{a}/{b}")
+0

@@ -1,0 +1,42 @@
+
+function f() -> Result<int, string> {
+    let root = JSON.parse("\{\"arr\":[false],\"n\":1.0,\"s\":\"x\"\}")?
+    let len = match root.length() {
+        case Some(n) => n
+        case None => -1
+    }
+    let s = match root.get("s") {
+        case Some(v) => match v.asString() {
+            case Some(text) => text
+            case None => "bad"
+        }
+        case None => "missing"
+    }
+    let nText = match root.get("n") {
+        case Some(v) => match v.numberText() {
+            case Some(text) => text
+            case None => "bad"
+        }
+        case None => "missing"
+    }
+    let nInt = match root.get("n") {
+        case Some(v) => match v.asInt() {
+            case Some(n) => n
+            case None => -1
+        }
+        case None => -2
+    }
+    let b = match root.get("arr") {
+        case Some(arr) => match arr.at(0) {
+            case Some(v) => match v.asBool() {
+                case Some(flag) => flag
+                case None => true
+            }
+            case None => true
+        }
+        case None => true
+    }
+    print("{root.kind()}:{len}:{s}:{nText}:{nInt}:{b}")
+    Ok(0)
+}
+f()

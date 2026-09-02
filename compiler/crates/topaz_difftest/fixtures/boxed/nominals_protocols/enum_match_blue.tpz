@@ -1,0 +1,6 @@
+enum Color { Red, Blue }
+let c: Color = Color.Blue
+match c {
+  case Red => 1
+  case Blue => 2
+}

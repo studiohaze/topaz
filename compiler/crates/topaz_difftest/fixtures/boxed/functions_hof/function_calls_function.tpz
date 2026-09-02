@@ -1,0 +1,3 @@
+function double(x: int) { x * 2 }
+function quad(x: int) { double(double(x)) }
+quad(3)

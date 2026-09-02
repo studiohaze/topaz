@@ -1,0 +1,13 @@
+enum Status { Active, Banned }
+record Account { id: int, status: Status }
+function describe(a: Account) -> string {
+  match a {
+    case Account { id, status } => match status {
+      case Active => "active {id}"
+      case Banned => "banned {id}"
+    }
+  }
+}
+print("{describe(Account { id: 7, status: Status.Active })}")
+print("{describe(Account { id: 9, status: Status.Banned })}")
+0

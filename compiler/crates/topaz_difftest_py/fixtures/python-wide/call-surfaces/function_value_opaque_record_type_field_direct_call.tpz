@@ -1,0 +1,11 @@
+
+function apply(cb: { total: (int, int) -> int }) -> int {
+    cb.total(2, 4)
+}
+function add(a: int, b: int) -> int {
+    a + b
+}
+function main() -> int {
+    apply({ total: add })
+}
+main()

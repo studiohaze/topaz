@@ -1,0 +1,33 @@
+// 팩토리얼 계산
+function 팩토리얼(n: int) -> int {
+    if n <= 1 {
+        return 1
+    }
+    return n * 팩토리얼(n - 1)
+}
+
+print("{팩토리얼(5)}")  // 120
+
+// 피보나치 수열
+function 피보나치(n: int) -> int {
+    if n <= 1 {
+        return n
+    }
+    return 피보나치(n - 1) + 피보나치(n - 2)
+}
+
+print("{피보나치(8)}")  // 21
+
+// 배열 합계 (인덱스 기반 재귀 — §22에는 슬라이싱이 없습니다)
+function 부분합(배열: Array<int>, 시작: int) -> int {
+    return match 배열.get(시작) {
+        case Some(값) => 값 + 부분합(배열, 시작 + 1)
+        case None => 0
+    }
+}
+
+function 배열합계(배열: Array<int>) -> int {
+    return 부분합(배열, 0)
+}
+
+print("{배열합계([1, 2, 3, 4, 5])}")  // 15

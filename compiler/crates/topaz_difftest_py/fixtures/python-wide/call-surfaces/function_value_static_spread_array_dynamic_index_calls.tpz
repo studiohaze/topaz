@@ -1,0 +1,12 @@
+
+function addDefault(a: int, b: int = 2) -> int {
+    a + b
+}
+function main() -> int {
+    let base = [addDefault]
+    let callbacks = [...base]
+    let seeds = [0]
+    let i = seeds[0]
+    callbacks[i](a: 5)
+}
+main()

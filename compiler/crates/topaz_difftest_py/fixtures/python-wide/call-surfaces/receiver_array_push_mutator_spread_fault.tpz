@@ -1,0 +1,11 @@
+
+function mark(label: string, xs: Array<int>) -> Array<int> {
+    print(label)
+    xs
+}
+function main() -> Array<int> {
+    let mut xs = [1]
+    xs.push(...mark("array-push", [2]))
+    xs
+}
+main()

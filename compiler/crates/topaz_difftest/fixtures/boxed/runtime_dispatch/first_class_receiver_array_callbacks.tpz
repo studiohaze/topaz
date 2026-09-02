@@ -1,0 +1,6 @@
+let xs = [3, 1, 2]
+let mapItems = xs.map
+let filterItems = xs.filter
+let reduceItems = xs.reduce
+let sortedItems = xs.sortedBy
+{ mapped: mapItems(f: (x) => x * 2), filtered: filterItems(f: (x) => x > 1), reduced: reduceItems(initial: 0, f: (a, b) => a + b), sorted: sortedItems(f: (x) => x) }

@@ -1,0 +1,2 @@
+import utils.strings
+export let trim = strings.trim

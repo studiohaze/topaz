@@ -1,0 +1,4 @@
+let mut m = Map.new()
+m.insert("k", 1)
+let bad: Map<string, string> = m
+0

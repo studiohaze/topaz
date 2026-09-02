@@ -1,0 +1,12 @@
+let mut оценки: Map<string, int> = Map.new()
+оценки.insert("alice", 92)
+оценки.insert("bob", 78)
+
+let оценкаAlice = оценки.get("alice")    // Some(92) — None, если ключа нет
+let удалено = оценки.remove("bob")       // Some(78) — Some(старое) если был, иначе None
+let отсутствует = оценки.remove("carol") // None
+
+match оценки.get("alice") {
+    case Some(оценка) => print("Оценка alice: {оценка}")
+    case None => print("Нет оценки для alice")
+}

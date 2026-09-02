@@ -1,0 +1,17 @@
+
+function spin(x: int) -> int {
+    x
+}
+
+let seeds = [2]
+let i = seeds[0]
+let callbacks = [spin, spin]
+
+concurrent {
+    slow: {
+        let values = map { "a": 1 }
+        values.mapValues(callbacks[i])
+    }
+    fast: 0
+}
+0

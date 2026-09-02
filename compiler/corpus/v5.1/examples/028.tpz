@@ -1,0 +1,6 @@
+function makeAdder(base: int) -> (int) -> int {
+    return x => x + base
+}
+
+let add5 = makeAdder(5)
+print("{add5(10)}")

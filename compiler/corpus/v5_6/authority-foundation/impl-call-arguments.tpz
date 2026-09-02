@@ -1,0 +1,13 @@
+record Bag { base: int }
+
+impl Bag {
+    function total(self, start: int = 0, ...xs: int) -> int {
+        let mut value = self.base + start
+        for x in xs { value = value + x }
+        value
+    }
+}
+
+let bag: Bag = Bag { base: 10 }
+let value: int = bag.total(1, ...[2, 3])
+print("{value}")

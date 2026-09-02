@@ -1,0 +1,4 @@
+record P { x: int }
+let xs = [P { x: 3 }, P { x: 1 }, P { x: 2 }]
+print("{xs.sortedBy((p) => p.x)}")
+0

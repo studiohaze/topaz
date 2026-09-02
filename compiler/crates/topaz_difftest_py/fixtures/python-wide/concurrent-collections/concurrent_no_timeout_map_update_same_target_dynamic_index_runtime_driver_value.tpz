@@ -1,0 +1,18 @@
+
+function spin(x: int) -> int {
+    x * 2
+}
+
+let seeds = [0, 1]
+let i = seeds[1]
+let callbacks = [spin, spin]
+
+let r = concurrent {
+    slow: {
+        let mut values = map { "a": 1, "b": 2 }
+        values.update("a", 0, callbacks[i])
+        values.getOr("a", 0) + values.getOr("b", 0)
+    }
+    fast: 0
+}
+r.slow + r.fast

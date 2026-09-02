@@ -1,0 +1,1 @@
+Bytes.encodeUtf8("a") < Bytes.encodeUtf8("b")

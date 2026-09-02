@@ -1,0 +1,6 @@
+
+function spin(x: int) -> int {
+    x
+}
+
+export let base = [spin]

@@ -1,0 +1,15 @@
+// Curried function
+function add(a: int) -> (int) -> int {
+    return (b: int) => a + b
+}
+
+let addFive = add(5)
+print("{addFive(3)}")  // 8
+
+// Multi-parameter currying
+function multiplyAndAdd(multiplier: float) -> (float) -> (float) -> float {
+    return (addend: float) => (value: float) => value * multiplier + addend
+}
+
+let doubleAndAddTen = multiplyAndAdd(2.0)(10.0)
+print("{doubleAndAddTen(5.0)}")  // 20.0 (5 * 2 + 10)

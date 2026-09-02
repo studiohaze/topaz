@@ -1,0 +1,12 @@
+
+function inc(x: int) -> int {
+    x + 1
+}
+function main() -> string {
+    let xs = [ for x in [1, 2, 3] => x ]
+    let ys = xs.map(inc)
+    let m = map { for x in [1, 2] => x: x + 10 }
+    let shifted = m.mapValues((v) => v + 1)
+    "{ys}:{m.getOr(2, 0)}:{shifted.getOr(2, 0)}"
+}
+main()

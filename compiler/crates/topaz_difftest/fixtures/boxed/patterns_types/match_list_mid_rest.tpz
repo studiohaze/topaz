@@ -1,0 +1,2 @@
+match Array.of(1, 2, 3, 4) { case [first, .., lst] => first + lst
+case _ => 0 }

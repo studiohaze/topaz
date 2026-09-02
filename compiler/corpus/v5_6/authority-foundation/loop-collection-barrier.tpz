@@ -1,0 +1,5 @@
+let values = for x in [1, 2] {
+    break
+    x
+}
+values

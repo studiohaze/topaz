@@ -1,0 +1,12 @@
+
+enum Shape { Circle(int), Square(int), Dot }
+function pick(value: Option<Shape>) -> int {
+    match value {
+        case Some(Circle(x) | Square(x)) if x > 0 => x
+        case _ => -1
+    }
+}
+function main() -> string {
+    "{pick(Some(Shape.Circle(3)))}:{pick(Some(Shape.Square(8)))}:{pick(Some(Shape.Circle(-2)))}:{pick(None)}"
+}
+main()

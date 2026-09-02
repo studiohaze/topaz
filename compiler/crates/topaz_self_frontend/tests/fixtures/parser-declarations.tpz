@@ -1,0 +1,22 @@
+record Point<T> derives Eq {
+  x: T,
+  y: T = x,
+}
+
+enum Choice<T> derives Eq {
+  None,
+  Some(T),
+}
+
+newtype Id = int
+type Index<T> = Map<string, T>
+
+function identity<T: Eq>(value: T) -> T {
+  value
+}
+
+impl Point {
+  function first(self) -> int {
+    self.x
+  }
+}

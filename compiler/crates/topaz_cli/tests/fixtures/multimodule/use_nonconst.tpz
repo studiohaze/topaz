@@ -1,0 +1,4 @@
+import nonconst_module
+let r = nonconst_module.ok(1)
+print("{r}")
+r

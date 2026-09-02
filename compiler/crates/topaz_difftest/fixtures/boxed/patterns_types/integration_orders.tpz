@@ -1,0 +1,5 @@
+let orders = [{ item: "a", qty: 3 }, { item: "b", qty: 5 }, { item: "c", qty: 2 }]
+let total = reduce(orders, 0, (acc, o) => acc + o.qty)
+let { item, qty } = orders[0]
+print("first: {item} x{qty}, total qty {total}")
+total

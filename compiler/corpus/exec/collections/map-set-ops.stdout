@@ -1,0 +1,7 @@
+[a, b] 9
+() true true
+9 7
+true false
+true false
+[9, 2] 2 1
+[{ key: a, value: 9 }, { key: b, value: 2 }]

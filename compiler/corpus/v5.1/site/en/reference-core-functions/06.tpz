@@ -1,0 +1,11 @@
+let mut numbers = Array.of(1, 2, 3)
+numbers.push(4)
+
+let count = numbers.length
+let third = numbers[2]           // 3 — direct indexing faults when out of bounds
+let safe = numbers.get(10)       // None — non-faulting read returns Option<int>
+let hasFour = 4 in numbers
+
+print("Count: {count}")
+print("Third: {third}")
+print("Has four: {hasFour}")

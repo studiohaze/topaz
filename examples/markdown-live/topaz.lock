@@ -1,0 +1,5 @@
+[[package]]
+name = "markdown_live"
+version = "0.1.0"
+source = "root"
+manifest_hash = "sha256:e4694e3020a1cf81cab4270b1e77a136ebc31d4af84084c701ad3f72a22fe9d0"

@@ -1,0 +1,13 @@
+
+function markArray(label: string, xs: Array<Bytes>) -> Array<Bytes> {
+    print(label)
+    xs
+}
+function markBytes(label: string, value: Bytes) -> Bytes {
+    print(label)
+    value
+}
+function main() -> Bytes {
+    Bytes.concat(Bytes.encodeUtf8("prefix"), ...markArray("spread", [Bytes.encodeUtf8("x")]), b: markBytes("named", Bytes.encodeUtf8("y")))
+}
+main()

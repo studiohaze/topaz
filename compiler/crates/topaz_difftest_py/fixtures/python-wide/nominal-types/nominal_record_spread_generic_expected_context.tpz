@@ -1,0 +1,6 @@
+
+record Box<T> { value: T }
+let base: Box<int> = Box { value: 7 }
+let next: Box<int> = Box { ...base, }
+print("{next.value}")
+next.value

@@ -1,0 +1,7 @@
+enum Maybe<T> {
+    Missing,
+    Present(T),
+}
+
+let value = Maybe.Present(1)
+print("{value}")

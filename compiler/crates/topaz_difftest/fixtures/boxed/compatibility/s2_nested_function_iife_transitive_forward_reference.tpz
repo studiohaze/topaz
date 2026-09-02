@@ -1,0 +1,7 @@
+function main() -> int {
+function first() -> int { second() }
+let value = (() => first())()
+function second() -> int { 1 }
+value
+}
+main()

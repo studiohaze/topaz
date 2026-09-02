@@ -1,0 +1,9 @@
+let option: Option<int> = Some(2)
+let result: Result<int, string> = Ok(3)
+let absent: Option<int> = None
+let optionMap = option.map
+let optionFlatMap = option.flatMap
+let resultMap = result.map
+let resultFlatMap = result.flatMap
+let fallback = absent.okOrElse
+{ optionMap: optionMap(f: (x) => x + 1), optionFlatMap: optionFlatMap(f: (x) => Some(x * 2)), resultMap: resultMap(f: (x) => x + 2), resultFlatMap: resultFlatMap(f: (x) => Ok(x * 3)), fallback: fallback(f: () => "missing") }

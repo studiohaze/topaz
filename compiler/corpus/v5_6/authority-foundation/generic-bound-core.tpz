@@ -1,0 +1,4 @@
+record User derives Show { name: string }
+function render<T: Show>(value: T) -> string { Show.show(value) }
+function pass<T: Show>(value: T) -> string { render<T>(value) }
+pass(User { name: "Ada" })

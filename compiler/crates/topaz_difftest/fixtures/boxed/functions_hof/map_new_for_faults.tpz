@@ -1,0 +1,1 @@
+for x in Map.new() { x }

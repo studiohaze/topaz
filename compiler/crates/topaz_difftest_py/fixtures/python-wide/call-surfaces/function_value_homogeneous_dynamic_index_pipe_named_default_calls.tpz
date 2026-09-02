@@ -1,0 +1,17 @@
+
+function add(a: int, b: int = 2, c: int = 4) -> int {
+    a + b + c
+}
+function sub(a: int, b: int = 10, c: int = 20) -> int {
+    a - b - c
+}
+function main() -> int {
+    let seeds = [0, 1]
+    let i = seeds[1]
+    let j = seeds[0]
+    let callbacks = [sub, add]
+    let a = 1 |> callbacks[i](c: 5, a: _)
+    let b = 20 |> callbacks[j](c: 5, a: _)
+    a * 10 + b
+}
+main()

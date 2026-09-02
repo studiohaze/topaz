@@ -1,0 +1,2 @@
+let values = set { for x in [2, 1, 2] => x }
+print("{values.toArray()}")

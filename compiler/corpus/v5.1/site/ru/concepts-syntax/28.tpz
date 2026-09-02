@@ -1,0 +1,12 @@
+let user: Option<{ name: string, profile: Option<{ city: string }> }> =
+    Some({ name: "Ann", profile: Some({ city: "Seoul" }) })
+
+let nameOpt = user?.name
+let cityOpt = user?.profile?.city
+
+// С комбинированием с ?? для значений по умолчанию
+let city = user?.profile?.city ?? "Unknown"
+
+// Это не общий объектный чейнинг — для обычных значений используйте `.`
+let plain = { name: "Jo" }
+let ok = plain.name

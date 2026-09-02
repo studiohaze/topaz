@@ -1,0 +1,13 @@
+
+import model { User, Admin }
+function main() -> string {
+    let u = User { name: "Ada", age: 36 }
+    let u2 = User { name: "Ada", age: 36 }
+    let admin = Admin { name: "Ada", age: 36 }
+    let structural = { name: "Ada", age: 36 }
+    let mut m: Map<User | Admin | { name: string, age: int }, string> = Map.new()
+    m.insert(u, "user")
+    m.insert(admin, "admin")
+    "{m.getOr(u2, "miss")}:{m.getOr(admin, "miss")}:{m.getOr(structural, "miss")}"
+}
+main()

@@ -1,0 +1,8 @@
+record User { name: string }
+
+function render<T: Show>(value: T) -> string {
+  Show.show(value)
+}
+
+let out = render(User { name: "Ada" })
+print(out)

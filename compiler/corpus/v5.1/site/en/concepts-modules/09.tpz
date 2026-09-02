@@ -1,0 +1,5 @@
+// main.tpz
+import ui.theme
+
+let s: theme.Style = theme.defaultStyle    // ns.Type and ns.member
+let b = theme.defaultStyle.bold            // then ordinary access

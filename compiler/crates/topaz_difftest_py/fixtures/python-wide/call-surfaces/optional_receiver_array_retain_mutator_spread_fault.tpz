@@ -1,0 +1,12 @@
+
+function mark(label: string, fs: Array<(int) -> bool>) -> Array<(int) -> bool> {
+    print(label)
+    fs
+}
+function keep(x: int) -> bool { x > 0 }
+function main() -> string {
+    let mut xs: Option<Array<int>> = Some([1])
+    xs?.retain(...mark("array-retain", [keep]))
+    "unreachable"
+}
+main()

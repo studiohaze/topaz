@@ -1,0 +1,14 @@
+// 에러 처리를 위한 Result 타입
+function 파일읽기(경로: string) -> Result<string, string> {
+    if 파일존재함(경로) {
+        Ok(파일내용읽기(경로))
+    } else {
+        Err("파일을 찾을 수 없습니다")
+    }
+}
+
+// 안전한 에러 처리
+match 파일읽기("data.txt") {
+    case Ok(내용) => print("파일 내용: {내용}")
+    case Err(에러메시지) => print("에러 발생: {에러메시지}")
+}

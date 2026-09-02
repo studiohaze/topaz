@@ -1,0 +1,10 @@
+let mut 점수들: Map<string, int> = Map.new()
+점수들.insert("alice", 92)
+점수들.insert("bob", 78)
+
+for 이름 in 점수들.keys {
+    print("{이름}의 점수가 저장됨")    // "alice" 먼저, 그다음 "bob" (삽입 순서)
+}
+
+let 앨리스있음 = "alice" in 점수들.keys
+print("alice 있음: {앨리스있음}")

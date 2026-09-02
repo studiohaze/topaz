@@ -1,0 +1,15 @@
+// Good: Explicitly handle errors
+function safeUserInput() -> Result<int, string> {
+    let userInput = input("Enter a number: ")
+
+    // toInt returns Option<int> — handle the None case explicitly
+    let number = match toInt(userInput) {
+        case Some(value) => value
+        case None => { return Err("Not a valid number: {userInput}") }
+    }
+
+    if number < 0 {
+        return Err("Negative numbers not allowed")
+    }
+    return Ok(number)
+}

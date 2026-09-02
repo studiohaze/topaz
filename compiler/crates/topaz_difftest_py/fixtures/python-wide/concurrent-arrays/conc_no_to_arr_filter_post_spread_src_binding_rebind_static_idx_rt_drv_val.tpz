@@ -1,0 +1,26 @@
+
+function all(x: int) -> bool {
+    x > 0
+}
+
+function keep(x: int) -> bool {
+    x > 2
+}
+
+function onlyTwo(x: int) -> bool {
+    x == 2
+}
+
+let mut base = [all, keep]
+let callbacks = [...base, onlyTwo]
+base = [onlyTwo, all]
+
+let r = concurrent {
+    slow: {
+        let xs = [1, 2, 3, 4]
+        let out = xs.filter(callbacks[1])
+        out[0] + out[1]
+    }
+    fast: 0
+}
+r.slow + r.fast

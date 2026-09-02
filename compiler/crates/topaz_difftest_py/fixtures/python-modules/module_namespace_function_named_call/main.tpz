@@ -1,0 +1,12 @@
+
+import math
+function mark(label: string, n: int) -> int {
+    print(label)
+    n
+}
+function main() -> int {
+    let total = math.add(b: mark("b", 22), a: mark("a", 20))
+    print("{total}")
+    total
+}
+main()

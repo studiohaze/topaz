@@ -1,0 +1,5 @@
+
+function f() -> int {
+    "a,b,c,".byteLength()
+}
+f()

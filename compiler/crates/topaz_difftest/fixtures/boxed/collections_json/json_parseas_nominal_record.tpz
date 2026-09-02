@@ -1,0 +1,2 @@
+record User { name: string, age: int }
+JSON.parseAs<User>("\{\"name\":\"Ada\",\"age\":37\}")

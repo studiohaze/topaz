@@ -1,0 +1,15 @@
+[package]
+name = "report_slug"
+version = "1.0.0"
+language = "5.18"
+entry = "src/lib.tpz"
+
+[build]
+target = "native"
+deterministic = true
+
+[dependencies]
+std = "5.18"
+
+[exports]
+module = "src/lib.tpz"

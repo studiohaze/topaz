@@ -1,0 +1,9 @@
+
+function mark(label: string, xs: Array<int>) -> Array<int> {
+    print(label)
+    xs
+}
+function main() -> bool {
+    Set.of(1).contains(...mark("set", [1]))
+}
+main()

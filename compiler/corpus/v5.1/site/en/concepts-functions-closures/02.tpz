@@ -1,0 +1,17 @@
+// Default parameter values
+function calculate(a: int, b: int = 10, operation: string = "add") -> int {
+    return match operation {
+        case "add" => a + b
+        case "subtract" => a - b
+        case "multiply" => a * b
+        case _ => 0
+    }
+}
+
+// Various calling methods
+let result1 = calculate(5)                    // 5 + 10 = 15
+let result2 = calculate(5, 3)                 // 5 + 3 = 8
+let result3 = calculate(5, 3, "multiply")     // 5 * 3 = 15
+
+// Named parameters
+let result4 = calculate(a: 8, operation: "subtract", b: 3)  // 8 - 3 = 5

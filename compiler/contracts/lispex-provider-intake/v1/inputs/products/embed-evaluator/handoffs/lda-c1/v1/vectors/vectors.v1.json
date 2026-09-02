@@ -1,0 +1,222 @@
+{
+  "schema": "lispex.retained-restricted-lda-c1-vectors/v1",
+  "status": "exact-provider-handoff-input",
+  "provider_wire_revision": "451027beb8daff90c09364a1fd38a2a9f3790e55",
+  "evaluator_sha256": "fa6e52559e1f5a43e50a3b7ac0cc5add6930cff0aed8aaff462cff4609362870",
+  "contracts": {
+    "semantic_profile_id": "lispex/r7rs-rule-embedded-core/1",
+    "model_id": "lispex-vm-meter/1",
+    "abi_id": "lispex.embed-wasm-abi/v1",
+    "value_codec_id": "lispex.embed-value/v1",
+    "transcript_id": "lispex.embed-transcript/v1",
+    "receipt_schema_id": "lispex.embed-receipt-core/v1",
+    "component_id": "lispex-embed-evaluator/1.12.4"
+  },
+  "positives": [
+    {
+      "name": "prepared",
+      "artifact": {
+        "path": "products/embed-evaluator/handoffs/lda-c1/v1/vectors/prepared.lpxembed",
+        "bytes": 1640,
+        "sha256": "852fd77c760593e1b36db1ffbcd2c1a6398e3f051be7e9001540d584974d0249"
+      },
+      "operation": "prepare",
+      "category": "prepared",
+      "portable_core": null
+    },
+    {
+      "name": "complete",
+      "artifact": {
+        "path": "products/embed-evaluator/handoffs/lda-c1/v1/vectors/complete.lpxembed",
+        "bytes": 2931,
+        "sha256": "75f8b6f6e54ac6a8ca5519be7146f523e4dc8bf25e1a7215a27f29a6a11b0fa7"
+      },
+      "operation": "evaluate",
+      "category": "semantic-complete",
+      "portable_core": {
+        "path": "products/embed-evaluator/handoffs/lda-c1/v1/vectors/complete.core",
+        "bytes": 1900,
+        "sha256": "430c91c2094f3eb8190dcd5122fcef06a8512f6250fc9761706525af71fafda7"
+      }
+    },
+    {
+      "name": "semantic-fault",
+      "artifact": {
+        "path": "products/embed-evaluator/handoffs/lda-c1/v1/vectors/semantic-fault.lpxembed",
+        "bytes": 2904,
+        "sha256": "30afda93fcc2a8eb712498cf569cacd760c8dc92cc707161c54c1159538a6c97"
+      },
+      "operation": "evaluate",
+      "category": "semantic-fault",
+      "portable_core": {
+        "path": "products/embed-evaluator/handoffs/lda-c1/v1/vectors/semantic-fault.core",
+        "bytes": 1900,
+        "sha256": "99a6bc83f46fee158eed05c367bd227f6e29f703a419b36661e7c72456cd3020"
+      }
+    },
+    {
+      "name": "evaluation-exhausted",
+      "artifact": {
+        "path": "products/embed-evaluator/handoffs/lda-c1/v1/vectors/evaluation-exhausted.lpxembed",
+        "bytes": 2767,
+        "sha256": "c33393ce19b326e5f97cec217d26e1ddfd3540f1a785553f16f5c4d9e0ceaba7"
+      },
+      "operation": "evaluate",
+      "category": "semantic-exhausted",
+      "portable_core": {
+        "path": "products/embed-evaluator/handoffs/lda-c1/v1/vectors/evaluation-exhausted.core",
+        "bytes": 1886,
+        "sha256": "05faf71bfdd54f4696f5fc906721ff13230e30065ed5fe355800e25a20def320"
+      }
+    },
+    {
+      "name": "preparation-exhausted",
+      "artifact": {
+        "path": "products/embed-evaluator/handoffs/lda-c1/v1/vectors/preparation-exhausted.lpxembed",
+        "bytes": 767,
+        "sha256": "0ca4d16287bd3069036232d5ab3bc9fb203023caed9dac465fc07ec56f4e3921"
+      },
+      "operation": "prepare",
+      "category": "semantic-exhausted",
+      "portable_core": {
+        "path": "products/embed-evaluator/handoffs/lda-c1/v1/vectors/preparation-exhausted.core",
+        "bytes": 547,
+        "sha256": "3367bee172ffd1680f61b992a9b563755c95af98b181042c5564f4045cc5f6eb"
+      }
+    },
+    {
+      "name": "request-refusal",
+      "artifact": {
+        "path": "products/embed-evaluator/handoffs/lda-c1/v1/vectors/request-refusal.lpxembed",
+        "bytes": 607,
+        "sha256": "44b30a8e1192b9ddb96bb8a9351e1bbbf5cba12765df7a49a35fa2a46b5debb5"
+      },
+      "operation": "prepare",
+      "category": "request-refusal",
+      "portable_core": {
+        "path": "products/embed-evaluator/handoffs/lda-c1/v1/vectors/request-refusal.core",
+        "bytes": 393,
+        "sha256": "f3193386d4f11376a76a700b8f7443b1cd6fc512fb461cafd8646d08f89be6f6"
+      }
+    }
+  ],
+  "negatives": [
+    {
+      "name": "magic",
+      "artifact": {
+        "path": "products/embed-evaluator/handoffs/lda-c1/v1/vectors/negative-magic.lpxembed",
+        "bytes": 2931,
+        "sha256": "7ee9f203e2bf167ff9d18c82a2fe4099f3d7d43887510da563ef10aba5d27516"
+      },
+      "expectation": "magic-refusal"
+    },
+    {
+      "name": "truncated",
+      "artifact": {
+        "path": "products/embed-evaluator/handoffs/lda-c1/v1/vectors/negative-truncated.lpxembed",
+        "bytes": 2930,
+        "sha256": "9613a9a1280b1cfa6b3ee3e3f49e2db454cb2ed15f80e09d66e1dc33f45080c9"
+      },
+      "expectation": "truncation-refusal"
+    },
+    {
+      "name": "trailing",
+      "artifact": {
+        "path": "products/embed-evaluator/handoffs/lda-c1/v1/vectors/negative-trailing.lpxembed",
+        "bytes": 2932,
+        "sha256": "77726245db6b2647f6567a3654f45faf157f312dca625f5ab076c64c46590fba"
+      },
+      "expectation": "trailing-byte-refusal"
+    },
+    {
+      "name": "evaluator",
+      "artifact": {
+        "path": "products/embed-evaluator/handoffs/lda-c1/v1/vectors/negative-evaluator.lpxembed",
+        "bytes": 2931,
+        "sha256": "5dc9ccb2941f71349c0a590dfbd85ca08cf0c5f327a1842b03f2151f891de2e5"
+      },
+      "expectation": "evaluator-refusal"
+    },
+    {
+      "name": "limit-count",
+      "artifact": {
+        "path": "products/embed-evaluator/handoffs/lda-c1/v1/vectors/negative-limit-count.lpxembed",
+        "bytes": 2923,
+        "sha256": "b8a0b00b7ab836e7aeea6cf1688b07a2ed69dbb35326558ac823efd0bd90d4dc"
+      },
+      "expectation": "limit-count-refusal"
+    },
+    {
+      "name": "limit-value",
+      "artifact": {
+        "path": "products/embed-evaluator/handoffs/lda-c1/v1/vectors/negative-limit-value.lpxembed",
+        "bytes": 2931,
+        "sha256": "b6c3cfaccebbc2b12371aa6f63719779969110b81072d29de873a619393190df"
+      },
+      "expectation": "exact-limit-value-mismatch-refusal"
+    },
+    {
+      "name": "identity-tag",
+      "artifact": {
+        "path": "products/embed-evaluator/handoffs/lda-c1/v1/vectors/negative-identity-tag.lpxembed",
+        "bytes": 2931,
+        "sha256": "4f9e27c0d29e387d1de8b5bcd70eefd2465ea7f4274a0e3b635336af39e54710"
+      },
+      "expectation": "identity-tag-refusal"
+    },
+    {
+      "name": "identity-noncanonical-case",
+      "artifact": {
+        "path": "products/embed-evaluator/handoffs/lda-c1/v1/vectors/negative-identity-noncanonical-case.lpxembed",
+        "bytes": 2931,
+        "sha256": "a29bb52e17d3ea37ba497b2e8c687a9cdb04e759425aca4e0d9592805b29b5aa"
+      },
+      "expectation": "noncanonical-identity-refusal"
+    },
+    {
+      "name": "identity-mismatch",
+      "artifact": {
+        "path": "products/embed-evaluator/handoffs/lda-c1/v1/vectors/negative-identity-mismatch.lpxembed",
+        "bytes": 2931,
+        "sha256": "3a1e9e7de5847c163b9fead958b7c47f5983a830800f0149e7c68f8c00d39362"
+      },
+      "expectation": "inconsistent-identity-refusal"
+    },
+    {
+      "name": "category-binding",
+      "artifact": {
+        "path": "products/embed-evaluator/handoffs/lda-c1/v1/vectors/negative-category-binding.lpxembed",
+        "bytes": 2931,
+        "sha256": "19c1b0cad9a0872d202434a86d906a75e2732b54c7c3333fb1d6b09e6d67aeff"
+      },
+      "expectation": "category-binding-refusal"
+    },
+    {
+      "name": "response",
+      "artifact": {
+        "path": "products/embed-evaluator/handoffs/lda-c1/v1/vectors/negative-response.lpxembed",
+        "bytes": 2931,
+        "sha256": "71ebaae34a1b3958707ffb0bd2db97addf74e246ccc7cb111cbba8116e57bcb4"
+      },
+      "expectation": "response-refusal"
+    },
+    {
+      "name": "portable-core",
+      "artifact": {
+        "path": "products/embed-evaluator/handoffs/lda-c1/v1/vectors/negative-portable-core.lpxembed",
+        "bytes": 2931,
+        "sha256": "054fa31dcd540341828e5b28ed6827fe3a7d3ae7a83e8c56f0120a167508ce60"
+      },
+      "expectation": "portable-core-refusal"
+    },
+    {
+      "name": "portable-core-duplicate-key",
+      "artifact": {
+        "path": "products/embed-evaluator/handoffs/lda-c1/v1/vectors/negative-portable-core-duplicate-key.lpxembed",
+        "bytes": 3026,
+        "sha256": "ad4322908b41e04b5f88990ca6851e386805acf027edcb22ee154bb09d7d83d0"
+      },
+      "expectation": "duplicate-core-key-refusal"
+    }
+  ]
+}

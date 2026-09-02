@@ -1,0 +1,35 @@
+
+function f() -> Result<Bytes, string> {
+    let empty = Bytes.fromHex("")?
+    let zero = Bytes.fromHex("00")?
+    let high7f = Bytes.fromHex("7f")?
+    let high80 = Bytes.fromHex("80")?
+    let ff = Bytes.fromHex("ff")?
+    let prefix = Bytes.fromHex("00ff")?
+    let longer = Bytes.fromHex("00ff10")?
+    let letter = Bytes.encodeUtf8("a")
+    let sorted = [ff, high80, high7f, letter, longer, prefix, zero, empty].sorted()
+    let mut mutated = [ff, high80, longer, prefix, zero, empty]
+    mutated.sort()
+    let keyOrder = [0, 1, 2, 3].sortedBy((i) => [high80, high80, zero, high7f][i])
+    let branch = if empty < zero { "if" } else { "miss" }
+    let guard = match ff {
+        case value if high80 < value => "guard"
+        case _ => "miss"
+    }
+    let pipeOrder = zero |> before(ff)
+    let stringOrder = "alpha" < "beta"
+    let flags = "{zero < ff}:{prefix < longer}:{high7f < high80}:{ff > zero}:{prefix <= prefix}:{longer >= prefix}:{stringOrder}:{branch}:{guard}:{pipeOrder}"
+    print("{sorted[0].toHex()}:{sorted[1].toHex()}:{sorted[2].toHex()}:{sorted[3].toHex()}:{sorted[4].toHex()}:{sorted[5].toHex()}:{sorted[6].toHex()}:{sorted[7].toHex()}|{mutated[0].toHex()}:{mutated[1].toHex()}:{mutated[2].toHex()}:{mutated[3].toHex()}:{mutated[4].toHex()}:{mutated[5].toHex()}|{keyOrder[0]}:{keyOrder[1]}:{keyOrder[2]}:{keyOrder[3]}|{flags}")
+    Ok(sorted[0])
+}
+
+function before(left: Bytes, right: Bytes) -> bool {
+    left < right
+}
+
+let result = match f() {
+    case Ok(value) => value
+    case Err(e) => Bytes.encodeUtf8(e)
+}
+result

@@ -1,0 +1,14 @@
+
+function mark(label: string, xs: Array<int>) -> Array<int> {
+    print(label)
+    xs
+}
+let xs: Option<Array<int>> = Some([1])
+let failed = loop {
+    print("pipe-some")
+    break (x) => x + 1
+} |> xs?.map(...loop {
+    print("spread-loop")
+    break mark("spread", [0])
+})
+"unreachable"

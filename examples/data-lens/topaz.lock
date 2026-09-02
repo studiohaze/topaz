@@ -1,0 +1,16 @@
+[[package]]
+name = "data_lens"
+version = "0.1.0"
+source = "root"
+manifest_hash = "sha256:dc1a59971fdf15f9d00ff90805ebbeb6136461b9427b6aeaa05cab6e5bcda53f"
+
+[[package]]
+name = "data_lens_core"
+path = "../data-lens-core"
+hash = "sha256:2ad67cd92214842b1141765d1d31b87383aa828d8ea50e52d9664323a7007e9f"
+
+[[package]]
+name = "lens_labels"
+version = "1.0.0"
+source = "registry"
+hash = "sha256:36d6a6d0bbffa0b7bf652fcdb61e2773e77dfcde38c9178d56c6ef46ea452613"

@@ -1,0 +1,72 @@
+# corpus/v5.2/compat/module-eligible manifest (CDR-002 §3). Phase A: every
+# fixture is parse-phase and runnable; resolve-phase fixtures
+# (corpus/v5.2/modules/) land separately and are counted as
+# pending until the resolver ships.
+
+[totals]
+recorded = 9
+runnable = 9
+pending = 0
+
+[[fixture]]
+file = "alias-selection.tpz"
+phase = "parse"
+versions = "5.2"
+result = "error"
+code = "TPZ2009"
+
+[[fixture]]
+file = "export-destructure.tpz"
+phase = "parse"
+versions = "5.2"
+result = "error"
+code = "TPZ2007"
+
+[[fixture]]
+file = "export-import.tpz"
+phase = "parse"
+versions = "5.2"
+result = "error"
+code = "TPZ2009"
+
+[[fixture]]
+file = "export-list.tpz"
+phase = "parse"
+versions = "5.2"
+result = "error"
+code = "TPZ2009"
+
+[[fixture]]
+file = "import-prologue.tpz"
+phase = "parse"
+versions = "5.2"
+result = "error"
+code = "TPZ2010"
+
+[[fixture]]
+file = "string-path.tpz"
+phase = "parse"
+versions = "5.2"
+result = "error"
+code = "TPZ2008"
+
+[[fixture]]
+file = "use-item.tpz"
+phase = "parse"
+versions = "5.2"
+result = "error"
+code = "TPZ2008"
+
+[[fixture]]
+file = "template-path.tpz"
+phase = "parse"
+versions = "5.2"
+result = "error"
+code = "TPZ2008"
+
+[[fixture]]
+file = "export-rename.tpz"
+phase = "parse"
+versions = "5.2"
+result = "error"
+code = "TPZ2001"

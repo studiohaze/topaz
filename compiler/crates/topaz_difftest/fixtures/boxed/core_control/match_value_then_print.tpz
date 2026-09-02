@@ -1,0 +1,3 @@
+let x = match 2 { case 2 => "two"
+case _ => "?" }
+print(x)

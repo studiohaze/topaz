@@ -1,0 +1,7 @@
+
+function main() -> int {
+    let x = 1
+    let addX = (y) => x + y
+    addX(2)
+}
+main()

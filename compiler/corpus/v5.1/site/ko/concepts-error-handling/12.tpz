@@ -1,0 +1,38 @@
+// 재시도 로직
+function 문자열결과재시도(
+    작업: () -> Result<string, string>,
+    최대시도: int,
+    시도횟수: int = 1,
+    지연시간: int = 1000
+) -> Result<string, string> {
+    return match 작업() {
+        case Ok(결과) => {
+            if 시도횟수 > 1 {
+                print("재시도 {시도횟수}번째에 성공")
+            }
+            Ok(결과)
+        }
+        case Err(오류) => {
+            print("시도 {시도횟수} 실패: {오류}")
+            if 시도횟수 >= 최대시도 {
+                Err(오류)
+            } else {
+                print("{지연시간}ms 후 재시도...")
+                Thread.sleep(지연시간)
+                문자열결과재시도(작업, 최대시도, 시도횟수 + 1, 지연시간)
+            }
+        }
+    }
+}
+
+// 네트워크 요청 재시도
+let 응답 = 문자열결과재시도(
+    작업: () => 네트워크요청("https://api.example.com/data"),
+    최대시도: 3,
+    지연시간: 2000
+)
+
+match 응답 {
+    case Ok(데이터) => print("데이터 수신: {데이터}")
+    case Err(오류) => print("최종 실패: {오류}")
+}

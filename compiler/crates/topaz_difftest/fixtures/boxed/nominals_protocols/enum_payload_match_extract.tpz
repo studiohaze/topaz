@@ -1,0 +1,5 @@
+enum Shape { Circle(int), Dot }
+match Shape.Circle(7) {
+  case Circle(r) => r
+  case Dot => 0
+}

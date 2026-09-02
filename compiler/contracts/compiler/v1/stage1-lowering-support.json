@@ -1,0 +1,218 @@
+{
+  "schema": "topaz.compiler.stage1-lowering-support/v1",
+  "languageMode": "topaz-5.16",
+  "exchangeSchema": "topaz.compiler.stage1-exchange/v2",
+  "irSchema": "topaz.compiler.stage1-ir/v1",
+  "profile": "bootstrap",
+  "admittedAstKinds": [
+    "block",
+    "expression/array",
+    "expression/binary",
+    "expression/block",
+    "expression/boolean",
+    "expression/call",
+    "expression/compose",
+    "expression/comprehension",
+    "expression/concurrent",
+    "expression/duration",
+    "expression/float",
+    "expression/for",
+    "expression/identifier",
+    "expression/if",
+    "expression/index",
+    "expression/integer",
+    "expression/lambda",
+    "expression/loop",
+    "expression/map",
+    "expression/match",
+    "expression/member",
+    "expression/null",
+    "expression/optional-access",
+    "expression/parenthesized",
+    "expression/pipe",
+    "expression/placeholder",
+    "expression/range",
+    "expression/record-literal",
+    "expression/record-update",
+    "expression/set",
+    "expression/string",
+    "expression/template",
+    "expression/try",
+    "expression/unary",
+    "expression/unit",
+    "function-declaration",
+    "lambda-parameter",
+    "parameter",
+    "pattern/binding",
+    "pattern/constructor",
+    "pattern/list",
+    "pattern/literal",
+    "pattern/nominal-record",
+    "pattern/or",
+    "pattern/range",
+    "pattern/record",
+    "pattern/typed",
+    "pattern/wildcard",
+    "program",
+    "statement/assign",
+    "statement/break",
+    "statement/const",
+    "statement/continue",
+    "statement/defer",
+    "statement/enum",
+    "statement/export",
+    "statement/expression",
+    "statement/function",
+    "statement/impl",
+    "statement/import",
+    "statement/let",
+    "statement/newtype",
+    "statement/protocol",
+    "statement/record",
+    "statement/return",
+    "statement/type-alias",
+    "statement/using",
+    "statement/while",
+    "string-part/text"
+  ],
+  "transparentAstKinds": [
+    "array-element/spread",
+    "call-argument/named",
+    "call-argument/spread",
+    "comprehension-clause/for",
+    "comprehension-clause/if",
+    "concurrent-arm",
+    "enum-variant",
+    "field-initializer",
+    "function-type-parameter",
+    "identifier",
+    "impl-method",
+    "import-item",
+    "import-spec",
+    "list-pattern/rest",
+    "map-entry",
+    "match-case",
+    "match-case-return",
+    "module-path",
+    "record-field-declaration",
+    "record-pattern-field",
+    "record-type-field",
+    "string-part/interpolation",
+    "template-tag",
+    "type/function",
+    "type/literal",
+    "type/named",
+    "type/qualified",
+    "type/record",
+    "type/union",
+    "type/unit"
+  ],
+  "compilerSourceSet": [
+    {
+      "path": "checker.tpz",
+      "disposition": "admitted"
+    },
+    {
+      "path": "checker_types.tpz",
+      "disposition": "admitted"
+    },
+    {
+      "path": "emitter.tpz",
+      "disposition": "admitted"
+    },
+    {
+      "path": "layout.tpz",
+      "disposition": "admitted"
+    },
+    {
+      "path": "lowering.tpz",
+      "disposition": "admitted"
+    },
+    {
+      "path": "parser.tpz",
+      "disposition": "admitted"
+    },
+    {
+      "path": "profile.tpz",
+      "disposition": "admitted"
+    },
+    {
+      "path": "raw.tpz",
+      "disposition": "admitted"
+    },
+    {
+      "path": "resolver.tpz",
+      "disposition": "admitted"
+    },
+    {
+      "path": "src/main.tpz",
+      "disposition": "admitted"
+    },
+    {
+      "path": "stage1_types.tpz",
+      "disposition": "admitted"
+    },
+    {
+      "path": "types.tpz",
+      "disposition": "admitted"
+    },
+    {
+      "path": "unicode.tpz",
+      "disposition": "admitted"
+    },
+    {
+      "path": "unicode_tables.tpz",
+      "disposition": "admitted"
+    }
+  ],
+  "fixedCases": [
+    {
+      "id": "bootstrap-workload",
+      "input": "compiler/corpus/v5_10/bootstrap-workload",
+      "disposition": "semantic-compare",
+      "comparison": [
+        "operation-identity",
+        "operand-order",
+        "capture-identity"
+      ]
+    },
+    {
+      "id": "declared-control-callable",
+      "input": "focused current-language function, closure, for, match, and collection sources",
+      "disposition": "semantic-compare",
+      "comparison": [
+        "operation-identity",
+        "operand-order",
+        "capture-identity"
+      ]
+    },
+    {
+      "id": "checker-rejection",
+      "input": "focused current-language type mismatch",
+      "disposition": "rejected",
+      "comparison": [
+        "status",
+        "empty-lowered-ir",
+        "provenance"
+      ]
+    },
+    {
+      "id": "exact-compiler-source",
+      "input": "embedded compiler source manifest",
+      "disposition": "admitted-generation-input",
+      "comparison": [
+        "source-set-identity",
+        "per-file-disposition",
+        "schema-coverage"
+      ],
+      "executionGate": "S1-K4"
+    }
+  ],
+  "unsupportedBoundary": {
+    "automaticFallback": false,
+    "unknownAstKind": "unsupported",
+    "malformedExchange": "compiler-fault",
+    "profileDeniedSource": "rejected",
+    "fixedPoint": "not-run"
+  }
+}

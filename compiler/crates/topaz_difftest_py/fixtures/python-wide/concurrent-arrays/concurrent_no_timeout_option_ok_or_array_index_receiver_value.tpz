@@ -1,0 +1,17 @@
+
+function choose(x: int) -> int {
+    let r = concurrent {
+        slow: {
+            let values: Array<Option<int>> = [None, Some(x)]
+            let out = values[0].okOr(7)
+            match out {
+                case Ok(v) => v
+                case Err(code) => code
+            }
+        }
+        fast: 0
+    }
+    r.slow + r.fast
+}
+
+choose(5)

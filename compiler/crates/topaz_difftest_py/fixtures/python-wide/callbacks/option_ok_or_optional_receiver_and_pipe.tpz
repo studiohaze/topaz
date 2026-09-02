@@ -1,0 +1,19 @@
+
+function main() -> int {
+    let wrapped: Option<Option<int>> = Some(None)
+    let skipped: Option<Option<int>> = None
+    let a = match wrapped?.okOr(3) {
+        case Some(Err(e)) => e
+        case _ => 0
+    }
+    let b = match skipped?.okOr(4) {
+        case None => 5
+        case _ => 0
+    }
+    let c = match 6 |> wrapped?.okOr() {
+        case Some(Err(e)) => e
+        case _ => 0
+    }
+    a + b + c
+}
+main()

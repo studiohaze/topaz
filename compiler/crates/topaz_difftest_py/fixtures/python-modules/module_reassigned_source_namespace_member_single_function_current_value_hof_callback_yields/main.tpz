@@ -1,0 +1,21 @@
+
+import util
+let mut first = util.fast
+let mut reserved = util.otherSorted
+first = util.spin
+reserved = util.sortedBy
+concurrent {
+    valueCurrent: {
+        let xs = [1]
+        xs.map(first)
+    }
+    reservedCurrent: {
+        let ys = [1]
+        ys.map(reserved)
+    }
+    boom: {
+        let zs = [1]
+        zs[2]
+    }
+}
+0

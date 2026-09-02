@@ -1,0 +1,1 @@
+filter<string>(["a", "bb", "c"], (s) => s == "bb").join(",")

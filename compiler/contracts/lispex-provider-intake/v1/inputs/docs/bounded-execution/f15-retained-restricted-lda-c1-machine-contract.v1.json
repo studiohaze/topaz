@@ -1,0 +1,166 @@
+{
+  "schema": "lispex.retained-restricted-lda-c1-machine-contract/v1",
+  "status": "qualified-exact-construction-handoff",
+  "component": {
+    "id": "lispex-embed-evaluator/1.12.4",
+    "source_revision": "5423eb32a1f456163de1a4898bef4eebd7f3c91e",
+    "artifact": {
+      "path": "products/embed-evaluator/v1.12.4/lispex-embed-evaluator.wasm",
+      "bytes": 1387762,
+      "sha256": "fa6e52559e1f5a43e50a3b7ac0cc5add6930cff0aed8aaff462cff4609362870",
+      "imports": 0
+    },
+    "changed": false
+  },
+  "contracts": {
+    "language_profile_id": "lispex-profile-1.5",
+    "semantic_profile_id": "lispex/r7rs-rule-embedded-core/1",
+    "feature_set_sha256": "c7ac2d3037b43dd90889467aabdcd2d3c061559bde12bb8330d878886c5ab429",
+    "model_id": "lispex-vm-meter/1",
+    "abi_id": "lispex.embed-wasm-abi/v1",
+    "value_codec_id": "lispex.embed-value/v1",
+    "transcript_id": "lispex.embed-transcript/v1",
+    "receipt_schema_id": "lispex.embed-receipt-core/v1"
+  },
+  "wasm_abi": {
+    "version": 65536,
+    "imports": [],
+    "exports": [
+      "lispex_embed_abi_version: () -> u32",
+      "lispex_embed_alloc: (u32) -> u32",
+      "lispex_embed_dealloc: (u32,u32) -> u32",
+      "lispex_embed_prepare: (u32,u32) -> packed-u64",
+      "lispex_embed_evaluate: (u32,u32) -> packed-u64",
+      "memory"
+    ],
+    "packed_response": "high-u32 pointer followed by low-u32 length",
+    "integer_encoding": "little-endian WebAssembly i32/i64 at the call boundary"
+  },
+  "request_grammar": {
+    "integer_encoding": "unsigned big-endian",
+    "prepare": [
+      "8 bytes ASCII LPXPRP01",
+      "u32 source length and source bytes",
+      "u64 raw_source_bytes",
+      "u64 prepare_work",
+      "u64 prepare_logical_allocation",
+      "u64 syntax_depth",
+      "end of input"
+    ],
+    "evaluate": [
+      "8 bytes ASCII LPXEVA01",
+      "u32 prepared length and prepared bytes",
+      "u32 canonical input length and canonical input bytes",
+      "ten u64 evaluation limits in contract order",
+      "end of input"
+    ]
+  },
+  "response_grammar": {
+    "magic": "LPXRSP01",
+    "integer_encoding": "unsigned big-endian",
+    "categories": {
+      "prepared": 0,
+      "complete": 1,
+      "semantic_fault": 2,
+      "exhausted": 3,
+      "request_refusal": 4,
+      "engine_fault": 5
+    },
+    "fields": [
+      "u8 operation",
+      "u8 category",
+      "u16 code length and ASCII code bytes",
+      "u32 payload length and payload bytes",
+      "six optional SHA-256 fields with closed tag 0 or 1",
+      "optional nine-counter nonportable usage block",
+      "end of input"
+    ]
+  },
+  "native_artifact_grammar": {
+    "magic": "LPXART01",
+    "integer_encoding": "unsigned big-endian",
+    "fields": [
+      "u8 kind",
+      "u8 category",
+      "64 lowercase hexadecimal evaluator digest bytes",
+      "u8 exact-limit count followed by that many u64 values",
+      "six optional SHA-256 identity fields with closed tag 0 or 1",
+      "u32 response length and exact raw response bytes",
+      "u32 portable-core length and exact portable-core bytes",
+      "end of input"
+    ],
+    "prepare_limit_count": 4,
+    "evaluate_limit_count": 14,
+    "replay_request_present": false,
+    "request_digest_present": false,
+    "whole_envelope_digest_present": false,
+    "source_retained": false,
+    "trailing_bytes": "forbidden"
+  },
+  "portable_core_construction": {
+    "encoding": "lispex.embed-value/v1",
+    "record_keys": "strict UTF-8 byte order and unique",
+    "assigned": [
+      "prepare exhausted",
+      "prepare request-refusal",
+      "evaluate complete",
+      "evaluate semantic-fault",
+      "evaluate exhausted",
+      "evaluate request-refusal"
+    ],
+    "absent": [
+      "prepare prepared",
+      "prepare engine-fault",
+      "evaluate engine-fault"
+    ],
+    "usage_counters_included": false,
+    "vouch_eligible": false,
+    "provider_issued": false,
+    "consumer_output": "unauthenticated deterministic serialization only"
+  },
+  "hash_domains": [
+    "lispex.embedding.submission/v1",
+    "lispex.embedding.resource-contract/v1",
+    "lispex.embedding.request/v1",
+    "lispex.embedding.evaluation/v1",
+    "lispex.embedding.transcript/v1",
+    "lispex.embedding.result/v1",
+    "lispex.embedding.receipt-core/v1"
+  ],
+  "vectors": {
+    "path": "products/embed-evaluator/handoffs/lda-c1/v1/vectors/vectors.v1.json",
+    "sha256": "d110f7c2c4e52a321c8c808992b2bfadd7658e9cc739faaa9064841471975d9d"
+  },
+  "generator": {
+    "path": "scripts/gen-f15-retained-restricted-provider-vectors.mjs",
+    "sha256": "1edccb6e8d2fb66028ab760d88d6b9da0b350fa8725ef746528af64436460d5d"
+  },
+  "checker": {
+    "path": "scripts/check-f15-retained-restricted-provider-vectors.mjs",
+    "sha256": "7856ba5366b8348da1345fcc357d2c53268dd1babe5dbbf2f713aae20c5607c3"
+  },
+  "retained_provider": {
+    "component_manifest": {
+      "path": "embedding-readiness/release-dag/components/lispex-embed-evaluator-1.12.4.v1.json",
+      "sha256": "818454bab1eb60042f4fdcf3da07b4eca6cee017ba7bdaf2b73f7e10e8fc37ad"
+    },
+    "provider_court": {
+      "path": "docs/bounded-execution/f12-final-provider-court.v1.json",
+      "sha256": "5baefccbe837dab8b1e817ec757016a1221cea7f823e95cd652ccd8aabe571c3"
+    },
+    "redistribution": {
+      "path": "products/embed-evaluator/v1.12.4/lispex-embed-evaluator-redistribution.zip",
+      "sha256": "fd8c2ba441c977c207147690272f09df3ce3b74c1bd3223c295593a3c5dd1b92",
+      "bytes": 1416611
+    }
+  },
+  "forbidden": {
+    "abi_change": true,
+    "wrapper_component": true,
+    "fallback": true,
+    "discovery": true,
+    "host_capability": true,
+    "topaz_admission": true,
+    "public_compatibility_claim": true
+  }
+}

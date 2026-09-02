@@ -1,0 +1,36 @@
+{
+  "schema": "lispex.f15-provider-evidence/v1",
+  "subjects": {
+    "evaluator_source_revision": "e3909e56491b53c61a63efaff51b6093019d8b27",
+    "provider_wire_revision": "451027beb8daff90c09364a1fd38a2a9f3790e55",
+    "qualification_revision": "8e7d4bf2a1bc550b5e1315449002cf2938952ec4",
+    "artifact_sha256": "dd4cde2976d825ae99b542d308d87489ac96848e0710329dbb9173664d8c5ad8",
+    "executable_profile_id": "lispex/r7rs-rule-current-profile-bounded/1",
+    "feature_set_sha256": "6ff16159ab9c6758c1485b67c928a9b3b4a896e4f2ecf96e4cf3cbaf5ac22fae"
+  },
+  "execution_input": {
+    "path": "docs/bounded-execution/f15-final-provider-execution-inputs.v1.json",
+    "sha256": "6222dc50e99ca51ac85e6f214b2c03a692493c1aac9b6c9ec6b17c30bc10df28"
+  },
+  "kind": "cross-architecture-portable-core",
+  "primaryEvidence": [
+    {
+      "path": ".github/workflows/f15-final-provider-cross-architecture.yml",
+      "sha256": "ba11bd6b7ef836823912485c7266d9b6937253cdbec76619c568cdc4d65d9b88"
+    },
+    {
+      "path": "docs/bounded-execution/f15-final-provider-execution-inputs.v1.json",
+      "sha256": "6222dc50e99ca51ac85e6f214b2c03a692493c1aac9b6c9ec6b17c30bc10df28"
+    }
+  ],
+  "result": {
+    "status": "passed",
+    "runId": 30646266047,
+    "workflowRevision": "baf0907c229283e6706a6ceb91dcaef41e225a37",
+    "qualificationRevision": "8e7d4bf2a1bc550b5e1315449002cf2938952ec4",
+    "macosArm64JobId": 91208284061,
+    "linuxX64JobId": 91210111599,
+    "portableCoreByteEqual": true,
+    "portableCoreRawSha256": "3cbd38dc840902d4e606431545bf9cadb584fafe6c023add26745a49a9da7dd0"
+  }
+}

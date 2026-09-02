@@ -1,0 +1,8 @@
+
+function f() -> int {
+    defer print("cleanup")
+    print("before")
+    let z = 0
+    1 / z
+}
+f()

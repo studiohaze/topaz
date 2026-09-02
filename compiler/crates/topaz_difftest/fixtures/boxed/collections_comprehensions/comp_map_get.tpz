@@ -1,0 +1,2 @@
+let m = map { for x in [1, 2, 3] => x: x * 10 }
+m.getOr(2, -1)

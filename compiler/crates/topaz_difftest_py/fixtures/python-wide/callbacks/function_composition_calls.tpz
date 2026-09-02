@@ -1,0 +1,14 @@
+
+function inc(x: int) -> int {
+    x + 1
+}
+function dbl(x: int) -> int {
+    x * 2
+}
+function main() -> int {
+    let top = inc >> dbl
+    let local = ((x) => x + 3) >> ((x) => x * 4)
+    let nested = top >> ((x) => x - 1)
+    top(5) + local(2) + nested(1)
+}
+main()

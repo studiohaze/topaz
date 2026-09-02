@@ -1,0 +1,14 @@
+
+import util { base }
+let callbacks = [...base]
+concurrent {
+    slow: {
+        let xs = [1]
+        xs.map(callbacks[1])
+    }
+    boom: {
+        let ys = [1]
+        ys[2]
+    }
+}
+0

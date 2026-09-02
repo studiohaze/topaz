@@ -1,0 +1,6 @@
+function side() -> string {
+  print("SIDE")
+  "t"
+}
+function f(tag: string = "x", ...xs: int) -> int { xs.length }
+f(...1, tag: side())

@@ -1,0 +1,2 @@
+let values = map { for x in [1, 2] => x: x * 10 }
+print("{values.keys}")

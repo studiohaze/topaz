@@ -1,0 +1,9 @@
+
+function f() -> Array<int> {
+    let mut xs = [1, 2, 3]
+    xs[0] = 9
+    xs[2] = xs[0] + xs[1]
+    print("{xs[0]}:{xs[2]}")
+    xs
+}
+f()

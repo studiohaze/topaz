@@ -1,0 +1,5 @@
+
+import model { Box as Crate }
+let base: Crate<int> = Crate { value: 7 }
+let next: Crate<int> = Crate { ...base, }
+next.value

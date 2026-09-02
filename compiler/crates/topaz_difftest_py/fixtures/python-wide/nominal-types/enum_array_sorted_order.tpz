@@ -1,0 +1,4 @@
+
+enum Color derives Eq, Order, Show { Red, Blue }
+let ordered = [Color.Blue, Color.Red].sorted()
+"{ordered[0]}:{ordered[1]}"

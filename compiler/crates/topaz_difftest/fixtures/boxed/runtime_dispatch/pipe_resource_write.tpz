@@ -1,0 +1,2 @@
+match open("input.txt") { case Ok(f) => "world" |> f.write()
+case Err(e) => Err(e) }

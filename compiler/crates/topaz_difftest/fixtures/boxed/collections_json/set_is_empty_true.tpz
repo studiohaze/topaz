@@ -1,0 +1,2 @@
+let s = Set.of<int>()
+s.isEmpty()

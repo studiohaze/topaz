@@ -1,0 +1,5 @@
+print(Label.label(Item { name: "x" }))
+protocol Label { function label(value: Self) -> string }
+record Item { name: string }
+impl Label<Item> { function label(value: Item) -> string { value.name } }
+0

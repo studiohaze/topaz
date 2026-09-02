@@ -1,0 +1,7 @@
+let isActive = true
+let hasAdminRights = false
+
+// Used in conditionals
+if isActive {
+    print("Service is active")
+}

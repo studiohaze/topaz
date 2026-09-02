@@ -1,0 +1,15 @@
+// 좋은 예: 에러를 명시적으로 처리
+function 안전한사용자입력() -> Result<int, string> {
+    let 사용자입력 = input("숫자를 입력하세요: ")
+
+    // toInt는 Option<int>를 반환합니다 — None 경우를 명시적으로 처리하세요
+    let 숫자 = match toInt(사용자입력) {
+        case Some(값) => 값
+        case None => { return Err("유효한 숫자가 아닙니다: {사용자입력}") }
+    }
+
+    if 숫자 < 0 {
+        return Err("음수는 허용되지 않습니다")
+    }
+    return Ok(숫자)
+}

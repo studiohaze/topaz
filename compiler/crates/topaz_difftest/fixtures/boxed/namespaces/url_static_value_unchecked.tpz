@@ -1,0 +1,3 @@
+let f = URL.parse
+match f("https://example.com/a") { case Ok(u) => u.host()
+case Err(e) => None }

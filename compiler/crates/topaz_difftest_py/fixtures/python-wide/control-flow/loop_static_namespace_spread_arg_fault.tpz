@@ -1,0 +1,6 @@
+
+let parsed = JSON.parse(...loop {
+    print("json-spread")
+    break ["null"]
+})
+0

@@ -1,0 +1,9 @@
+
+function main() -> string {
+    match "ko" {
+        case "en" => "English"
+        case "ko" => "Korean"
+        case _ => "Other"
+    }
+}
+main()

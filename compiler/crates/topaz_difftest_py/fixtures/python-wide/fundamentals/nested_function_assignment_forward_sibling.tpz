@@ -1,0 +1,13 @@
+
+function main() -> int {
+    function first() -> int {
+        second()
+    }
+    function second() -> int {
+        let mut x = 0
+        x = x + 1
+        x
+    }
+    first()
+}
+main()

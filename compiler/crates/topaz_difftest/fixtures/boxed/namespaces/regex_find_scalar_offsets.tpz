@@ -1,0 +1,3 @@
+match Regex.compile("\\d+") { case Ok(re) => match re.find("é12") { case Some(m) => "{m.start}/{m.end}/{m.text}"
+case None => "none" }
+case Err(e) => e }

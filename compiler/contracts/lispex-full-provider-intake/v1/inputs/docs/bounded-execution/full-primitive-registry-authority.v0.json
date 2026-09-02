@@ -1,0 +1,840 @@
+{
+  "schema": "lispex.full-primitive-registry-authority/v0",
+  "status": "private-build-authority-cost-soundness-incomplete",
+  "semantic_profile": "lispex-profile-1.5",
+  "classification_source": "docs/bounded-execution/primitive-cost-classification.v0.json",
+  "runtime_source": "interp/src/eval.rs",
+  "build_generator_source": "interp/build.rs",
+  "core_ir_source": "interp/src/core_ir.rs",
+  "required_rows": 205,
+  "required_class_counts": {
+    "Deferred": 4,
+    "Fixed": 70,
+    "GuestCalling": 18,
+    "Incremental": 98,
+    "Precharged": 15
+  },
+  "required_native_disposition_counts": {
+    "alias-binding-candidate": 14,
+    "deferred-first-profile": 4,
+    "retain-first-profile": 137,
+    "source-bytecode-candidate": 50
+  },
+  "allowed_cost_classes": [
+    "Deferred",
+    "Fixed",
+    "GuestCalling",
+    "Incremental",
+    "Precharged"
+  ],
+  "allowed_native_dispositions": [
+    "alias-binding-candidate",
+    "deferred-first-profile",
+    "retain-first-profile",
+    "source-bytecode-candidate"
+  ],
+  "runtime_rows": [
+    [0, "!=", "!=", "prim_not_equal", "generated-registry-handler"],
+    [1, "%", "%", "prim_percent", "generated-registry-handler"],
+    [2, "*", "*", "prim_mul", "generated-registry-handler"],
+    [3, "+", "+", "prim_add", "generated-registry-handler"],
+    [4, "-", "-", "prim_sub", "generated-registry-handler"],
+    [5, "/", "/", "prim_div", "generated-registry-handler"],
+    [6, "<", "<", "prim_lt", "generated-registry-handler"],
+    [7, "<=", "<=", "prim_le", "generated-registry-handler"],
+    [8, "=", "=", "prim_num_eq", "generated-registry-handler"],
+    [9, "==", "==", "prim_equal", "generated-registry-handler"],
+    [10, ">", ">", "prim_gt", "generated-registry-handler"],
+    [11, ">=", ">=", "prim_ge", "generated-registry-handler"],
+    [12, "abs", "abs", "prim_abs", "generated-registry-handler"],
+    [13, "all?", "all?", "prim_all_p", "generated-registry-handler"],
+    [14, "any?", "any?", "prim_any_p", "generated-registry-handler"],
+    [15, "append", "append", "prim_append", "generated-registry-handler"],
+    [16, "apply", "apply", "prim_apply", "generated-registry-handler"],
+    [17, "assoc", "assoc", "prim_assoc", "generated-registry-handler"],
+    [18, "assq", "assq", "prim_assq", "generated-registry-handler"],
+    [19, "assv", "assv", "prim_assv", "generated-registry-handler"],
+    [
+      20,
+      "boolean=?",
+      "boolean=?",
+      "prim_boolean_eq",
+      "generated-registry-handler"
+    ],
+    [
+      21,
+      "boolean?",
+      "boolean?",
+      "prim_boolean_q",
+      "generated-registry-handler"
+    ],
+    [
+      22,
+      "bytevector",
+      "bytevector",
+      "prim_bytevector",
+      "generated-registry-handler"
+    ],
+    [
+      23,
+      "bytevector-length",
+      "bytevector-length",
+      "prim_bytevector_length",
+      "generated-registry-handler"
+    ],
+    [
+      24,
+      "bytevector-u8-ref",
+      "bytevector-u8-ref",
+      "prim_bytevector_u8_ref",
+      "generated-registry-handler"
+    ],
+    [
+      25,
+      "bytevector?",
+      "bytevector?",
+      "prim_bytevector_q",
+      "generated-registry-handler"
+    ],
+    [26, "caaaar", "caaaar", "prim_caaaar", "generated-registry-cxr-handler"],
+    [27, "caaadr", "caaadr", "prim_caaadr", "generated-registry-cxr-handler"],
+    [28, "caaar", "caaar", "prim_caaar", "generated-registry-cxr-handler"],
+    [29, "caadar", "caadar", "prim_caadar", "generated-registry-cxr-handler"],
+    [30, "caaddr", "caaddr", "prim_caaddr", "generated-registry-cxr-handler"],
+    [31, "caadr", "caadr", "prim_caadr", "generated-registry-cxr-handler"],
+    [32, "caar", "caar", "prim_caar", "generated-registry-cxr-handler"],
+    [33, "cadaar", "cadaar", "prim_cadaar", "generated-registry-cxr-handler"],
+    [34, "cadadr", "cadadr", "prim_cadadr", "generated-registry-cxr-handler"],
+    [35, "cadar", "cadar", "prim_cadar", "generated-registry-cxr-handler"],
+    [36, "caddar", "caddar", "prim_caddar", "generated-registry-cxr-handler"],
+    [37, "cadddr", "cadddr", "prim_cadddr", "generated-registry-cxr-handler"],
+    [38, "caddr", "caddr", "prim_caddr", "generated-registry-cxr-handler"],
+    [39, "cadr", "cadr", "prim_cadr", "generated-registry-cxr-handler"],
+    [
+      40,
+      "call-with-current-continuation",
+      "call-with-current-continuation",
+      "prim_call_cc",
+      "generated-registry-handler"
+    ],
+    [
+      41,
+      "call-with-values",
+      "call-with-values",
+      "prim_call_with_values",
+      "generated-registry-handler"
+    ],
+    [
+      42,
+      "call/cc",
+      "call-with-current-continuation",
+      "prim_call_cc",
+      "generated-registry-handler"
+    ],
+    [43, "car", "car", "prim_car", "generated-registry-handler"],
+    [44, "cdaaar", "cdaaar", "prim_cdaaar", "generated-registry-cxr-handler"],
+    [45, "cdaadr", "cdaadr", "prim_cdaadr", "generated-registry-cxr-handler"],
+    [46, "cdaar", "cdaar", "prim_cdaar", "generated-registry-cxr-handler"],
+    [47, "cdadar", "cdadar", "prim_cdadar", "generated-registry-cxr-handler"],
+    [48, "cdaddr", "cdaddr", "prim_cdaddr", "generated-registry-cxr-handler"],
+    [49, "cdadr", "cdadr", "prim_cdadr", "generated-registry-cxr-handler"],
+    [50, "cdar", "cdar", "prim_cdar", "generated-registry-cxr-handler"],
+    [51, "cddaar", "cddaar", "prim_cddaar", "generated-registry-cxr-handler"],
+    [52, "cddadr", "cddadr", "prim_cddadr", "generated-registry-cxr-handler"],
+    [53, "cddar", "cddar", "prim_cddar", "generated-registry-cxr-handler"],
+    [54, "cdddar", "cdddar", "prim_cdddar", "generated-registry-cxr-handler"],
+    [55, "cddddr", "cddddr", "prim_cddddr", "generated-registry-cxr-handler"],
+    [56, "cdddr", "cdddr", "prim_cdddr", "generated-registry-cxr-handler"],
+    [57, "cddr", "cddr", "prim_cddr", "generated-registry-cxr-handler"],
+    [58, "cdr", "cdr", "prim_cdr", "generated-registry-handler"],
+    [59, "ceiling", "ceiling", "prim_ceiling", "generated-registry-handler"],
+    [
+      60,
+      "char->integer",
+      "char->integer",
+      "prim_char_to_integer",
+      "generated-registry-handler"
+    ],
+    [
+      61,
+      "char-alphabetic?",
+      "char-alphabetic?",
+      "prim_char_alphabetic",
+      "generated-registry-handler"
+    ],
+    [
+      62,
+      "char-ci<=?",
+      "char-ci<=?",
+      "prim_char_ci_le",
+      "generated-registry-handler"
+    ],
+    [
+      63,
+      "char-ci<?",
+      "char-ci<?",
+      "prim_char_ci_lt",
+      "generated-registry-handler"
+    ],
+    [
+      64,
+      "char-ci=?",
+      "char-ci=?",
+      "prim_char_ci_eq",
+      "generated-registry-handler"
+    ],
+    [
+      65,
+      "char-ci>=?",
+      "char-ci>=?",
+      "prim_char_ci_ge",
+      "generated-registry-handler"
+    ],
+    [
+      66,
+      "char-ci>?",
+      "char-ci>?",
+      "prim_char_ci_gt",
+      "generated-registry-handler"
+    ],
+    [
+      67,
+      "char-downcase",
+      "char-downcase",
+      "prim_char_downcase",
+      "generated-registry-handler"
+    ],
+    [
+      68,
+      "char-foldcase",
+      "char-foldcase",
+      "prim_char_foldcase",
+      "generated-registry-handler"
+    ],
+    [
+      69,
+      "char-lower-case?",
+      "char-lower-case?",
+      "prim_char_lower_case",
+      "generated-registry-handler"
+    ],
+    [
+      70,
+      "char-numeric?",
+      "char-numeric?",
+      "prim_char_numeric",
+      "generated-registry-handler"
+    ],
+    [
+      71,
+      "char-upcase",
+      "char-upcase",
+      "prim_char_upcase",
+      "generated-registry-handler"
+    ],
+    [
+      72,
+      "char-upper-case?",
+      "char-upper-case?",
+      "prim_char_upper_case",
+      "generated-registry-handler"
+    ],
+    [
+      73,
+      "char-whitespace?",
+      "char-whitespace?",
+      "prim_char_whitespace",
+      "generated-registry-handler"
+    ],
+    [74, "char<=?", "char<=?", "prim_char_le", "generated-registry-handler"],
+    [75, "char<?", "char<?", "prim_char_lt", "generated-registry-handler"],
+    [76, "char=?", "char=?", "prim_char_eq", "generated-registry-handler"],
+    [77, "char>=?", "char>=?", "prim_char_ge", "generated-registry-handler"],
+    [78, "char>?", "char>?", "prim_char_gt", "generated-registry-handler"],
+    [79, "char?", "char?", "prim_char_q", "generated-registry-handler"],
+    [
+      80,
+      "complex?",
+      "complex?",
+      "prim_complex_q",
+      "generated-registry-handler"
+    ],
+    [81, "cons", "cons", "prim_cons", "generated-registry-handler"],
+    [82, "display", "display", "prim_display", "generated-registry-handler"],
+    [
+      83,
+      "dynamic-wind",
+      "dynamic-wind",
+      "prim_dynamic_wind",
+      "generated-registry-handler"
+    ],
+    [84, "empty?", "empty?", "prim_null_q", "generated-registry-handler"],
+    [85, "eq?", "eq?", "prim_eq", "generated-registry-handler"],
+    [86, "equal?", "==", "prim_equal", "generated-registry-handler"],
+    [87, "eqv?", "eqv?", "prim_eqv", "generated-registry-handler"],
+    [88, "error", "error", "prim_error", "generated-registry-handler"],
+    [
+      89,
+      "error-object-irritants",
+      "error-object-irritants",
+      "prim_error_object_irritants",
+      "generated-registry-handler"
+    ],
+    [
+      90,
+      "error-object-message",
+      "error-object-message",
+      "prim_error_object_message",
+      "generated-registry-handler"
+    ],
+    [
+      91,
+      "error-object?",
+      "error-object?",
+      "prim_error_object_p",
+      "generated-registry-handler"
+    ],
+    [92, "even?", "even?", "prim_even_q", "generated-registry-handler"],
+    [93, "exact", "exact", "prim_exact", "generated-registry-handler"],
+    [
+      94,
+      "exact->inexact",
+      "exact->inexact",
+      "prim_inexact",
+      "generated-registry-handler"
+    ],
+    [
+      95,
+      "exact-integer-sqrt",
+      "exact-integer-sqrt",
+      "prim_exact_integer_sqrt",
+      "generated-registry-handler"
+    ],
+    [
+      96,
+      "exact-integer?",
+      "exact-integer?",
+      "prim_exact_integer_q",
+      "generated-registry-handler"
+    ],
+    [97, "exact?", "exact?", "prim_exact_q", "generated-registry-handler"],
+    [98, "expt", "expt", "prim_expt", "generated-registry-handler"],
+    [99, "filter", "filter", "prim_filter", "generated-registry-handler"],
+    [100, "first", "car", "prim_car", "generated-registry-handler"],
+    [101, "floor", "floor", "prim_floor", "generated-registry-handler"],
+    [
+      102,
+      "floor-quotient",
+      "floor-quotient",
+      "prim_floor_quotient",
+      "generated-registry-handler"
+    ],
+    [
+      103,
+      "floor-remainder",
+      "floor-remainder",
+      "prim_floor_remainder",
+      "generated-registry-handler"
+    ],
+    [104, "floor/", "floor/", "prim_floor_div", "generated-registry-handler"],
+    [
+      105,
+      "fold-left",
+      "fold-left",
+      "prim_reduce",
+      "generated-registry-handler"
+    ],
+    [
+      106,
+      "fold-right",
+      "fold-right",
+      "prim_fold_right",
+      "generated-registry-handler"
+    ],
+    [
+      107,
+      "for-each",
+      "for-each",
+      "prim_for_each",
+      "generated-registry-handler"
+    ],
+    [108, "gcd", "gcd", "prim_gcd", "generated-registry-handler"],
+    [
+      109,
+      "inexact",
+      "exact->inexact",
+      "prim_inexact",
+      "generated-registry-handler"
+    ],
+    [
+      110,
+      "inexact->exact",
+      "exact",
+      "prim_exact",
+      "generated-registry-handler"
+    ],
+    [
+      111,
+      "inexact?",
+      "inexact?",
+      "prim_inexact_q",
+      "generated-registry-handler"
+    ],
+    [
+      112,
+      "integer->char",
+      "integer->char",
+      "prim_integer_to_char",
+      "generated-registry-handler"
+    ],
+    [
+      113,
+      "integer?",
+      "integer?",
+      "prim_integer_q",
+      "generated-registry-handler"
+    ],
+    [114, "lcm", "lcm", "prim_lcm", "generated-registry-handler"],
+    [115, "length", "length", "prim_length", "generated-registry-handler"],
+    [116, "list", "list", "prim_list", "generated-registry-handler"],
+    [
+      117,
+      "list->string",
+      "list->string",
+      "prim_list_to_string",
+      "generated-registry-handler"
+    ],
+    [
+      118,
+      "list->vector",
+      "list->vector",
+      "prim_list_to_vector",
+      "generated-registry-handler"
+    ],
+    [
+      119,
+      "list-copy",
+      "list-copy",
+      "prim_list_copy",
+      "generated-registry-handler"
+    ],
+    [
+      120,
+      "list-first",
+      "list-first",
+      "prim_list_first",
+      "generated-registry-handler"
+    ],
+    [
+      121,
+      "list-ref",
+      "list-ref",
+      "prim_list_ref",
+      "generated-registry-handler"
+    ],
+    [
+      122,
+      "list-rest",
+      "list-rest",
+      "prim_list_rest",
+      "generated-registry-handler"
+    ],
+    [
+      123,
+      "list-tail",
+      "list-tail",
+      "prim_list_tail",
+      "generated-registry-handler"
+    ],
+    [124, "list?", "list?", "prim_list_q", "generated-registry-handler"],
+    [
+      125,
+      "make-bytevector",
+      "make-bytevector",
+      "prim_make_bytevector",
+      "generated-registry-handler"
+    ],
+    [
+      126,
+      "make-list",
+      "make-list",
+      "prim_make_list",
+      "generated-registry-handler"
+    ],
+    [
+      127,
+      "make-string",
+      "make-string",
+      "prim_make_string",
+      "generated-registry-handler"
+    ],
+    [
+      128,
+      "make-vector",
+      "make-vector",
+      "prim_make_vector",
+      "generated-registry-handler"
+    ],
+    [129, "map", "map", "prim_map", "generated-registry-handler"],
+    [130, "max", "max", "prim_max", "generated-registry-handler"],
+    [131, "member", "member", "prim_member", "generated-registry-handler"],
+    [132, "memq", "memq", "prim_memq", "generated-registry-handler"],
+    [133, "memv", "memv", "prim_memv", "generated-registry-handler"],
+    [134, "min", "min", "prim_min", "generated-registry-handler"],
+    [135, "modulo", "modulo", "prim_modulo", "generated-registry-handler"],
+    [
+      136,
+      "negative?",
+      "negative?",
+      "prim_negative_q",
+      "generated-registry-handler"
+    ],
+    [137, "newline", "newline", "prim_newline", "generated-registry-handler"],
+    [138, "not", "not", "prim_not", "generated-registry-handler"],
+    [139, "nth", "list-ref", "prim_list_ref", "generated-registry-handler"],
+    [140, "null?", "empty?", "prim_null_q", "generated-registry-handler"],
+    [
+      141,
+      "number->string",
+      "number->string",
+      "prim_number_to_string",
+      "generated-registry-handler"
+    ],
+    [142, "number?", "number?", "prim_number_q", "generated-registry-handler"],
+    [143, "odd?", "odd?", "prim_odd_q", "generated-registry-handler"],
+    [144, "pair?", "pair?", "prim_pair_q", "generated-registry-handler"],
+    [
+      145,
+      "positive?",
+      "positive?",
+      "prim_positive_q",
+      "generated-registry-handler"
+    ],
+    [146, "println", "println", "prim_println", "generated-registry-handler"],
+    [
+      147,
+      "procedure?",
+      "procedure?",
+      "prim_procedure_q",
+      "generated-registry-handler"
+    ],
+    [
+      148,
+      "quotient",
+      "quotient",
+      "prim_quotient",
+      "generated-registry-handler"
+    ],
+    [149, "raise", "raise", "prim_raise", "generated-registry-handler"],
+    [
+      150,
+      "raise-continuable",
+      "raise-continuable",
+      "prim_raise_continuable",
+      "generated-registry-handler"
+    ],
+    [
+      151,
+      "rational?",
+      "rational?",
+      "prim_rational_q",
+      "generated-registry-handler"
+    ],
+    [152, "real?", "real?", "prim_real_q", "generated-registry-handler"],
+    [153, "reduce", "fold-left", "prim_reduce", "generated-registry-handler"],
+    [
+      154,
+      "remainder",
+      "remainder",
+      "prim_remainder",
+      "generated-registry-handler"
+    ],
+    [155, "rest", "cdr", "prim_cdr", "generated-registry-handler"],
+    [156, "reverse", "reverse", "prim_reverse", "generated-registry-handler"],
+    [157, "round", "round", "prim_round", "generated-registry-handler"],
+    [158, "square", "square", "prim_square", "generated-registry-handler"],
+    [
+      159,
+      "string->list",
+      "string->list",
+      "prim_string_to_list",
+      "generated-registry-handler"
+    ],
+    [
+      160,
+      "string->number",
+      "string->number",
+      "prim_string_to_number",
+      "generated-registry-handler"
+    ],
+    [
+      161,
+      "string->symbol",
+      "string->symbol",
+      "prim_string_to_symbol",
+      "generated-registry-handler"
+    ],
+    [
+      162,
+      "string->vector",
+      "string->vector",
+      "prim_string_to_vector",
+      "generated-registry-handler"
+    ],
+    [
+      163,
+      "string-append",
+      "string-append",
+      "prim_string_append",
+      "generated-registry-handler"
+    ],
+    [
+      164,
+      "string-ci<=?",
+      "string-ci<=?",
+      "prim_string_ci_le",
+      "generated-registry-handler"
+    ],
+    [
+      165,
+      "string-ci<?",
+      "string-ci<?",
+      "prim_string_ci_lt",
+      "generated-registry-handler"
+    ],
+    [
+      166,
+      "string-ci=?",
+      "string-ci=?",
+      "prim_string_ci_eq",
+      "generated-registry-handler"
+    ],
+    [
+      167,
+      "string-ci>=?",
+      "string-ci>=?",
+      "prim_string_ci_ge",
+      "generated-registry-handler"
+    ],
+    [
+      168,
+      "string-ci>?",
+      "string-ci>?",
+      "prim_string_ci_gt",
+      "generated-registry-handler"
+    ],
+    [
+      169,
+      "string-copy",
+      "string-copy",
+      "prim_string_copy",
+      "generated-registry-handler"
+    ],
+    [
+      170,
+      "string-downcase",
+      "string-downcase",
+      "prim_string_downcase",
+      "generated-registry-handler"
+    ],
+    [
+      171,
+      "string-foldcase",
+      "string-foldcase",
+      "prim_string_foldcase",
+      "generated-registry-handler"
+    ],
+    [
+      172,
+      "string-for-each",
+      "string-for-each",
+      "prim_string_for_each",
+      "generated-registry-handler"
+    ],
+    [
+      173,
+      "string-length",
+      "string-length",
+      "prim_string_length",
+      "generated-registry-handler"
+    ],
+    [
+      174,
+      "string-map",
+      "string-map",
+      "prim_string_map",
+      "generated-registry-handler"
+    ],
+    [
+      175,
+      "string-ref",
+      "string-ref",
+      "prim_string_ref",
+      "generated-registry-handler"
+    ],
+    [
+      176,
+      "string-upcase",
+      "string-upcase",
+      "prim_string_upcase",
+      "generated-registry-handler"
+    ],
+    [
+      177,
+      "string<=?",
+      "string<=?",
+      "prim_string_le",
+      "generated-registry-handler"
+    ],
+    [
+      178,
+      "string<?",
+      "string<?",
+      "prim_string_lt",
+      "generated-registry-handler"
+    ],
+    [
+      179,
+      "string=?",
+      "string=?",
+      "prim_string_eq",
+      "generated-registry-handler"
+    ],
+    [
+      180,
+      "string>=?",
+      "string>=?",
+      "prim_string_ge",
+      "generated-registry-handler"
+    ],
+    [
+      181,
+      "string>?",
+      "string>?",
+      "prim_string_gt",
+      "generated-registry-handler"
+    ],
+    [182, "string?", "string?", "prim_string_q", "generated-registry-handler"],
+    [
+      183,
+      "substring",
+      "substring",
+      "prim_substring",
+      "generated-registry-handler"
+    ],
+    [
+      184,
+      "symbol->string",
+      "symbol->string",
+      "prim_symbol_to_string",
+      "generated-registry-handler"
+    ],
+    [
+      185,
+      "symbol=?",
+      "symbol=?",
+      "prim_symbol_eq",
+      "generated-registry-handler"
+    ],
+    [186, "symbol?", "symbol?", "prim_symbol_q", "generated-registry-handler"],
+    [
+      187,
+      "truncate",
+      "truncate",
+      "prim_truncate",
+      "generated-registry-handler"
+    ],
+    [
+      188,
+      "truncate-quotient",
+      "truncate-quotient",
+      "prim_truncate_quotient",
+      "generated-registry-handler"
+    ],
+    [
+      189,
+      "truncate-remainder",
+      "truncate-remainder",
+      "prim_truncate_remainder",
+      "generated-registry-handler"
+    ],
+    [
+      190,
+      "truncate/",
+      "truncate/",
+      "prim_truncate_div",
+      "generated-registry-handler"
+    ],
+    [191, "values", "values", "prim_values", "generated-registry-handler"],
+    [192, "vector", "vector", "prim_vector", "generated-registry-handler"],
+    [
+      193,
+      "vector->list",
+      "vector->list",
+      "prim_vector_to_list",
+      "generated-registry-handler"
+    ],
+    [
+      194,
+      "vector->string",
+      "vector->string",
+      "prim_vector_to_string",
+      "generated-registry-handler"
+    ],
+    [
+      195,
+      "vector-copy",
+      "vector-copy",
+      "prim_vector_copy",
+      "generated-registry-handler"
+    ],
+    [
+      196,
+      "vector-for-each",
+      "vector-for-each",
+      "prim_vector_for_each",
+      "generated-registry-handler"
+    ],
+    [
+      197,
+      "vector-length",
+      "vector-length",
+      "prim_vector_length",
+      "generated-registry-handler"
+    ],
+    [
+      198,
+      "vector-map",
+      "vector-map",
+      "prim_vector_map",
+      "generated-registry-handler"
+    ],
+    [
+      199,
+      "vector-ref",
+      "vector-ref",
+      "prim_vector_ref",
+      "generated-registry-handler"
+    ],
+    [
+      200,
+      "vector-set!",
+      "vector-set!",
+      "prim_vector_set",
+      "generated-registry-handler"
+    ],
+    [201, "vector?", "vector?", "prim_vector_q", "generated-registry-handler"],
+    [
+      202,
+      "with-exception-handler",
+      "with-exception-handler",
+      "prim_with_exception_handler",
+      "generated-registry-handler"
+    ],
+    [203, "write", "write", "prim_write", "generated-registry-handler"],
+    [204, "zero?", "zero?", "prim_zero_q", "generated-registry-handler"]
+  ],
+  "public_identity_assigned": false,
+  "de_nativeization_evidence_complete": false,
+  "final_deferred_required": 0
+}

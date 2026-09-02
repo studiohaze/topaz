@@ -1,0 +1,8 @@
+function sum(...xs: int) -> int {
+  let mut t = 0
+  for x in xs {
+    t = t + x
+  }
+  t
+}
+sum(...[1, 2, 3])

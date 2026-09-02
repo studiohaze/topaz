@@ -1,0 +1,20 @@
+
+function spin(x: int) -> int {
+    x
+}
+
+function quick(x: int) -> int {
+    x
+}
+
+let mut callbacks = { nested: { primary: spin } }
+callbacks.nested = { primary: quick }
+
+concurrent {
+    slow: {
+        let xs = [1]
+        xs.map(callbacks.nested.primary)
+    }
+    fast: 0
+}
+0

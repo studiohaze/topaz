@@ -1,0 +1,36 @@
+// Practical type definitions for real projects
+type User = {
+    id: int,
+    name: string,
+    email: string,
+    createdAt: string
+}
+
+type UserResponse = {
+    success: bool,
+    data: Option<User>,
+    error: Option<string>,
+    statusCode: int
+}
+
+// User-fetching API
+function getUser(id: int) -> UserResponse {
+    let response = fetch("/api/users/{id}")
+    
+    if response.ok {
+        let userData = response.json()
+        return {
+            success: true,
+            data: Some(userData),
+            error: None,
+            statusCode: response.status
+        }
+    } else {
+        return {
+            success: false,
+            data: None,
+            error: Some("User not found"),
+            statusCode: response.status
+        }
+    }
+}

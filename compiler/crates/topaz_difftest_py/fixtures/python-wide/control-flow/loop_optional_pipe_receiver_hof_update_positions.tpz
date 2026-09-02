@@ -1,0 +1,32 @@
+
+function inc(x: int) -> int {
+    x + 1
+}
+let mut m: Option<Map<string, int>> = Some(map { "a": 1 })
+let mut noneMap: Option<Map<string, int>> = None
+let updateKey = loop {
+    print("key")
+    break "b"
+} |> m?.update(_, 7, (v) => v / 0)
+let skippedKey = inc |> noneMap?.update(loop {
+    print("skip-key")
+    break "z"
+}, 0, _)
+let updateInitial = loop {
+    print("initial")
+    break 5
+} |> m?.update("c", _, inc)
+let updateFunction = inc |> m?.update(loop {
+    print("function-key")
+    break "a"
+}, 0, _)
+let sum = match m {
+    case Some(mm) => mm.getOr("a", 0) + mm.getOr("b", 0) + mm.getOr("c", 0)
+    case None => 0
+}
+let skippedValue = match skippedKey {
+    case Some(_) => 100
+    case None => 1
+}
+print("{sum}:{skippedValue}")
+sum + skippedValue

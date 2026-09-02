@@ -1,0 +1,33 @@
+
+record Reading { value: float }
+record Meter { reading: Reading }
+record Gauge { reading: Reading }
+
+function optIntText(value: Option<int>) -> string {
+    match value {
+        case Some(n) => "{n}"
+        case None => "none"
+    }
+}
+
+function main() -> string {
+    let neg = Meter { reading: Reading { value: -0.0 } }
+    let posDup = Meter { reading: Reading { value: 0.0 } }
+    let nanStored = Meter { reading: Reading { value: 0.0 / 0.0 } }
+    let gaugeStored = Gauge { reading: Reading { value: 5.0 } }
+
+    let xs: Array<Meter | Gauge> = [neg, posDup, nanStored, gaugeStored]
+    let posNeedle = Meter { reading: Reading { value: 0.0 } }
+    let nanNeedle = Meter { reading: Reading { value: 0.0 / 0.0 } }
+    let gaugeNeedle = Gauge { reading: Reading { value: 0.0 } }
+    let missing = Meter { reading: Reading { value: 7.0 } }
+
+    let posIndex = optIntText(xs.indexOf(posNeedle))
+    let nanIndex = optIntText(xs.indexOf(nanNeedle))
+    let gaugeIndex = optIntText(xs.indexOf(gaugeNeedle))
+    let missingIndex = optIntText(xs.indexOf(missing))
+    let pipedPosIndex = optIntText(posNeedle |> xs.indexOf())
+
+    "{posIndex}:{posNeedle in xs}:{nanIndex}:{nanNeedle in xs}:{gaugeIndex}:{gaugeNeedle in xs}:{missingIndex}:{missing in xs}:{pipedPosIndex}:{1.0 / xs[0].reading.value}"
+}
+main()

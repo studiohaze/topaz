@@ -1,0 +1,39 @@
+{
+  "schema": "lispex.diagnostic-phase-alias/v1",
+  "rule_id": "DIAGNOSTIC-PHASE-ALIAS-1",
+  "decision_id": "L120-SDL-RERAT-20260811-01",
+  "ratified_at": "2026-08-11",
+  "field": "diagnostic_phase",
+  "scope": {
+    "wording": "applies only when reading the identified legacy authored contracts",
+    "case_ids": [
+      "L120-SDL-051",
+      "L120-SDL-052",
+      "L120-SDL-054",
+      "L120-SDL-055"
+    ],
+    "contract_rule_ids": [
+      "conformance:diagnostic-negative:diag.negative.001",
+      "conformance:diagnostic-negative:diag.negative.002",
+      "conformance:diagnostic-negative:diag.negative.004",
+      "conformance:diagnostic-negative:diag.negative.005"
+    ]
+  },
+  "aliases": [
+    {
+      "legacy_authored_identifier": "normalize",
+      "canonical_identifier": "normalizer"
+    }
+  ],
+  "canonical_emitted_identifier": {
+    "version": "1.20",
+    "identifier": "normalizer"
+  },
+  "excluded_identifiers": ["source"],
+  "effects": {
+    "fault_precedence": "unchanged",
+    "diagnostic_code": "unchanged",
+    "source_span": "unchanged"
+  },
+  "future_aliases": "no other aliases are permitted by this rule"
+}

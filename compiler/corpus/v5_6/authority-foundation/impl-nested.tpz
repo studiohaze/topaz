@@ -1,0 +1,10 @@
+record Point { x: int }
+
+function build() -> int {
+    impl Point {
+        function value(self) -> int { self.x }
+    }
+    0
+}
+
+build()

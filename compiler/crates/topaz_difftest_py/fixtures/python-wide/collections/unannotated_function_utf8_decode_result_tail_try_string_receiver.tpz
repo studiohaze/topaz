@@ -1,0 +1,9 @@
+
+function makeText() {
+    Encoding.utf8Decode(Bytes.encodeUtf8("AZ"))
+}
+function main() -> Result<int, string> {
+    let text = makeText()?
+    Ok(text.byteLength())
+}
+main()

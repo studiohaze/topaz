@@ -1,0 +1,6 @@
+function f() {
+  let mut x = "one"
+  defer print(x)
+  x = "two"
+}
+f()

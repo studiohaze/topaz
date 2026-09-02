@@ -1,0 +1,4 @@
+protocol Marker {}
+record Item {}
+impl Marker<Item> {}
+0

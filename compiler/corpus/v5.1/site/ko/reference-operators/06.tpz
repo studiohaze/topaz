@@ -1,0 +1,17 @@
+// Topaz는 타입 안전 비교를 강제
+let 정수 = 42
+let 실수값 = 42.0
+let 텍스트 = "42"
+
+// 같은 타입끼리만 비교 가능
+let 정수비교 = 정수 == 42          // true
+let 실수비교 = 실수값 == 42.0      // true
+
+// 다른 타입 비교는 명시적 변환 필요
+let 타입변환비교 = "{정수}" == 텍스트          // true
+let 숫자변환비교 = match toInt(텍스트) {       // toInt는 Option<int> 반환
+    case Some(값) => 정수 == 값
+    case None => false
+}
+
+print("타입 변환 후 비교: {타입변환비교}")

@@ -1,0 +1,16 @@
+function parsePort(raw: string) -> Result<int, string> {
+    let n = toInt(raw) ?? -1
+    if n < 1 {
+        return Err("not a port: {raw}")
+    }
+    return Ok(n)
+}
+
+function startup(raw: string) -> Result<string, string> {
+    defer print("config closed")
+    let port = parsePort(raw)?
+    return Ok("listening on {port}")
+}
+
+print("{startup("8080")}")
+print("{startup("http")}")

@@ -1,0 +1,24 @@
+
+function f() -> Bytes {
+    let tail = match Bytes.fromArray([90]) {
+        case Ok(v) => v
+        case Err(e) => Bytes.empty()
+    }
+    let b = Bytes.concat(Bytes.encodeUtf8("A"), tail)
+    let first = match b.get(0) {
+        case Some(n) => n
+        case None => -1
+    }
+    let missing = match b.get(9) {
+        case Some(n) => n
+        case None => -1
+    }
+    let arr = b.toArray()
+    let arr1 = match arr.get(1) {
+        case Some(n) => n
+        case None => -1
+    }
+    print("{b.toHex()}:{b.toBase64()}:{b.length()}:{b.isEmpty()}:{first}:{missing}:{arr1}")
+    b
+}
+f()

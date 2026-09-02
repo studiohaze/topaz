@@ -1,0 +1,6 @@
+record P { x: int, y: int }
+let a = P { x: 1, y: 9 } < P { x: 2, y: 0 }
+let b = P { x: 1, y: 2 } < P { x: 1, y: 3 }
+let c = P { x: 1, y: 3 } < P { x: 1, y: 2 }
+print("{a}/{b}/{c}")
+0

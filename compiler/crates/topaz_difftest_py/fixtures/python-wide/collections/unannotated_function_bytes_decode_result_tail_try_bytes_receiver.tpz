@@ -1,0 +1,10 @@
+
+function makeBytes() {
+    Bytes.fromHex("4142")
+}
+function main() -> Result<int, string> {
+    let bytes = makeBytes()?
+    let hex = bytes.toHex()
+    Ok(hex.byteLength())
+}
+main()

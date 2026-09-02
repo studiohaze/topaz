@@ -1,0 +1,41 @@
+
+record Meter { value: float }
+record Gauge { value: float }
+
+function removedText(value: Option<string>) -> string {
+    match value {
+        case Some(text) => "removed:{text}"
+        case None => "kept"
+    }
+}
+
+function main() -> string {
+    let neg = Meter { value: -0.0 }
+    let pos = Meter { value: 0.0 }
+    let nan = Meter { value: 0.0 / 0.0 }
+    let gauge = Gauge { value: -0.0 }
+    let structural = { value: 0.0 }
+
+    let mut m: Map<Meter | Gauge | { value: float }, string> = Map.new()
+    m.insert(neg, "negative")
+    m.insert(pos, "positive")
+    m.insert(nan, "nan")
+    m.insert(gauge, "gauge")
+
+    let mapSlot = m.keys[0].value
+    let nanLookup = m.getOr(nan, "missing")
+    let nanRemoved = removedText(m.remove(nan))
+
+    let mut s: Set<Meter | Gauge | { value: float }> = Set.of()
+    s.add(neg)
+    s.add(pos)
+    s.add(nan)
+    s.add(gauge)
+    s.add(structural)
+
+    let setSlot = s.toArray()[0].value
+    let setNanRemoved = s.remove(nan)
+
+    "{m.length}:{m.getOr(pos, "missing")}:{m.getOr(gauge, "missing")}:{m.getOr(structural, "missing")}:{m.containsKey(nan)}:{nanLookup}:{nanRemoved}:{m.length}:{mapSlot}:{s.length}:{s.contains(pos)}:{s.contains(nan)}:{s.contains(structural)}:{setNanRemoved}:{s.length}:{setSlot}"
+}
+main()

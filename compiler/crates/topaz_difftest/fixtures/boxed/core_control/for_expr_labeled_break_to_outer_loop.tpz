@@ -1,0 +1,8 @@
+let r = loop 'outer {
+  let xs = for x in [1] {
+    if x == 1 { break 'outer 9 }
+    0
+  }
+  break 0
+}
+r

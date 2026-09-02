@@ -1,0 +1,2 @@
+newtype Id<T> = T
+let id = Id(1)

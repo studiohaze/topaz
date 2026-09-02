@@ -1,0 +1,2 @@
+let f = Codec.gzipCompress
+f(Bytes.encodeUtf8("abc")).map((b) => b.toHex())

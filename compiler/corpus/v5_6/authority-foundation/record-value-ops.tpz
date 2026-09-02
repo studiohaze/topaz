@@ -1,0 +1,11 @@
+record Key {
+    number: int,
+    label: string,
+}
+
+let first: Key = Key { number: 1, label: "a" }
+let same: Key = Key { number: 1, label: "a" }
+let mut table: Map<Key, string> = Map.new()
+let set: Set<Key> = Set.of(first, same)
+table.insert(first, "value")
+print("{first == same}:{table.get(same)}:{set}")

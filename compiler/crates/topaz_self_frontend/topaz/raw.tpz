@@ -1,0 +1,740 @@
+import types { PreviewDiagnostic, PreviewToken, RawResult }
+import unicode {
+  identifierContinueEnd,
+  identifierEnd,
+  identifierStartWidth,
+  utf8Width,
+}
+
+function token(kind: string, lo: int, hi: int) -> PreviewToken {
+  PreviewToken {
+    kind: kind,
+    lo: lo,
+    hi: hi,
+    stream: "raw",
+    synthetic: false,
+  }
+}
+
+function syntheticToken(kind: string, at: int) -> PreviewToken {
+  PreviewToken {
+    kind: kind,
+    lo: at,
+    hi: at,
+    stream: "raw",
+    synthetic: true,
+  }
+}
+
+function diagnostic(code: string, message: string, lo: int, hi: int) -> PreviewDiagnostic {
+  PreviewDiagnostic { code: code, message: message, lo: lo, hi: hi, notes: [] }
+}
+
+function byteAt(bytes: Bytes, index: int) -> int {
+  match bytes.get(index) {
+    case Some(value) => value
+    case None => -1
+  }
+}
+
+function isAsciiSpace(value: int) -> bool {
+  value == 32 || value == 9
+}
+
+function lineCommentEnd(bytes: Bytes, start: int) -> int {
+  let mut index = start + 2
+  while index < bytes.length() && byteAt(bytes, index) != 10 {
+    index += 1
+  }
+  index
+}
+
+function blockCommentEnd(bytes: Bytes, start: int) -> int {
+  let mut index = start + 2
+  while index < bytes.length() {
+    if byteAt(bytes, index) == 42 && byteAt(bytes, index + 1) == 47 {
+      return index + 2
+    }
+    index += 1
+  }
+  index
+}
+
+function isAsciiDigit(value: int) -> bool {
+  value >= 48 && value <= 57
+}
+
+export function keywordKind(text: string) -> string {
+  match text {
+    case "let" => "keyword/let"
+    case "mut" => "keyword/mut"
+    case "const" => "keyword/const"
+    case "type" => "keyword/type"
+    case "function" => "keyword/function"
+    case "return" => "keyword/return"
+    case "if" => "keyword/if"
+    case "else" => "keyword/else"
+    case "match" => "keyword/match"
+    case "case" => "keyword/case"
+    case "for" => "keyword/for"
+    case "in" => "keyword/in"
+    case "by" => "keyword/by"
+    case "while" => "keyword/while"
+    case "break" => "keyword/break"
+    case "continue" => "keyword/continue"
+    case "defer" => "keyword/defer"
+    case "concurrent" => "keyword/concurrent"
+    case "true" => "keyword/true"
+    case "false" => "keyword/false"
+    case "null" => "keyword/null"
+    case "_" => "underscore"
+    case _ => "identifier"
+  }
+}
+
+function decode(bytes: Bytes, lo: int, hi: int) -> string {
+  match bytes.slice(lo, hi).decodeUtf8() {
+    case Ok(value) => value
+    case Err(_) => ""
+  }
+}
+
+function identifierHeadKind(bytes: Bytes, start: int, end: int) -> string {
+  let kind = keywordKind(decode(bytes, start, end))
+  if kind == "identifier" && byteAt(bytes, end) == 34 {
+    "tagged-string"
+  } else {
+    kind
+  }
+}
+
+function punctuation(bytes: Bytes, index: int) -> Option<PreviewToken> {
+  let a = byteAt(bytes, index)
+  let b = byteAt(bytes, index + 1)
+  let c = byteAt(bytes, index + 2)
+  match [a, b, c] {
+    case [46, 46, 46] => Some(token("ellipsis", index, index + 3))
+    case [46, 46, 60] => Some(token("dot-dot-lt", index, index + 3))
+    case [63, 63, 61] => Some(token("question-question-eq", index, index + 3))
+    case [42, 42, _] => Some(token("star-star", index, index + 2))
+    case [46, 46, _] => Some(token("dot-dot", index, index + 2))
+    case [63, 46, _] => Some(token("question-dot", index, index + 2))
+    case [63, 63, _] => Some(token("question-question", index, index + 2))
+    case [60, 61, _] => Some(token("le", index, index + 2))
+    case [62, 61, _] => Some(token("ge", index, index + 2))
+    case [62, 62, _] => Some(token("gt-gt", index, index + 2))
+    case [61, 61, _] => Some(token("eq-eq", index, index + 2))
+    case [33, 61, _] => Some(token("not-eq", index, index + 2))
+    case [43, 61, _] => Some(token("plus-eq", index, index + 2))
+    case [45, 61, _] => Some(token("minus-eq", index, index + 2))
+    case [42, 61, _] => Some(token("star-eq", index, index + 2))
+    case [47, 61, _] => Some(token("slash-eq", index, index + 2))
+    case [37, 61, _] => Some(token("percent-eq", index, index + 2))
+    case [38, 38, _] => Some(token("and-and", index, index + 2))
+    case [124, 124, _] => Some(token("or-or", index, index + 2))
+    case [124, 62, _] => Some(token("pipe-gt", index, index + 2))
+    case [61, 62, _] => Some(token("fat-arrow", index, index + 2))
+    case [45, 62, _] => Some(token("thin-arrow", index, index + 2))
+    case [40, _, _] => Some(token("left-paren", index, index + 1))
+    case [41, _, _] => Some(token("right-paren", index, index + 1))
+    case [91, _, _] => Some(token("left-bracket", index, index + 1))
+    case [93, _, _] => Some(token("right-bracket", index, index + 1))
+    case [123, _, _] => Some(token("left-brace", index, index + 1))
+    case [125, _, _] => Some(token("right-brace", index, index + 1))
+    case [43, _, _] => Some(token("plus", index, index + 1))
+    case [45, _, _] => Some(token("minus", index, index + 1))
+    case [42, _, _] => Some(token("star", index, index + 1))
+    case [47, _, _] => Some(token("slash", index, index + 1))
+    case [37, _, _] => Some(token("percent", index, index + 1))
+    case [46, _, _] => Some(token("dot", index, index + 1))
+    case [63, _, _] => Some(token("question", index, index + 1))
+    case [60, _, _] => Some(token("lt", index, index + 1))
+    case [62, _, _] => Some(token("gt", index, index + 1))
+    case [61, _, _] => Some(token("eq", index, index + 1))
+    case [33, _, _] => Some(token("bang", index, index + 1))
+    case [126, _, _] => Some(token("tilde", index, index + 1))
+    case [124, _, _] => Some(token("pipe", index, index + 1))
+    case [44, _, _] => Some(token("comma", index, index + 1))
+    case [58, _, _] => Some(token("colon", index, index + 1))
+    case [59, _, _] => Some(token("semicolon", index, index + 1))
+    case _ => None
+  }
+}
+
+function isValidEscape(value: int) -> bool {
+  value == 110 ||
+    value == 116 ||
+    value == 114 ||
+    value == 92 ||
+    value == 34 ||
+    value == 123 ||
+    value == 125
+}
+
+function startsTripleQuote(bytes: Bytes, index: int) -> bool {
+  byteAt(bytes, index) == 34 &&
+    byteAt(bytes, index + 1) == 34 &&
+    byteAt(bytes, index + 2) == 34
+}
+
+function multilineIndentDiagnostics(
+  bytes: Bytes,
+  lineStarts: Array<int>,
+  delimiter: int,
+) -> Array<PreviewDiagnostic> {
+  let mut diagnostics: Array<PreviewDiagnostic> = []
+  let mut closeLine = delimiter
+  while closeLine > 0 && byteAt(bytes, closeLine - 1) != 10 {
+    closeLine -= 1
+  }
+  let indentLength = delimiter - closeLine
+  if indentLength == 0 {
+    return diagnostics
+  }
+  let mut offset = 0
+  while offset < indentLength {
+    let value = byteAt(bytes, closeLine + offset)
+    if value != 32 && value != 9 {
+      return diagnostics
+    }
+    offset += 1
+  }
+  for line in lineStarts {
+    if line >= closeLine {
+      break
+    }
+    let mut end = line
+    while end < bytes.length() && byteAt(bytes, end) != 10 {
+      end += 1
+    }
+    let textEnd = if end > line && byteAt(bytes, end - 1) == 13 { end - 1 } else { end }
+    let mut blank = true
+    let mut cursor = line
+    while cursor < textEnd {
+      let value = byteAt(bytes, cursor)
+      if value != 32 && value != 9 {
+        blank = false
+        break
+      }
+      cursor += 1
+    }
+    if blank {
+      continue
+    }
+    let mut matchesIndent = textEnd - line >= indentLength
+    offset = 0
+    while matchesIndent && offset < indentLength {
+      if byteAt(bytes, line + offset) != byteAt(bytes, closeLine + offset) {
+        matchesIndent = false
+      }
+      offset += 1
+    }
+    if !matchesIndent {
+      diagnostics.push(diagnostic(
+        "TPZ0006",
+        "line does not begin with the closing indent of its multiline string",
+        line,
+        textEnd,
+      ))
+    }
+  }
+  diagnostics
+}
+
+record LexemeScan {
+  tokens: Array<PreviewToken>,
+  diagnostics: Array<PreviewDiagnostic>,
+  next: int,
+  propagatedLineBreak: bool,
+}
+
+record StringInterpolationOutcome {
+  next: int,
+  lineBreak: bool,
+}
+
+record StringScanState {
+  bytes: Bytes,
+  tokens: Array<PreviewToken>,
+  diagnostics: Array<PreviewDiagnostic>,
+  lineStarts: Array<int>,
+  quote: int,
+  multiline: bool,
+  lineBreakForbidden: bool,
+}
+
+function stringDelimiterEnd(start: int, multiline: bool) -> int {
+  start + if multiline { 3 } else { 1 }
+}
+
+function appendStringText(state: StringScanState, start: int, end: int) -> () {
+  if end > start {
+    let mut tokens = state.tokens
+    tokens.push(token("string-text", start, end))
+  }
+  ()
+}
+
+function finishString(state: StringScanState, textStart: int, delimiter: int) -> LexemeScan {
+  appendStringText(state, textStart, delimiter)
+  let end = stringDelimiterEnd(delimiter, state.multiline)
+  let mut tokens = state.tokens
+  tokens.push(token("string-end", delimiter, end))
+  if state.multiline {
+    let mut diagnostics = state.diagnostics
+    for found in multilineIndentDiagnostics(state.bytes, state.lineStarts, delimiter) {
+      diagnostics.push(found)
+    }
+  }
+  LexemeScan {
+    tokens: state.tokens,
+    diagnostics: state.diagnostics,
+    next: end,
+    propagatedLineBreak: false,
+  }
+}
+
+function scanStringEscape(state: StringScanState, start: int) -> int {
+  let mut index = start + 1
+  let escaped = byteAt(state.bytes, index)
+  if isValidEscape(escaped) {
+    return index + 1
+  }
+  let mut diagnostics = state.diagnostics
+  if escaped == 10 || escaped == 13 || escaped == -1 {
+    diagnostics.push(diagnostic(
+      "TPZ0004",
+      "invalid escape: `\\` before the end of the line",
+      start,
+      index,
+    ))
+    return index
+  }
+  let escapedWidth = utf8Width(escaped)
+  let consumed = if escapedWidth > 0 { escapedWidth } else { 1 }
+  let escapedText = decode(state.bytes, index, index + consumed)
+  index += consumed
+  diagnostics.push(diagnostic(
+    "TPZ0004",
+    "invalid escape `\\{escapedText}` in a string literal",
+    start,
+    index,
+  ))
+  index
+}
+
+function scanStringInterpolation(
+  state: StringScanState,
+  textStart: int,
+  start: int,
+) -> StringInterpolationOutcome {
+  appendStringText(state, textStart, start)
+  let mut tokens = state.tokens
+  tokens.push(token("interpolation-start", start, start + 1))
+  let interpolation = scanCode(
+    state.bytes,
+    start + 1,
+    true,
+    state.lineBreakForbidden || !state.multiline,
+  )
+  let mut diagnostics = state.diagnostics
+  for found in interpolation.tokens {
+    tokens.push(found)
+  }
+  for found in interpolation.diagnostics {
+    diagnostics.push(found)
+  }
+  StringInterpolationOutcome {
+    next: interpolation.next,
+    lineBreak: interpolation.propagatedLineBreak,
+  }
+}
+
+function interruptedString(
+  state: StringScanState,
+  textStart: int,
+  end: int,
+  message: string,
+) -> LexemeScan {
+  appendStringText(state, textStart, end)
+  let mut diagnostics = state.diagnostics
+  diagnostics.push(diagnostic(
+    "TPZ0003",
+    message,
+    state.quote,
+    stringDelimiterEnd(state.quote, state.multiline),
+  ))
+  let mut tokens = state.tokens
+  tokens.push(syntheticToken("string-end", end))
+  LexemeScan {
+    tokens: state.tokens,
+    diagnostics: state.diagnostics,
+    next: end,
+    propagatedLineBreak: false,
+  }
+}
+
+function propagateStringLineBreak(
+  state: StringScanState,
+  textStart: int,
+  end: int,
+) -> LexemeScan {
+  appendStringText(state, textStart, end)
+  let mut tokens = state.tokens
+  tokens.push(syntheticToken("string-end", end))
+  LexemeScan {
+    tokens: state.tokens,
+    diagnostics: state.diagnostics,
+    next: end,
+    propagatedLineBreak: true,
+  }
+}
+
+function scanString(
+  bytes: Bytes,
+  tokenStart: int,
+  quote: int,
+  tagged: bool,
+  lineBreakForbidden: bool,
+) -> LexemeScan {
+  let multiline = startsTripleQuote(bytes, quote)
+  let mut index = stringDelimiterEnd(quote, multiline)
+  let mut textStart = index
+  let state = StringScanState {
+    bytes: bytes,
+    tokens: [token(
+      "string-start/tagged={tagged}/multiline={multiline}",
+      tokenStart,
+      index,
+    )],
+    diagnostics: [],
+    lineStarts: [],
+    quote: quote,
+    multiline: multiline,
+    lineBreakForbidden: lineBreakForbidden,
+  }
+  if multiline && index < bytes.length() && byteAt(bytes, index) != 10 &&
+    !(byteAt(bytes, index) == 13 && byteAt(bytes, index + 1) == 10) {
+    let mut lineStarts = state.lineStarts
+    lineStarts.push(index)
+  }
+  while index < bytes.length() {
+    if (multiline && startsTripleQuote(bytes, index)) ||
+      (!multiline && byteAt(bytes, index) == 34) {
+      return finishString(state, textStart, index)
+    }
+    let value = byteAt(bytes, index)
+    if value == 92 {
+      index = scanStringEscape(state, index)
+      continue
+    }
+    if value == 123 {
+      let interpolation = scanStringInterpolation(state, textStart, index)
+      if interpolation.lineBreak {
+        if state.multiline && state.lineBreakForbidden {
+          return propagateStringLineBreak(state, interpolation.next, interpolation.next)
+        }
+        return interruptedString(
+          state,
+          interpolation.next,
+          interpolation.next,
+          "string interpolation in a single-line string cannot contain a line break",
+        )
+      }
+      index = interpolation.next
+      textStart = index
+      continue
+    }
+    if multiline && state.lineBreakForbidden &&
+      (value == 10 || (value == 13 && byteAt(bytes, index + 1) == 10)) {
+      return propagateStringLineBreak(state, textStart, index)
+    }
+    if !multiline && (value == 10 ||
+      (value == 13 && byteAt(bytes, index + 1) == 10)) {
+      return interruptedString(
+        state,
+        textStart,
+        index,
+        "single-line string literal is not closed before the line break",
+      )
+    }
+    if !multiline && value == 125 {
+      let mut diagnostics = state.diagnostics
+      diagnostics.push(diagnostic(
+        "TPZ0005",
+        "unescaped `\}` in a string literal; write `\\\}`",
+        index,
+        index + 1,
+      ))
+    }
+    if multiline && value == 10 {
+      let mut lineStarts = state.lineStarts
+      lineStarts.push(index + 1)
+    }
+    index += 1
+  }
+  interruptedString(state, textStart, index, "unterminated string literal")
+}
+
+function appendScan(
+  targetTokens: Array<PreviewToken>,
+  targetDiagnostics: Array<PreviewDiagnostic>,
+  foundTokens: Array<PreviewToken>,
+  foundDiagnostics: Array<PreviewDiagnostic>,
+) -> () {
+  let mut tokens = targetTokens
+  for found in foundTokens {
+    tokens.push(found)
+  }
+  let mut diagnostics = targetDiagnostics
+  for found in foundDiagnostics {
+    diagnostics.push(found)
+  }
+  ()
+}
+
+function scanComment(bytes: Bytes, start: int) -> LexemeScan {
+  let mut index = start + 2
+  let mut diagnostics: Array<PreviewDiagnostic> = []
+  if byteAt(bytes, start + 1) == 47 {
+    index = lineCommentEnd(bytes, start)
+  } else {
+    index = blockCommentEnd(bytes, start)
+    let closed = index >= start + 4 &&
+      byteAt(bytes, index - 2) == 42 && byteAt(bytes, index - 1) == 47
+    if !closed {
+      diagnostics.push(diagnostic("TPZ0002", "unterminated block comment", start, index))
+    }
+  }
+  LexemeScan {
+    tokens: [],
+    diagnostics: diagnostics,
+    next: index,
+    propagatedLineBreak: false,
+  }
+}
+
+function scanNumber(bytes: Bytes, start: int) -> LexemeScan {
+  let mut index = start + 1
+  while index < bytes.length() && isAsciiDigit(byteAt(bytes, index)) {
+    index += 1
+  }
+  let mut kind = "integer"
+  if byteAt(bytes, index) == 46 && isAsciiDigit(byteAt(bytes, index + 1)) {
+    kind = "float"
+    index += 1
+    while index < bytes.length() && isAsciiDigit(byteAt(bytes, index)) {
+      index += 1
+    }
+  } else {
+    let unitStart = index
+    let unitEnd = identifierContinueEnd(bytes, index)
+    let unit = decode(bytes, unitStart, unitEnd)
+    if unit == "ms" || unit == "s" || unit == "m" {
+      kind = "duration/{unit}"
+      index = unitEnd
+    }
+  }
+  LexemeScan {
+    tokens: [token(kind, start, index)],
+    diagnostics: [],
+    next: index,
+    propagatedLineBreak: false,
+  }
+}
+
+function scanLabel(bytes: Bytes, start: int) -> LexemeScan {
+  let identifierStart = start + 1
+  let index = identifierEnd(bytes, identifierStart)
+  if index == identifierStart {
+    return LexemeScan {
+      tokens: [],
+      diagnostics: [diagnostic(
+        "TPZ0001",
+        "a `'` begins a loop label `'name`; a bare `'` is not valid",
+        start,
+        identifierStart,
+      )],
+      next: identifierStart,
+      propagatedLineBreak: false,
+    }
+  }
+  LexemeScan {
+    tokens: [token("label", start, index)],
+    diagnostics: [],
+    next: index,
+    propagatedLineBreak: false,
+  }
+}
+
+function scanIdentifier(bytes: Bytes, start: int, lineBreakForbidden: bool) -> LexemeScan {
+  let index = identifierEnd(bytes, start)
+  let kind = identifierHeadKind(bytes, start, index)
+  if kind == "tagged-string" {
+    return scanString(bytes, start, index, true, lineBreakForbidden)
+  }
+  LexemeScan {
+    tokens: [token(kind, start, index)],
+    diagnostics: [],
+    next: index,
+    propagatedLineBreak: false,
+  }
+}
+
+function scanUnknown(bytes: Bytes, start: int) -> LexemeScan {
+  let scalarWidth = utf8Width(byteAt(bytes, start))
+  let consumed = if scalarWidth > 0 { scalarWidth } else { 1 }
+  let found = decode(bytes, start, start + consumed)
+  LexemeScan {
+    tokens: [],
+    diagnostics: [diagnostic(
+      "TPZ0001",
+      "unknown character `{found}`",
+      start,
+      start + consumed,
+    )],
+    next: start + consumed,
+    propagatedLineBreak: false,
+  }
+}
+
+function scanCode(
+  bytes: Bytes,
+  startIndex: int,
+  interpolation: bool,
+  lineBreakForbidden: bool,
+) -> LexemeScan {
+  let mut tokens: Array<PreviewToken> = []
+  let mut diagnostics: Array<PreviewDiagnostic> = []
+  let mut index = startIndex
+  let mut braceDepth = 0
+
+  while index < bytes.length() {
+    let value = byteAt(bytes, index)
+    if interpolation && value == 125 {
+      if braceDepth == 0 {
+        tokens.push(token("interpolation-end", index, index + 1))
+        return LexemeScan {
+          tokens: tokens,
+          diagnostics: diagnostics,
+          next: index + 1,
+          propagatedLineBreak: false,
+        }
+      }
+      tokens.push(token("right-brace", index, index + 1))
+      braceDepth -= 1
+      index += 1
+      continue
+    }
+    if interpolation && lineBreakForbidden &&
+      (value == 10 || (value == 13 && byteAt(bytes, index + 1) == 10)) {
+      tokens.push(syntheticToken("interpolation-end", index))
+      return LexemeScan {
+        tokens: tokens,
+        diagnostics: diagnostics,
+        next: index,
+        propagatedLineBreak: true,
+      }
+    }
+    if isAsciiSpace(value) {
+      index += 1
+      continue
+    }
+    if value == 10 {
+      let lo = if index > 0 && byteAt(bytes, index - 1) == 13 { index - 1 } else { index }
+      tokens.push(token("newline", lo, index + 1))
+      index += 1
+      continue
+    }
+    if value == 13 && byteAt(bytes, index + 1) == 10 {
+      tokens.push(token("newline", index, index + 2))
+      index += 2
+      continue
+    }
+    if value == 13 {
+      index += 1
+      continue
+    }
+    if value == 47 &&
+      (byteAt(bytes, index + 1) == 47 || byteAt(bytes, index + 1) == 42) {
+      let found = scanComment(bytes, index)
+      appendScan(tokens, diagnostics, found.tokens, found.diagnostics)
+      index = found.next
+      continue
+    }
+    if value == 34 {
+      let result = scanString(bytes, index, index, false, lineBreakForbidden)
+      appendScan(tokens, diagnostics, result.tokens, result.diagnostics)
+      index = result.next
+      if result.propagatedLineBreak {
+        tokens.push(syntheticToken("interpolation-end", index))
+        return LexemeScan {
+          tokens: tokens,
+          diagnostics: diagnostics,
+          next: index,
+          propagatedLineBreak: true,
+        }
+      }
+      continue
+    }
+    if isAsciiDigit(value) {
+      let found = scanNumber(bytes, index)
+      appendScan(tokens, diagnostics, found.tokens, found.diagnostics)
+      index = found.next
+      continue
+    }
+    if value == 39 {
+      let found = scanLabel(bytes, index)
+      appendScan(tokens, diagnostics, found.tokens, found.diagnostics)
+      index = found.next
+      continue
+    }
+    let startWidth = identifierStartWidth(bytes, index)
+    if startWidth > 0 {
+      let found = scanIdentifier(bytes, index, lineBreakForbidden)
+      appendScan(tokens, diagnostics, found.tokens, found.diagnostics)
+      index = found.next
+      if found.propagatedLineBreak {
+        tokens.push(syntheticToken("interpolation-end", index))
+        return LexemeScan {
+          tokens: tokens,
+          diagnostics: diagnostics,
+          next: index,
+          propagatedLineBreak: true,
+        }
+      }
+      continue
+    }
+    match punctuation(bytes, index) {
+      case Some(found) => {
+        tokens.push(found)
+        if interpolation && found.kind == "left-brace" {
+          braceDepth += 1
+        }
+        index = found.hi
+      }
+      case None => {
+        let found = scanUnknown(bytes, index)
+        appendScan(tokens, diagnostics, found.tokens, found.diagnostics)
+        index = found.next
+      }
+    }
+  }
+  if interpolation {
+    tokens.push(syntheticToken("interpolation-end", index))
+  } else {
+    tokens.push(token("eof", bytes.length(), bytes.length()))
+  }
+  LexemeScan {
+    tokens: tokens,
+    diagnostics: diagnostics,
+    next: index,
+    propagatedLineBreak: false,
+  }
+}
+
+export function lex(source: string) -> RawResult {
+  let bytes = Bytes.encodeUtf8(source)
+  let result = scanCode(bytes, 0, false, false)
+  RawResult { tokens: result.tokens, diagnostics: result.diagnostics }
+}

@@ -1,0 +1,9 @@
+let result = if let Some(value) = maybe {
+  value
+} else {
+  0
+}
+
+while let Some(value) = next() {
+  consume(value)
+}

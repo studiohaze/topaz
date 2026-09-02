@@ -1,0 +1,10 @@
+
+function makeMap() {
+    Map.new()
+}
+function main() -> int {
+    let values = makeMap()
+    let bonus = if values.containsKey(k: "x") { 10 } else { 0 }
+    bonus + values.getOr(k: "x", default: 7)
+}
+main()

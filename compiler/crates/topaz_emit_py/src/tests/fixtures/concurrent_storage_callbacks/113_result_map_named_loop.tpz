@@ -1,0 +1,32 @@
+
+function dbl(x: int) -> int {
+    x * 2
+}
+
+function inc(x: int) -> int {
+    x + 1
+}
+
+function zero(x: int) -> int {
+    0
+}
+
+function choose(i: int) -> int {
+    let r = concurrent {
+        slow: {
+            let mut cbs = [zero, inc]
+            loop {
+                cbs[i] = dbl
+                let out = Ok(3).map(f: cbs[i])
+                break match out {
+                    case Ok(n) => n
+                    case Err(_) => -3
+                }
+            }
+        }
+        fast: 0
+    }
+    r.slow + r.fast
+}
+
+choose(1)

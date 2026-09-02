@@ -1,0 +1,12 @@
+
+function main() -> int {
+    let base = 3
+    function first(x: int) -> int {
+        second(x) + base
+    }
+    function second(y: int) -> int {
+        y * 2
+    }
+    first(4)
+}
+main()

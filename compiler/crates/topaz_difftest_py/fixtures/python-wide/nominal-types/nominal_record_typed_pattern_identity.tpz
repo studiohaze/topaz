@@ -1,0 +1,30 @@
+
+record User { name: string, age: int }
+record Admin { name: string, age: int }
+function main() -> int {
+    let u = User { name: "Ada", age: 36 }
+    let admin = Admin { name: "Ada", age: 36 }
+    let structural = { name: "Ada", age: 36 }
+    let a = match u {
+        case person: User if person.age > 30 => person.age
+        case _ => 0
+    }
+    let b = match u {
+        case other: Admin => 100
+        case _ => 1
+    }
+    let c = match structural {
+        case person: User => 1000
+        case _ => 2
+    }
+    let d = match admin {
+        case person: User => 10000
+        case _ => 3
+    }
+    let e = match u {
+        case person: User | Admin => person.age
+        case _ => 0
+    }
+    a + b + c + d + e
+}
+main()

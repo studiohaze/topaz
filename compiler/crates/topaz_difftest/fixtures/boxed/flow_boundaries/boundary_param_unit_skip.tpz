@@ -1,0 +1,4 @@
+function g(x: ()) -> int { 0 }
+g(for y in [1, 2] {
+  print("{y}")
+})

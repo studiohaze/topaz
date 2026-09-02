@@ -1,0 +1,1 @@
+let series = 0..<10 |> map(_, fibonacci)

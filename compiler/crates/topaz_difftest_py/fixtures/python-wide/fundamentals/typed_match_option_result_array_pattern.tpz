@@ -1,0 +1,17 @@
+
+function main() -> int {
+    let a = match [4].get(0) {
+        case opt: Option<int> => 1
+        case _ => 0
+    }
+    let b = match Ok("x") {
+        case res: Result<int, string> => 2
+        case _ => 0
+    }
+    let c = match [1, 2] {
+        case xs: Array<int> => 3
+        case _ => 0
+    }
+    a + b + c
+}
+main()

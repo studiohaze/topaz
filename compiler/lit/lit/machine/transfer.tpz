@@ -1,0 +1,407 @@
+// Dynamic transfer, condition, wind, and continuation transitions.
+// This leaf changes control context only; value delivery and primitive execution
+// remain with their machine siblings.
+
+import lit.model {
+  GuestInt,
+  GuestRational,
+  ErrorObjectRow,
+  GuardClauseRow,
+  GuestValue,
+  ValuePacket,
+  MachineSignal,
+  EnvironmentRow,
+  ContinuationFrame,
+  ContinuationRow,
+  DynamicFrame,
+  DynamicRow,
+  MachineMode,
+  KernelTransferStep,
+}
+import lit.value_runtime {
+  allocateCell,
+  allocateEnvironment,
+  allocateContinuation,
+  isCatchableSignal,
+  conditionObject,
+  conditionContinuable,
+  runtimeDiagnosticIsUserError,
+  nearestConditionTarget,
+}
+
+function runKernelTransferCondition(
+  signal: MachineSignal,
+  continuation: int,
+  cells: Array<GuestValue>,
+  environments: Array<EnvironmentRow>,
+  continuations: Array<ContinuationRow>,
+  dynamics: Array<DynamicRow>,
+  initialDynamicSuppressed: Array<bool>,
+  initialEscapeActive: Array<bool>,
+  guestIdentities: Array<int>,
+  initialAllocations: int,
+  initialMaxContinuationDepth: int,
+  initialTransfers: int,
+  initialDynamic: int,
+  initialActiveOrigin: int,
+  initialFinalDiagnostic: Option<string>,
+  initialFinalDiagnosticCode: Option<string>,
+  initialFinalDiagnosticMessage: Option<string>,
+  initialFinalDiagnosticOrigin: int,
+  initialFinalDiagnosticIrritants: Array<GuestValue>,
+  initialFinalStatus: string,
+  initialFinalExit: int,
+) -> KernelTransferStep {
+  let mut dynamicSuppressed = initialDynamicSuppressed
+  let mut escapeActive = initialEscapeActive
+  let mut allocations = initialAllocations
+  let mut maxContinuationDepth = initialMaxContinuationDepth
+  let mut transfers = initialTransfers
+  let mut dynamic = initialDynamic
+  let mut activeOrigin = initialActiveOrigin
+  let mut finalDiagnostic = initialFinalDiagnostic
+  let mut finalDiagnosticCode = initialFinalDiagnosticCode
+  let mut finalDiagnosticMessage = initialFinalDiagnosticMessage
+  let mut finalDiagnosticOrigin = initialFinalDiagnosticOrigin
+  let mut finalDiagnosticIrritants = initialFinalDiagnosticIrritants
+  let mut finalStatus = initialFinalStatus
+  let mut finalExit = initialFinalExit
+  let mut mode = MachineMode.HaltMode
+    let target = nearestConditionTarget(dynamics, dynamicSuppressed, dynamic)
+    if target >= 0 {
+      match dynamics[target].frame {
+        case HandlerDynamic(handler) => {
+          dynamicSuppressed[target] = true
+          let frame = allocateContinuation(
+            continuations,
+            ContinuationFrame.HandlerResultFrame(target, conditionContinuable(signal), activeOrigin),
+            continuation,
+          )
+          allocations += 1
+          if continuations[frame].depth > maxContinuationDepth { maxContinuationDepth = continuations[frame].depth }
+          mode = MachineMode.InvokeMode(handler, [conditionObject(signal, guestIdentities)], frame, activeOrigin)
+        }
+        case GuardDynamic(clauses, elseNode, environment, targetContinuation) => {
+          if dynamic == target {
+            dynamic = dynamics[target].parent
+            let cell = allocateCell(cells, conditionObject(signal, guestIdentities))
+            allocations += 1
+            let conditionEnvironment = allocateEnvironment(environments, environment, [cell])
+            allocations += 1
+            if clauses.length > 0 {
+              let frame = allocateContinuation(
+                continuations,
+                ContinuationFrame.GuardTestFrame(target, 0, conditionEnvironment, signal, continuation, activeOrigin),
+                targetContinuation,
+              )
+              allocations += 1
+              if continuations[frame].depth > maxContinuationDepth { maxContinuationDepth = continuations[frame].depth }
+              mode = MachineMode.EvalMode(clauses[0].test, conditionEnvironment, frame)
+            } else if elseNode >= 0 {
+              mode = MachineMode.EvalMode(elseNode, conditionEnvironment, targetContinuation)
+            } else {
+              transfers += 1
+              mode = MachineMode.TransferMode(signal, continuation)
+            }
+          } else {
+            match dynamics[dynamic].frame {
+              case WindDynamic(after, windOrigin) => {
+                dynamic = dynamics[dynamic].parent
+                let frame = allocateContinuation(
+                  continuations,
+                  ContinuationFrame.ResumeTransferFrame(signal, continuation, activeOrigin),
+                  continuation,
+                )
+                allocations += 1
+                if continuations[frame].depth > maxContinuationDepth { maxContinuationDepth = continuations[frame].depth }
+                mode = MachineMode.InvokeMode(after, [], frame, windOrigin)
+              }
+              case EscapeOwnerDynamic(escapeId, _) => {
+                escapeActive[escapeId] = false
+                dynamic = dynamics[dynamic].parent
+                transfers += 1
+                mode = MachineMode.TransferMode(signal, continuation)
+              }
+              case HandlerDynamic(_) => {
+                dynamic = dynamics[dynamic].parent
+                transfers += 1
+                mode = MachineMode.TransferMode(signal, continuation)
+              }
+              case GuardDynamic(_, _, _, _) => {
+                finalStatus = "error"
+                finalDiagnostic = Some("LIT200 invalid condition target ordering")
+                finalDiagnosticOrigin = activeOrigin
+                finalExit = 1
+                mode = MachineMode.HaltMode
+              }
+            }
+          }
+        }
+        case _ => {
+          finalStatus = "error"
+          finalDiagnostic = Some("LIT200 invalid condition target")
+          finalDiagnosticOrigin = activeOrigin
+          finalExit = 1
+          mode = MachineMode.HaltMode
+        }
+      }
+    } else if dynamic >= 0 {
+      match dynamics[dynamic].frame {
+        case WindDynamic(after, windOrigin) => {
+          dynamic = dynamics[dynamic].parent
+          let frame = allocateContinuation(
+            continuations,
+            ContinuationFrame.ResumeTransferFrame(signal, continuation, activeOrigin),
+            continuation,
+          )
+          allocations += 1
+          if continuations[frame].depth > maxContinuationDepth { maxContinuationDepth = continuations[frame].depth }
+          mode = MachineMode.InvokeMode(after, [], frame, windOrigin)
+        }
+        case EscapeOwnerDynamic(escapeId, _) => {
+          escapeActive[escapeId] = false
+          dynamic = dynamics[dynamic].parent
+          transfers += 1
+          mode = MachineMode.TransferMode(signal, continuation)
+        }
+        case HandlerDynamic(_) | GuardDynamic(_, _, _, _) => {
+          dynamic = dynamics[dynamic].parent
+          transfers += 1
+          mode = MachineMode.TransferMode(signal, continuation)
+        }
+      }
+    } else {
+      let diagnostic = match signal {
+        case RuntimeSignal(value) => value
+        case ProjectedRuntimeSignal(value, _, _, _) => value
+        case ConditionSignal(_, _, value) => value
+        case _ => "LIT200 invalid terminal condition"
+      }
+      match signal {
+        case ProjectedRuntimeSignal(_, code, message, irritants) => {
+          finalDiagnosticCode = Some(code)
+          finalDiagnosticMessage = Some(message)
+          finalDiagnosticIrritants = irritants
+        }
+        case ConditionSignal(value, _, raw) => {
+          if runtimeDiagnosticIsUserError(raw) {
+            match value {
+              case VError(_, error, irritants) => {
+                finalDiagnosticMessage = Some(error.message)
+                finalDiagnosticIrritants = irritants
+              }
+              case _ => { finalDiagnosticIrritants = [value] }
+            }
+          } else {
+            finalDiagnosticIrritants = [value]
+          }
+        }
+        case _ => {}
+      }
+      finalStatus = "error"
+      finalDiagnostic = Some(diagnostic)
+      finalDiagnosticOrigin = activeOrigin
+      finalExit = 1
+      mode = MachineMode.HaltMode
+    }
+  KernelTransferStep {
+    mode: mode,
+    allocations: allocations,
+    maxContinuationDepth: maxContinuationDepth,
+    transfers: transfers,
+    dynamic: dynamic,
+    activeOrigin: activeOrigin,
+    finalDiagnostic: finalDiagnostic,
+    finalDiagnosticCode: finalDiagnosticCode,
+    finalDiagnosticMessage: finalDiagnosticMessage,
+    finalDiagnosticOrigin: finalDiagnosticOrigin,
+    finalDiagnosticIrritants: finalDiagnosticIrritants,
+    finalStatus: finalStatus,
+    finalExit: finalExit,
+  }
+}
+
+function runKernelTransferControl(
+  signal: MachineSignal,
+  continuation: int,
+  cells: Array<GuestValue>,
+  environments: Array<EnvironmentRow>,
+  continuations: Array<ContinuationRow>,
+  dynamics: Array<DynamicRow>,
+  initialDynamicSuppressed: Array<bool>,
+  initialEscapeActive: Array<bool>,
+  guestIdentities: Array<int>,
+  initialAllocations: int,
+  initialMaxContinuationDepth: int,
+  initialTransfers: int,
+  initialDynamic: int,
+  initialActiveOrigin: int,
+  initialFinalDiagnostic: Option<string>,
+  initialFinalDiagnosticCode: Option<string>,
+  initialFinalDiagnosticMessage: Option<string>,
+  initialFinalDiagnosticOrigin: int,
+  initialFinalDiagnosticIrritants: Array<GuestValue>,
+  initialFinalStatus: string,
+  initialFinalExit: int,
+) -> KernelTransferStep {
+  let mut dynamicSuppressed = initialDynamicSuppressed
+  let mut escapeActive = initialEscapeActive
+  let mut allocations = initialAllocations
+  let mut maxContinuationDepth = initialMaxContinuationDepth
+  let mut transfers = initialTransfers
+  let mut dynamic = initialDynamic
+  let mut activeOrigin = initialActiveOrigin
+  let mut finalDiagnostic = initialFinalDiagnostic
+  let mut finalDiagnosticCode = initialFinalDiagnosticCode
+  let mut finalDiagnosticMessage = initialFinalDiagnosticMessage
+  let mut finalDiagnosticOrigin = initialFinalDiagnosticOrigin
+  let mut finalDiagnosticIrritants = initialFinalDiagnosticIrritants
+  let mut finalStatus = initialFinalStatus
+  let mut finalExit = initialFinalExit
+  let mut mode = MachineMode.HaltMode
+    match signal {
+      case EscapeSignal(targetEscape, packet) => {
+        if dynamic >= 0 {
+          match dynamics[dynamic].frame {
+            case WindDynamic(after, windOrigin) => {
+              dynamic = dynamics[dynamic].parent
+              let frame = allocateContinuation(
+                continuations,
+                ContinuationFrame.ResumeTransferFrame(signal, continuation, activeOrigin),
+                continuation,
+              )
+              allocations += 1
+              if continuations[frame].depth > maxContinuationDepth { maxContinuationDepth = continuations[frame].depth }
+              mode = MachineMode.InvokeMode(after, [], frame, windOrigin)
+            }
+            case EscapeOwnerDynamic(escapeId, targetContinuation) => {
+              dynamic = dynamics[dynamic].parent
+              if escapeId == targetEscape {
+                escapeActive[escapeId] = false
+                mode = MachineMode.DeliverMode(packet, targetContinuation)
+              } else {
+                escapeActive[escapeId] = false
+                transfers += 1
+                mode = MachineMode.TransferMode(signal, continuation)
+              }
+            }
+            case HandlerDynamic(_) | GuardDynamic(_, _, _, _) => {
+              dynamic = dynamics[dynamic].parent
+              transfers += 1
+              mode = MachineMode.TransferMode(signal, continuation)
+            }
+          }
+        } else {
+          finalStatus = "error"
+          finalDiagnostic = Some("E340 escape continuation is no longer active")
+          finalDiagnosticOrigin = activeOrigin
+          finalExit = 1
+          mode = MachineMode.HaltMode
+        }
+      }
+      case ResourceSignal(diagnostic) => {
+        if dynamic >= 0 {
+          match dynamics[dynamic].frame {
+            case WindDynamic(after, windOrigin) => {
+              dynamic = dynamics[dynamic].parent
+              let frame = allocateContinuation(
+                continuations,
+                ContinuationFrame.ResumeTransferFrame(signal, continuation, activeOrigin),
+                continuation,
+              )
+              allocations += 1
+              if continuations[frame].depth > maxContinuationDepth { maxContinuationDepth = continuations[frame].depth }
+              mode = MachineMode.InvokeMode(after, [], frame, windOrigin)
+            }
+            case EscapeOwnerDynamic(escapeId, _) => {
+              escapeActive[escapeId] = false
+              dynamic = dynamics[dynamic].parent
+              transfers += 1
+              mode = MachineMode.TransferMode(signal, continuation)
+            }
+            case HandlerDynamic(_) | GuardDynamic(_, _, _, _) => {
+              dynamic = dynamics[dynamic].parent
+              transfers += 1
+              mode = MachineMode.TransferMode(signal, continuation)
+            }
+          }
+        } else {
+          finalStatus = "resource"
+          finalDiagnostic = Some(diagnostic)
+          finalDiagnosticCode = Some("recursion-limit")
+          finalDiagnosticMessage = Some("execution exceeded the machine transition limit")
+          finalDiagnosticOrigin = activeOrigin
+          finalExit = 2
+          mode = MachineMode.HaltMode
+        }
+      }
+      case _ => {
+        finalStatus = "error"
+        finalDiagnostic = Some("LIT200 invalid non-condition signal")
+        finalDiagnosticOrigin = activeOrigin
+        finalExit = 1
+        mode = MachineMode.HaltMode
+      }
+    }
+  KernelTransferStep {
+    mode: mode,
+    allocations: allocations,
+    maxContinuationDepth: maxContinuationDepth,
+    transfers: transfers,
+    dynamic: dynamic,
+    activeOrigin: activeOrigin,
+    finalDiagnostic: finalDiagnostic,
+    finalDiagnosticCode: finalDiagnosticCode,
+    finalDiagnosticMessage: finalDiagnosticMessage,
+    finalDiagnosticOrigin: finalDiagnosticOrigin,
+    finalDiagnosticIrritants: finalDiagnosticIrritants,
+    finalStatus: finalStatus,
+    finalExit: finalExit,
+  }
+}
+
+export function runKernelTransfer(
+  signal: MachineSignal,
+  continuation: int,
+  cells: Array<GuestValue>,
+  environments: Array<EnvironmentRow>,
+  continuations: Array<ContinuationRow>,
+  dynamics: Array<DynamicRow>,
+  initialDynamicSuppressed: Array<bool>,
+  initialEscapeActive: Array<bool>,
+  guestIdentities: Array<int>,
+  initialAllocations: int,
+  initialMaxContinuationDepth: int,
+  initialTransfers: int,
+  initialDynamic: int,
+  initialActiveOrigin: int,
+  initialFinalDiagnostic: Option<string>,
+  initialFinalDiagnosticCode: Option<string>,
+  initialFinalDiagnosticMessage: Option<string>,
+  initialFinalDiagnosticOrigin: int,
+  initialFinalDiagnosticIrritants: Array<GuestValue>,
+  initialFinalStatus: string,
+  initialFinalExit: int,
+) -> KernelTransferStep {
+  if isCatchableSignal(signal) {
+    runKernelTransferCondition(
+      signal, continuation, cells, environments, continuations, dynamics,
+      initialDynamicSuppressed, initialEscapeActive, guestIdentities,
+      initialAllocations, initialMaxContinuationDepth, initialTransfers,
+      initialDynamic, initialActiveOrigin, initialFinalDiagnostic,
+      initialFinalDiagnosticCode, initialFinalDiagnosticMessage,
+      initialFinalDiagnosticOrigin, initialFinalDiagnosticIrritants,
+      initialFinalStatus, initialFinalExit,
+    )
+  } else {
+    runKernelTransferControl(
+      signal, continuation, cells, environments, continuations, dynamics,
+      initialDynamicSuppressed, initialEscapeActive, guestIdentities,
+      initialAllocations, initialMaxContinuationDepth, initialTransfers,
+      initialDynamic, initialActiveOrigin, initialFinalDiagnostic,
+      initialFinalDiagnosticCode, initialFinalDiagnosticMessage,
+      initialFinalDiagnosticOrigin, initialFinalDiagnosticIrritants,
+      initialFinalStatus, initialFinalExit,
+    )
+  }
+}

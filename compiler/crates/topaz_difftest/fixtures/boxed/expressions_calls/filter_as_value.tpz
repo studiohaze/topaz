@@ -1,0 +1,3 @@
+let flt = filter
+let xs = Array.of(1, 2, 3, 4)
+flt(xs, (x) => x > 2)

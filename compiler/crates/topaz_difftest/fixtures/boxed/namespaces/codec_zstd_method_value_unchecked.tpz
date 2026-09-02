@@ -1,0 +1,2 @@
+let f = Codec.zstdCompress
+f(Bytes.encodeUtf8("abc")).map((b) => b.toHex())

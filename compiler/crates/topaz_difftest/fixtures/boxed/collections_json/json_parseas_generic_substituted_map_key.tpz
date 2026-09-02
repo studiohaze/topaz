@@ -1,0 +1,5 @@
+record Lookup<K, V> { values: Map<K, V> }
+match JSON.parseAs<Lookup<string, int>>("\{\"values\":\{\"answer\":7\}\}") {
+  case Ok(lookup) => lookup.values.getOr("answer", 0)
+  case Err(e) => 0
+}

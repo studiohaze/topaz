@@ -1,0 +1,1663 @@
+// Atom, postfix, precedence, and control-expression grammar.
+// Type and pattern parsing enter through parser services, while node allocation
+// and recovery remain in parser.core.
+
+import types { PreviewAstAttribute, PreviewDiagnostic, PreviewToken, SyntaxNode }
+import parser.core {
+  Parser,
+  ParserService,
+  addDiagnostic,
+  at,
+  attach,
+  boolAttribute,
+  boxValue,
+  bump,
+  current,
+  diagnostic,
+  eat,
+  expect,
+  expectLeftBrace,
+  expectRightBrace,
+  fail,
+  fieldName,
+  identNode,
+  identifier,
+  isFieldNameKind,
+  itemBoundary,
+  invokeParseBlock,
+  lambdaAllowed,
+  layoutTokenAt,
+  matchingParenFollowedBy,
+  node,
+  parseString,
+  recordUpdateAllowed,
+  rejectReservedBinding,
+  setLambdaAllowed,
+  setRecordUpdateAllowed,
+  skipSeparators,
+  stringAttribute,
+  synchronize,
+  text,
+  tokenAt,
+}
+import parser.types_patterns { parsePattern, parseType, parseTypeArguments }
+
+function diagnosticWithNotes(
+  code: string,
+  message: string,
+  lo: int,
+  hi: int,
+  notes: Array<string>,
+) -> PreviewDiagnostic {
+  PreviewDiagnostic { code: code, message: message, lo: lo, hi: hi, notes: notes }
+}
+
+function nullAttribute(name: string) -> PreviewAstAttribute {
+  PreviewAstAttribute { name: name, kind: "null", value: "" }
+}
+
+function binaryPrecedence(kind: string) -> int {
+  match kind {
+    case "pipe-gt" => 1
+    case "gt-gt" => 2
+    case "question-question" => 3
+    case "or-or" => 4
+    case "and-and" => 5
+    case "eq-eq" | "not-eq" => 6
+    case "lt" | "le" | "gt" | "ge" | "keyword/in" => 6
+    case "dot-dot" | "dot-dot-lt" => 7
+    case "plus" | "minus" => 8
+    case "star" | "slash" | "percent" => 9
+    case _ => 0
+  }
+}
+
+function binaryName(kind: string) -> string {
+  match kind {
+    case "plus" => "add"
+    case "minus" => "subtract"
+    case "star" => "multiply"
+    case "slash" => "divide"
+    case "percent" => "remainder"
+    case "lt" => "less-than"
+    case "le" => "less-or-equal"
+    case "gt" => "greater-than"
+    case "ge" => "greater-or-equal"
+    case "eq-eq" => "equal"
+    case "not-eq" => "not-equal"
+    case "keyword/in" => "in"
+    case "and-and" => "and"
+    case "or-or" => "or"
+    case "question-question" => "coalesce"
+    case _ => ""
+  }
+}
+
+function parseCallArguments(
+  service: ParserService,
+  parser: Parser,
+) -> Result<Array<SyntaxNode>, string> {
+  expect(parser, "left-paren", "`(`")?
+  let mut arguments: Array<SyntaxNode> = []
+  let mut index = 0
+  while !at(parser, "right-paren") && !at(parser, "eof") {
+    if eat(parser, "ellipsis") {
+      let value = parseNestedExpression(service, parser, "value", 0)?
+      arguments.push(node(
+        "call-argument/spread",
+        value.lo,
+        value.hi,
+        "arguments",
+        index,
+        [],
+        [value],
+      ))
+    } else if at(parser, "identifier") && tokenAt(parser, 1).kind == "colon" {
+      let name = bump(parser)
+      bump(parser)
+      let value = parseNestedExpression(service, parser, "value", 0)?
+      arguments.push(node(
+        "call-argument/named",
+        name.lo,
+        value.hi,
+        "arguments",
+        index,
+        [],
+        [identNode(name, "name", 0), value],
+      ))
+    } else {
+      arguments.push(parseNestedExpression(service, parser, "arguments", index)?)
+    }
+    index += 1
+    if !eat(parser, "comma") {
+      break
+    }
+  }
+  expect(parser, "right-paren", "`)`")?
+  Ok(arguments)
+}
+
+function looksLikeCallTypeArguments(parser: Parser) -> bool {
+  if !at(parser, "lt") {
+    return false
+  }
+  let mut angle = 0
+  let mut paren = 0
+  let mut brace = 0
+  let mut offset = 0
+  let mut sawTypeToken = false
+  while true {
+    let token = tokenAt(parser, offset)
+    if token.kind == "lt" {
+      angle += 1
+    } else if token.kind == "gt" || token.kind == "gt-gt" {
+      if paren != 0 || brace != 0 {
+        return false
+      }
+      if token.kind == "gt-gt" {
+        angle -= 2
+      } else {
+        angle -= 1
+      }
+      if angle <= 0 {
+        let next = tokenAt(parser, offset + 1)
+        return angle == 0 && sawTypeToken &&
+          next.kind == "left-paren" && token.hi == next.lo
+      }
+      sawTypeToken = true
+    } else if token.kind == "left-paren" {
+      paren += 1
+      sawTypeToken = true
+    } else if token.kind == "right-paren" {
+      paren -= 1
+      if paren < 0 {
+        return false
+      }
+    } else if token.kind == "left-brace" {
+      brace += 1
+      sawTypeToken = true
+    } else if token.kind == "right-brace" {
+      brace -= 1
+      if brace < 0 {
+        return false
+      }
+    } else if token.kind == "identifier" || token.kind == "dot" ||
+      token.kind == "thin-arrow" || token.kind == "ellipsis" ||
+      token.kind == "pipe" || token.kind == "colon" ||
+      token.kind == "integer" || token.kind == "float" ||
+      token.kind == "keyword/true" || token.kind == "keyword/false" ||
+      token.kind == "keyword/null" || token.kind == "string-end" ||
+      token.kind == "string-text" || token.kind.startsWith("string-start/") {
+      sawTypeToken = true
+    } else if token.kind != "comma" {
+      return false
+    }
+    offset += 1
+  }
+  false
+}
+
+function parseLambdaParameters(
+  service: ParserService,
+  parser: Parser,
+) -> Result<Array<SyntaxNode>, string> {
+  let mut parameters: Array<SyntaxNode> = []
+  let mut index = 0
+  while !at(parser, "right-paren") && !at(parser, "eof") {
+    let lo = current(parser).lo
+    let name = identifier(parser, "a parameter name")?
+    rejectReservedBinding(parser, name)
+    let mut children: Array<SyntaxNode> = [identNode(name, "name", 0)]
+    if eat(parser, "colon") {
+      children.push(parseType(service, parser, "type", 0)?)
+    }
+    parameters.push(node(
+      "lambda-parameter",
+      lo,
+      boxValue(parser.lastHi),
+      "parameters",
+      index,
+      [],
+      children,
+    ))
+    index += 1
+    if !eat(parser, "comma") {
+      break
+    }
+  }
+  Ok(parameters)
+}
+
+function parseSingleLambda(
+  service: ParserService,
+  parser: Parser,
+  field: string,
+  index: int,
+) -> Result<SyntaxNode, string> {
+  let name = identifier(parser, "a parameter name")?
+  rejectReservedBinding(parser, name)
+  expect(parser, "fat-arrow", "`=>`")?
+  let body = parseExpression(service, parser, "body", 0)?
+  Ok(node(
+    "expression/lambda",
+    name.lo,
+    body.hi,
+    field,
+    index,
+    [],
+    [
+      node(
+        "lambda-parameter",
+        name.lo,
+        name.hi,
+        "parameters",
+        0,
+        [],
+        [identNode(name, "name", 0)],
+      ),
+      body,
+    ],
+  ))
+}
+
+function parseParenLambda(
+  service: ParserService,
+  parser: Parser,
+  field: string,
+  index: int,
+) -> Result<SyntaxNode, string> {
+  let open = expect(parser, "left-paren", "`(`")?
+  let mut children = parseLambdaParameters(service, parser)?
+  expect(parser, "right-paren", "`)`")?
+  expect(parser, "fat-arrow", "`=>`")?
+  let body = parseExpression(service, parser, "body", 0)?
+  let hi = body.hi
+  children.push(body)
+  Ok(node("expression/lambda", open.lo, hi, field, index, [], children))
+}
+
+function parseArray(
+  service: ParserService,
+  parser: Parser,
+  field: string,
+  index: int,
+) -> Result<SyntaxNode, string> {
+  let open = expect(parser, "left-bracket", "`[`")?
+  let mut elements: Array<SyntaxNode> = []
+  let mut elementIndex = 0
+  while !at(parser, "right-bracket") && !at(parser, "eof") {
+    if eat(parser, "ellipsis") {
+      let value = parseNestedExpression(service, parser, "value", 0)?
+      elements.push(node(
+        "array-element/spread",
+        value.lo,
+        value.hi,
+        "elements",
+        elementIndex,
+        [],
+        [value],
+      ))
+    } else {
+      elements.push(parseNestedExpression(service, parser, "elements", elementIndex)?)
+    }
+    elementIndex += 1
+    if !eat(parser, "comma") {
+      break
+    }
+  }
+  let close = expect(parser, "right-bracket", "`]`")?
+  Ok(node(
+    "expression/array",
+    open.lo,
+    close.hi,
+    field,
+    index,
+    [],
+    elements,
+  ))
+}
+
+function parseFieldInitializers(
+  service: ParserService,
+  parser: Parser,
+  rejectRecordSpread: bool,
+) -> Result<Array<SyntaxNode>, string> {
+  let mut fields: Array<SyntaxNode> = []
+  let mut fieldIndex = 0
+  while !at(parser, "right-brace") && !at(parser, "eof") {
+    if rejectRecordSpread && at(parser, "ellipsis") {
+      let spread = current(parser)
+      addDiagnostic(
+        parser,
+        "TPZ2001",
+        "a record spread `...` must be the FIRST element and appear at most once",
+        spread.lo,
+        spread.hi,
+      )
+      recoverToMatchingRightBrace(parser)
+      break
+    }
+    let name = fieldName(parser, "a field name")?
+    expect(parser, "colon", "`:`")?
+    let value = parseNestedExpression(service, parser, "value", 0)?
+    fields.push(node(
+      "field-initializer",
+      name.lo,
+      value.hi,
+      "fields",
+      fieldIndex,
+      [],
+      [identNode(name, "name", 0), value],
+    ))
+    fieldIndex += 1
+    if !eat(parser, "comma") {
+      break
+    }
+  }
+  Ok(fields)
+}
+
+function parseRecordLiteral(
+  service: ParserService,
+  parser: Parser,
+  field: string,
+  index: int,
+) -> Result<SyntaxNode, string> {
+  let open = expectLeftBrace(parser)?
+  let children = parseFieldInitializers(service, parser, false)?
+  let close = expectRightBrace(parser)?
+  Ok(node(
+    "expression/record-literal",
+    open.lo,
+    close.hi,
+    field,
+    index,
+    [],
+    children,
+  ))
+}
+
+function parseRecordUpdate(
+  service: ParserService,
+  parser: Parser,
+  base: SyntaxNode,
+  field: string,
+  index: int,
+) -> Result<SyntaxNode, string> {
+  expectLeftBrace(parser)?
+  let mut children: Array<SyntaxNode> = [attach(base, "base", 0)]
+  if eat(parser, "ellipsis") {
+    children.push(parseNestedExpression(service, parser, "spread", 0)?)
+    if !at(parser, "right-brace") && !eat(parser, "comma") {
+      let token = current(parser)
+      addDiagnostic(parser, "TPZ2001", "expected `,` or `\}`", token.lo, token.hi)
+      recoverToMatchingRightBrace(parser)
+    }
+  }
+  for found in parseFieldInitializers(service, parser, true)? {
+    children.push(found)
+  }
+  let close = expectRightBrace(parser)?
+  Ok(node(
+    "expression/record-update",
+    base.lo,
+    close.hi,
+    field,
+    index,
+    [],
+    children,
+  ))
+}
+
+function parseComprehensionClauses(
+  service: ParserService,
+  parser: Parser,
+) -> Result<Array<SyntaxNode>, string> {
+  let mut clauses: Array<SyntaxNode> = []
+  let mut clauseIndex = 0
+  while true {
+    if eat(parser, "keyword/for") {
+      let pattern = parsePattern(service, parser, "pattern", 0)?
+      expect(parser, "keyword/in", "`in`")?
+      let iterator = parseExpressionWithoutNakedLambda(service, parser, "iterator", 0)?
+      clauses.push(node(
+        "comprehension-clause/for",
+        pattern.lo,
+        iterator.hi,
+        "clauses",
+        clauseIndex,
+        [],
+        [pattern, iterator],
+      ))
+      clauseIndex += 1
+      continue
+    }
+    if eat(parser, "keyword/if") {
+      let condition = parseExpressionWithoutNakedLambda(service, parser, "condition", 0)?
+      clauses.push(node(
+        "comprehension-clause/if",
+        condition.lo,
+        condition.hi,
+        "clauses",
+        clauseIndex,
+        [],
+        [condition],
+      ))
+      clauseIndex += 1
+      continue
+    }
+    break
+  }
+  expect(parser, "fat-arrow", "`=>` to introduce the comprehension body")?
+  Ok(clauses)
+}
+
+function parseArrayComprehension(
+  service: ParserService,
+  parser: Parser,
+  field: string,
+  index: int,
+) -> Result<SyntaxNode, string> {
+  let open = expect(parser, "left-bracket", "`[`")?
+  let mut children = parseComprehensionClauses(service, parser)?
+  children.push(parseNestedExpression(service, parser, "body", 0)?)
+  let close = expect(parser, "right-bracket", "`]`")?
+  Ok(node(
+    "expression/comprehension",
+    open.lo,
+    close.hi,
+    field,
+    index,
+    [stringAttribute("collection", "array")],
+    children,
+  ))
+}
+
+function parseSetComprehension(
+  service: ParserService,
+  parser: Parser,
+  field: string,
+  index: int,
+) -> Result<SyntaxNode, string> {
+  let head = identifier(parser, "`set`")?
+  expectLeftBrace(parser)?
+  let mut children = parseComprehensionClauses(service, parser)?
+  children.push(parseNestedExpression(service, parser, "body", 0)?)
+  let close = expectRightBrace(parser)?
+  Ok(node(
+    "expression/comprehension",
+    head.lo,
+    close.hi,
+    field,
+    index,
+    [stringAttribute("collection", "set")],
+    children,
+  ))
+}
+
+function parseMapComprehension(
+  service: ParserService,
+  parser: Parser,
+  field: string,
+  index: int,
+) -> Result<SyntaxNode, string> {
+  let head = identifier(parser, "`map`")?
+  expectLeftBrace(parser)?
+  let mut children = parseComprehensionClauses(service, parser)?
+  children.push(parseNestedExpression(service, parser, "bodyKey", 0)?)
+  expect(parser, "colon", "`:` (a map comprehension body is `key: value`)")?
+  children.push(parseNestedExpression(service, parser, "bodyValue", 0)?)
+  let close = expectRightBrace(parser)?
+  Ok(node(
+    "expression/comprehension",
+    head.lo,
+    close.hi,
+    field,
+    index,
+    [stringAttribute("collection", "map")],
+    children,
+  ))
+}
+
+function parseSet(
+  service: ParserService,
+  parser: Parser,
+  field: string,
+  index: int,
+) -> Result<SyntaxNode, string> {
+  let head = identifier(parser, "`set`")?
+  expectLeftBrace(parser)?
+  let mut elements: Array<SyntaxNode> = []
+  let mut elementIndex = 0
+  while !at(parser, "right-brace") && !at(parser, "eof") {
+    elements.push(parseNestedExpression(service, parser, "elements", elementIndex)?)
+    elementIndex += 1
+    if !eat(parser, "comma") {
+      break
+    }
+  }
+  let close = expectRightBrace(parser)?
+  Ok(node("expression/set", head.lo, close.hi, field, index, [], elements))
+}
+
+function parseMap(
+  service: ParserService,
+  parser: Parser,
+  field: string,
+  index: int,
+) -> Result<SyntaxNode, string> {
+  let head = identifier(parser, "`map`")?
+  expectLeftBrace(parser)?
+  let mut entries: Array<SyntaxNode> = []
+  let mut entryIndex = 0
+  while !at(parser, "right-brace") && !at(parser, "eof") {
+    let key = parseNestedExpression(service, parser, "key", 0)?
+    expect(parser, "colon", "`:`")?
+    let value = parseNestedExpression(service, parser, "value", 0)?
+    entries.push(node(
+      "map-entry",
+      key.lo,
+      value.hi,
+      "entries",
+      entryIndex,
+      [],
+      [key, value],
+    ))
+    entryIndex += 1
+    if !eat(parser, "comma") {
+      break
+    }
+  }
+  let close = expectRightBrace(parser)?
+  Ok(node("expression/map", head.lo, close.hi, field, index, [], entries))
+}
+
+export function blockExpression(block: SyntaxNode, field: string, index: int) -> SyntaxNode {
+  node(
+    "expression/block",
+    block.lo,
+    block.hi,
+    field,
+    index,
+    [],
+    [attach(block, "block", 0)],
+  )
+}
+
+function parseIfLet(
+  service: ParserService,
+  parser: Parser,
+  keyword: PreviewToken,
+  field: string,
+  index: int,
+) -> Result<SyntaxNode, string> {
+  expect(parser, "keyword/let", "`let`")?
+  let pattern = parsePattern(service, parser, "pattern", 0)?
+  expect(parser, "eq", "`=`")?
+  let scrutinee = parseExpressionBeforeBlock(service, parser, "scrutinee", 0)?
+  let thenBlock = invokeParseBlock(service, parser, "block", 0)?
+  let thenExpression = blockExpression(thenBlock, "body", 0)
+  let mut elseExpression = node(
+    "expression/unit",
+    thenBlock.hi,
+    thenBlock.hi,
+    "body",
+    0,
+    [],
+    [],
+  )
+  if eat(parser, "keyword/else") {
+    elseExpression = if at(parser, "keyword/if") {
+      parseIf(service, parser, "body", 0)?
+    } else {
+      let block = invokeParseBlock(service, parser, "block", 0)?
+      blockExpression(block, "body", 0)
+    }
+  }
+  let hi = elseExpression.hi
+  let wholeLo = keyword.lo
+  let firstCase = node(
+    "match-case",
+    wholeLo,
+    hi,
+    "cases",
+    0,
+    [],
+    [pattern, thenExpression],
+  )
+  let wildcard = node("pattern/wildcard", wholeLo, hi, "pattern", 0, [], [])
+  let secondCase = node(
+    "match-case",
+    wholeLo,
+    hi,
+    "cases",
+    1,
+    [],
+    [wildcard, elseExpression],
+  )
+  Ok(node(
+    "expression/match",
+    wholeLo,
+    hi,
+    field,
+    index,
+    [],
+    [scrutinee, firstCase, secondCase],
+  ))
+}
+
+function parseIf(
+  service: ParserService,
+  parser: Parser,
+  field: string,
+  index: int,
+) -> Result<SyntaxNode, string> {
+  let keyword = expect(parser, "keyword/if", "`if`")?
+  if at(parser, "keyword/let") {
+    return parseIfLet(service, parser, keyword, field, index)
+  }
+  let condition = parseExpressionBeforeBlock(service, parser, "condition", 0)?
+  let thenBlock = invokeParseBlock(service, parser, "then", 0)?
+  let mut children: Array<SyntaxNode> = [condition, thenBlock]
+  let mut hi = thenBlock.hi
+  if eat(parser, "keyword/else") {
+    let elseValue = if at(parser, "keyword/if") {
+      parseIf(service, parser, "else", 0)?
+    } else {
+      let block = invokeParseBlock(service, parser, "block", 0)?
+      blockExpression(block, "else", 0)
+    }
+    hi = elseValue.hi
+    children.push(elseValue)
+  }
+  Ok(node("expression/if", keyword.lo, hi, field, index, [], children))
+}
+
+function parseFor(
+  service: ParserService,
+  parser: Parser,
+  field: string,
+  index: int,
+) -> Result<SyntaxNode, string> {
+  let keyword = expect(parser, "keyword/for", "`for`")?
+  let pattern = parsePattern(service, parser, "pattern", 0)?
+  expect(parser, "keyword/in", "`in`")?
+  let iterator = parseExpressionBeforeBlock(service, parser, "iterator", 0)?
+  let body = invokeParseBlock(service, parser, "body", 0)?
+  Ok(node(
+    "expression/for",
+    keyword.lo,
+    body.hi,
+    field,
+    index,
+    [],
+    [pattern, iterator, body],
+  ))
+}
+
+export function labelNode(value: PreviewToken, field: string, index: int) -> SyntaxNode {
+  node("identifier", value.lo + 1, value.hi, field, index, [], [])
+}
+
+function parseLoop(
+  service: ParserService,
+  parser: Parser,
+  field: string,
+  index: int,
+) -> Result<SyntaxNode, string> {
+  let head = identifier(parser, "`loop`")?
+  let mut children: Array<SyntaxNode> = []
+  if at(parser, "label") {
+    children.push(labelNode(bump(parser), "label", 0))
+  }
+  let body = invokeParseBlock(service, parser, "body", 0)?
+  let hi = body.hi
+  children.push(body)
+  Ok(node("expression/loop", head.lo, hi, field, index, [], children))
+}
+
+function parseConcurrentTimeout(parser: Parser) -> Result<Option<SyntaxNode>, string> {
+  if !at(parser, "left-paren") {
+    return Ok(None)
+  }
+  bump(parser)
+  let key = identifier(parser, "`timeout`")?
+  if text(parser, key.lo, key.hi) != "timeout" {
+    addDiagnostic(
+      parser,
+      "TPZ2005",
+      "`concurrent` takes only a `timeout:` argument",
+      key.lo,
+      key.hi,
+    )
+  }
+  if !eat(parser, "colon") {
+    let token = current(parser)
+    addDiagnostic(parser, "TPZ2001", "expected `:` after `timeout`", token.lo, token.hi)
+  }
+  let duration = current(parser)
+  let mut durationHi = duration.hi
+  let mut unit = "s"
+  let mut valueAttribute = nullAttribute("valueDecimal")
+  if duration.kind.startsWith("duration/") {
+    bump(parser)
+    unit = duration.kind.replace("duration/", "")
+    let spelling = text(parser, duration.lo, duration.hi)
+    valueAttribute = stringAttribute(
+      "valueDecimal",
+      spelling.replace(unit, "").replace("_", ""),
+    )
+  } else {
+    addDiagnostic(
+      parser,
+      "TPZ2001",
+      "expected a duration literal, e.g. `3s`",
+      duration.lo,
+      duration.hi,
+    )
+    recoverToMatchingRightParen(parser, false)
+    let recoveredHi = boxValue(parser.lastHi)
+    if recoveredHi > durationHi {
+      durationHi = recoveredHi
+    }
+  }
+  let value = node(
+    "expression/duration",
+    duration.lo,
+    durationHi,
+    "timeout",
+    0,
+    [
+      stringAttribute("unit", unit),
+      valueAttribute,
+    ],
+    [],
+  )
+  expect(parser, "right-paren", "`)`")?
+  Ok(Some(value))
+}
+
+function parseConcurrentArm(
+  service: ParserService,
+  parser: Parser,
+  index: int,
+) -> Result<SyntaxNode, string> {
+  let name = identifier(parser, "an arm name")?
+  expect(parser, "colon", "`:`")?
+  let value = parseNestedExpression(service, parser, "value", 0)?
+  Ok(node(
+    "concurrent-arm",
+    name.lo,
+    value.hi,
+    "arms",
+    index,
+    [],
+    [identNode(name, "name", 0), value],
+  ))
+}
+
+function parseConcurrentArms(
+  service: ParserService,
+  parser: Parser,
+  keyword: PreviewToken,
+) -> Result<Array<SyntaxNode>, string> {
+  expectLeftBrace(parser)?
+  let mut arms: Array<SyntaxNode> = []
+  skipSeparators(parser)
+  while !at(parser, "right-brace") && !at(parser, "eof") {
+    match parseConcurrentArm(service, parser, arms.length) {
+      case Ok(arm) => {
+        arms.push(arm)
+        itemBoundary(parser)
+      }
+      case Err(_) => synchronize(parser)
+    }
+    skipSeparators(parser)
+  }
+  expectRightBrace(parser)?
+  if arms.length == 0 {
+    addDiagnostic(
+      parser,
+      "TPZ2001",
+      "`concurrent` requires at least one arm",
+      keyword.lo,
+      boxValue(parser.lastHi),
+    )
+  }
+  Ok(arms)
+}
+
+function parseConcurrentElse(
+  service: ParserService,
+  parser: Parser,
+  keyword: PreviewToken,
+  hasTimeout: bool,
+) -> Result<Option<SyntaxNode>, string> {
+  let elseToken = current(parser)
+  if eat(parser, "keyword/else") {
+    if !hasTimeout {
+      addDiagnostic(
+        parser,
+        "TPZ2005",
+        "`else` requires the `concurrent(timeout: ...)` form",
+        elseToken.lo,
+        elseToken.hi,
+      )
+    }
+    return Ok(Some(invokeParseBlock(service, parser, "else", 0)?))
+  }
+  if hasTimeout {
+    addDiagnostic(
+      parser,
+      "TPZ2005",
+      "the `concurrent(timeout: ...)` form requires an `else` block",
+      keyword.lo,
+      boxValue(parser.lastHi),
+    )
+  }
+  Ok(None)
+}
+
+function parseConcurrent(
+  service: ParserService,
+  parser: Parser,
+  field: string,
+  index: int,
+) -> Result<SyntaxNode, string> {
+  let keyword = expect(parser, "keyword/concurrent", "`concurrent`")?
+  let mut children: Array<SyntaxNode> = []
+  let timeout = parseConcurrentTimeout(parser)?
+  let mut hasTimeout = false
+  match timeout {
+    case Some(value) => {
+      hasTimeout = true
+      children.push(value)
+    }
+    case None => ()
+  }
+  for arm in parseConcurrentArms(service, parser, keyword)? {
+    children.push(arm)
+  }
+  match parseConcurrentElse(service, parser, keyword, hasTimeout)? {
+    case Some(value) => children.push(value)
+    case None => ()
+  }
+  Ok(node(
+    "expression/concurrent",
+    keyword.lo,
+    boxValue(parser.lastHi),
+    field,
+    index,
+    [],
+    children,
+  ))
+}
+
+function parseMatchCase(
+  service: ParserService,
+  parser: Parser,
+  index: int,
+) -> Result<SyntaxNode, string> {
+  let keyword = expect(parser, "keyword/case", "`case`")?
+  let pattern = parsePattern(service, parser, "pattern", 0)?
+  let mut children: Array<SyntaxNode> = [pattern]
+  if eat(parser, "keyword/if") {
+    children.push(parseExpressionWithoutNakedLambda(service, parser, "guard", 0)?)
+  }
+  expect(parser, "fat-arrow", "`=>`")?
+  let hi = if at(parser, "keyword/return") {
+    let returnToken = bump(parser)
+    let mut returnChildren: Array<SyntaxNode> = []
+    if !at(parser, "separator") && !at(parser, "right-brace") && !at(parser, "eof") {
+      returnChildren.push(parseNestedExpression(service, parser, "value", 0)?)
+    }
+    let returnHi = boxValue(parser.lastHi)
+    children.push(node(
+      "match-case-return",
+      returnToken.lo,
+      returnHi,
+      "body",
+      0,
+      [],
+      returnChildren,
+    ))
+    returnHi
+  } else {
+    let body = parseNestedExpression(service, parser, "body", 0)?
+    let bodyHi = body.hi
+    children.push(body)
+    bodyHi
+  }
+  Ok(node("match-case", keyword.lo, hi, "cases", index, [], children))
+}
+
+function parseMatch(
+  service: ParserService,
+  parser: Parser,
+  field: string,
+  index: int,
+) -> Result<SyntaxNode, string> {
+  let keyword = expect(parser, "keyword/match", "`match`")?
+  let scrutinee = parseExpressionBeforeBlock(service, parser, "scrutinee", 0)?
+  let open = expectLeftBrace(parser)?
+  let mut children: Array<SyntaxNode> = [scrutinee]
+  let mut caseIndex = 0
+  skipSeparators(parser)
+  while !at(parser, "right-brace") && !at(parser, "eof") {
+    match parseMatchCase(service, parser, caseIndex) {
+      case Ok(found) => {
+        children.push(found)
+        caseIndex += 1
+        itemBoundary(parser)
+      }
+      case Err(_) => synchronize(parser)
+    }
+    skipSeparators(parser)
+  }
+  let close = expectRightBrace(parser)?
+  if caseIndex == 0 {
+    addDiagnostic(
+      parser,
+      "TPZ2001",
+      "`match` requires at least one `case`",
+      open.lo,
+      close.hi,
+    )
+  }
+  Ok(node(
+    "expression/match",
+    keyword.lo,
+    close.hi,
+    field,
+    index,
+    [],
+    children,
+  ))
+}
+
+function parseIdentifierAtom(
+  service: ParserService,
+  parser: Parser,
+  field: string,
+  index: int,
+) -> Result<SyntaxNode, string> {
+  let value = current(parser)
+  if tokenAt(parser, 1).kind == "fat-arrow" && lambdaAllowed(parser) {
+    return parseSingleLambda(service, parser, field, index)
+  }
+  let name = text(parser, value.lo, value.hi)
+  if name == "set" && tokenAt(parser, 1).kind == "left-brace" {
+    if tokenAt(parser, 2).kind == "keyword/for" {
+      return parseSetComprehension(service, parser, field, index)
+    }
+    return parseSet(service, parser, field, index)
+  }
+  if name == "map" && tokenAt(parser, 1).kind == "left-brace" {
+    if tokenAt(parser, 2).kind == "keyword/for" {
+      return parseMapComprehension(service, parser, field, index)
+    }
+    return parseMap(service, parser, field, index)
+  }
+  if name == "loop" &&
+    (tokenAt(parser, 1).kind == "left-brace" ||
+      (tokenAt(parser, 1).kind == "label" && tokenAt(parser, 2).kind == "left-brace")) {
+    return parseLoop(service, parser, field, index)
+  }
+  bump(parser)
+  Ok(node("expression/identifier", value.lo, value.hi, field, index, [], []))
+}
+
+function parseParenthesizedExpression(
+  service: ParserService,
+  parser: Parser,
+  field: string,
+  index: int,
+) -> Result<SyntaxNode, string> {
+  let openPosition = boxValue(parser.position)
+  let open = bump(parser)
+  if eat(parser, "right-paren") {
+    return Ok(node(
+      "expression/unit",
+      open.lo,
+      boxValue(parser.lastHi),
+      field,
+      index,
+      [],
+      [],
+    ))
+  }
+  let inner = parseNestedExpression(service, parser, "operand", 0)?
+  if at(parser, "comma") {
+    let comma = current(parser)
+    let mut diagnostics = parser.diagnostics
+    diagnostics.push(diagnosticWithNotes(
+      "TPZ2001",
+      "parentheses group a single expression; `(a, b)` comma lists are not Topaz syntax",
+      comma.lo,
+      comma.hi,
+      if looksLikeExplicitTypeArgumentsBefore(parser, openPosition) {
+        ["Topaz infers type arguments — drop the explicit `<…>`, e.g. `Array.of(…)`"]
+      } else {
+        []
+      },
+    ))
+    recoverToMatchingRightParen(parser, true)
+    return Ok(node(
+      "expression/parenthesized",
+      open.lo,
+      boxValue(parser.lastHi),
+      field,
+      index,
+      [],
+      [inner],
+    ))
+  }
+  let close = expect(parser, "right-paren", "`)`")?
+  Ok(node(
+    "expression/parenthesized",
+    open.lo,
+    close.hi,
+    field,
+    index,
+    [],
+    [inner],
+  ))
+}
+
+function looksLikeExplicitTypeArgumentsBefore(parser: Parser, leftParenPosition: int) -> bool {
+  if leftParenPosition == 0 || layoutTokenAt(parser, leftParenPosition - 1).kind != "gt" {
+    return false
+  }
+  let mut position = leftParenPosition - 1
+  let mut depth = 0
+  while true {
+    let kind = layoutTokenAt(parser, position).kind
+    if kind == "gt" {
+      depth += 1
+    } else if kind == "lt" {
+      depth -= 1
+      if depth == 0 {
+        break
+      }
+    } else if kind != "identifier" && kind != "comma" {
+      return false
+    }
+    if position == 0 {
+      return false
+    }
+    position -= 1
+  }
+  position > 0 && layoutTokenAt(parser, position - 1).kind == "identifier"
+}
+
+function recoverToMatchingRightParen(parser: Parser, consumeClose: bool) -> () {
+  let mut depth = 0
+  while !at(parser, "eof") {
+    let kind = current(parser).kind
+    if kind == "left-paren" || kind == "left-bracket" || kind == "left-brace" {
+      depth += 1
+    } else if kind == "right-paren" || kind == "right-bracket" || kind == "right-brace" {
+      if depth == 0 {
+        if consumeClose && kind == "right-paren" {
+          bump(parser)
+        }
+        return ()
+      }
+      depth -= 1
+    }
+    bump(parser)
+  }
+  ()
+}
+
+function recoverToMatchingRightBrace(parser: Parser) -> () {
+  let mut depth = 0
+  while !at(parser, "eof") {
+    let kind = current(parser).kind
+    if kind == "left-paren" || kind == "left-bracket" || kind == "left-brace" {
+      depth += 1
+    } else if kind == "right-paren" || kind == "right-bracket" || kind == "right-brace" {
+      if depth == 0 {
+        return ()
+      }
+      depth -= 1
+    }
+    bump(parser)
+  }
+  ()
+}
+
+function parseCollectionAtom(
+  service: ParserService,
+  parser: Parser,
+  field: string,
+  index: int,
+) -> Result<SyntaxNode, string> {
+  let value = current(parser)
+  if value.kind == "left-bracket" {
+    if tokenAt(parser, 1).kind == "keyword/for" {
+      return parseArrayComprehension(service, parser, field, index)
+    }
+    return parseArray(service, parser, field, index)
+  }
+  if value.kind == "left-brace" &&
+    isFieldNameKind(tokenAt(parser, 1).kind) &&
+    tokenAt(parser, 2).kind == "colon" {
+    return parseRecordLiteral(service, parser, field, index)
+  }
+  if value.kind == "left-brace" {
+    let block = invokeParseBlock(service, parser, "block", 0)?
+    return Ok(node(
+      "expression/block",
+      block.lo,
+      block.hi,
+      field,
+      index,
+      [],
+      [block],
+    ))
+  }
+  fail(parser, "expected a collection or block expression")?
+  Err("expected a collection or block expression")
+}
+
+function parseLiteralAtom(
+  parser: Parser,
+  field: string,
+  index: int,
+) -> Result<SyntaxNode, string> {
+  let value = bump(parser)
+  if value.kind == "integer" {
+    return Ok(node(
+      "expression/integer",
+      value.lo,
+      value.hi,
+      field,
+      index,
+      [stringAttribute("valueDecimal", text(parser, value.lo, value.hi).replace("_", ""))],
+      [],
+    ))
+  }
+  if value.kind == "float" {
+    return Ok(node(
+      "expression/float",
+      value.lo,
+      value.hi,
+      field,
+      index,
+      [nullAttribute("floatBits")],
+      [],
+    ))
+  }
+  if value.kind == "keyword/true" || value.kind == "keyword/false" {
+    return Ok(node(
+      "expression/boolean",
+      value.lo,
+      value.hi,
+      field,
+      index,
+      [boolAttribute("value", value.kind == "keyword/true")],
+      [],
+    ))
+  }
+  Ok(node("expression/null", value.lo, value.hi, field, index, [], []))
+}
+
+function parseAtom(
+  service: ParserService,
+  parser: Parser,
+  field: string,
+  index: int,
+) -> Result<SyntaxNode, string> {
+  let value = current(parser)
+  if value.kind == "integer" || value.kind == "float" ||
+    value.kind == "keyword/true" || value.kind == "keyword/false" ||
+    value.kind == "keyword/null" {
+    return parseLiteralAtom(parser, field, index)
+  }
+  if value.kind.startsWith("duration/") {
+    fail(parser, "a duration literal is valid only in `concurrent(timeout: ...)`")?
+  }
+  if value.kind == "identifier" {
+    return parseIdentifierAtom(service, parser, field, index)
+  }
+  if value.kind == "underscore" {
+    bump(parser)
+    return Ok(node(
+      "expression/placeholder",
+      value.lo,
+      value.hi,
+      field,
+      index,
+      [],
+      [],
+    ))
+  }
+  if value.kind.startsWith("string-start/") {
+    return parseString(service, parser, field, index)
+  }
+  if value.kind == "left-paren" && lambdaAllowed(parser) &&
+    matchingParenFollowedBy(parser, "fat-arrow") {
+    return parseParenLambda(service, parser, field, index)
+  }
+  if value.kind == "left-paren" {
+    return parseParenthesizedExpression(service, parser, field, index)
+  }
+  if value.kind == "left-bracket" || value.kind == "left-brace" {
+    return parseCollectionAtom(service, parser, field, index)
+  }
+  if value.kind == "keyword/if" {
+    return parseIf(service, parser, field, index)
+  }
+  if value.kind == "keyword/match" {
+    return parseMatch(service, parser, field, index)
+  }
+  if value.kind == "keyword/for" {
+    return parseFor(service, parser, field, index)
+  }
+  if value.kind == "keyword/concurrent" {
+    return parseConcurrent(service, parser, field, index)
+  }
+  fail(parser, "expected an expression")?
+  Err("expected an expression")
+}
+
+function parseCallPostfix(
+  service: ParserService,
+  parser: Parser,
+  callee: SyntaxNode,
+  field: string,
+  index: int,
+  withTypeArguments: bool,
+) -> Result<SyntaxNode, string> {
+  let typeArguments = if withTypeArguments {
+    parseTypeArguments(service, parser)?
+  } else {
+    []
+  }
+  let arguments = parseCallArguments(service, parser)?
+  let mut children: Array<SyntaxNode> = [attach(callee, "callee", 0)]
+  for argument in arguments {
+    children.push(argument)
+  }
+  let mut typeIndex = 0
+  for typeArgument in typeArguments {
+    children.push(attach(typeArgument, "typeArguments", typeIndex))
+    typeIndex += 1
+  }
+  Ok(node(
+    "expression/call",
+    callee.lo,
+    boxValue(parser.lastHi),
+    field,
+    index,
+    [],
+    children,
+  ))
+}
+
+function parseIndexPostfix(
+  service: ParserService,
+  parser: Parser,
+  object: SyntaxNode,
+  field: string,
+  index: int,
+) -> Result<SyntaxNode, string> {
+  bump(parser)
+  let found = parseNestedExpression(service, parser, "index", 0)?
+  let close = expect(parser, "right-bracket", "`]`")?
+  Ok(node(
+    "expression/index",
+    object.lo,
+    close.hi,
+    field,
+    index,
+    [],
+    [attach(object, "object", 0), found],
+  ))
+}
+
+function parseMemberPostfix(
+  parser: Parser,
+  object: SyntaxNode,
+  field: string,
+  index: int,
+) -> Result<SyntaxNode, string> {
+  let optional = at(parser, "question-dot")
+  bump(parser)
+  let name = fieldName(parser, "a member name")?
+  Ok(node(
+    if optional { "expression/optional-access" } else { "expression/member" },
+    object.lo,
+    name.hi,
+    field,
+    index,
+    [],
+    [attach(object, "object", 0), identNode(name, "field", 0)],
+  ))
+}
+
+function tryPostfix(
+  parser: Parser,
+  operand: SyntaxNode,
+  field: string,
+  index: int,
+) -> SyntaxNode {
+  bump(parser)
+  node(
+    "expression/try",
+    operand.lo,
+    boxValue(parser.lastHi),
+    field,
+    index,
+    [],
+    [attach(operand, "operand", 0)],
+  )
+}
+
+function startsRecordUpdate(parser: Parser, base: SyntaxNode) -> bool {
+  if !recordUpdateAllowed(parser) || !at(parser, "left-brace") {
+    return false
+  }
+  if isFieldNameKind(tokenAt(parser, 1).kind) && tokenAt(parser, 2).kind == "colon" {
+    return true
+  }
+  base.kind == "expression/identifier" &&
+    (tokenAt(parser, 1).kind == "ellipsis" || tokenAt(parser, 1).kind == "right-brace")
+}
+
+function parsePostfix(
+  service: ParserService,
+  parser: Parser,
+  field: string,
+  index: int,
+) -> Result<SyntaxNode, string> {
+  let mut value = parseAtom(service, parser, field, index)?
+  while true {
+    if at(parser, "left-paren") {
+      value = parseCallPostfix(service, parser, value, field, index, false)?
+    } else if at(parser, "lt") &&
+      (value.kind == "expression/identifier" ||
+        value.kind == "expression/member" ||
+        value.kind == "expression/optional-access") &&
+      looksLikeCallTypeArguments(parser) {
+      value = parseCallPostfix(service, parser, value, field, index, true)?
+    } else if at(parser, "left-bracket") {
+      value = parseIndexPostfix(service, parser, value, field, index)?
+    } else if at(parser, "dot") || at(parser, "question-dot") {
+      value = parseMemberPostfix(parser, value, field, index)?
+    } else if at(parser, "question") {
+      value = tryPostfix(parser, value, field, index)
+    } else if startsRecordUpdate(parser, value) {
+      value = parseRecordUpdate(service, parser, value, field, index)?
+    } else {
+      break
+    }
+  }
+  Ok(value)
+}
+
+function parseUnary(
+  service: ParserService,
+  parser: Parser,
+  field: string,
+  index: int,
+) -> Result<SyntaxNode, string> {
+  let value = current(parser)
+  if value.kind == "plus" || value.kind == "minus" || value.kind == "bang" {
+    bump(parser)
+    let operand = parseUnary(service, parser, "operand", 0)?
+    let operator = match value.kind {
+      case "plus" => "plus"
+      case "minus" => "minus"
+      case _ => "not"
+    }
+    return Ok(node(
+      "expression/unary",
+      value.lo,
+      operand.hi,
+      field,
+      index,
+      [stringAttribute("operator", operator)],
+      [operand],
+    ))
+  }
+  if value.kind == "tilde" {
+    let mut diagnostics = parser.diagnostics
+    diagnostics.push(diagnostic(
+      "TPZ2013",
+      "reserved operator `~`: Topaz has no bitwise operations",
+      value.lo,
+      value.hi,
+    ))
+    bump(parser)
+    return parseUnary(service, parser, field, index)
+  }
+  let mut lhs = parsePostfix(service, parser, field, index)?
+  if eat(parser, "star-star") {
+    let rhs = parseUnary(service, parser, "right", 0)?
+    lhs = node(
+      "expression/binary",
+      lhs.lo,
+      rhs.hi,
+      field,
+      index,
+      [stringAttribute("operator", "power")],
+      [attach(lhs, "left", 0), rhs],
+    )
+  }
+  Ok(lhs)
+}
+
+function parsePipeInfix(
+  service: ParserService,
+  parser: Parser,
+  lhs: SyntaxNode,
+  precedence: int,
+  field: string,
+  index: int,
+) -> Result<SyntaxNode, string> {
+  if eat(parser, "dot") {
+    let name = identifier(parser, "a field name")?
+    return Ok(node(
+      "expression/pipe",
+      lhs.lo,
+      name.hi,
+      field,
+      index,
+      [],
+      [attach(lhs, "left", 0), identNode(name, "field", 0)],
+    ))
+  }
+  let rhs = parseExpressionBp(service, parser, precedence + 1, "right", 0)?
+  Ok(node(
+    "expression/pipe",
+    lhs.lo,
+    rhs.hi,
+    field,
+    index,
+    [],
+    [attach(lhs, "left", 0), rhs],
+  ))
+}
+
+function parseComposeInfix(
+  service: ParserService,
+  parser: Parser,
+  lhs: SyntaxNode,
+  precedence: int,
+  field: string,
+  index: int,
+) -> Result<SyntaxNode, string> {
+  let rhs = parseExpressionBp(service, parser, precedence, "right", 0)?
+  Ok(node(
+    "expression/compose",
+    lhs.lo,
+    rhs.hi,
+    field,
+    index,
+    [],
+    [attach(lhs, "left", 0), rhs],
+  ))
+}
+
+function parseRangeInfix(
+  service: ParserService,
+  parser: Parser,
+  lhs: SyntaxNode,
+  precedence: int,
+  field: string,
+  index: int,
+) -> Result<SyntaxNode, string> {
+  let operator = layoutTokenAt(parser, boxValue(parser.position) - 1)
+  let kind = current(parser).kind
+  let missingEndpoint = kind == "separator" || kind == "eof" ||
+    kind == "right-paren" || kind == "right-brace" || kind == "right-bracket" ||
+    kind == "comma" || kind == "fat-arrow" ||
+    (kind.startsWith("keyword/") && kind != "keyword/if" && kind != "keyword/match" &&
+      kind != "keyword/for" && kind != "keyword/concurrent" &&
+      kind != "keyword/true" && kind != "keyword/false" && kind != "keyword/null")
+  let rhs = if missingEndpoint {
+    addDiagnostic(
+      parser,
+      "TPZ2001",
+      "expected a range endpoint after `..`, e.g. `1..5`",
+      operator.lo,
+      operator.hi,
+    )
+    attach(lhs, "high", 0)
+  } else {
+    parseExpressionBp(service, parser, precedence + 1, "high", 0)?
+  }
+  let mut children: Array<SyntaxNode> = [attach(lhs, "low", 0), rhs]
+  if eat(parser, "keyword/by") {
+    children.push(parseExpressionBp(service, parser, precedence + 1, "step", 0)?)
+  }
+  let hi = if missingEndpoint && children.length == 2 {
+    operator.hi
+  } else {
+    match children.get(children.length - 1) {
+      case Some(last) => last.hi
+      case None => rhs.hi
+    }
+  }
+  Ok(node(
+    "expression/range",
+    lhs.lo,
+    hi,
+    field,
+    index,
+    [boolAttribute("inclusive", operator.kind == "dot-dot")],
+    children,
+  ))
+}
+
+function parseBinaryInfix(
+  service: ParserService,
+  parser: Parser,
+  lhs: SyntaxNode,
+  operator: string,
+  precedence: int,
+  field: string,
+  index: int,
+) -> Result<SyntaxNode, string> {
+  let rhs = parseExpressionBp(service, parser, precedence + 1, "right", 0)?
+  Ok(node(
+    "expression/binary",
+    lhs.lo,
+    rhs.hi,
+    field,
+    index,
+    [stringAttribute("operator", binaryName(operator))],
+    [attach(lhs, "left", 0), rhs],
+  ))
+}
+
+export function parseExpressionBp(
+  service: ParserService,
+  parser: Parser,
+  minimum: int,
+  field: string,
+  index: int,
+) -> Result<SyntaxNode, string> {
+  let mut lhs = parseUnary(service, parser, field, index)?
+  while true {
+    let operator = current(parser).kind
+    let precedence = binaryPrecedence(operator)
+    if precedence < minimum || precedence == 0 {
+      break
+    }
+    bump(parser)
+    if operator == "pipe-gt" {
+      lhs = parsePipeInfix(service, parser, lhs, precedence, field, index)?
+    } else if operator == "gt-gt" {
+      lhs = parseComposeInfix(service, parser, lhs, precedence, field, index)?
+    } else if operator == "dot-dot" || operator == "dot-dot-lt" {
+      lhs = parseRangeInfix(service, parser, lhs, precedence, field, index)?
+    } else {
+      lhs = parseBinaryInfix(service, parser, lhs, operator, precedence, field, index)?
+    }
+  }
+  Ok(lhs)
+}
+
+export function parseExpression(
+  service: ParserService,
+  parser: Parser,
+  field: string,
+  index: int,
+) -> Result<SyntaxNode, string> {
+  parseExpressionBp(service, parser, 1, field, index)
+}
+
+function parseNestedExpression(
+  service: ParserService,
+  parser: Parser,
+  field: string,
+  index: int,
+) -> Result<SyntaxNode, string> {
+  let previousLambda = lambdaAllowed(parser)
+  setLambdaAllowed(parser, true)
+  let result = parseRecordNestedExpression(service, parser, field, index)
+  setLambdaAllowed(parser, previousLambda)
+  result
+}
+
+function parseRecordNestedExpression(
+  service: ParserService,
+  parser: Parser,
+  field: string,
+  index: int,
+) -> Result<SyntaxNode, string> {
+  let previous = recordUpdateAllowed(parser)
+  setRecordUpdateAllowed(parser, true)
+  let result = parseExpression(service, parser, field, index)
+  setRecordUpdateAllowed(parser, previous)
+  result
+}
+
+function parseExpressionWithoutNakedLambda(
+  service: ParserService,
+  parser: Parser,
+  field: string,
+  index: int,
+) -> Result<SyntaxNode, string> {
+  let previous = lambdaAllowed(parser)
+  setLambdaAllowed(parser, false)
+  let result = parseRecordNestedExpression(service, parser, field, index)
+  setLambdaAllowed(parser, previous)
+  result
+}
+
+export function parseExpressionBeforeBlock(
+  service: ParserService,
+  parser: Parser,
+  field: string,
+  index: int,
+) -> Result<SyntaxNode, string> {
+  let previous = recordUpdateAllowed(parser)
+  setRecordUpdateAllowed(parser, false)
+  let result = parseExpression(service, parser, field, index)
+  setRecordUpdateAllowed(parser, previous)
+  result
+}

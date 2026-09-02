@@ -1,0 +1,2 @@
+enum Status { Done, Failed(string) }
+JSON.stringify(Status.Failed("no"))

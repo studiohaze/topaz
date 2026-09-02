@@ -1,0 +1,4 @@
+let mut prices: Map<string, int> = Map.new()
+prices.insert("apple", 100)
+
+let hasApple = "apple" in prices.keys

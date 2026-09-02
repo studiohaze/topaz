@@ -1,0 +1,7 @@
+record Box<T> { value: T }
+
+impl Box {
+    function tag(self) -> int { 0 }
+}
+
+0

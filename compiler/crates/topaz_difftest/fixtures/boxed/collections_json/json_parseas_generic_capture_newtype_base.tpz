@@ -1,0 +1,6 @@
+newtype Id<T> = T
+newtype Wrapped<T> = Id<T>
+match JSON.parseAs<Wrapped<int>>("7") {
+  case Ok(Wrapped(Id(value))) => value
+  case Err(e) => 0
+}

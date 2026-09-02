@@ -1,0 +1,11 @@
+
+function mark(label: string, xs: Array<int>) -> Array<int> {
+    print(label)
+    xs
+}
+function main() -> Set<int> {
+    let mut s = Set.of(1)
+    s.add(...mark("set-add", [2]))
+    s
+}
+main()

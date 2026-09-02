@@ -1,0 +1,36 @@
+[package]
+workspace = "../../difftest"
+name = "topaz_difftest_native"
+version.workspace = true
+license.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+# Workspace-internal 3-column differential harness (CDR-006 §7, v5.4): it
+# compiles and runs the BOXED and the NATIVE-checked emitter output against the
+# WORKSPACE runtime and compares BOTH to the interpreter in-process. Not part of
+# the shipped, vendored closure — so it MAY use a build script.
+publish = false
+
+# UNLIKE `topaz_difftest`, this harness MAY depend on `topaz_check`: the NATIVE
+# backend consumes the checker-produced typed HIR (`CheckedUnit`/`TypedUnit`), so
+# the build script type-checks each fixture to obtain it. This is the v5.4
+# native-emit lane (interp / boxed-emit / native-checked-emit, all
+# byte-identical); the original `topaz_difftest` keeps its checker-free path.
+[dependencies]
+topaz_rt = { workspace = true }
+topaz_interp = { workspace = true }
+topaz_value = { workspace = true }
+topaz_diag = { workspace = true }
+topaz_resolve = { workspace = true }
+
+[build-dependencies]
+topaz_emit = { workspace = true }
+topaz_resolve = { workspace = true }
+topaz_check = { workspace = true }
+topaz_parser = { workspace = true }
+topaz_syntax = { workspace = true }
+topaz_hir = { workspace = true }
+topaz_lower = { workspace = true }
+
+[lints]
+workspace = true

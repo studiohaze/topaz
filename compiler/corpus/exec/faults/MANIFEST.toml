@@ -1,0 +1,38 @@
+# corpus/exec/faults — execution transcripts (CDR-003 §11)
+
+[totals]
+recorded = 4
+runnable = 4
+pending = 0
+
+[[fixture]]
+file = "div-zero.tpz"
+phase = "exec"
+versions = "5.2"
+result = "error"
+code = "TPZ4002"
+message = "integer division by zero"
+
+[[fixture]]
+file = "index-oob.tpz"
+phase = "exec"
+versions = "5.2"
+result = "error"
+code = "TPZ4001"
+message = "index 5 is out of bounds for an array of length 2"
+
+[[fixture]]
+file = "overflow.tpz"
+phase = "exec"
+versions = "5.2"
+result = "error"
+code = "TPZ4004"
+message = "integer addition overflows"
+
+[[fixture]]
+file = "match-miss.tpz"
+phase = "exec"
+versions = "5.2"
+result = "error"
+code = "TPZ4006"
+message = "no `case` matched and no catch-all exists (§5)"

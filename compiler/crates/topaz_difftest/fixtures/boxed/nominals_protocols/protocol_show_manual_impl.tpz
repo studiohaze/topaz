@@ -1,0 +1,5 @@
+record User { name: string }
+impl User { function display(self) -> string { "User: {self.name}" } }
+impl Show<User> { function show(value: User) -> string { value.display() } }
+print(Show.show(User { name: "Ada" }))
+0

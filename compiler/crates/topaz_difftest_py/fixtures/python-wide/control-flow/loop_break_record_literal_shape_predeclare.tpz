@@ -1,0 +1,8 @@
+
+function main() -> int {
+    let row = loop {
+        break { breakPayload: 40, breakBonus: 2 }
+    }
+    row.breakPayload + row.breakBonus
+}
+main()

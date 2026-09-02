@@ -1,0 +1,9 @@
+
+function markString(label: string, value: string) -> string {
+    print(label)
+    value
+}
+function main() -> () {
+    print(value: markString("named", "x"), markString("pos", "y"))
+}
+main()

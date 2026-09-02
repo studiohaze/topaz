@@ -1,0 +1,27 @@
+
+function dbl(x: int) -> int {
+    x * 2
+}
+
+function inc(x: int) -> int {
+    x + 1
+}
+
+function zero(x: int) -> int {
+    0
+}
+
+function choose(i: int) -> int {
+    concurrent {
+        slow: {
+            let mut cbs = [zero, inc]
+            cbs[i] = dbl
+            let values = map { "a": 1, "b": 2 }
+            values.mapValues(cbs[i])
+        }
+        fast: 0
+    }
+    0
+}
+
+choose(1)

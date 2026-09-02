@@ -1,0 +1,1 @@
+JSON.stringify(Set.of(1, 2))

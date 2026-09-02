@@ -1,0 +1,27 @@
+
+function all(x: int) -> bool {
+    x > 0
+}
+
+function keep(x: int) -> bool {
+    x > 2
+}
+
+function onlyTwo(x: int) -> bool {
+    x == 2
+}
+
+let seeds = [0, 1]
+let i = seeds[1]
+let base = [all, keep]
+let callbacks = [...base, onlyTwo]
+
+let r = concurrent {
+    slow: {
+        let mut xs = [1, 2, 3, 4]
+        xs.retain(callbacks[i])
+        xs[0] + xs[1]
+    }
+    fast: 0
+}
+r.slow + r.fast

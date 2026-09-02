@@ -1,0 +1,693 @@
+{
+  "schema": "lispex.meter-manifest/v2",
+  "manifest_id": "lispex.meter-manifest/2",
+  "supersedes": {
+    "path": "manifests/meter-manifest.v1.json",
+    "sha256": "25a0594489fe955418927259f90a55b9cb7b92c836482d357d1c637f67157365"
+  },
+  "erratum": "v1 paired interp/src/product.rs SHA-256 c9c113585061bbf217eefdd1239cbdd3c26ff177cd6fa02805b2bc71c691c0a8 with commit d58aeee0a735b747c67d5b53362cb8d1018049b6; those bytes belong to commit 5e6b8ea1bd09da56a7d257a031f00f968ebb7517, and v2 cites the post-fix bytes and commit.",
+  "status": "implementation-description-pending-expert-ratification",
+  "generated_from": {
+    "ordering": "profile-id-then-meter-id-then-axis-index",
+    "inputs": [
+      {
+        "path": "product/contracts/resource-profiles.v1.json",
+        "sha256": "3dcd098d67ace9d9a01e38eb52b469a6924a05d9fe88eb93130415b9df041501",
+        "git_commit": "4fd915f3af2452734e0b6a9b8e43049085b88eca"
+      },
+      {
+        "path": "product/contracts/external-backend-protocol.v1.json",
+        "sha256": "fc0ff12d6f56a8185e2e8b08c72a267acffeddb5b9f74930121bfa2e8b86cb0a",
+        "git_commit": "eca21a7d871368490b2cba9159befe53b612a721"
+      },
+      {
+        "path": "interp/src/product.rs",
+        "sha256": "92de13aae69b84813fae72c885c4d5310d42fef24333526a5e58021a3e5e789c",
+        "git_commit": "99bf0804fcf9db2d62834dd26d3b62a3266a58b2"
+      },
+      {
+        "path": "hosted/source-v0/entry.lspx",
+        "sha256": "9047fae5cd5a74a82e656001232fffd28d4ca1369927886f6d63ba1b987012ad",
+        "git_commit": "64bac4a870a093dcc972389d89d89872f8fe9548"
+      },
+      {
+        "path": "hosted/kernel-v0/machine.lspx",
+        "sha256": "7995c6d154c23e1959ed4c3d6a971a0979d5f175bef0de9ff972699bdefbdd37",
+        "git_commit": "d58aeee0a735b747c67d5b53362cb8d1018049b6"
+      },
+      {
+        "path": "hosted/frontend-v0/tokenizer.lspx",
+        "sha256": "6ad8c080798467dd77b2b3ec3f7668df9e23f9510b036ad1d0022c86fa8589e8",
+        "git_commit": "7c0a53002e2c7fbb58f27e8456d5058137eadca1"
+      },
+      {
+        "path": "hosted/frontend-v0/normalizer.lspx",
+        "sha256": "a214a2261d64924a8efad9592a58f1c908c503b3eef19af47f805b9d306a23e1",
+        "git_commit": "d58aeee0a735b747c67d5b53362cb8d1018049b6"
+      },
+      {
+        "path": "LISPEX-RUNTIME.md",
+        "sha256": "8dc3cbc730bae0aff62368e3dcdfaf47b19ba97215d91f7574c0cda795557d8c",
+        "git_commit": "d58aeee0a735b747c67d5b53362cb8d1018049b6"
+      }
+    ]
+  },
+  "semantic_profile_id": "lispex-profile-1.5",
+  "meter_id": "lispex.product-resource-meter/v1",
+  "profile_meter_bindings": [
+    {
+      "profile_id": "lispex-product-native/v1",
+      "meter_id": "lispex.product-resource-meter/v1",
+      "purpose": "installed-product",
+      "public_selectable": true,
+      "limits": {
+        "frontend-transition-limit": 20000000,
+        "token-limit": 2000000,
+        "normalization-step-limit": 20000000,
+        "machine-transition-limit": 100000000,
+        "output-byte-limit": 16777216
+      },
+      "source_citations": [
+        {
+          "path": "product/contracts/resource-profiles.v1.json",
+          "line_start": 12,
+          "line_end": 23,
+          "git_commit": "4fd915f3af2452734e0b6a9b8e43049085b88eca"
+        }
+      ]
+    },
+    {
+      "profile_id": "lispex-product-web/v1",
+      "meter_id": "lispex.product-resource-meter/v1",
+      "purpose": "installed-product",
+      "public_selectable": true,
+      "limits": {
+        "frontend-transition-limit": 5000000,
+        "token-limit": 500000,
+        "normalization-step-limit": 5000000,
+        "machine-transition-limit": 20000000,
+        "output-byte-limit": 4194304
+      },
+      "source_citations": [
+        {
+          "path": "product/contracts/resource-profiles.v1.json",
+          "line_start": 24,
+          "line_end": 35,
+          "git_commit": "4fd915f3af2452734e0b6a9b8e43049085b88eca"
+        }
+      ]
+    },
+    {
+      "profile_id": "lispex-mcp-local-authoring/v1",
+      "meter_id": "lispex.product-resource-meter/v1",
+      "purpose": "local-authoring",
+      "public_selectable": true,
+      "limits": {
+        "frontend-transition-limit": 20000000,
+        "token-limit": 2000000,
+        "normalization-step-limit": 20000000,
+        "machine-transition-limit": 100000000,
+        "output-byte-limit": 1048576
+      },
+      "source_citations": [
+        {
+          "path": "product/contracts/resource-profiles.v1.json",
+          "line_start": 36,
+          "line_end": 47,
+          "git_commit": "4fd915f3af2452734e0b6a9b8e43049085b88eca"
+        }
+      ]
+    },
+    {
+      "profile_id": "lispex-receipt-144/v1",
+      "meter_id": "lispex.product-resource-meter/v1",
+      "purpose": "bounded-evidence",
+      "public_selectable": false,
+      "limits": {
+        "frontend-transition-limit": 2000000,
+        "token-limit": 100000,
+        "normalization-step-limit": 2000000,
+        "machine-transition-limit": 5000000,
+        "output-byte-limit": 1048576
+      },
+      "source_citations": [
+        {
+          "path": "product/contracts/resource-profiles.v1.json",
+          "line_start": 48,
+          "line_end": 59,
+          "git_commit": "4fd915f3af2452734e0b6a9b8e43049085b88eca"
+        }
+      ]
+    },
+    {
+      "profile_id": "lispex-generated-11088/v1",
+      "meter_id": "lispex.product-resource-meter/v1",
+      "purpose": "bounded-evidence",
+      "public_selectable": false,
+      "limits": {
+        "frontend-transition-limit": 400000,
+        "token-limit": 16384,
+        "normalization-step-limit": 400000,
+        "machine-transition-limit": 400000,
+        "output-byte-limit": 65536
+      },
+      "source_citations": [
+        {
+          "path": "product/contracts/resource-profiles.v1.json",
+          "line_start": 60,
+          "line_end": 71,
+          "git_commit": "4fd915f3af2452734e0b6a9b8e43049085b88eca"
+        }
+      ]
+    }
+  ],
+  "historical_observation_profile_bindings": [
+    {
+      "profile_id": "rust-reference-cli-uninstrumented",
+      "meter_id": "undefined-in-implementation",
+      "receipt_claim_status": "unknown"
+    },
+    {
+      "profile_id": "hosted-h6d-default",
+      "meter_id": "lispex.product-resource-meter/v1",
+      "receipt_claim_status": "unknown"
+    },
+    {
+      "profile_id": "hosted-h6d-tco-bounded",
+      "meter_id": "lispex.product-resource-meter/v1",
+      "receipt_claim_status": "unknown"
+    },
+    {
+      "profile_id": "hosted-h6d-resource-bounded",
+      "meter_id": "lispex.product-resource-meter/v1",
+      "receipt_claim_status": "unknown"
+    },
+    {
+      "profile_id": "topaz-lit-h5-source/v0",
+      "meter_id": "lispex.product-resource-meter/v1",
+      "receipt_claim_status": "unknown",
+      "ambiguity": "receipt-bound Topaz tariff source is absent; this records the shared product resource contract and is not a retroactive backend digest claim"
+    }
+  ],
+  "axes": [
+    {
+      "axis_id": "frontend-transition",
+      "limit_field": "frontend-transition-limit",
+      "limit_index": 0,
+      "definition": "tokenizer transition counter",
+      "tariff": {
+        "rust": "undefined-in-implementation",
+        "lil": "one unit for each hf-state-step! invocation before the guarded tokenizer action",
+        "lit": "undefined-in-implementation"
+      },
+      "precharge_rules": {
+        "rust": "undefined-in-implementation",
+        "lil": "compute next=count+1; reject when next exceeds the limit; mutate count only after admission",
+        "lit": "undefined-in-implementation"
+      },
+      "exhaustion_reporting": {
+        "rust": "undefined-in-implementation",
+        "lil": {
+          "internal_code": "HF900",
+          "product_projection": "undefined-in-implementation"
+        },
+        "lit": "undefined-in-implementation"
+      },
+      "usage_reporting_semantics": {
+        "rust": "not-reported",
+        "lil": "reported in frontend_metrics as transitions",
+        "lit": "undefined-in-implementation"
+      },
+      "source_citations": {
+        "axis_definition": [
+          {
+            "path": "product/contracts/resource-profiles.v1.json",
+            "line_start": 4,
+            "line_end": 11,
+            "git_commit": "4fd915f3af2452734e0b6a9b8e43049085b88eca"
+          },
+          {
+            "path": "interp/src/product.rs",
+            "line_start": 1699,
+            "line_end": 1712,
+            "git_commit": "d58aeee0a735b747c67d5b53362cb8d1018049b6"
+          }
+        ],
+        "tariff": [
+          {
+            "path": "hosted/frontend-v0/tokenizer.lspx",
+            "line_start": 56,
+            "line_end": 100,
+            "git_commit": "7c0a53002e2c7fbb58f27e8456d5058137eadca1"
+          }
+        ],
+        "precharge": [
+          {
+            "path": "hosted/frontend-v0/tokenizer.lspx",
+            "line_start": 59,
+            "line_end": 69,
+            "git_commit": "7c0a53002e2c7fbb58f27e8456d5058137eadca1"
+          }
+        ],
+        "exhaustion": [
+          {
+            "path": "hosted/frontend-v0/tokenizer.lspx",
+            "line_start": 88,
+            "line_end": 96,
+            "git_commit": "7c0a53002e2c7fbb58f27e8456d5058137eadca1"
+          }
+        ],
+        "usage": [
+          {
+            "path": "hosted/frontend-v0/tokenizer.lspx",
+            "line_start": 447,
+            "line_end": 452,
+            "git_commit": "7c0a53002e2c7fbb58f27e8456d5058137eadca1"
+          }
+        ]
+      }
+    },
+    {
+      "axis_id": "token",
+      "limit_field": "token-limit",
+      "limit_index": 1,
+      "definition": "emitted tokenizer token counter",
+      "tariff": {
+        "rust": "undefined-in-implementation",
+        "lil": "one unit for each hf-state-add-token! invocation",
+        "lit": "undefined-in-implementation"
+      },
+      "precharge_rules": {
+        "rust": "undefined-in-implementation",
+        "lil": "compute next=count+1; reject when next exceeds the limit; mutate count only after admission",
+        "lit": "undefined-in-implementation"
+      },
+      "exhaustion_reporting": {
+        "rust": "undefined-in-implementation",
+        "lil": {
+          "internal_code": "HF901",
+          "product_projection": "undefined-in-implementation"
+        },
+        "lit": "undefined-in-implementation"
+      },
+      "usage_reporting_semantics": {
+        "rust": "not-reported",
+        "lil": "reported in frontend_metrics as tokens",
+        "lit": "undefined-in-implementation"
+      },
+      "source_citations": {
+        "axis_definition": [
+          {
+            "path": "product/contracts/resource-profiles.v1.json",
+            "line_start": 4,
+            "line_end": 11,
+            "git_commit": "4fd915f3af2452734e0b6a9b8e43049085b88eca"
+          },
+          {
+            "path": "interp/src/product.rs",
+            "line_start": 1699,
+            "line_end": 1712,
+            "git_commit": "d58aeee0a735b747c67d5b53362cb8d1018049b6"
+          }
+        ],
+        "tariff": [
+          {
+            "path": "hosted/frontend-v0/tokenizer.lspx",
+            "line_start": 65,
+            "line_end": 75,
+            "git_commit": "7c0a53002e2c7fbb58f27e8456d5058137eadca1"
+          }
+        ],
+        "precharge": [
+          {
+            "path": "hosted/frontend-v0/tokenizer.lspx",
+            "line_start": 65,
+            "line_end": 75,
+            "git_commit": "7c0a53002e2c7fbb58f27e8456d5058137eadca1"
+          }
+        ],
+        "exhaustion": [
+          {
+            "path": "hosted/frontend-v0/tokenizer.lspx",
+            "line_start": 92,
+            "line_end": 100,
+            "git_commit": "7c0a53002e2c7fbb58f27e8456d5058137eadca1"
+          }
+        ],
+        "usage": [
+          {
+            "path": "hosted/frontend-v0/tokenizer.lspx",
+            "line_start": 447,
+            "line_end": 452,
+            "git_commit": "7c0a53002e2c7fbb58f27e8456d5058137eadca1"
+          }
+        ]
+      }
+    },
+    {
+      "axis_id": "normalization-step",
+      "limit_field": "normalization-step-limit",
+      "limit_index": 2,
+      "definition": "normalizer step counter",
+      "tariff": {
+        "rust": "undefined-in-implementation",
+        "lil": "one unit for each hn-step! invocation",
+        "lit": "undefined-in-implementation"
+      },
+      "precharge_rules": {
+        "rust": "undefined-in-implementation",
+        "lil": "compute next=count+1; fail before counter mutation when next exceeds the limit",
+        "lit": "undefined-in-implementation"
+      },
+      "exhaustion_reporting": {
+        "rust": "undefined-in-implementation",
+        "lil": {
+          "internal_code": "HN900",
+          "template": "normalization-limit"
+        },
+        "lit": "undefined-in-implementation"
+      },
+      "usage_reporting_semantics": {
+        "rust": "not-reported",
+        "lil": "reported in frontend_metrics as normalization-steps",
+        "lit": "undefined-in-implementation"
+      },
+      "source_citations": {
+        "axis_definition": [
+          {
+            "path": "product/contracts/resource-profiles.v1.json",
+            "line_start": 4,
+            "line_end": 11,
+            "git_commit": "4fd915f3af2452734e0b6a9b8e43049085b88eca"
+          },
+          {
+            "path": "interp/src/product.rs",
+            "line_start": 1699,
+            "line_end": 1712,
+            "git_commit": "d58aeee0a735b747c67d5b53362cb8d1018049b6"
+          }
+        ],
+        "tariff": [
+          {
+            "path": "hosted/frontend-v0/normalizer.lspx",
+            "line_start": 32,
+            "line_end": 38,
+            "git_commit": "d58aeee0a735b747c67d5b53362cb8d1018049b6"
+          }
+        ],
+        "precharge": [
+          {
+            "path": "hosted/frontend-v0/normalizer.lspx",
+            "line_start": 32,
+            "line_end": 38,
+            "git_commit": "d58aeee0a735b747c67d5b53362cb8d1018049b6"
+          }
+        ],
+        "exhaustion": [
+          {
+            "path": "hosted/frontend-v0/normalizer.lspx",
+            "line_start": 32,
+            "line_end": 38,
+            "git_commit": "d58aeee0a735b747c67d5b53362cb8d1018049b6"
+          }
+        ],
+        "usage": [
+          {
+            "path": "hosted/frontend-v0/normalizer.lspx",
+            "line_start": 1639,
+            "line_end": 1644,
+            "git_commit": "d58aeee0a735b747c67d5b53362cb8d1018049b6"
+          }
+        ]
+      }
+    },
+    {
+      "axis_id": "machine-transition",
+      "limit_field": "machine-transition-limit",
+      "limit_index": 3,
+      "definition": "hosted abstract-machine transition counter; the Rust product path instead projects non-tail recursion exhaustion into this resource slot",
+      "tariff": {
+        "rust": "undefined-in-implementation",
+        "lil": "one unit immediately before each admitted eval, deliver, or transfer machine step",
+        "lit": "undefined-in-implementation"
+      },
+      "precharge_rules": {
+        "rust": "undefined-in-implementation",
+        "lil": "check count >= limit before the next non-transfer step; active settlement or cleanup allowances may admit further transfer steps; roots receive the remaining aggregate limit",
+        "lit": "undefined-in-implementation"
+      },
+      "exhaustion_reporting": {
+        "rust": {
+          "diagnostic_code": "recursion-limit",
+          "reported_limit": "non-tail-call-depth",
+          "contract_axis_contradiction": "machine-transition-limit is present but not charged"
+        },
+        "lil": {
+          "internal_code": "HK900",
+          "product_code": "recursion-limit",
+          "product_limit": "machine-transitions"
+        },
+        "lit": "undefined-in-implementation"
+      },
+      "usage_reporting_semantics": {
+        "rust": "not-reported; transition_metrics_available is false",
+        "lil": "sum hk-m-transitions for completed or faulted roots and report transitions plus roots-completed",
+        "lit": "undefined-in-implementation"
+      },
+      "source_citations": {
+        "axis_definition": [
+          {
+            "path": "product/contracts/external-backend-protocol.v1.json",
+            "line_start": 28,
+            "line_end": 29,
+            "git_commit": "eca21a7d871368490b2cba9159befe53b612a721"
+          },
+          {
+            "path": "product/contracts/resource-profiles.v1.json",
+            "line_start": 4,
+            "line_end": 11,
+            "git_commit": "4fd915f3af2452734e0b6a9b8e43049085b88eca"
+          },
+          {
+            "path": "interp/src/product.rs",
+            "line_start": 1699,
+            "line_end": 1712,
+            "git_commit": "d58aeee0a735b747c67d5b53362cb8d1018049b6"
+          }
+        ],
+        "tariff": [
+          {
+            "path": "hosted/kernel-v0/machine.lspx",
+            "line_start": 868,
+            "line_end": 895,
+            "git_commit": "d58aeee0a735b747c67d5b53362cb8d1018049b6"
+          }
+        ],
+        "precharge": [
+          {
+            "path": "hosted/kernel-v0/machine.lspx",
+            "line_start": 868,
+            "line_end": 901,
+            "git_commit": "d58aeee0a735b747c67d5b53362cb8d1018049b6"
+          },
+          {
+            "path": "hosted/source-v0/entry.lspx",
+            "line_start": 126,
+            "line_end": 146,
+            "git_commit": "64bac4a870a093dcc972389d89d89872f8fe9548"
+          }
+        ],
+        "exhaustion": [
+          {
+            "path": "interp/src/product.rs",
+            "line_start": 1429,
+            "line_end": 1574,
+            "git_commit": "d58aeee0a735b747c67d5b53362cb8d1018049b6"
+          },
+          {
+            "path": "hosted/kernel-v0/machine.lspx",
+            "line_start": 152,
+            "line_end": 159,
+            "git_commit": "d58aeee0a735b747c67d5b53362cb8d1018049b6"
+          },
+          {
+            "path": "interp/src/product.rs",
+            "line_start": 2974,
+            "line_end": 2978,
+            "git_commit": "d58aeee0a735b747c67d5b53362cb8d1018049b6"
+          }
+        ],
+        "usage": [
+          {
+            "path": "hosted/source-v0/entry.lspx",
+            "line_start": 84,
+            "line_end": 110,
+            "git_commit": "64bac4a870a093dcc972389d89d89872f8fe9548"
+          },
+          {
+            "path": "hosted/kernel-v0/machine.lspx",
+            "line_start": 903,
+            "line_end": 909,
+            "git_commit": "d58aeee0a735b747c67d5b53362cb8d1018049b6"
+          }
+        ]
+      }
+    },
+    {
+      "axis_id": "output-byte",
+      "limit_field": "output-byte-limit",
+      "limit_index": 4,
+      "definition": "UTF-8 byte length of accumulated stdout",
+      "tariff": {
+        "rust": "undefined-in-implementation",
+        "lil": "charge the UTF-8 byte length of the entire candidate accumulated output",
+        "lit": "undefined-in-implementation"
+      },
+      "precharge_rules": {
+        "rust": "undefined-in-implementation",
+        "lil": "render and concatenate the candidate output, compute its full UTF-8 length, and retain prior output when the candidate exceeds the limit",
+        "lit": "undefined-in-implementation"
+      },
+      "exhaustion_reporting": {
+        "rust": "undefined-in-implementation",
+        "lil": {
+          "internal_code": "HK901",
+          "product_code": "output-limit",
+          "product_limit": "output-bytes"
+        },
+        "lit": "undefined-in-implementation"
+      },
+      "usage_reporting_semantics": {
+        "rust": "stdout byte length is emitted but meter usage is not reported",
+        "lil": "report UTF-8 bytes of retained output; resource observations clear product stdout",
+        "lit": "undefined-in-implementation"
+      },
+      "source_citations": {
+        "axis_definition": [
+          {
+            "path": "product/contracts/resource-profiles.v1.json",
+            "line_start": 4,
+            "line_end": 11,
+            "git_commit": "4fd915f3af2452734e0b6a9b8e43049085b88eca"
+          },
+          {
+            "path": "interp/src/product.rs",
+            "line_start": 1699,
+            "line_end": 1712,
+            "git_commit": "d58aeee0a735b747c67d5b53362cb8d1018049b6"
+          }
+        ],
+        "tariff": [
+          {
+            "path": "hosted/source-v0/entry.lspx",
+            "line_start": 52,
+            "line_end": 69,
+            "git_commit": "64bac4a870a093dcc972389d89d89872f8fe9548"
+          }
+        ],
+        "precharge": [
+          {
+            "path": "hosted/source-v0/entry.lspx",
+            "line_start": 65,
+            "line_end": 82,
+            "git_commit": "64bac4a870a093dcc972389d89d89872f8fe9548"
+          }
+        ],
+        "exhaustion": [
+          {
+            "path": "hosted/source-v0/entry.lspx",
+            "line_start": 141,
+            "line_end": 146,
+            "git_commit": "64bac4a870a093dcc972389d89d89872f8fe9548"
+          },
+          {
+            "path": "interp/src/product.rs",
+            "line_start": 2979,
+            "line_end": 2982,
+            "git_commit": "d58aeee0a735b747c67d5b53362cb8d1018049b6"
+          }
+        ],
+        "usage": [
+          {
+            "path": "hosted/source-v0/entry.lspx",
+            "line_start": 96,
+            "line_end": 102,
+            "git_commit": "64bac4a870a093dcc972389d89d89872f8fe9548"
+          },
+          {
+            "path": "interp/src/product.rs",
+            "line_start": 1768,
+            "line_end": 1773,
+            "git_commit": "d58aeee0a735b747c67d5b53362cb8d1018049b6"
+          }
+        ]
+      }
+    }
+  ],
+  "tie_break_order": {
+    "value": "undefined-in-implementation",
+    "detail": "pipeline order and local admission order exist, but no global simultaneous-exhaustion order spans all five axes",
+    "source_citations": [
+      {
+        "path": "interp/src/product.rs",
+        "line_start": 1429,
+        "line_end": 1618,
+        "git_commit": "d58aeee0a735b747c67d5b53362cb8d1018049b6"
+      },
+      {
+        "path": "hosted/source-v0/entry.lspx",
+        "line_start": 148,
+        "line_end": 202,
+        "git_commit": "64bac4a870a093dcc972389d89d89872f8fe9548"
+      }
+    ]
+  },
+  "exhaustion_reporting": {
+    "effect_atomicity": {
+      "rust": "undefined-in-implementation",
+      "lil": "resource observations clear product stdout; individual counter and output guards mutate only after admission",
+      "lit": "undefined-in-implementation"
+    },
+    "source_citations": [
+      {
+        "path": "interp/src/product.rs",
+        "line_start": 1540,
+        "line_end": 1571,
+        "git_commit": "d58aeee0a735b747c67d5b53362cb8d1018049b6"
+      },
+      {
+        "path": "interp/src/product.rs",
+        "line_start": 2128,
+        "line_end": 2156,
+        "git_commit": "d58aeee0a735b747c67d5b53362cb8d1018049b6"
+      }
+    ]
+  },
+  "usage_reporting_semantics": {
+    "normative_usage_shape": "undefined-in-implementation",
+    "rust": "limits and status are reported without usage counters",
+    "lil": "counters are nested under metrics.frontend_metrics, metrics.machine_metrics, and metrics.internal_resource_report",
+    "lit": "undefined-in-implementation",
+    "source_citations": [
+      {
+        "path": "interp/src/product.rs",
+        "line_start": 1429,
+        "line_end": 1443,
+        "git_commit": "d58aeee0a735b747c67d5b53362cb8d1018049b6"
+      },
+      {
+        "path": "interp/src/product.rs",
+        "line_start": 2148,
+        "line_end": 2153,
+        "git_commit": "d58aeee0a735b747c67d5b53362cb8d1018049b6"
+      }
+    ]
+  },
+  "implementation_ambiguities": [
+    "Rust accepts all five resource-profile limits but does not charge frontend-transition, token, normalization-step, or output-byte axes.",
+    "Rust maps non-tail recursion exhaustion to a resource outcome while the selected profile field is machine-transition-limit.",
+    "No global cross-axis tie-break order is defined.",
+    "No single normative usage-report shape is defined across Rust, LIL, and LIT.",
+    "The receipt-bound Topaz meter and tariff source is not present in this repository."
+  ]
+}

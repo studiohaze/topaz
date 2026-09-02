@@ -1,0 +1,15 @@
+
+function spin(x: int) -> int {
+    x
+}
+
+let callbacks = { primary: spin, plain: (x) => x }
+
+concurrent {
+    slow: {
+        let xs = [1]
+        xs.map(callbacks.plain)
+    }
+    fast: 0
+}
+0

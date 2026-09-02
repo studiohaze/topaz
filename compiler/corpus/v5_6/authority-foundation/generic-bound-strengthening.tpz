@@ -1,0 +1,3 @@
+function render<T: Show>(value: T) -> string { Show.show(value) }
+function pass<T>(value: T) -> string { render(value) }
+0

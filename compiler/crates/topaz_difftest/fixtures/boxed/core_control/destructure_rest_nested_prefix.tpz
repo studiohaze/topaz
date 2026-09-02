@@ -1,0 +1,3 @@
+let v = [Some(3), 4, 5]
+let [Some(x), ..tail] = v
+x + tail.length

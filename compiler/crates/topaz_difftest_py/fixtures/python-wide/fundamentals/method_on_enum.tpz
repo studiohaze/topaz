@@ -1,0 +1,9 @@
+enum Color { Red, Green, Blue }
+impl Color { function label(self) -> string { match self {
+case Red => "red"
+case Green => "green"
+case Blue => "blue"
+} } }
+let c: Color = Color.Green
+print(c.label())
+0

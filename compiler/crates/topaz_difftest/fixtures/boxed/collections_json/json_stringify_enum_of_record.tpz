@@ -1,0 +1,3 @@
+record Point { x: int, y: int }
+enum Shape { Dot, At(Point) }
+JSON.stringify(Shape.At(Point { x: 3, y: 4 }))

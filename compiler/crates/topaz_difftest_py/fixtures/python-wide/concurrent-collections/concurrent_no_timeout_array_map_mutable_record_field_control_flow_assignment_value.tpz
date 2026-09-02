@@ -1,0 +1,25 @@
+
+function spin(x: int) -> int {
+    1 / 0
+}
+
+function quick(x: int) -> int {
+    x + 5
+}
+
+let mut callbacks = { primary: spin }
+let mut i = 0
+while i < 1 {
+    callbacks.primary = quick
+    i = i + 1
+}
+
+let result = concurrent {
+    value: {
+        let xs = [1, 2, 3]
+        let ys = xs.map(callbacks.primary)
+        ys[0] + ys[1] + ys[2]
+    }
+    idle: 0
+}
+result.value + result.idle

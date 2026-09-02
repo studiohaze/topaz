@@ -1,0 +1,69 @@
+{
+  "schema": "topaz.compiler-support-contract/v1",
+  "statusSchema": "topaz.compiler-support/v1",
+  "compilationProductSchema": "topaz.compilation-product/v1",
+  "selfCompilationProductSchema": "topaz.self-compilation-product/v1",
+  "phaseTraceSchema": "topaz.compiler-phase-trace/v1",
+  "selectors": [
+    "rust",
+    "self"
+  ],
+  "defaultCompiler": "rust",
+  "recoveryCompiler": "rust",
+  "silentFallback": false,
+  "compilerStatuses": [
+    "supported",
+    "partial"
+  ],
+  "routeStatuses": [
+    "supported",
+    "planned",
+    "declined",
+    "repository-only"
+  ],
+  "requiredTopLevelFields": [
+    "schema",
+    "productVersion",
+    "languageMode",
+    "selfCompilationProductSchema",
+    "defaultCompiler",
+    "recoveryCompiler",
+    "silentFallback",
+    "compilers",
+    "routes",
+    "previewProducers"
+  ],
+  "requiredCompilerFields": [
+    "selector",
+    "producer",
+    "status"
+  ],
+  "requiredSelfIdentityFields": [
+    "producerStage",
+    "sourceSetId",
+    "programImageSha256",
+    "programImagePayloadSha256",
+    "exchangeSchema",
+    "irSchema",
+    "runtimeTemplate"
+  ],
+  "requiredRouteFields": [
+    "command",
+    "rust",
+    "self",
+    "condition"
+  ],
+  "previewProducerNamespace": [
+    "topaz-stage1",
+    "topaz-stage2"
+  ],
+  "rules": [
+    "omitted compiler selection is exactly rust",
+    "self selects only the validated current-source Stage 2 C2 image",
+    "unsupported self routes fail before source, output, cache, or target work",
+    "compiler failure never invokes another compiler or reuses a previous result",
+    "the self adapter validates and decodes C2 facts but never synthesizes a compiler decision",
+    "recovery is explicit and never automatic",
+    "preview producer selection is separate from ordinary compiler selection"
+  ]
+}

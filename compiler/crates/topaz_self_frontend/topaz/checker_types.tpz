@@ -1,0 +1,14 @@
+export record TypeValue {
+  kind: string,
+  name: string,
+  value: string,
+  identity: string,
+  origin: string,
+  arguments: Array<TypeValue>,
+  members: Array<TypeValue>,
+  fieldNames: Array<string>,
+  fields: Array<TypeValue>,
+  parameters: Array<TypeValue>,
+  variadic: Array<TypeValue>,
+  result: Array<TypeValue>,
+}

@@ -1,0 +1,64 @@
+import src.main { initialModel, transitionAppModel, transitionModel }
+import src.model { Model, Msg }
+import std.dom { BrowserEvent, LocalDataEvent, LocalDataResult, LocalStateEvent, LocalStateResult, TextDocument, WebAppEvent }
+
+let initial = initialModel()
+assert(initial.source.contains("# Markdown Live"), "initial sample")
+
+let inputEvent = BrowserEvent {
+  kind: "input",
+  targetId: Some("markdown-source"),
+  value: Some("# Changed"),
+  checked: None,
+  key: None,
+}
+let changed = transitionModel(initial, Msg.SourceChanged, inputEvent)
+assert(changed.source == "# Changed", "source transition")
+assert(changed.status.contains("9 bytes"), "status transition")
+
+let resetEvent = BrowserEvent {
+  kind: "click",
+  targetId: Some("reset"),
+  value: None,
+  checked: None,
+  key: None,
+}
+let reset = transitionModel(changed, Msg.Reset, resetEvent)
+assert(reset.source.contains("# Markdown Live"), "reset transition")
+
+let recovered = transitionAppModel(
+  initial,
+  Msg.LocalCompleted,
+  WebAppEvent.LocalState(LocalStateEvent {
+    requestId: "markdown-draft-load",
+    result: LocalStateResult.Loaded("draft", Some("# Recovered")),
+  }),
+)
+assert(recovered.source == "# Recovered", "draft recovery")
+assert(recovered.status == "Recovered saved draft", "draft recovery status")
+
+let saved = transitionAppModel(
+  recovered,
+  Msg.LocalCompleted,
+  WebAppEvent.LocalState(LocalStateEvent {
+    requestId: "markdown-draft-save",
+    result: LocalStateResult.Saved("draft"),
+  }),
+)
+assert(saved.status == "Draft saved", "draft saved status")
+
+let opened = transitionAppModel(
+  saved,
+  Msg.LocalCompleted,
+  WebAppEvent.LocalData(LocalDataEvent {
+    requestId: "markdown-open",
+    result: LocalDataResult.TextOpened(TextDocument {
+      name: "notes.md",
+      mediaType: "text/markdown",
+      sizeBytes: 8,
+      text: "# Opened",
+    }),
+  }),
+)
+assert(opened.source == "# Opened", "opened Markdown source")
+assert(opened.status == "Opened notes.md", "opened Markdown status")

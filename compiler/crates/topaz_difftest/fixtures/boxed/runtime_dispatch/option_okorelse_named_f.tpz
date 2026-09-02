@@ -1,0 +1,5 @@
+let n: Option<int> = None
+let s: Option<int> = Some(7)
+let a = n.okOrElse(f: () => "e")
+let b = s.okOrElse(f: () => "x")
+"{a}/{b}"

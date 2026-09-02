@@ -1,0 +1,12 @@
+
+function mark(label: string, xs: Array<int>) -> Array<int> {
+    print(label)
+    xs
+}
+function keep(x: int) -> bool { x > 0 }
+function main() -> string {
+    let xs: Option<Array<int>> = Some([1])
+    keep |> xs?.filter(...mark("pipe-filter", [0]))
+    "unreachable"
+}
+main()

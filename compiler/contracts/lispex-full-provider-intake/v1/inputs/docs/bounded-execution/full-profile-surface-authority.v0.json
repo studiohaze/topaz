@@ -1,0 +1,202 @@
+{
+  "schema": "lispex.full-profile-surface-authority/v0",
+  "status": "private-design-authority-implementation-not-ready",
+  "semantic_profile": "lispex-profile-1.5",
+  "public_identity_assignment": false,
+  "source_authorities": {
+    "profile": "product/contracts/lispex-profile-1.5.json",
+    "source_frontend": "product/contracts/source-frontend.v1.json",
+    "primitive_capabilities": "product/contracts/primitive-capabilities.v2.json",
+    "primitive_classification": "docs/bounded-execution/primitive-cost-classification.v0.json",
+    "diagnostics": "product/contracts/diagnostic-catalog.v1.json",
+    "bytecode_source": "interp/src/bytecode.rs",
+    "value_source": "interp/src/value.rs",
+    "value_codec_source": "interp/src/embed_value.rs",
+    "host_source": "interp/src/embed_host.rs",
+    "identity_specification": "LISPEX-EVALUATION-IDENTITY.md",
+    "restricted_manifest": "products/embed-evaluator/v1.12.4/manifest.v1.json",
+    "restricted_final_court": "docs/bounded-execution/f12-final-provider-court.v1.json",
+    "restricted_redistribution_attestation": "embedding-readiness/release-dag/attestations/lispex-embed-evaluator-redistribution-release-1.12.4.v1.json"
+  },
+  "product_fit_workloads": [
+    {
+      "id": "maintained-refund-rule",
+      "source": "examples/checkable-refund/generated/refund-window.lspx",
+      "input": "examples/checkable-refund/generated/inputs/day-14-unopened.bin",
+      "prepare_limits": "examples/checkable-refund/generated/prepare-limits.json",
+      "evaluation_limits": "examples/checkable-refund/generated/evaluation-limits.json",
+      "purpose": "existing-restricted-provider-maintained-product-fit-control"
+    }
+  ],
+  "required_denominator": {
+    "reader_comments": 2,
+    "reader_datums": 15,
+    "core_forms": 13,
+    "derived_forms": 12,
+    "bytecode_opcodes": 22,
+    "primitive_rows": 205,
+    "guest_calling_rows": 18,
+    "diagnostic_rows": 24,
+    "cost_classes": [
+      "Fixed",
+      "Precharged",
+      "Incremental",
+      "GuestCalling",
+      "Deferred"
+    ],
+    "private_class_counts": {
+      "Fixed": 70,
+      "Precharged": 15,
+      "Incremental": 98,
+      "GuestCalling": 18,
+      "Deferred": 4
+    }
+  },
+  "bytecode_opcodes": [
+    "constant",
+    "load-lexical",
+    "load-global",
+    "load-primitive",
+    "make-closure",
+    "require-one",
+    "discard",
+    "make-values",
+    "set-lexical",
+    "set-global",
+    "define-lexical",
+    "define-global",
+    "enter-let",
+    "enter-recursive-scope",
+    "initialize-lexical",
+    "leave-scope",
+    "jump",
+    "jump-if-false",
+    "call",
+    "tail-call",
+    "guard",
+    "return"
+  ],
+  "runtime_value_variants": [
+    "Bool",
+    "Int",
+    "Rational",
+    "Real",
+    "Char",
+    "Sym",
+    "Str",
+    "Nil",
+    "Pair",
+    "Vector",
+    "Bytevector",
+    "Closure",
+    "VmClosure",
+    "Primitive",
+    "Cont",
+    "ErrorObject"
+  ],
+  "optional_feature_value_variants": [
+    "Decision"
+  ],
+  "portable_result_value_kinds": [
+    "nil",
+    "boolean",
+    "integer",
+    "rational",
+    "finite-real",
+    "character",
+    "symbol",
+    "string",
+    "proper-list",
+    "improper-list",
+    "vector",
+    "bytevector"
+  ],
+  "protocol_only_value_kinds": [
+    "host-record"
+  ],
+  "nonportable_result_value_kinds": [
+    "closure",
+    "primitive",
+    "continuation",
+    "error-object",
+    "opaque-decision"
+  ],
+  "contract_decisions": {
+    "restricted_component": {
+      "disposition": "immutable-retain",
+      "artifact_sha256": "fa6e52559e1f5a43e50a3b7ac0cc5add6930cff0aed8aaff462cff4609362870",
+      "artifact_bytes": 1387762,
+      "redistribution_sha256": "fd8c2ba441c977c207147690272f09df3ce3b74c1bd3223c295593a3c5dd1b92",
+      "profile_id": "lispex/r7rs-rule-embedded-core/1",
+      "model_id": "lispex-vm-meter/1",
+      "abi_id": "lispex.embed-wasm-abi/v1",
+      "value_codec_id": "lispex.embed-value/v1",
+      "transcript_id": "lispex.embed-transcript/v1",
+      "receipt_id": "lispex.embed-receipt-core/v1"
+    },
+    "semantic_profile": {
+      "disposition": "reuse-language-contract",
+      "id": "lispex-profile-1.5"
+    },
+    "full_executable_profile": {
+      "disposition": "new-public-identity-required-after-qualification",
+      "candidate_id": null
+    },
+    "full_meter": {
+      "disposition": "new-public-identity-required-after-qualification",
+      "candidate_id": null
+    },
+    "full_component": {
+      "disposition": "new-exact-component-required",
+      "artifact_sha256": null
+    },
+    "value_codec": {
+      "id": "lispex.embed-value/v1",
+      "disposition": "reuse-candidate-normative-surface-sufficient",
+      "implementation_status": "restricted-result-encoder-incomplete-for-full-profile",
+      "missing_result_variants": [
+        "Rational",
+        "Real",
+        "Char",
+        "Vector",
+        "Bytevector"
+      ]
+    },
+    "wasm_abi": {
+      "id": "lispex.embed-wasm-abi/v1",
+      "disposition": "reuse-candidate-requires-exact-second-artifact-proof"
+    },
+    "transcript": {
+      "id": "lispex.embed-transcript/v1",
+      "disposition": "reuse-candidate-requires-full-output-warning-court"
+    },
+    "receipt_core": {
+      "id": "lispex.embed-receipt-core/v1",
+      "disposition": "reuse-candidate-requires-profile-model-artifact-goldens"
+    }
+  },
+  "implementation_blockers": [
+    "four-deferred-primitive-cost-designs",
+    "full-result-value-encoding",
+    "full-primitive-handler-and-hidden-traversal-audit",
+    "full-allocation-and-error-path-ownership",
+    "full-mutation-targets",
+    "full-meter-site-reachability",
+    "full-property-and-fuzz-court",
+    "full-wasm-safety-envelope",
+    "full-cross-architecture-portable-core",
+    "full-source-free-installed-product",
+    "full-exact-artifact-and-provider-court",
+    "public-executable-profile-and-meter-identities"
+  ],
+  "topaz_observation": {
+    "status": "external-reviewed-fact-not-build-input",
+    "public_product": "5.17.0",
+    "release_commit": "85d952eb20589a4b42aef9c41e05e4e6e68af9bb",
+    "restricted_component_consumption": "public-consumer-owned-admission",
+    "full_component_consumption": "future-separate-consumer-owned-admission",
+    "aot_compiler_pin": "retain-exact-topaz-5.11",
+    "lit_evidence": "retain-until-separate-court"
+  },
+  "implementation_ready": false
+}

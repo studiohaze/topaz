@@ -1,0 +1,14 @@
+function 안전한나누기(a: int, b: int) -> Result<int, string> {
+    if b == 0 {
+        Err("0으로 나눌 수 없습니다")
+    } else {
+        Ok(a / b)
+    }
+}
+
+// ? 연산자로 간단하게
+function 복잡한계산(x: int) -> Result<int, string> {
+    let 결과1 = 안전한나누기(x, 2)?
+    let 결과2 = 안전한나누기(결과1, 3)?
+    Ok(결과2 * 10)
+}

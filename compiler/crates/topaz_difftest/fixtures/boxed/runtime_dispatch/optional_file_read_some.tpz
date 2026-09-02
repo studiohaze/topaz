@@ -1,0 +1,3 @@
+let of = match open("input.txt") { case Ok(f) => Some(f)
+case Err(e) => None }
+of?.read()

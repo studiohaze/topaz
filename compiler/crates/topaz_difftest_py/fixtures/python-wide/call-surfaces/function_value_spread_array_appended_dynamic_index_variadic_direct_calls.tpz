@@ -1,0 +1,38 @@
+
+function main() -> int {
+    let mut order = 0
+
+    function tick(label: int, value: int) -> int {
+        order = order * 10 + label
+        value
+    }
+
+    function pack(label: int, a: int, b: int) -> Array<int> {
+        order = order * 10 + label
+        [a, b]
+    }
+
+    function sum(seed: int = 0, ...xs: int) -> int {
+        order = order * 10 + 3
+        let mut total = seed
+        for x in xs {
+            total = total + x
+        }
+        total
+    }
+
+    function scale(seed: int = 0, ...xs: int) -> int {
+        order = order * 10 + 4
+        let mut total = seed
+        for x in xs {
+            total = total + x * 10
+        }
+        total
+    }
+
+    let base = [sum]
+    let callbacks = [...base, scale]
+    let value = callbacks[tick(1, 1)](...pack(2, 5, 6), seed: 7)
+    order * 1000 + value
+}
+main()

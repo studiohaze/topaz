@@ -1,0 +1,9 @@
+[package]
+name = "data_lens_core"
+version = "1.0.0"
+language = "5.18"
+entry = "src/lib.tpz"
+
+[dependencies]
+std = "5.18"
+lens_labels = "1.0.0"

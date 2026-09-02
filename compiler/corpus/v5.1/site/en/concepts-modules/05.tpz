@@ -1,0 +1,3 @@
+import utils.strings { shout, greeting }
+
+let s = shout(greeting)

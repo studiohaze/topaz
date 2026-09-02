@@ -1,0 +1,10 @@
+
+function zero(x: int) -> int {
+    0
+}
+
+function inc(x: int) -> int {
+    x + 1
+}
+
+export let base = [zero, inc]

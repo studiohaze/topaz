@@ -1,0 +1,29 @@
+// Clear function names
+function validateUserEmail(email: string) -> bool {
+    return email.contains("@") && email.contains(".")
+}
+
+function calculateOrderTotal(orderItems: Array<{ priceCents: int, quantity: int }>) -> int {
+    return orderItems
+        |> map(_, item => item.priceCents * item.quantity)
+        |> reduce(_, 0, (total, amount) => total + amount)
+}
+
+// Single responsibility principle
+function parseUserData(rawData: string) -> { name: string, age: int } {
+    // Only responsible for parsing — toInt returns Option<int>
+    let parts = rawData.split(",")
+    let age = match toInt(parts[1].trim()) {
+        case Some(value) => value
+        case None => 0
+    }
+    return {
+        name: parts[0].trim(),
+        age: age
+    }
+}
+
+function validateUserData(user: { name: string, age: int }) -> bool {
+    // Only responsible for validation
+    return user.name != "" && user.age > 0
+}

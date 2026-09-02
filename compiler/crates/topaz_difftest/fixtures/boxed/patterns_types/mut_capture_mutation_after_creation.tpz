@@ -1,0 +1,4 @@
+let mut x = 0
+let f = () => x
+x = 5
+f()

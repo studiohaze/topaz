@@ -1,0 +1,12 @@
+record R { x: int }
+function side() -> R {
+  print("S")
+  R { x: 1 }
+}
+function demo() -> int {
+  let R = { x: 1 }
+  let v = R { ...side(), x: 2 }
+  print("{v}")
+  0
+}
+demo()

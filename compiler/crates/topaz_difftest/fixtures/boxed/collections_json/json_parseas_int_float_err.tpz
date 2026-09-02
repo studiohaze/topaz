@@ -1,0 +1,1 @@
+JSON.parseAs<int>("3.5")

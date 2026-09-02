@@ -1,0 +1,649 @@
+// Canonical guest-value, diagnostic, metrics, and protocol rendering.
+// Machine and frontend records arrive fully decided; no evaluation or admission
+// policy is introduced while producing the response text.
+
+import lit.value_runtime {
+  lowerHex,
+  scalarText,
+}
+import lit.model {
+  GuestInt,
+  GuestRational,
+  ErrorObjectRow,
+  GuardClauseRow,
+  GuestValue,
+  RenderTask,
+  ValuePacket,
+  NodeOp,
+  SpanRow,
+  OriginRow,
+  BinderRow,
+  GlobalRow,
+  NodeRow,
+  Kernel,
+  Request,
+  FrontendRequest,
+  SourceRequest,
+  ScalarRow,
+  FrontendToken,
+  FrontendFault,
+  TokenizedSource,
+  ReaderOutput,
+  NormalizeOutput,
+  SourcePoint,
+  NodeEncoding,
+  MachineWarning,
+  RunResult,
+}
+import lit.numeric {
+  renderGuestInt,
+  renderRational,
+  renderReal,
+}
+import lit.normalize_core {
+  h6CapabilityRowsJson,
+  normalizeSource,
+}
+import lit.frontend_lex_read {
+  tokenizeSource,
+  readSourceIterative,
+}
+
+function renderGuestChar(scalar: int, display: bool) -> string {
+  let text = scalarText(scalar)
+  if display { return text }
+  if scalar == 32 { return "#\\space" }
+  if scalar == 10 { return "#\\newline" }
+  if scalar == 9 { return "#\\tab" }
+  if scalar == 13 { return "#\\return" }
+  if scalar == 0 { return "#\\null" }
+  if scalar < 32 || scalar == 127 { return "#\\x{lowerHex(scalar)}" }
+  "#\\{text}"
+}
+
+function escapeGuestString(text: string) -> string {
+  let mut output = ""
+  for scalar in text.scalars() {
+    if scalar == "\\" { output += "\\\\" }
+    else if scalar == "\"" { output += "\\\"" }
+    else if scalar == "\n" { output += "\\n" }
+    else if scalar == "\r" { output += "\\r" }
+    else if scalar == "\t" { output += "\\t" }
+    else { output += scalar }
+  }
+  output
+}
+
+export function renderGuestMode(value: GuestValue, display: bool) -> string {
+  let mut tasks: Array<RenderTask> = [RenderTask.RenderValueTask(value)]
+  let mut activeVectors: Set<int> = Set.of<int>()
+  let mut output = ""
+  while tasks.length > 0 {
+    let task = tasks[tasks.length - 1]
+    tasks = tasks.slice(0, tasks.length - 1)
+    match task {
+      case RenderTextTask(text) => { output += text }
+      case LeaveVectorTask(identity) => { activeVectors.remove(identity) }
+      case RenderValueTask(current) => match current {
+        case VBool(flag) => { output += if flag { "#t" } else { "#f" } }
+        case VInt(number) => { output += renderGuestInt(number) }
+        case VRational(number) => { output += renderRational(number) }
+        case VReal(number) => { output += renderReal(number) }
+        case VChar(scalar) => { output += renderGuestChar(scalar, display) }
+        case VString(_, text) => {
+          output += if display { text } else { "\"{escapeGuestString(text)}\"" }
+        }
+        case VSymbol(name) => { output += name }
+        case VNil => { output += "()" }
+        case VPair(_, _, _) => {
+          let mut cars: Array<GuestValue> = []
+          let mut cursor = current
+          let mut terminal: Option<GuestValue> = None
+          loop {
+            match cursor {
+              case VPair(_, car, cdr) => {
+                cars.push(car)
+                cursor = cdr
+              }
+              case VNil => { break }
+              case _ => {
+                terminal = Some(cursor)
+                break
+              }
+            }
+          }
+          output += "("
+          tasks.push(RenderTask.RenderTextTask(")"))
+          match terminal {
+            case Some(tail) => {
+              tasks.push(RenderTask.RenderValueTask(tail))
+              tasks.push(RenderTask.RenderTextTask(" . "))
+            }
+            case None => {}
+          }
+          let mut index = cars.length - 1
+          while index >= 0 {
+            tasks.push(RenderTask.RenderValueTask(cars[index]))
+            if index > 0 { tasks.push(RenderTask.RenderTextTask(" ")) }
+            index -= 1
+          }
+        }
+        case VVector(identity, values, _) => {
+          if identity in activeVectors {
+            output += "#(...)"
+          } else {
+            activeVectors.add(identity)
+            output += "#("
+            tasks.push(RenderTask.RenderTextTask(")"))
+            tasks.push(RenderTask.LeaveVectorTask(identity))
+            let mut index = values.length - 1
+            while index >= 0 {
+              tasks.push(RenderTask.RenderValueTask(values[index]))
+              if index > 0 { tasks.push(RenderTask.RenderTextTask(" ")) }
+              index -= 1
+            }
+          }
+        }
+        case VBytevector(_, bytes) => {
+          let mut parts: Array<string> = []
+          for byte in bytes { parts.push("{byte}") }
+          output += "#u8({parts.join(" ")})"
+        }
+        case VClosure(_) | VPrimitive(_) | VEscape(_) => { output += "#<procedure>" }
+        case VError(_, _, _) => { output += "#<error-object>" }
+        case VUninitialized => { output += "#<internal-uninitialized>" }
+      }
+    }
+  }
+  output
+}
+
+export function renderGuest(value: GuestValue) -> string {
+  renderGuestMode(value, false)
+}
+
+export function escapeJson(text: string) -> string {
+  let mut result = ""
+  for scalar in text.scalars() {
+    let codePoint = scalar.codePointAt(0) ?? -1
+    if scalar == "\\" { result += "\\\\" }
+    else if scalar == "\"" { result += "\\\"" }
+    else if scalar == "\n" { result += "\\n" }
+    else if scalar == "\r" { result += "\\r" }
+    else if scalar == "\t" { result += "\\t" }
+    else if codePoint >= 0 && codePoint < 32 {
+      let hex = "0123456789abcdef".scalars()
+      result += "\\u00{hex[codePoint / 16]}{hex[codePoint % 16]}"
+    }
+    else { result += scalar }
+  }
+  result
+}
+
+function renderEncodedGuest(value: GuestValue) -> string {
+  let mut tasks: Array<RenderTask> = [RenderTask.RenderValueTask(value)]
+  let mut activeVectors: Set<int> = Set.of<int>()
+  let mut output = ""
+  while tasks.length > 0 {
+    let task = tasks[tasks.length - 1]
+    tasks = tasks.slice(0, tasks.length - 1)
+    match task {
+      case RenderTextTask(text) => { output += text }
+      case LeaveVectorTask(identity) => { activeVectors.remove(identity) }
+      case RenderValueTask(current) => match current {
+        case VBool(flag) => { output += "[\"bool\",{if flag { "true" } else { "false" }}]" }
+        case VInt(number) => { output += "[\"int\",\"{renderGuestInt(number)}\"]" }
+        case VRational(number) => { output += "[\"rational\",\"{renderRational(number)}\"]" }
+        case VReal(number) => { output += "[\"real\",\"{renderReal(number)}\"]" }
+        case VChar(scalar) => { output += "[\"char\",{scalar}]" }
+        case VString(_, text) => { output += "[\"string\",\"{escapeJson(text)}\"]" }
+        case VSymbol(name) => { output += "[\"symbol\",\"{escapeJson(name)}\"]" }
+        case VNil => { output += "[\"nil\"]" }
+        case VPair(_, car, cdr) => {
+          output += "[\"pair\","
+          tasks.push(RenderTask.RenderTextTask("]"))
+          tasks.push(RenderTask.RenderValueTask(cdr))
+          tasks.push(RenderTask.RenderTextTask(","))
+          tasks.push(RenderTask.RenderValueTask(car))
+        }
+        case VVector(identity, values, _) => {
+          if identity in activeVectors {
+            output += "[\"cycle\",\"#(...)\"]"
+          } else {
+            activeVectors.add(identity)
+            output += "[\"vector\",["
+            tasks.push(RenderTask.RenderTextTask("]]"))
+            tasks.push(RenderTask.LeaveVectorTask(identity))
+            let mut index = values.length - 1
+            while index >= 0 {
+              tasks.push(RenderTask.RenderValueTask(values[index]))
+              if index > 0 { tasks.push(RenderTask.RenderTextTask(",")) }
+              index -= 1
+            }
+          }
+        }
+        case VBytevector(_, bytes) => {
+          let mut encoded: Array<string> = []
+          for byte in bytes { encoded.push("{byte}") }
+          output += "[\"bytevector\",[{encoded.join(",")}]]"
+        }
+        case VClosure(_) | VPrimitive(_) | VEscape(_) => { output += "[\"procedure\"]" }
+        case VError(_, error, _) => {
+          output += "[\"error-object\",\"{escapeJson(error.code)}\",\"{escapeJson(error.message)}\"]"
+        }
+        case VUninitialized => { output += "[\"internal\",\"uninitialized\"]" }
+      }
+    }
+  }
+  output
+}
+
+function renderPacket(packet: ValuePacket) -> string {
+  match packet {
+    case One(value) => "[\"one\",{renderEncodedGuest(value)}]"
+    case Many(values) => {
+      let mut rendered: Array<string> = []
+      for value in values { rendered.push(renderEncodedGuest(value)) }
+      "[\"many\",[{rendered.join(",")}]]"
+    }
+  }
+}
+
+export function appendValuePacket(packets: Array<ValuePacket>, packet: ValuePacket) -> Array<ValuePacket> {
+  let mut result: Array<ValuePacket> = []
+  for prior in packets { result.push(prior) }
+  result.push(packet)
+  result
+}
+
+export function machineOriginStartByte(kernel: Kernel, origin: int) -> int {
+  if origin < 0 || origin >= kernel.origins.length { return 0 }
+  let mut cursor = origin
+  let mut remaining = kernel.origins.length + 1
+  while cursor >= 0 && cursor < kernel.origins.length && remaining > 0 {
+    let row = kernel.origins[cursor]
+    if row.span >= 0 && row.span < kernel.spans.length {
+      return kernel.spans[row.span].startByte
+    }
+    cursor = row.parent
+    remaining -= 1
+  }
+  0
+}
+
+export function machineNodeOrigin(kernel: Kernel, node: int) -> int {
+  if node < 0 || node >= kernel.nodes.length { -1 } else { kernel.nodes[node].origin }
+}
+
+export function renderRunResult(invocationId: string, result: RunResult) -> string {
+  let packet = match result.packet {
+    case Some(value) => renderPacket(value)
+    case None => "false"
+  }
+  let diagnostic = match result.diagnostic {
+    case Some(value) => "\"{escapeJson(value)}\""
+    case None => "false"
+  }
+  let exhausted = if result.exhausted { "true" } else { "false" }
+  "[\"lispex.hosted-kernel-result/v0\",\"{escapeJson(invocationId)}\",\"{result.status}\",{packet},{diagnostic},{result.exitStatus},[],[[\"transition-limit\",{result.transitionLimit}],[\"transitions\",{result.transitions}],[\"exhausted\",{exhausted}],[\"max-continuation-depth\",{result.maxContinuationDepth}],[\"allocations\",{result.allocations}],[\"transfers\",{result.transfers}]]]"
+}
+
+export function renderDecodeError(error: string) -> string {
+  "[\"lispex.lit-runner-result/v0\",\"\",\"\",\"invalid\",false,\"{escapeJson(error)}\",2,[],[],[]]"
+}
+
+function renderRunnerResources(request: Request) -> string {
+  "[[\"transition-limit\",{request.transitionLimit}],[\"input-byte-limit\",{request.inputLimit}],[\"output-byte-limit\",{request.outputLimit}],[\"token-limit\",{request.tokenLimit}]]"
+}
+
+function renderRunnerIdentities(request: Request) -> string {
+  "[[\"profile\",\"lispex-r7rs-small-pinned/v1.4\"],[\"logical-source-id\",\"{escapeJson(request.sourceId)}\"],[\"source-sha256\",\"{request.sourceSha}\"],[\"workload-sha256\",\"{request.workloadSha}\"],[\"lit-source-sha256\",\"{request.litSourceSha}\"],[\"capability-sha256\",\"{request.capabilitySha}\"],[\"isolation-profile\",\"fresh-process-per-request/v0\"]]"
+}
+
+export function renderRunnerResult(request: Request, nested: string) -> string {
+  let resources = renderRunnerResources(request)
+  let identities = renderRunnerIdentities(request)
+  let normal = "[\"lispex.lit-runner-result/v0\",\"{escapeJson(request.invocationId)}\",\"{request.mode}\",\"executed\",{nested},false,0,[],{resources},{identities}]"
+  if normal.byteLength() + 1 <= request.outputLimit { return normal }
+  "[\"lispex.lit-runner-result/v0\",\"{escapeJson(request.invocationId)}\",\"{request.mode}\",\"resource\",false,\"LIT901 output byte limit exceeded\",2,[],{resources},{identities}]"
+}
+
+function renderFrontendRunnerResources(request: FrontendRequest) -> string {
+  "[[\"transition-limit\",{request.transitionLimit}],[\"input-byte-limit\",{request.inputLimit}],[\"output-byte-limit\",{request.outputLimit}],[\"token-limit\",{request.tokenLimit}]]"
+}
+
+function renderFrontendRunnerIdentities(request: FrontendRequest) -> string {
+  "[[\"profile\",\"lispex-r7rs-small-pinned/v1.4\"],[\"logical-source-id\",\"{escapeJson(request.sourceId)}\"],[\"source-sha256\",\"{request.sourceSha}\"],[\"workload-sha256\",\"{request.workloadSha}\"],[\"lit-source-sha256\",\"{request.litSourceSha}\"],[\"capability-sha256\",\"{request.capabilitySha}\"],[\"isolation-profile\",\"fresh-process-per-request/v0\"]]"
+}
+
+function renderIntVector(values: Array<int>) -> string {
+  let mut rendered: Array<string> = []
+  for value in values { rendered.push("{value}") }
+  "[{rendered.join(",")}]"
+}
+
+function renderFrontendDiagnostic(request: FrontendRequest, fault: FrontendFault) -> string {
+  "[\"lispex.hosted-diagnostic/v0\",\"{fault.code}\",\"{escapeJson(fault.templateId)}\",\"{escapeJson(fault.phase)}\",\"{escapeJson(request.sourceId)}\",[{fault.startByte},{fault.endByte}],[],[[\"message\",\"{escapeJson(fault.message)}\"]],false]"
+}
+
+function renderProjectionDiagnostic(request: FrontendRequest, fault: FrontendFault) -> string {
+  "[\"lispex.lit-frontend-diagnostic/v0\",\"{fault.code}\",\"{escapeJson(fault.templateId)}\",\"{escapeJson(fault.phase)}\",\"{escapeJson(request.sourceId)}\",[{fault.startByte},{fault.endByte}],[],[[\"message\",\"{escapeJson(fault.message)}\"]],false]"
+}
+
+function renderFrontendTables(tokens: Array<FrontendToken>) -> Array<string> {
+  let mut spans: Array<string> = []
+  let mut origins: Array<string> = []
+  let mut tokenRows: Array<string> = []
+  let mut index = 0
+  while index < tokens.length {
+    let token = tokens[index]
+    spans.push("[{index},{token.startByte},{token.endByte}]")
+    origins.push("[{index},\"source\",{index},\"\",-1]")
+    tokenRows.push("[{index},\"{token.kind}\",{index},{index},{renderIntVector(token.raw)}]")
+    index += 1
+  }
+  ["[{spans.join(",")}]", "[{origins.join(",")}]", "[{tokenRows.join(",")}]"]
+}
+
+function renderHostedFrontendSuccess(request: FrontendRequest, tokenized: TokenizedSource) -> string {
+  let tables = renderFrontendTables(tokenized.tokens)
+  let metrics = "[[\"transition-limit\",{request.transitionLimit}],[\"transitions\",{tokenized.transitions}],[\"scalar-count\",{tokenized.scalars.length}],[\"token-count\",{tokenized.tokens.length}]]"
+  "[\"lispex.hosted-frontend-result/v0\",\"{escapeJson(request.invocationId)}\",\"ok\",\"{escapeJson(request.sourceId)}\",\"{request.sourceSha}\",{request.sourceBytes.length},{renderIntVector(tokenized.newlineIndex)},{tables[0]},{tables[1]},{tables[2]},false,0,[],{metrics}]"
+}
+
+function renderHostedFrontendFault(request: FrontendRequest, fault: FrontendFault) -> string {
+  let status = if fault.resource { "resource" } else { "error" }
+  let exitStatus = if fault.resource { 2 } else { 1 }
+  let diagnostic = renderFrontendDiagnostic(request, fault)
+  let metrics = "[[\"transition-limit\",{request.transitionLimit}],[\"transitions\",0],[\"scalar-count\",0],[\"token-count\",0]]"
+  "[\"lispex.hosted-frontend-result/v0\",\"{escapeJson(request.invocationId)}\",\"{status}\",\"{escapeJson(request.sourceId)}\",\"{request.sourceSha}\",{request.sourceBytes.length},[0],[],[],[],{diagnostic},{exitStatus},[],{metrics}]"
+}
+
+function renderGuardClauseRows(clauses: Array<GuardClauseRow>) -> string {
+  let mut rows: Array<string> = []
+  for clause in clauses { rows.push("[{clause.test},{clause.body}]") }
+  "[{rows.join(",")}]"
+}
+
+function encodeNodeOp(op: NodeOp) -> NodeEncoding {
+  match op {
+    case Literal(quote) => NodeEncoding { opcode: "literal", a: "{quote}", b: "-1", c: "-1", d: "-1" }
+    case LocalRef(binder, depth, slot) => NodeEncoding { opcode: "local-ref", a: "{binder}", b: "{depth}", c: "{slot}", d: "-1" }
+    case GlobalRef(global, slot) => NodeEncoding { opcode: "global-ref", a: "{global}", b: "{slot}", c: "-1", d: "-1" }
+    case Capability(capability) => NodeEncoding { opcode: "capability", a: "{capability}", b: "-1", c: "-1", d: "-1" }
+    case IfNode(test, consequent, alternate) => NodeEncoding { opcode: "if", a: "{test}", b: "{consequent}", c: "{alternate}", d: "-1" }
+    case Begin(children) => NodeEncoding { opcode: "begin", a: renderIntVector(children), b: "-1", c: "-1", d: "-1" }
+    case Lambda(binders, body, rest) => NodeEncoding { opcode: "lambda", a: renderIntVector(binders), b: "{body}", c: "{rest}", d: "-1" }
+    case Apply(operator, operands) => NodeEncoding { opcode: "app", a: "{operator}", b: renderIntVector(operands), c: "-1", d: "-1" }
+    case SetLocal(binder, depth, slot, rhs) => NodeEncoding { opcode: "set-local", a: "{binder}", b: "{depth}", c: "{slot}", d: "{rhs}" }
+    case SetGlobal(global, slot, rhs) => NodeEncoding { opcode: "set-global", a: "{global}", b: "{slot}", c: "{rhs}", d: "-1" }
+    case Letrec(binders, initializers, body) => NodeEncoding { opcode: "letrec", a: renderIntVector(binders), b: renderIntVector(initializers), c: "{body}", d: "-1" }
+    case GuardNode(binders, clauses, elseNode, body) => NodeEncoding { opcode: "guard", a: renderIntVector(binders), b: renderGuardClauseRows(clauses), c: "{elseNode}", d: "{body}" }
+  }
+}
+
+function renderProjectedKernel(kernel: Kernel) -> string {
+  let mut spans: Array<string> = []
+  let mut index = 0
+  while index < kernel.spans.length {
+    let span = kernel.spans[index]
+    spans.push("[{index},{span.startByte},{span.endByte}]")
+    index += 1
+  }
+  let mut origins: Array<string> = []
+  index = 0
+  while index < kernel.origins.length {
+    let origin = kernel.origins[index]
+    origins.push("[{index},\"{origin.kind}\",{origin.span},\"{escapeJson(origin.rule)}\",{origin.parent}]")
+    index += 1
+  }
+  let mut binders: Array<string> = []
+  index = 0
+  while index < kernel.binders.length {
+    let binder = kernel.binders[index]
+    binders.push("[{index},\"{escapeJson(binder.name)}\",{binder.owner},{binder.slot},{binder.origin}]")
+    index += 1
+  }
+  let mut globals: Array<string> = []
+  index = 0
+  while index < kernel.globals.length {
+    let global = kernel.globals[index]
+    globals.push("[{index},\"{escapeJson(global.name)}\",{global.slot},{global.origin},{global.capability}]")
+    index += 1
+  }
+  let mut nodes: Array<string> = []
+  index = 0
+  while index < kernel.nodes.length {
+    let node = kernel.nodes[index]
+    let encoded = encodeNodeOp(node.op)
+    nodes.push("[{index},\"{encoded.opcode}\",{node.span},{node.origin},{encoded.a},{encoded.b},{encoded.c},{encoded.d}]")
+    index += 1
+  }
+  let mut quotes: Array<string> = []
+  index = 0
+  while index < kernel.quotes.length {
+    quotes.push("[{index},{renderEncodedGuest(kernel.quotes[index])}]")
+    index += 1
+  }
+  let capabilityRows = if kernel.feature == "hosted-kernel-h6/v0" { h6CapabilityRowsJson() } else { h4CapabilityRowsJson() }
+  "[\"lispex.hosted-kernel/v0\",\"lispex-r7rs-small-pinned/v1.4\",\"{kernel.feature}\",\"{escapeJson(kernel.sourceId)}\",\"{kernel.sourceSha}\",[{spans.join(",")}],[{origins.join(",")}],[{binders.join(",")}],[{globals.join(",")}],{renderIntVector(kernel.roots)},[{nodes.join(",")}],[{quotes.join(",")}],{capabilityRows}]"
+}
+
+function h4CapabilityRowsJson() -> string {
+  "[[0,\"+\",\"numeric/add\",\"0+\",[\"number...\"],\"number\",\"exactly-one\",[\"HK220\"],\"deterministic-pinned\",false,\"linear-arguments\",\"native-and-wasm-reference-host\",\"hosted-h4-core-floor-v0\",0,\"host-delegated-deterministic\"],[1,\"-\",\"numeric/subtract\",\"1+\",[\"number...\"],\"number\",\"exactly-one\",[\"HK221\"],\"deterministic-pinned\",false,\"linear-arguments\",\"native-and-wasm-reference-host\",\"hosted-h4-core-floor-v0\",0,\"host-delegated-deterministic\"],[2,\"=\",\"numeric/equal\",\"2+\",[\"number...\"],\"boolean\",\"exactly-one\",[\"HK222\"],\"deterministic-pinned\",false,\"linear-arguments\",\"native-and-wasm-reference-host\",\"hosted-h4-core-floor-v0\",0,\"host-delegated-deterministic\"],[3,\"cons\",\"aggregate/cons\",\"2\",[\"value\",\"value\"],\"pair\",\"exactly-one\",[\"HK223\"],\"deterministic-pinned\",false,\"constant\",\"native-and-wasm-reference-host\",\"hosted-h4-core-floor-v0\",0,\"hosted-implemented\"],[4,\"null?\",\"predicate/null\",\"1\",[\"value\"],\"boolean\",\"exactly-one\",[\"HK224\"],\"deterministic-pinned\",false,\"constant\",\"native-and-wasm-reference-host\",\"hosted-h4-core-floor-v0\",0,\"hosted-implemented\"],[5,\"values\",\"control/values\",\"0+\",[\"value...\"],\"value-packet\",\"any-values\",[],\"deterministic-pinned\",false,\"linear-arguments\",\"native-and-wasm-reference-host\",\"hosted-h4-core-floor-v0\",0,\"hosted-implemented\"],[6,\"call-with-values\",\"control/call-with-values\",\"2\",[\"procedure\",\"procedure\"],\"value-packet\",\"any-values\",[\"HK225\"],\"deterministic-pinned\",true,\"machine-dispatch\",\"native-and-wasm-reference-host\",\"hosted-h4-core-floor-v0\",0,\"hosted-implemented\"],[7,\"apply\",\"control/apply\",\"2+\",[\"procedure\",\"value...\",\"proper-list\"],\"value-packet\",\"any-values\",[\"HK211\",\"HK226\"],\"deterministic-pinned\",true,\"linear-arguments-plus-machine-dispatch\",\"native-and-wasm-reference-host\",\"hosted-h4-core-floor-v0\",0,\"hosted-implemented\"],[8,\"vector-ref\",\"aggregate/vector-ref\",\"2\",[\"vector\",\"exact-nonnegative-integer\"],\"value\",\"exactly-one\",[\"HK227\"],\"deterministic-pinned\",false,\"constant\",\"native-and-wasm-reference-host\",\"hosted-h4-core-floor-v0\",0,\"hosted-implemented\"],[9,\"vector-set!\",\"aggregate/vector-set\",\"3\",[\"mutable-vector\",\"exact-nonnegative-integer\",\"value\"],\"value\",\"exactly-one\",[\"HK228\"],\"deterministic-pinned\",false,\"constant\",\"native-and-wasm-reference-host\",\"hosted-h4-core-floor-v0\",0,\"hosted-implemented\"],[10,\"call/cc\",\"control/upward-escape\",\"1\",[\"procedure\"],\"value-packet\",\"any-values\",[\"E340\",\"HK234\"],\"deterministic-pinned\",true,\"machine-transfer\",\"native-and-wasm-reference-host\",\"hosted-h4-core-floor-v0\",0,\"hosted-implemented\"],[11,\"dynamic-wind\",\"control/dynamic-wind\",\"3\",[\"procedure\",\"procedure\",\"procedure\"],\"value-packet\",\"any-values\",[\"HK235\"],\"deterministic-pinned\",true,\"machine-transfer\",\"native-and-wasm-reference-host\",\"hosted-h4-core-floor-v0\",0,\"hosted-implemented\"],[12,\"with-exception-handler\",\"control/exception-handler\",\"2\",[\"procedure\",\"procedure\"],\"value-packet\",\"any-values\",[\"E332\",\"HK236\"],\"deterministic-pinned\",true,\"machine-transfer\",\"native-and-wasm-reference-host\",\"hosted-h4-core-floor-v0\",0,\"hosted-implemented\"],[13,\"raise\",\"control/raise\",\"1\",[\"value\"],\"none\",\"discard\",[\"E331\",\"HK237\"],\"deterministic-pinned\",false,\"machine-transfer\",\"native-and-wasm-reference-host\",\"hosted-h4-core-floor-v0\",0,\"hosted-implemented\"],[14,\"raise-continuable\",\"control/raise-continuable\",\"1\",[\"value\"],\"value-packet\",\"any-values\",[\"E331\",\"HK238\"],\"deterministic-pinned\",false,\"machine-transfer\",\"native-and-wasm-reference-host\",\"hosted-h4-core-floor-v0\",0,\"hosted-implemented\"],[15,\"error\",\"control/error\",\"1+\",[\"string\",\"value...\"],\"none\",\"discard\",[\"E330\",\"HK233\"],\"deterministic-pinned\",false,\"machine-transfer\",\"native-and-wasm-reference-host\",\"hosted-h4-core-floor-v0\",0,\"hosted-implemented\"],[16,\"error-object?\",\"predicate/error-object\",\"1\",[\"value\"],\"boolean\",\"exactly-one\",[\"HK239\"],\"deterministic-pinned\",false,\"constant\",\"native-and-wasm-reference-host\",\"hosted-h4-core-floor-v0\",0,\"hosted-implemented\"],[17,\"error-object-message\",\"error-object/message\",\"1\",[\"error-object\"],\"string\",\"exactly-one\",[\"HK243\"],\"deterministic-pinned\",false,\"constant\",\"native-and-wasm-reference-host\",\"hosted-h4-core-floor-v0\",0,\"hosted-implemented\"],[18,\"error-object-irritants\",\"error-object/irritants\",\"1\",[\"error-object\"],\"list\",\"exactly-one\",[\"HK244\"],\"deterministic-pinned\",false,\"linear-irritants\",\"native-and-wasm-reference-host\",\"hosted-h4-core-floor-v0\",0,\"hosted-implemented\"],[19,\"*\",\"numeric/multiply\",\"0+\",[\"number...\"],\"number\",\"exactly-one\",[\"HK250\"],\"deterministic-pinned\",false,\"linear-arguments\",\"native-and-wasm-reference-host\",\"hosted-h4-core-floor-v0\",0,\"host-delegated-deterministic\"],[20,\"/\",\"numeric/divide\",\"1+\",[\"number...\"],\"number\",\"exactly-one\",[\"HK251\",\"HK252\"],\"deterministic-pinned\",false,\"linear-arguments\",\"native-and-wasm-reference-host\",\"hosted-h4-core-floor-v0\",0,\"host-delegated-deterministic\"],[21,\"<\",\"numeric/less\",\"2+\",[\"number...\"],\"boolean\",\"exactly-one\",[\"HK253\"],\"deterministic-pinned\",false,\"linear-arguments\",\"native-and-wasm-reference-host\",\"hosted-h4-core-floor-v0\",0,\"host-delegated-deterministic\"],[22,\">\",\"numeric/greater\",\"2+\",[\"number...\"],\"boolean\",\"exactly-one\",[\"HK253\"],\"deterministic-pinned\",false,\"linear-arguments\",\"native-and-wasm-reference-host\",\"hosted-h4-core-floor-v0\",0,\"host-delegated-deterministic\"],[23,\"<=\",\"numeric/less-or-equal\",\"2+\",[\"number...\"],\"boolean\",\"exactly-one\",[\"HK253\"],\"deterministic-pinned\",false,\"linear-arguments\",\"native-and-wasm-reference-host\",\"hosted-h4-core-floor-v0\",0,\"host-delegated-deterministic\"],[24,\">=\",\"numeric/greater-or-equal\",\"2+\",[\"number...\"],\"boolean\",\"exactly-one\",[\"HK253\"],\"deterministic-pinned\",false,\"linear-arguments\",\"native-and-wasm-reference-host\",\"hosted-h4-core-floor-v0\",0,\"host-delegated-deterministic\"],[25,\"pair?\",\"predicate/pair\",\"1\",[\"value\"],\"boolean\",\"exactly-one\",[\"HK254\"],\"deterministic-pinned\",false,\"constant\",\"native-and-wasm-reference-host\",\"hosted-h4-core-floor-v0\",0,\"hosted-implemented\"],[26,\"car\",\"aggregate/car\",\"1\",[\"pair\"],\"value\",\"exactly-one\",[\"HK255\"],\"deterministic-pinned\",false,\"constant\",\"native-and-wasm-reference-host\",\"hosted-h4-core-floor-v0\",0,\"hosted-implemented\"],[27,\"cdr\",\"aggregate/cdr\",\"1\",[\"pair\"],\"value\",\"exactly-one\",[\"HK256\"],\"deterministic-pinned\",false,\"constant\",\"native-and-wasm-reference-host\",\"hosted-h4-core-floor-v0\",0,\"hosted-implemented\"],[28,\"list\",\"aggregate/list\",\"0+\",[\"value...\"],\"list\",\"exactly-one\",[],\"deterministic-pinned\",false,\"linear-arguments\",\"native-and-wasm-reference-host\",\"hosted-h4-core-floor-v0\",0,\"hosted-implemented\"],[29,\"list?\",\"predicate/list\",\"1\",[\"value\"],\"boolean\",\"exactly-one\",[\"HK254\"],\"deterministic-pinned\",false,\"linear-spine\",\"native-and-wasm-reference-host\",\"hosted-h4-core-floor-v0\",0,\"hosted-implemented\"],[30,\"length\",\"aggregate/length\",\"1\",[\"proper-list\"],\"exact-integer\",\"exactly-one\",[\"HK257\"],\"deterministic-pinned\",false,\"linear-spine\",\"native-and-wasm-reference-host\",\"hosted-h4-core-floor-v0\",0,\"hosted-implemented\"],[31,\"append\",\"aggregate/append\",\"0+\",[\"list...\",\"value\"],\"value\",\"exactly-one\",[\"HK258\"],\"deterministic-pinned\",false,\"linear-copied-spines\",\"native-and-wasm-reference-host\",\"hosted-h4-core-floor-v0\",0,\"hosted-implemented\"],[32,\"reverse\",\"aggregate/reverse\",\"1\",[\"proper-list\"],\"list\",\"exactly-one\",[\"HK259\"],\"deterministic-pinned\",false,\"linear-spine\",\"native-and-wasm-reference-host\",\"hosted-h4-core-floor-v0\",0,\"hosted-implemented\"],[33,\"eqv?\",\"equality/eqv\",\"2\",[\"value\",\"value\"],\"boolean\",\"exactly-one\",[\"HK261\"],\"deterministic-pinned\",false,\"constant\",\"native-and-wasm-reference-host\",\"hosted-h4-core-floor-v0\",0,\"hosted-implemented\"],[34,\"eq?\",\"equality/eq\",\"2\",[\"value\",\"value\"],\"boolean\",\"exactly-one\",[\"HK261\"],\"deterministic-pinned\",false,\"constant\",\"native-and-wasm-reference-host\",\"hosted-h4-core-floor-v0\",0,\"hosted-implemented\"],[35,\"equal?\",\"equality/equal\",\"2\",[\"value\",\"value\"],\"boolean\",\"exactly-one\",[\"HK261\"],\"deterministic-pinned\",false,\"cycle-safe-structural\",\"native-and-wasm-reference-host\",\"hosted-h4-core-floor-v0\",0,\"hosted-implemented\"],[36,\"not\",\"predicate/not\",\"1\",[\"value\"],\"boolean\",\"exactly-one\",[\"HK254\"],\"deterministic-pinned\",false,\"constant\",\"native-and-wasm-reference-host\",\"hosted-h4-core-floor-v0\",0,\"hosted-implemented\"],[37,\"number?\",\"predicate/number\",\"1\",[\"value\"],\"boolean\",\"exactly-one\",[\"HK254\"],\"deterministic-pinned\",false,\"constant\",\"native-and-wasm-reference-host\",\"hosted-h4-core-floor-v0\",0,\"hosted-implemented\"],[38,\"integer?\",\"predicate/integer\",\"1\",[\"value\"],\"boolean\",\"exactly-one\",[\"HK254\"],\"deterministic-pinned\",false,\"constant\",\"native-and-wasm-reference-host\",\"hosted-h4-core-floor-v0\",0,\"hosted-implemented\"],[39,\"exact-integer?\",\"predicate/exact-integer\",\"1\",[\"value\"],\"boolean\",\"exactly-one\",[\"HK254\"],\"deterministic-pinned\",false,\"constant\",\"native-and-wasm-reference-host\",\"hosted-h4-core-floor-v0\",0,\"hosted-implemented\"],[40,\"boolean?\",\"predicate/boolean\",\"1\",[\"value\"],\"boolean\",\"exactly-one\",[\"HK254\"],\"deterministic-pinned\",false,\"constant\",\"native-and-wasm-reference-host\",\"hosted-h4-core-floor-v0\",0,\"hosted-implemented\"],[41,\"symbol?\",\"predicate/symbol\",\"1\",[\"value\"],\"boolean\",\"exactly-one\",[\"HK254\"],\"deterministic-pinned\",false,\"constant\",\"native-and-wasm-reference-host\",\"hosted-h4-core-floor-v0\",0,\"hosted-implemented\"],[42,\"string?\",\"predicate/string\",\"1\",[\"value\"],\"boolean\",\"exactly-one\",[\"HK254\"],\"deterministic-pinned\",false,\"constant\",\"native-and-wasm-reference-host\",\"hosted-h4-core-floor-v0\",0,\"hosted-implemented\"],[43,\"procedure?\",\"predicate/procedure\",\"1\",[\"value\"],\"boolean\",\"exactly-one\",[\"HK254\"],\"deterministic-pinned\",false,\"constant\",\"native-and-wasm-reference-host\",\"hosted-h4-core-floor-v0\",0,\"hosted-implemented\"],[44,\"vector?\",\"predicate/vector\",\"1\",[\"value\"],\"boolean\",\"exactly-one\",[\"HK254\"],\"deterministic-pinned\",false,\"constant\",\"native-and-wasm-reference-host\",\"hosted-h4-core-floor-v0\",0,\"hosted-implemented\"],[45,\"bytevector?\",\"predicate/bytevector\",\"1\",[\"value\"],\"boolean\",\"exactly-one\",[\"HK254\"],\"deterministic-pinned\",false,\"constant\",\"native-and-wasm-reference-host\",\"hosted-h4-core-floor-v0\",0,\"hosted-implemented\"],[46,\"make-vector\",\"aggregate/make-vector\",\"1-or-2\",[\"exact-nonnegative-integer\",\"value?\"],\"mutable-vector\",\"exactly-one\",[\"HK262\"],\"deterministic-pinned\",false,\"linear-size\",\"native-and-wasm-reference-host\",\"hosted-h4-core-floor-v0\",0,\"hosted-implemented\"],[47,\"vector\",\"aggregate/vector\",\"0+\",[\"value...\"],\"mutable-vector\",\"exactly-one\",[],\"deterministic-pinned\",false,\"linear-arguments\",\"native-and-wasm-reference-host\",\"hosted-h4-core-floor-v0\",0,\"hosted-implemented\"],[48,\"vector-length\",\"aggregate/vector-length\",\"1\",[\"vector\"],\"exact-integer\",\"exactly-one\",[\"HK263\"],\"deterministic-pinned\",false,\"constant\",\"native-and-wasm-reference-host\",\"hosted-h4-core-floor-v0\",0,\"hosted-implemented\"],[49,\"vector->list\",\"aggregate/vector-to-list\",\"1\",[\"vector\"],\"list\",\"exactly-one\",[\"HK263\"],\"deterministic-pinned\",false,\"linear-size\",\"native-and-wasm-reference-host\",\"hosted-h4-core-floor-v0\",0,\"hosted-implemented\"],[50,\"list->vector\",\"aggregate/list-to-vector\",\"1\",[\"proper-list\"],\"mutable-vector\",\"exactly-one\",[\"HK264\"],\"deterministic-pinned\",false,\"linear-spine\",\"native-and-wasm-reference-host\",\"hosted-h4-core-floor-v0\",0,\"hosted-implemented\"],[51,\"make-bytevector\",\"aggregate/make-bytevector\",\"1-or-2\",[\"exact-nonnegative-integer\",\"byte?\"],\"bytevector\",\"exactly-one\",[\"HK265\"],\"deterministic-pinned\",false,\"linear-size\",\"native-and-wasm-reference-host\",\"hosted-h4-core-floor-v0\",0,\"hosted-implemented\"],[52,\"bytevector\",\"aggregate/bytevector\",\"0+\",[\"byte...\"],\"bytevector\",\"exactly-one\",[\"HK266\"],\"deterministic-pinned\",false,\"linear-arguments\",\"native-and-wasm-reference-host\",\"hosted-h4-core-floor-v0\",0,\"hosted-implemented\"],[53,\"bytevector-length\",\"aggregate/bytevector-length\",\"1\",[\"bytevector\"],\"exact-integer\",\"exactly-one\",[\"HK267\"],\"deterministic-pinned\",false,\"constant\",\"native-and-wasm-reference-host\",\"hosted-h4-core-floor-v0\",0,\"hosted-implemented\"],[54,\"bytevector-u8-ref\",\"aggregate/bytevector-ref\",\"2\",[\"bytevector\",\"exact-nonnegative-integer\"],\"byte\",\"exactly-one\",[\"HK268\"],\"deterministic-pinned\",false,\"constant\",\"native-and-wasm-reference-host\",\"hosted-h4-core-floor-v0\",0,\"hosted-implemented\"],[55,\"string-append\",\"string/append\",\"0+\",[\"string...\"],\"string\",\"exactly-one\",[\"HK269\"],\"deterministic-pinned\",false,\"linear-bytes\",\"native-and-wasm-reference-host\",\"hosted-h4-core-floor-v0\",0,\"host-delegated-deterministic\"],[56,\"string-length\",\"string/length\",\"1\",[\"string\"],\"exact-integer\",\"exactly-one\",[\"HK270\"],\"deterministic-pinned\",false,\"linear-codepoints\",\"native-and-wasm-reference-host\",\"hosted-h4-core-floor-v0\",0,\"host-delegated-deterministic\"],[57,\"string-ref\",\"string/ref\",\"2\",[\"string\",\"exact-nonnegative-integer\"],\"char\",\"exactly-one\",[\"HK271\"],\"deterministic-pinned\",false,\"linear-codepoints\",\"native-and-wasm-reference-host\",\"hosted-h4-core-floor-v0\",0,\"host-delegated-deterministic\"],[58,\"string->symbol\",\"symbol/intern\",\"1\",[\"string\"],\"symbol\",\"exactly-one\",[\"HK272\"],\"deterministic-pinned\",false,\"linear-bytes\",\"native-and-wasm-reference-host\",\"hosted-h4-core-floor-v0\",0,\"host-delegated-deterministic\"],[59,\"symbol->string\",\"symbol/name\",\"1\",[\"symbol\"],\"string\",\"exactly-one\",[\"HK273\"],\"deterministic-pinned\",false,\"linear-bytes\",\"native-and-wasm-reference-host\",\"hosted-h4-core-floor-v0\",0,\"host-delegated-deterministic\"],[60,\"char?\",\"predicate/char\",\"1\",[\"value\"],\"boolean\",\"exactly-one\",[\"HK254\"],\"deterministic-pinned\",false,\"constant\",\"native-and-wasm-reference-host\",\"hosted-h4-core-floor-v0\",0,\"host-delegated-deterministic\"],[61,\"char->integer\",\"char/codepoint\",\"1\",[\"char\"],\"exact-integer\",\"exactly-one\",[\"HK274\"],\"deterministic-pinned\",false,\"constant\",\"native-and-wasm-reference-host\",\"hosted-h4-core-floor-v0\",0,\"host-delegated-deterministic\"],[62,\"integer->char\",\"char/from-codepoint\",\"1\",[\"Unicode-scalar\"],\"char\",\"exactly-one\",[\"HK275\"],\"deterministic-pinned\",false,\"constant\",\"native-and-wasm-reference-host\",\"hosted-h4-core-floor-v0\",0,\"host-delegated-deterministic\"],[63,\"number->string\",\"numeric/canonical-format\",\"1\",[\"number\"],\"string\",\"exactly-one\",[\"HK276\"],\"deterministic-pinned\",false,\"number-format-cost\",\"native-and-wasm-reference-host\",\"hosted-h4-core-floor-v0\",0,\"host-delegated-deterministic\"],[64,\"string->number\",\"numeric/canonical-parse\",\"1\",[\"string\"],\"number-or-false\",\"exactly-one\",[\"HK277\"],\"deterministic-pinned\",false,\"number-parse-cost\",\"native-and-wasm-reference-host\",\"hosted-h4-core-floor-v0\",0,\"host-delegated-deterministic\"],[65,\"display\",\"io/display\",\"1\",[\"value\"],\"none\",\"discard\",[\"HK260\"],\"deterministic-pinned\",false,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h4-core-floor-v0\",0,\"unsupported-loud\"],[66,\"write\",\"io/write\",\"1\",[\"value\"],\"none\",\"discard\",[\"HK260\"],\"deterministic-pinned\",false,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h4-core-floor-v0\",0,\"unsupported-loud\"],[67,\"newline\",\"io/newline\",\"0\",[],\"none\",\"discard\",[\"HK260\"],\"deterministic-pinned\",false,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h4-core-floor-v0\",0,\"unsupported-loud\"],[68,\"println\",\"io/println\",\"1\",[\"value\"],\"none\",\"discard\",[\"HK260\"],\"deterministic-pinned\",false,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h4-core-floor-v0\",0,\"unsupported-loud\"],[69,\"map\",\"hof/map\",\"2\",[\"procedure\",\"proper-list\"],\"list\",\"exactly-one\",[\"HK260\"],\"deterministic-pinned\",true,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h4-core-floor-v0\",0,\"unsupported-loud\"],[70,\"for-each\",\"hof/for-each\",\"2\",[\"procedure\",\"proper-list\"],\"none\",\"discard\",[\"HK260\"],\"deterministic-pinned\",true,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h4-core-floor-v0\",0,\"unsupported-loud\"],[71,\"vector-map\",\"hof/vector-map\",\"2\",[\"procedure\",\"vector\"],\"vector\",\"exactly-one\",[\"HK260\"],\"deterministic-pinned\",true,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h4-core-floor-v0\",0,\"unsupported-loud\"],[72,\"vector-for-each\",\"hof/vector-for-each\",\"2\",[\"procedure\",\"vector\"],\"none\",\"discard\",[\"HK260\"],\"deterministic-pinned\",true,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h4-core-floor-v0\",0,\"unsupported-loud\"],[73,\"string-map\",\"hof/string-map\",\"2\",[\"procedure\",\"string\"],\"string\",\"exactly-one\",[\"HK260\"],\"deterministic-pinned\",true,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h4-core-floor-v0\",0,\"unsupported-loud\"],[74,\"string-for-each\",\"hof/string-for-each\",\"2\",[\"procedure\",\"string\"],\"none\",\"discard\",[\"HK260\"],\"deterministic-pinned\",true,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h4-core-floor-v0\",0,\"unsupported-loud\"],[75,\"filter\",\"hof/filter\",\"2\",[\"procedure\",\"proper-list\"],\"list\",\"exactly-one\",[\"HK260\"],\"deterministic-pinned\",true,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h4-core-floor-v0\",0,\"unsupported-loud\"],[76,\"fold-left\",\"hof/fold-left\",\"3\",[\"procedure\",\"value\",\"proper-list\"],\"value\",\"exactly-one\",[\"HK260\"],\"deterministic-pinned\",true,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h4-core-floor-v0\",0,\"unsupported-loud\"],[77,\"fold-right\",\"hof/fold-right\",\"3\",[\"procedure\",\"value\",\"proper-list\"],\"value\",\"exactly-one\",[\"HK260\"],\"deterministic-pinned\",true,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h4-core-floor-v0\",0,\"unsupported-loud\"],[78,\"member\",\"search/member\",\"2\",[\"value\",\"proper-list\"],\"value-or-false\",\"exactly-one\",[\"HK260\"],\"deterministic-pinned\",false,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h4-core-floor-v0\",0,\"unsupported-loud\"],[79,\"assoc\",\"search/assoc\",\"2\",[\"value\",\"alist\"],\"pair-or-false\",\"exactly-one\",[\"HK260\"],\"deterministic-pinned\",false,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h4-core-floor-v0\",0,\"unsupported-loud\"]]"
+}
+
+export function renderFrontendRunnerResult(request: FrontendRequest) -> string {
+  let resources = renderFrontendRunnerResources(request)
+  let identities = renderFrontendRunnerIdentities(request)
+  let nested = match tokenizeSource(request) {
+    case Ok(tokenized) => {
+      let frontend = renderHostedFrontendSuccess(request, tokenized)
+      match readSourceIterative(request, tokenized) {
+        case Ok(reader) => match normalizeSource(request, reader) {
+          case Ok(normalized) => {
+            let kernel = renderProjectedKernel(normalized.kernel)
+            "[\"lispex.lit-frontend-projection/v0\",\"{escapeJson(request.invocationId)}\",\"ok\",{frontend},{kernel},false,0,[],[[\"kernel-feature\",\"hosted-kernel-h5/v0\"],[\"kernel-produced\",true],[\"reader-datums\",{reader.datums.length}],[\"reader-roots\",{reader.roots.length}],[\"max-reader-nesting\",{reader.maxNesting}],[\"frontend-transitions\",{normalized.transitions}],[\"kernel-nodes\",{normalized.kernel.nodes.length}],[\"kernel-binders\",{normalized.kernel.binders.length}],[\"generated-binders\",{normalized.generatedBinders}],[\"intrinsic-references\",{normalized.intrinsicReferences}]]]"
+          }
+          case Err(fault) => {
+            let status = if fault.resource { "resource" } else { "error" }
+            let exitStatus = if fault.resource { 2 } else { 1 }
+            let diagnostic = renderProjectionDiagnostic(request, fault)
+            "[\"lispex.lit-frontend-projection/v0\",\"{escapeJson(request.invocationId)}\",\"{status}\",{frontend},false,{diagnostic},{exitStatus},[],[[\"kernel-feature\",\"hosted-kernel-h5/v0\"],[\"kernel-produced\",false]]]"
+          }
+        }
+        case Err(fault) => {
+          let status = if fault.resource { "resource" } else { "error" }
+          let exitStatus = if fault.resource { 2 } else { 1 }
+          let diagnostic = renderProjectionDiagnostic(request, fault)
+          "[\"lispex.lit-frontend-projection/v0\",\"{escapeJson(request.invocationId)}\",\"{status}\",{frontend},false,{diagnostic},{exitStatus},[],[[\"kernel-feature\",\"hosted-kernel-h5/v0\"],[\"kernel-produced\",false]]]"
+        }
+      }
+    }
+    case Err(fault) => {
+      let frontend = renderHostedFrontendFault(request, fault)
+      let status = if fault.resource { "resource" } else { "error" }
+      let exitStatus = if fault.resource { 2 } else { 1 }
+      "[\"lispex.lit-frontend-projection/v0\",\"{escapeJson(request.invocationId)}\",\"{status}\",{frontend},false,false,{exitStatus},[],[[\"kernel-feature\",\"hosted-kernel-h5/v0\"],[\"kernel-produced\",false]]]"
+    }
+  }
+  let normal = "[\"lispex.lit-runner-result/v0\",\"{escapeJson(request.invocationId)}\",\"{request.mode}\",\"projected\",{nested},false,0,[],{resources},{identities}]"
+  if normal.byteLength() + 1 <= request.outputLimit { return normal }
+  "[\"lispex.lit-runner-result/v0\",\"{escapeJson(request.invocationId)}\",\"{request.mode}\",\"resource\",false,\"LIT901 output byte limit exceeded\",2,[],{resources},{identities}]"
+}
+
+export function sourceFrontendRequest(request: SourceRequest) -> FrontendRequest {
+  FrontendRequest {
+    invocationId: request.invocationId,
+    mode: "source-v0",
+    sourceId: request.sourceId,
+    sourceSha: request.sourceSha,
+    sourceBytes: request.sourceBytes,
+    workloadSha: "e3b0c44298fc1f149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    litSourceSha: request.litSourceSha,
+    capabilitySha: request.capabilityRowsSha,
+    transitionLimit: request.tokenizerTransitionLimit,
+    normalizationLimit: request.normalizationLimit,
+    inputLimit: 16777216,
+    outputLimit: request.outputLimit,
+    tokenLimit: request.tokenLimit,
+  }
+}
+
+export function sourcePoint(bytes: Array<int>, offset: int) -> SourcePoint {
+  let mut line = 1
+  let mut column = 1
+  let mut index = 0
+  while index < offset && index < bytes.length {
+    let byte = bytes[index]
+    if byte == 10 {
+      line += 1
+      column = 1
+    } else if byte < 128 || byte >= 192 {
+      column += 1
+    }
+    index += 1
+  }
+  SourcePoint { line: line, column: column }
+}
+
+function utf8Array(text: string) -> Array<int> {
+  Bytes.encodeUtf8(text).toArray()
+}
+
+function renderSourceIdentityChain(request: SourceRequest) -> string {
+  "[[\"host-artifact-sha256\",false],[\"host-profile-version\",\"topaz-host-variant-bound-by-supervisor/v0\"],[\"hosted-source-bundle-sha256\",\"{request.litSourceSha}\"],[\"bootstrap-runner-sha256\",false],[\"guest-source-sha256\",\"{request.sourceSha}\"],[\"hosted-kernel-schema\",\"lispex.hosted-kernel/v0\"],[\"capability-manifest-sha256\",\"{request.capabilityContractSha}\"],[\"diagnostic-catalog-version\",\"topaz-lit-h5/v0\"],[\"resource-profile-id\",\"topaz-lit-h5-source/v0\"],[\"external-protocol-version\",false],[\"nesting-depth\",{request.nestingDepth}],[\"parent-receipt-sha256\",false]]"
+}
+
+export function renderSourceResourceReport(
+  request: SourceRequest,
+  status: string,
+  tokenizerTransitions: int,
+  tokens: int,
+  normalizationSteps: int,
+  machineTransitions: int,
+  outputBytes: int,
+  rootsCompleted: int,
+) -> string {
+  "[[\"backend-status\",\"{status}\"],[\"tokenizer-transition-limit\",{request.tokenizerTransitionLimit}],[\"tokenizer-transitions\",{tokenizerTransitions}],[\"token-limit\",{request.tokenLimit}],[\"tokens\",{tokens}],[\"normalization-step-limit\",{request.normalizationLimit}],[\"normalization-steps\",{normalizationSteps}],[\"machine-transition-limit\",{request.machineTransitionLimit}],[\"machine-transitions\",{machineTransitions}],[\"output-byte-limit\",{request.outputLimit}],[\"output-bytes\",{outputBytes}],[\"roots-completed\",{rootsCompleted}]]"
+}
+
+export function renderSourceFrontendMetrics(
+  scalars: int,
+  tokens: int,
+  readerDatums: int,
+  readerRoots: int,
+  maxReaderNesting: int,
+  tokenizerTransitions: int,
+  normalizationSteps: int,
+  kernelNodes: int,
+  kernelBinders: int,
+  generatedBinders: int,
+  intrinsicReferences: int,
+  kernelProduced: bool,
+) -> string {
+  let produced = if kernelProduced { "true" } else { "false" }
+  "[[\"manual-utf8-source-decodes\",1],[\"host-utf8-source-decodes\",0],[\"scalar-count\",{scalars}],[\"token-count\",{tokens}],[\"reader-datums\",{readerDatums}],[\"reader-roots\",{readerRoots}],[\"max-reader-nesting\",{maxReaderNesting}],[\"tokenizer-transitions\",{tokenizerTransitions}],[\"normalization-steps\",{normalizationSteps}],[\"kernel-feature\",\"hosted-kernel-h6/v0\"],[\"kernel-produced\",{produced}],[\"kernel-nodes\",{kernelNodes}],[\"kernel-binders\",{kernelBinders}],[\"generated-binders\",{generatedBinders}],[\"intrinsic-references\",{intrinsicReferences}],[\"supplied-kernel-count\",0],[\"producer-count\",0]]"
+}
+
+export function renderSourceMachineMetrics(
+  status: string,
+  transitions: int,
+  maxContinuationDepth: int,
+  allocations: int,
+  transfers: int,
+  rootsCompleted: int,
+) -> string {
+  "[[\"status\",\"{status}\"],[\"transitions\",{transitions}],[\"max-continuation-depth\",{maxContinuationDepth}],[\"allocations\",{allocations}],[\"transfers\",{transfers}],[\"roots-completed\",{rootsCompleted}],[\"capability-row-count\",205],[\"host-delegated-deterministic-count\",31],[\"hosted-implemented-count\",174],[\"unsupported-loud-count\",0],[\"may-call-guest-count\",18],[\"supported-may-call-guest-count\",18],[\"guest-invoke-route\",\"common-machine-invoke-mode/v0\"],[\"host-apply-fallback-count\",0],[\"host-eval-fallback-count\",0],[\"host-control-fallback-count\",0],[\"host-callback-fallback-count\",0],[\"unicode-alphabetic-profile\",\"Unicode-16.0.0-static-ranges/v0\"]]"
+}
+
+export function renderSourceResultRow(
+  request: SourceRequest,
+  status: string,
+  stdoutText: string,
+  diagnosticText: string,
+  exitStatus: int,
+  resourceReport: string,
+  frontendMetrics: string,
+  machineMetrics: string,
+) -> string {
+  let stdoutBytes = renderIntVector(utf8Array(stdoutText))
+  let diagnosticBytes = renderIntVector(utf8Array(diagnosticText))
+  let identities = renderSourceIdentityChain(request)
+  "[\"lispex.hosted-source-backend-result/v0\",\"{escapeJson(request.invocationId)}\",\"{status}\",{stdoutBytes},{diagnosticBytes},{exitStatus},[],{resourceReport},{frontendMetrics},{machineMetrics},{identities},[{request.nestingDepth},false]]"
+}
+
+export function sourceDiagnostic(request: SourceRequest, code: string, message: string, startByte: int) -> string {
+  let point = sourcePoint(request.sourceBytes, startByte)
+  "{code} {request.sourceId}:{point.line}:{point.column} {message}\n"
+}
+
+export function machineDiagnostic(request: SourceRequest, result: RunResult) -> string {
+  let raw = match result.diagnostic {
+    case Some(value) => value
+    case None => "LIT200 machine terminated without diagnostic"
+  }
+  if result.status == "resource" {
+    return sourceDiagnostic(request, "HK900", raw, 0)
+  }
+  let pieces = raw.split(" ")
+  let code = if pieces.length > 0 { pieces[0] } else { "LIT200" }
+  let scalars = raw.scalars()
+  let codeScalars = code.scalars().length
+  let mut message = raw
+  if scalars.length > codeScalars {
+    message = ""
+    let mut index = codeScalars + 1
+    while index < scalars.length {
+      message += scalars[index]
+      index += 1
+    }
+  }
+  sourceDiagnostic(request, code, message, 0)
+}
+
+export function machineDiagnosticIsUnsupported(value: string) -> bool {
+  value.startsWith("HK260 ")
+}
+
+export function renderRootPackets(packets: Array<ValuePacket>) -> string {
+  let mut output = ""
+  for packet in packets {
+    match packet {
+      case One(value) => { output += "{renderGuest(value)}\n" }
+      case Many(values) => for value in values { output += "{renderGuest(value)}\n" }
+    }
+  }
+  output
+}
+
+export function renderSourceFrontendFailure(
+  request: SourceRequest,
+  fault: FrontendFault,
+  scalars: int,
+  tokens: int,
+  readerDatums: int,
+  readerRoots: int,
+  maxReaderNesting: int,
+  tokenizerTransitions: int,
+  normalizationSteps: int,
+) -> string {
+  let status = if fault.resource { "resource" } else { "source-error" }
+  let exitStatus = if fault.resource { 2 } else { 1 }
+  let diagnostic = sourceDiagnostic(request, fault.code, fault.message, fault.startByte)
+  let resource = renderSourceResourceReport(request, status, tokenizerTransitions, tokens, normalizationSteps, 0, 0, 0)
+  let frontend = renderSourceFrontendMetrics(
+    scalars, tokens, readerDatums, readerRoots, maxReaderNesting, tokenizerTransitions,
+    normalizationSteps, 0, 0, 0, 0, false,
+  )
+  let machine = renderSourceMachineMetrics(status, 0, 0, 0, 0, 0)
+  renderSourceResultRow(request, status, "", diagnostic, exitStatus, resource, frontend, machine)
+}
+
+export function renderSourceInfrastructureFailure(request: SourceRequest, diagnostic: string) -> string {
+  let renderedDiagnostic = sourceDiagnostic(request, "LIT200", diagnostic, 0)
+  let resource = renderSourceResourceReport(request, "infrastructure-error", 0, 0, 0, 0, 0, 0)
+  let frontend = renderSourceFrontendMetrics(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, false)
+  let machine = renderSourceMachineMetrics("infrastructure-error", 0, 0, 0, 0, 0)
+  renderSourceResultRow(request, "infrastructure-error", "", renderedDiagnostic, 2, resource, frontend, machine)
+}

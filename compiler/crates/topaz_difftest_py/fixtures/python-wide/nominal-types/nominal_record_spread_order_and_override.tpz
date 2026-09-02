@@ -1,0 +1,16 @@
+
+record User { name: string, age: int = 0 }
+function base() -> User {
+    print("spread")
+    User { name: "Ada", age: 1 }
+}
+function mark(label: string, n: int) -> int {
+    print(label)
+    n
+}
+function f() -> int {
+    let v = User { ...base(), age: mark("field", 2) }
+    print("{v.name}:{v.age}")
+    v.age
+}
+f()

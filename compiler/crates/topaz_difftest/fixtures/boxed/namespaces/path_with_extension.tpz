@@ -1,0 +1,3 @@
+match Path.from("out/result.txt") { case Ok(p) => match p.withExtension("md") { case Ok(q) => q.toString()
+case Err(e) => e }
+case Err(e) => e }

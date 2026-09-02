@@ -1,0 +1,1224 @@
+// Predeclaration and filling of record, enum, newtype, and alias definitions.
+// Public type identity remains in shared exchange types; this leaf populates the
+// checker-private nominal catalogs consumed by later phases.
+
+import types {
+  PreviewResolvedDeclaration,
+  SyntaxNode,
+}
+import checker_types { TypeValue }
+import checker.model {
+  AliasDefinition,
+  CheckerService,
+  CheckerState,
+  EnumDefinition,
+  EnumVariant,
+  ModuleSyntax,
+  NewtypeDefinition,
+  ProtocolDefinition,
+  ProtocolMethodDefinition,
+  RecordDefinition,
+  RecordField,
+  TypeTarget,
+  constructor,
+  emptyType,
+  functionType,
+  literal,
+  nominal,
+  nominalInModule,
+  primitive,
+  rigid,
+  serviceGateCollectionKey,
+  structural,
+}
+import checker.type_algebra {
+  transformTypeComponents,
+  typeEqual,
+  unionType,
+}
+import checker.syntax_index {
+  activeTypeParameter,
+  addDiagnostic,
+  addNode,
+  aliasDefinitionIndex,
+  boolAttribute,
+  child,
+  children,
+  containsString,
+  declarationFor,
+  definitionNameKey,
+  enumDefinitionIndex,
+  moduleAt,
+  moduleIdentityAt,
+  moduleIndexByIdentity,
+  namedNominalTarget,
+  newtypeDefinitionIndex,
+  protocolDefinitionIndex,
+  recordDefinitionIndex,
+  referenceFor,
+  registerTypeParameters,
+  replaceEnumDefinition,
+  replaceNewtypeDefinition,
+  replaceRecordDefinition,
+  text,
+  typeParameterNames,
+  typeParameterOrigin,
+  unwrapExport,
+}
+
+function primitiveNamedType(name: string) -> Option<TypeValue> {
+  match name {
+    case "int" => Some(primitive("int"))
+    case "float" => Some(primitive("float"))
+    case "string" => Some(primitive("string"))
+    case "bool" => Some(primitive("bool"))
+    case _ => None
+  }
+}
+
+function terminalNamedType(name: string) -> Option<TypeValue> {
+  match name {
+    case "template" => Some(emptyType("template"))
+    case "JSONValue" => Some(emptyType("json-value"))
+    case "File" => Some(emptyType("file"))
+    case "Bytes" => Some(emptyType("bytes"))
+    case "ByteBuffer" => Some(emptyType("byte-buffer"))
+    case "Path" => Some(emptyType("path"))
+    case "Regex" => Some(emptyType("regex"))
+    case "Match" => Some(emptyType("match"))
+    case "TOMLValue" => Some(emptyType("toml-value"))
+    case "URL" => Some(emptyType("url"))
+    case "Date" => Some(emptyType("date"))
+    case "BigInt" => Some(emptyType("big-int"))
+    case "Decimal" => Some(emptyType("decimal"))
+    case "RoundingMode" => Some(emptyType("rounding-mode"))
+    case _ => None
+  }
+}
+
+function builtinTypeConstructorArity(name: string) -> int {
+  match name {
+    case "Array" | "Set" | "Option" => 1
+    case "Map" | "Result" => 2
+    case _ => -1
+  }
+}
+
+function addTypeArgumentArityDiagnostic(
+  state: CheckerState,
+  moduleIndex: int,
+  subject: string,
+  expected: int,
+  found: int,
+  node: SyntaxNode,
+) -> () {
+  let suffix = if expected == 1 { "" } else { "s" }
+  addDiagnostic(
+    state,
+    moduleIndex,
+    "TPZ5022",
+    "{subject} takes {expected} type argument{suffix}, found {found}",
+    "",
+    node,
+  )
+}
+
+function typeParameterComponentReplacement(
+  value: TypeValue,
+  names: Array<string>,
+  arguments: Array<TypeValue>,
+) -> Option<TypeValue> {
+  if value.kind != "rigid" {
+    return None
+  }
+  let mut index = 0
+  for name in names {
+    if value.name == name {
+      return Some(match arguments.get(index) {
+        case Some(found) => found
+        case None => emptyType("unknown")
+      })
+    }
+    index += 1
+  }
+  Some(value)
+}
+
+export function substitute(
+  value: TypeValue,
+  names: Array<string>,
+  arguments: Array<TypeValue>,
+) -> TypeValue {
+  transformTypeComponents(
+    value,
+    (component: TypeValue) => typeParameterComponentReplacement(
+      component,
+      names,
+      arguments,
+    ),
+  )
+}
+
+function typeDeclarationForName(
+  state: CheckerState,
+  moduleIndex: int,
+  name: string,
+) -> Option<PreviewResolvedDeclaration> {
+  for declaration in state.resolved.declarations {
+    if declaration.moduleIndex == moduleIndex &&
+      declaration.namespace == "type" && declaration.name == name {
+      return Some(declaration)
+    }
+  }
+  None
+}
+
+export function targetType(
+  state: CheckerState,
+  moduleIndex: int,
+  node: SyntaxNode,
+) -> TypeTarget {
+  let sourceName = match moduleAt(state, moduleIndex) {
+    case Some(module) => text(module.source, node)
+    case None => ""
+  }
+  match referenceFor(state, moduleIndex, node.lo, node.hi) {
+    case Some(reference) => {
+      let mut target = TypeTarget {
+        moduleIndex: if reference.targetModuleIndex >= 0 {
+          reference.targetModuleIndex
+        } else {
+          moduleIndex
+        },
+        name: if reference.targetName != "" {
+          reference.targetName
+        } else {
+          sourceName
+        },
+      }
+      match declarationFor(
+        state,
+        reference.targetModuleIndex,
+        reference.targetLo,
+        reference.targetHi,
+      ) {
+        case Some(declaration) => {
+          if declaration.targetModule != "" {
+            target = TypeTarget {
+              moduleIndex: moduleIndexByIdentity(
+                state,
+                declaration.targetModule,
+              ),
+              name: target.name,
+            }
+          }
+          if declaration.targetName != "" {
+            target = TypeTarget {
+              moduleIndex: target.moduleIndex,
+              name: declaration.targetName,
+            }
+          }
+        }
+        case None => ()
+      }
+      target
+    }
+    case None => match typeDeclarationForName(state, moduleIndex, sourceName) {
+      case Some(declaration) => TypeTarget {
+        moduleIndex: if declaration.targetModule != "" {
+          moduleIndexByIdentity(state, declaration.targetModule)
+        } else {
+          moduleIndex
+        },
+        name: if declaration.targetName != "" {
+          declaration.targetName
+        } else {
+          sourceName
+        },
+      }
+      case None => TypeTarget {
+        moduleIndex: moduleIndex,
+        name: sourceName,
+      }
+    }
+  }
+}
+
+function formLiteralType(source: Bytes, node: SyntaxNode) -> TypeValue {
+  let spelling = text(source, node)
+  if spelling == "true" || spelling == "false" {
+    return literal("bool", spelling)
+  }
+  if spelling == "null" {
+    return literal("null", "")
+  }
+  if spelling.startsWith("\"") {
+    let bytes = Bytes.encodeUtf8(spelling)
+    let decoded = if bytes.length() >= 2 {
+      match bytes.slice(1, bytes.length() - 1).decodeUtf8() {
+        case Ok(found) => found
+        case Err(_) => ""
+      }
+    } else {
+      ""
+    }
+    return literal("string", decoded)
+  }
+  if spelling.contains(".") {
+    literal("float", spelling)
+  } else {
+    literal("int", spelling)
+  }
+}
+
+function formUnionType(
+  service: CheckerService,
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  node: SyntaxNode,
+  parameters: Array<string>,
+  origin: string,
+) -> TypeValue {
+  let mut members: Array<TypeValue> = []
+  for member in children(node, "members") {
+    members.push(formType(
+      service,
+      state,
+      moduleIndex,
+      source,
+      member,
+      parameters,
+      origin,
+    ))
+  }
+  unionType(members)
+}
+
+function formRecordType(
+  service: CheckerService,
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  node: SyntaxNode,
+  parameters: Array<string>,
+  origin: string,
+) -> TypeValue {
+  let mut names: Array<string> = []
+  let mut values: Array<TypeValue> = []
+  for field in children(node, "fields") {
+    let name = match child(field, "name") {
+      case Some(found) => text(source, found)
+      case None => ""
+    }
+    if containsString(names, name) {
+      addDiagnostic(
+        state,
+        moduleIndex,
+        "TPZ5022",
+        "record type declares field `{name}` twice",
+        "",
+        field,
+      )
+      continue
+    }
+    let value = match child(field, "type") {
+      case Some(typeNode) => formType(
+        service,
+        state,
+        moduleIndex,
+        source,
+        typeNode,
+        parameters,
+        origin,
+      )
+      case None => emptyType("unknown")
+    }
+    names.push(name)
+    values.push(value)
+  }
+  structural(names, values)
+}
+
+function formFunctionType(
+  service: CheckerService,
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  node: SyntaxNode,
+  parameters: Array<string>,
+  origin: string,
+) -> TypeValue {
+  let mut fixed: Array<TypeValue> = []
+  let mut variadic: Array<TypeValue> = []
+  for parameter in children(node, "parameters") {
+    let formed = match child(parameter, "type") {
+      case Some(typeNode) => formType(
+        service,
+        state,
+        moduleIndex,
+        source,
+        typeNode,
+        parameters,
+        origin,
+      )
+      case None => emptyType("unknown")
+    }
+    if boolAttribute(parameter, "variadic") {
+      variadic.push(formed)
+    } else {
+      fixed.push(formed)
+    }
+  }
+  let result = match child(node, "returnType") {
+    case Some(typeNode) => formType(
+      service,
+      state,
+      moduleIndex,
+      source,
+      typeNode,
+      parameters,
+      origin,
+    )
+    case None => primitive("unit")
+  }
+  functionType(fixed, variadic, result)
+}
+
+function formNamedType(
+  service: CheckerService,
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  node: SyntaxNode,
+  parameters: Array<string>,
+  origin: string,
+) -> TypeValue {
+  let nameNode = match child(node, "name") {
+    case Some(found) => found
+    case None => node
+  }
+  let name = text(source, nameNode)
+  let argumentNodes = children(node, "arguments")
+  let argumentCount = argumentNodes.length
+  if containsString(parameters, name) {
+    if argumentCount > 0 {
+      addDiagnostic(
+        state,
+        moduleIndex,
+        "TPZ5022",
+        "type parameter `{name}` takes no type arguments",
+        "",
+        nameNode,
+      )
+    }
+    return rigid(name, typeParameterOrigin(state, moduleIndex, name, origin))
+  }
+  match activeTypeParameter(state, moduleIndex, name) {
+    case Some(value) => {
+      if argumentCount > 0 {
+        addDiagnostic(
+          state,
+          moduleIndex,
+          "TPZ5022",
+          "type parameter `{name}` takes no type arguments",
+          "",
+          nameNode,
+        )
+      }
+      return value
+    }
+    case None => ()
+  }
+  match primitiveNamedType(name) {
+    case Some(value) => {
+      if argumentCount > 0 {
+        addDiagnostic(
+          state,
+          moduleIndex,
+          "TPZ5022",
+          "primitive type `{name}` takes no type arguments",
+          "",
+          nameNode,
+        )
+      }
+      return value
+    }
+    case None => ()
+  }
+  match terminalNamedType(name) {
+    case Some(value) => {
+      if argumentCount > 0 {
+        addDiagnostic(
+          state,
+          moduleIndex,
+          "TPZ5022",
+          "`{name}` takes no type arguments",
+          "",
+          nameNode,
+        )
+      }
+      return value
+    }
+    case None => ()
+  }
+  let constructorArity = builtinTypeConstructorArity(name)
+  if constructorArity >= 0 && argumentCount != constructorArity {
+    addTypeArgumentArityDiagnostic(
+      state,
+      moduleIndex,
+      "`{name}`",
+      constructorArity,
+      argumentCount,
+      nameNode,
+    )
+    return emptyType("unknown")
+  }
+  if constructorArity >= 0 {
+    let mut arguments: Array<TypeValue> = []
+    for argument in argumentNodes {
+      arguments.push(formType(
+        service,
+        state,
+        moduleIndex,
+        source,
+        argument,
+        parameters,
+        origin,
+      ))
+    }
+    let formed = constructor(name, arguments)
+    if (name == "Map" || name == "Set") &&
+      state.typeCapabilitySuppressions.length == 0 {
+      match arguments.get(0) {
+        case Some(key) => serviceGateCollectionKey(
+          service,
+          state,
+          moduleIndex,
+          nameNode,
+          key,
+        )
+        case None => ()
+      }
+    }
+    return formed
+  }
+  let target = targetType(state, moduleIndex, nameNode)
+  let targetModule = target.moduleIndex
+  let targetName = target.name
+  let displayName = if node.kind == "type/qualified" {
+    let namespace = match child(node, "namespace") {
+      case Some(found) => text(source, found)
+      case None => ""
+    }
+    "{namespace}.{name}"
+  } else {
+    name
+  }
+  let aliasIndex = aliasDefinitionIndex(state, targetModule, targetName)
+  if aliasIndex >= 0 && targetModule == moduleIndex &&
+    node.kind != "type/qualified" {
+    match state.aliases.get(aliasIndex) {
+      case Some(alias) => if argumentCount != alias.typeParameters.length {
+        addTypeArgumentArityDiagnostic(
+          state,
+          moduleIndex,
+          "type alias `{displayName}`",
+          alias.typeParameters.length,
+          argumentCount,
+          nameNode,
+        )
+        return emptyType("unknown")
+      }
+      case None => ()
+    }
+  }
+  let mut arguments: Array<TypeValue> = []
+  for argument in argumentNodes {
+    arguments.push(formType(
+      service,
+      state,
+      moduleIndex,
+      source,
+      argument,
+      parameters,
+      origin,
+    ))
+  }
+  match namedNominalTarget(state, targetModule, targetName) {
+    case Some(target) => {
+      if arguments.length != target.typeArgumentCount {
+        addTypeArgumentArityDiagnostic(
+          state,
+          moduleIndex,
+          "{target.diagnosticKind} `{displayName}`",
+          target.typeArgumentCount,
+          arguments.length,
+          nameNode,
+        )
+        return emptyType("unknown")
+      }
+      return nominalInModule(
+        target.semanticKind,
+        targetName,
+        arguments,
+        moduleIdentityAt(state, targetModule),
+      )
+    }
+    case None => ()
+  }
+  if aliasIndex >= 0 {
+    return match state.aliases.get(aliasIndex) {
+      case Some(alias) => {
+        if arguments.length != alias.typeParameters.length {
+          let subject = if targetModule == moduleIndex &&
+            node.kind != "type/qualified" {
+            "type alias `{displayName}`"
+          } else {
+            "`{displayName}`"
+          }
+          addTypeArgumentArityDiagnostic(
+            state,
+            moduleIndex,
+            subject,
+            alias.typeParameters.length,
+            arguments.length,
+            nameNode,
+          )
+          emptyType("unknown")
+        } else {
+          substitute(alias.body, alias.typeParameters, arguments)
+        }
+      }
+      case None => emptyType("unknown")
+    }
+  }
+  if node.kind == "type/qualified" {
+    let namespace = match child(node, "namespace") {
+      case Some(found) => text(source, found)
+      case None => ""
+    }
+    return nominal("foreign", "{namespace}.{name}", arguments)
+  }
+  nominal("foreign", name, arguments)
+}
+
+export function formType(
+  service: CheckerService,
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  node: SyntaxNode,
+  parameters: Array<string>,
+  origin: string,
+) -> TypeValue {
+  match node.kind {
+    case "type/unit" => primitive("unit")
+    case "type/literal" => formLiteralType(source, node)
+    case "type/union" =>
+      formUnionType(service, state, moduleIndex, source, node, parameters, origin)
+    case "type/record" =>
+      formRecordType(service, state, moduleIndex, source, node, parameters, origin)
+    case "type/function" =>
+      formFunctionType(service, state, moduleIndex, source, node, parameters, origin)
+    case "type/named" | "type/qualified" =>
+      formNamedType(service, state, moduleIndex, source, node, parameters, origin)
+    case _ => emptyType("unknown")
+  }
+}
+
+export function predeclareNominals(state: CheckerState) -> () {
+  let mut records = state.records
+  let mut enums = state.enums
+  let mut newtypes = state.newtypes
+  let mut aliases = state.aliases
+  let mut recordIndexes = state.recordIndexes
+  let mut enumIndexes = state.enumIndexes
+  let mut newtypeIndexes = state.newtypeIndexes
+  let mut aliasIndexes = state.aliasIndexes
+  for module in state.modules {
+    for statement in module.root.children {
+      let item = unwrapExport(statement)
+      let nameNode = child(item, "name")
+      let name = match nameNode {
+        case Some(found) => text(module.source, found)
+        case None => ""
+      }
+      let parameters = typeParameterNames(module.source, item)
+      let nominalKind = match item.kind {
+        case "statement/record" => "record"
+        case "statement/enum" => "enum"
+        case "statement/newtype" => "newtype"
+        case _ => ""
+      }
+      let reservedNominal = nominalKind != "" && name == "template"
+      if reservedNominal {
+        addDiagnostic(
+          state,
+          module.moduleIndex,
+          "TPZ5022",
+          "{nominalKind} name `template` collides with the builtin `template` type; choose another name",
+          "",
+          match nameNode {
+            case Some(found) => found
+            case None => item
+          },
+        )
+      }
+      if !reservedNominal &&
+        (item.kind == "statement/record" || item.kind == "statement/enum" ||
+        item.kind == "statement/newtype" ||
+        item.kind == "statement/type-alias") {
+        registerTypeParameters(
+          state,
+          module.moduleIndex,
+          module.source,
+          item,
+        )
+      }
+      if !reservedNominal && item.kind == "statement/record" {
+        recordIndexes.insert(
+          definitionNameKey(module.moduleIndex, name),
+          records.length,
+        )
+        records.push(RecordDefinition {
+          moduleIndex: module.moduleIndex,
+          name: name,
+          typeParameters: parameters,
+          fields: [],
+        })
+      } else if !reservedNominal && item.kind == "statement/enum" {
+        enumIndexes.insert(
+          definitionNameKey(module.moduleIndex, name),
+          enums.length,
+        )
+        enums.push(EnumDefinition {
+          moduleIndex: module.moduleIndex,
+          name: name,
+          typeParameters: parameters,
+          variants: [],
+        })
+      } else if !reservedNominal && item.kind == "statement/newtype" {
+        newtypeIndexes.insert(
+          definitionNameKey(module.moduleIndex, name),
+          newtypes.length,
+        )
+        newtypes.push(NewtypeDefinition {
+          moduleIndex: module.moduleIndex,
+          name: name,
+          typeParameters: parameters,
+          base: emptyType("unknown"),
+        })
+      } else if !reservedNominal && item.kind == "statement/type-alias" {
+        aliasIndexes.insert(
+          definitionNameKey(module.moduleIndex, name),
+          aliases.length,
+        )
+        aliases.push(AliasDefinition {
+          moduleIndex: module.moduleIndex,
+          name: name,
+          typeParameters: parameters,
+          body: emptyType("unknown"),
+        })
+      }
+    }
+  }
+  ()
+}
+
+record NominalFillContext {
+  state: CheckerState,
+  module: ModuleSyntax,
+  item: SyntaxNode,
+  name: string,
+  origin: string,
+  parameters: Array<string>,
+}
+
+function nominalFillContext(
+  state: CheckerState,
+  module: ModuleSyntax,
+  item: SyntaxNode,
+) -> NominalFillContext {
+  let name = match child(item, "name") {
+    case Some(found) => text(module.source, found)
+    case None => ""
+  }
+  NominalFillContext {
+    state: state,
+    module: module,
+    item: item,
+    name: name,
+    origin: "source:{module.sourceOrdinal}:{item.lo}:{item.hi}",
+    parameters: typeParameterNames(module.source, item),
+  }
+}
+
+function formNominalChildType(
+  service: CheckerService,
+  context: NominalFillContext,
+  node: SyntaxNode,
+  field: string,
+) -> TypeValue {
+  match child(node, field) {
+    case Some(found) => formType(
+      service,
+      context.state,
+      context.module.moduleIndex,
+      context.module.source,
+      found,
+      context.parameters,
+      context.origin,
+    )
+    case None => emptyType("unknown")
+  }
+}
+
+function fillRecordNominal(service: CheckerService, context: NominalFillContext) -> () {
+  let index = recordDefinitionIndex(
+    context.state,
+    context.module.moduleIndex,
+    context.name,
+  )
+  let mut fields: Array<RecordField> = []
+  for field in children(context.item, "fields") {
+    let typeValue = formNominalChildType(service, context, field, "type")
+    match child(field, "type") {
+      case Some(typeNode) => addNode(
+        context.state,
+        context.module.moduleIndex,
+        "type",
+        typeNode,
+        typeValue,
+      )
+      case None => ()
+    }
+    fields.push(RecordField {
+      name: match child(field, "name") {
+        case Some(found) => text(context.module.source, found)
+        case None => ""
+      },
+      typeValue: typeValue,
+      hasDefault: match child(field, "default") {
+        case Some(_) => true
+        case None => false
+      },
+    })
+  }
+  if index >= 0 {
+    replaceRecordDefinition(context.state, index, RecordDefinition {
+      moduleIndex: context.module.moduleIndex,
+      name: context.name,
+      typeParameters: context.parameters,
+      fields: fields,
+    })
+  }
+}
+
+function fillEnumNominal(service: CheckerService, context: NominalFillContext) -> () {
+  let index = enumDefinitionIndex(
+    context.state,
+    context.module.moduleIndex,
+    context.name,
+  )
+  let mut variants: Array<EnumVariant> = []
+  for variant in children(context.item, "variants") {
+    let mut payloads: Array<TypeValue> = []
+    for payload in children(variant, "payload") {
+      let typeValue = formType(
+        service,
+        context.state,
+        context.module.moduleIndex,
+        context.module.source,
+        payload,
+        context.parameters,
+        context.origin,
+      )
+      addNode(
+        context.state,
+        context.module.moduleIndex,
+        "type",
+        payload,
+        typeValue,
+      )
+      payloads.push(typeValue)
+    }
+    variants.push(EnumVariant {
+      name: match child(variant, "name") {
+        case Some(found) => text(context.module.source, found)
+        case None => ""
+      },
+      payloads: payloads,
+    })
+  }
+  if index >= 0 {
+    replaceEnumDefinition(context.state, index, EnumDefinition {
+      moduleIndex: context.module.moduleIndex,
+      name: context.name,
+      typeParameters: context.parameters,
+      variants: variants,
+    })
+  }
+}
+
+function fillNewtypeNominal(service: CheckerService, context: NominalFillContext) -> () {
+  let index = newtypeDefinitionIndex(
+    context.state,
+    context.module.moduleIndex,
+    context.name,
+  )
+  if index >= 0 {
+    let base = formNominalChildType(service, context, context.item, "base")
+    match child(context.item, "base") {
+      case Some(typeNode) => addNode(
+        context.state,
+        context.module.moduleIndex,
+        "type",
+        typeNode,
+        base,
+      )
+      case None => ()
+    }
+    replaceNewtypeDefinition(context.state, index, NewtypeDefinition {
+      moduleIndex: context.module.moduleIndex,
+      name: context.name,
+      typeParameters: context.parameters,
+      base: base,
+    })
+  }
+}
+
+function fillAliasNominal(service: CheckerService, context: NominalFillContext) -> () {
+  let index = aliasDefinitionIndex(
+    context.state,
+    context.module.moduleIndex,
+    context.name,
+  )
+  if index >= 0 {
+    let mut aliases = context.state.aliases
+    aliases[index] = AliasDefinition {
+      moduleIndex: context.module.moduleIndex,
+      name: context.name,
+      typeParameters: context.parameters,
+      body: formNominalChildType(service, context, context.item, "type"),
+    }
+  }
+}
+
+function fillNominalDefinition(
+  service: CheckerService,
+  state: CheckerState,
+  module: ModuleSyntax,
+  item: SyntaxNode,
+) -> () {
+  if item.kind != "statement/record" && item.kind != "statement/enum" &&
+    item.kind != "statement/newtype" && item.kind != "statement/type-alias" {
+    return ()
+  }
+  let context = nominalFillContext(state, module, item)
+  match item.kind {
+    case "statement/record" => fillRecordNominal(service, context)
+    case "statement/enum" => fillEnumNominal(service, context)
+    case "statement/newtype" => fillNewtypeNominal(service, context)
+    case "statement/type-alias" => fillAliasNominal(service, context)
+    case _ => ()
+  }
+}
+
+export function fillNominals(service: CheckerService, state: CheckerState) -> () {
+  for module in state.modules {
+    for statement in module.root.children {
+      fillNominalDefinition(service, state, module, unwrapExport(statement))
+    }
+  }
+  ()
+}
+
+function normalizedProtocolType(
+  service: CheckerService,
+  state: CheckerState,
+  module: ModuleSyntax,
+  node: SyntaxNode,
+  explicitParameter: string,
+  origin: string,
+  conformingType: TypeValue,
+) -> TypeValue {
+  let mut parameters: Array<string> = ["Self"]
+  let mut replacements: Array<TypeValue> = [conformingType]
+  if explicitParameter != "" {
+    parameters.push(explicitParameter)
+    replacements.push(conformingType)
+  }
+  substitute(
+    formType(
+      service,
+      state,
+      module.moduleIndex,
+      module.source,
+      node,
+      parameters,
+      origin,
+    ),
+    parameters,
+    replacements,
+  )
+}
+
+function checkProtocolMethod(
+  service: CheckerService,
+  state: CheckerState,
+  module: ModuleSyntax,
+  protocolName: string,
+  explicitParameter: string,
+  origin: string,
+  method: SyntaxNode,
+  methodIndexes: Map<string, int>,
+) -> Option<ProtocolMethodDefinition> {
+  let methodNameNode = match child(method, "name") {
+    case Some(found) => found
+    case None => return None
+  }
+  let methodName = text(module.source, methodNameNode)
+  match methodIndexes.get(methodName) {
+    case Some(_) => {
+      addDiagnostic(
+        state,
+        module.moduleIndex,
+        "TPZ5008",
+        "method `{methodName}` is already declared in protocol `{protocolName}`",
+        "",
+        methodNameNode,
+      )
+      return None
+    }
+    case None => ()
+  }
+  if children(method, "typeParameters").length > 0 {
+    addDiagnostic(
+      state,
+      module.moduleIndex,
+      "TPZ5022",
+      "protocol method `{protocolName}.{methodName}` cannot be generic",
+      "",
+      methodNameNode,
+    )
+    return None
+  }
+  let methodParameters = children(method, "parameters")
+  if methodParameters.length == 0 {
+    addDiagnostic(
+      state,
+      module.moduleIndex,
+      "TPZ5022",
+      "protocol method `{protocolName}.{methodName}` must take the conforming value as its first parameter",
+      "",
+      methodNameNode,
+    )
+    return None
+  }
+  let firstParameter = methodParameters[0]
+  let returnTypeNodes = children(method, "returnType")
+  if returnTypeNodes.length == 0 {
+    addDiagnostic(
+      state,
+      module.moduleIndex,
+      "TPZ5022",
+      "protocol method `{protocolName}.{methodName}` requires an explicit return type (use `-> ()` for unit)",
+      "",
+      methodNameNode,
+    )
+    return None
+  }
+  let returnTypeNode = returnTypeNodes[0]
+  for parameter in methodParameters {
+    if boolAttribute(parameter, "variadic") {
+      addDiagnostic(
+        state,
+        module.moduleIndex,
+        "TPZ5022",
+        "protocol method `{protocolName}.{methodName}` cannot be variadic",
+        "",
+        parameter,
+      )
+      return None
+    }
+  }
+  for parameter in methodParameters {
+    match child(parameter, "default") {
+      case Some(_) => {
+        addDiagnostic(
+          state,
+          module.moduleIndex,
+          "TPZ5022",
+          "protocol method `{protocolName}.{methodName}` cannot declare parameter defaults",
+          "",
+          parameter,
+        )
+        return None
+      }
+      case None => ()
+    }
+  }
+  let conformingType = rigid("Self", origin)
+  let mut parameterTypes: Array<TypeValue> = []
+  for parameter in methodParameters {
+    parameterTypes.push(match child(parameter, "type") {
+      case Some(found) => normalizedProtocolType(
+        service,
+        state,
+        module,
+        found,
+        explicitParameter,
+        origin,
+        conformingType,
+      )
+      case None => emptyType("unknown")
+    })
+  }
+  let firstTypeNode = match child(firstParameter, "type") {
+    case Some(found) => found
+    case None => firstParameter
+  }
+  let firstType = match parameterTypes.get(0) {
+    case Some(found) => found
+    case None => emptyType("unknown")
+  }
+  if !typeEqual(firstType, conformingType) {
+    addDiagnostic(
+      state,
+      module.moduleIndex,
+      "TPZ5022",
+      "protocol method `{protocolName}.{methodName}` must use `Self` or the protocol's type parameter as its first parameter type",
+      "",
+      firstTypeNode,
+    )
+    return None
+  }
+  let resultType = normalizedProtocolType(
+    service,
+    state,
+    module,
+    returnTypeNode,
+    explicitParameter,
+    origin,
+    conformingType,
+  )
+  let mut indexes = methodIndexes
+  indexes.insert(methodName, 1)
+  let mut parameterNames: Array<string> = []
+  for parameter in methodParameters {
+    parameterNames.push(match child(parameter, "name") {
+      case Some(found) => text(module.source, found)
+      case None => ""
+    })
+  }
+  Some(ProtocolMethodDefinition {
+    name: methodName,
+    parameterNames: parameterNames,
+    typeValue: functionType(parameterTypes, [], resultType),
+  })
+}
+
+function collectProtocol(
+  service: CheckerService,
+  state: CheckerState,
+  module: ModuleSyntax,
+  statement: SyntaxNode,
+) -> () {
+  let item = unwrapExport(statement)
+  if item.kind != "statement/protocol" {
+    return ()
+  }
+  let nameNode = match child(item, "name") {
+    case Some(found) => found
+    case None => return ()
+  }
+  let name = text(module.source, nameNode)
+  if name == "Show" || name == "Eq" || name == "Order" || name == "JSON" {
+    addDiagnostic(
+      state,
+      module.moduleIndex,
+      "TPZ5008",
+      "`{name}` is a builtin protocol and cannot be redeclared",
+      "",
+      nameNode,
+    )
+    return ()
+  }
+  if protocolDefinitionIndex(state, module.moduleIndex, name) >= 0 {
+    addDiagnostic(
+      state,
+      module.moduleIndex,
+      "TPZ5008",
+      "protocol `{name}` is already declared",
+      "",
+      nameNode,
+    )
+    return ()
+  }
+  if recordDefinitionIndex(state, module.moduleIndex, name) >= 0 ||
+    enumDefinitionIndex(state, module.moduleIndex, name) >= 0 ||
+    newtypeDefinitionIndex(state, module.moduleIndex, name) >= 0 ||
+    aliasDefinitionIndex(state, module.moduleIndex, name) >= 0 {
+    addDiagnostic(
+      state,
+      module.moduleIndex,
+      "TPZ5022",
+      "`{name}` is already a type and cannot also be a protocol",
+      "",
+      nameNode,
+    )
+    return ()
+  }
+  let typeParameters = typeParameterNames(module.source, item)
+  if typeParameters.length > 1 {
+    addDiagnostic(
+      state,
+      module.moduleIndex,
+      "TPZ5022",
+      "protocol `{name}` takes at most one conforming-type parameter; found {typeParameters.length}",
+      "",
+      nameNode,
+    )
+    return ()
+  }
+  let explicitParameter = match typeParameters.get(0) {
+    case Some(found) => found
+    case None => ""
+  }
+  let origin = "{module.identity}::{name}::protocol"
+  let mut methodIndexes: Map<string, int> = Map.new()
+  let mut protocolMethods: Array<ProtocolMethodDefinition> = []
+  for method in children(item, "methods") {
+    match checkProtocolMethod(
+      service,
+      state,
+      module,
+      name,
+      explicitParameter,
+      origin,
+      method,
+      methodIndexes,
+    ) {
+      case Some(found) => protocolMethods.push(found)
+      case None => ()
+    }
+  }
+  let mut indexes = state.protocolIndexes
+  let mut protocols = state.protocols
+  indexes.insert(definitionNameKey(module.moduleIndex, name), protocols.length)
+  protocols.push(ProtocolDefinition {
+    name: name,
+    methods: protocolMethods,
+  })
+  ()
+}
+
+export function collectProtocols(service: CheckerService, state: CheckerState) -> () {
+  for module in state.modules {
+    for statement in module.root.children {
+      collectProtocol(service, state, module, statement)
+    }
+  }
+  ()
+}

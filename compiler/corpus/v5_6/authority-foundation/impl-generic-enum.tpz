@@ -1,0 +1,7 @@
+enum Maybe<T> { Empty, Present(T) }
+
+impl Maybe {
+    function tag(self) -> int { 0 }
+}
+
+0

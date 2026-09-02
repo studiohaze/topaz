@@ -1,0 +1,2 @@
+let f = "banana".replace
+f("na", "NA")

@@ -1,0 +1,6 @@
+
+enum Color derives Eq, Order, Show { Red, Blue }
+let same = Color.Red == Color.Red
+let different = Color.Red == Color.Blue
+let ordered = Color.Red < Color.Blue
+if same && !different && ordered { 1 } else { 0 }

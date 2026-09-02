@@ -1,0 +1,5 @@
+record User {
+    name: string,
+}
+
+let user: User = User { name: "Ada", age: 36 }

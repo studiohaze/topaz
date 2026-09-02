@@ -1,0 +1,12 @@
+function 정수두번적용(변환: (int) -> int, 값: int) -> int {
+    변환(변환(값))
+}
+
+function 곱셈기(배수: int) -> (int) -> int {
+    return (값: int) => 값 * 배수
+}
+
+let 세배 = 곱셈기(3)
+let 결과 = 정수두번적용(세배, 5)
+
+print("결과: {결과}")  // 45

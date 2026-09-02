@@ -1,0 +1,2 @@
+let xs: Array<int> = [ for x in [] => x ]
+xs.length

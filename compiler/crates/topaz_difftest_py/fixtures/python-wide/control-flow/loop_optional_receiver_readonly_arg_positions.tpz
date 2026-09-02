@@ -1,0 +1,39 @@
+
+let xs: Option<Array<int>> = Some([10, 20, 30])
+let noneXs: Option<Array<int>> = None
+let pickedOption = xs?.get(loop {
+    print("idx")
+    break 1
+})
+let picked = pickedOption ?? 0
+let skippedOption = noneXs?.get(loop {
+    print("skip")
+    break 0
+})
+let skipped = skippedOption ?? 7
+let m: Option<Map<string, int>> = Some(map { "a": 1, "b": 2 })
+let gotOption = m?.getOr(loop {
+    print("key")
+    break "b"
+}, loop {
+    print("default")
+    break 9
+})
+let got = gotOption ?? 0
+let bytes: Option<Bytes> = Some(Bytes.encodeUtf8(s: "abcd"))
+let sliced = bytes?.slice(loop {
+    print("start")
+    break 1
+}, loop {
+    print("end")
+    break 3
+})
+let text = match sliced {
+    case Some(b) => match b.decodeUtf8() {
+        case Ok(s) => s
+        case Err(_) => ""
+    }
+    case None => ""
+}
+print("{picked}:{skipped}:{got}:{text}")
+0

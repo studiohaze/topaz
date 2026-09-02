@@ -1,0 +1,43 @@
+{
+  "schema": "lispex.evaluator-redistribution-attestation/v1",
+  "id": "lispex-full-embed-evaluator-redistribution-1/v1",
+  "relationship": "lispex.provides-full-embed-evaluator-redistribution/v1",
+  "state": "exact-redistribution-material",
+  "subject": {
+    "component": "lispex-evaluator/rust-vm-current-profile/1",
+    "component_manifest": {
+      "path": "embedding-readiness/release-dag/components/lispex-full-embed-evaluator-1.v1.json",
+      "sha256": "741275df24d81b7eb002657c285fb142a6f089ec5ebc744fbb5a88c749fc1b09"
+    },
+    "evaluator": {
+      "sha256": "dd4cde2976d825ae99b542d308d87489ac96848e0710329dbb9173664d8c5ad8",
+      "bytes": 1484873
+    }
+  },
+  "distribution": {
+    "path": "products/full-embed-evaluator/v1.15.8/lispex-full-embed-evaluator-redistribution.zip",
+    "sha256": "7b28fb74bd0d05b9b6aee190a2d4cb863f5b0fcea7ed23946bd00068a3fc4511",
+    "bytes": 1623427,
+    "profile": "canonical-stored-zip/v1"
+  },
+  "provider_evidence": {
+    "final_court": {
+      "path": "docs/bounded-execution/f15-final-provider-court.v1.json",
+      "sha256": "d4810055356c4cbd6ff046786b88d1af78ead561b74c5d656d5bd784cd4ad4b1"
+    },
+    "provider_attestation": {
+      "path": "embedding-readiness/release-dag/attestations/lispex-full-embed-evaluator-1.v1.json",
+      "sha256": "320af9cefe541f5196ac82a3250db7dca273ce102cdf75cb046e38870a25d9d6"
+    }
+  },
+  "boundaries": {
+    "topaz_admission": false,
+    "topaz_implementation_authority": false,
+    "whole_lispex_release_pin": false,
+    "evaluator_rebuild": false,
+    "network_resolution": false,
+    "latest_resolution": false,
+    "vouch_promotion": false,
+    "release_authority": false
+  }
+}

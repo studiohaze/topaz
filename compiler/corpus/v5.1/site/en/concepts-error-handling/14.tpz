@@ -1,0 +1,40 @@
+// Use explicit helper functions in canonical docs
+type ApplicationErrorKind = "database_connection_failed" | "file_access_denied" | "invalid_input" | "external_service_unavailable"
+type ApplicationError = { kind: ApplicationErrorKind, message: string, field: string | null, value: string | null }
+
+function errorMessage(error: ApplicationError) -> string {
+    match error.kind {
+        case "database_connection_failed" => "Cannot connect to database"
+        case "file_access_denied" => "No permission to access file"
+        case "invalid_input" => "Invalid input - {error.field}: {error.value}"
+        case "external_service_unavailable" => "External service unavailable"
+    }
+}
+
+function errorCode(error: ApplicationError) -> int {
+    match error.kind {
+        case "database_connection_failed" => 1001
+        case "file_access_denied" => 1002
+        case "invalid_input" => 1003
+        case "external_service_unavailable" => 1004
+    }
+}
+
+function errorRecoverable(error: ApplicationError) -> bool {
+    match error.kind {
+        case "database_connection_failed" => true
+        case "external_service_unavailable" => true
+        case _ => false
+    }
+}
+
+// Integrated error handling
+function logErr(error: ApplicationError) {
+    print("[Error {errorCode(error)}] {errorMessage(error)}")
+    
+    if errorRecoverable(error) {
+        print("Recovery can be attempted")
+    } else {
+        print("Unrecoverable error")
+    }
+}

@@ -1,0 +1,8 @@
+
+import model { User as Person }
+function main() -> string {
+    let base = 999
+    let u = Person { name: "Ada" }
+    "{u.age}:{base}"
+}
+main()

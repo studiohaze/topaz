@@ -1,0 +1,2 @@
+import newtype_model as model
+let constructor = model?.UserId

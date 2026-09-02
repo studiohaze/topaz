@@ -1,0 +1,35 @@
+# corpus/exec/control — execution transcripts (CDR-003 §11)
+
+[totals]
+recorded = 4
+runnable = 4
+pending = 0
+
+[[fixture]]
+file = "while-sum.tpz"
+phase = "exec"
+versions = "5.2"
+result = "ok"
+
+[[fixture]]
+file = "match-dispatch.tpz"
+phase = "exec"
+versions = "5.2"
+result = "ok"
+
+[[fixture]]
+file = "for-collects.tpz"
+phase = "exec"
+versions = "5.2"
+result = "ok"
+
+# §6 runtime conformance: a generic alias whose argument is itself a
+# top-level alias (`Boxed<Alias>` → `Array<int>`). Guards CDR-006
+# E-1b: the lifetime-free conformance must thread the module source
+# by reference-counted identity, not reallocate it, or the alias
+# table (keyed by source identity) is missed.
+[[fixture]]
+file = "match-generic-alias.tpz"
+phase = "exec"
+versions = "5.2"
+result = "ok"

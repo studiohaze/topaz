@@ -1,0 +1,2 @@
+let r = { map: (x: int) => x + 1 }
+r.map(9)

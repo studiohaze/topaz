@@ -1,0 +1,4 @@
+let a = [{ x: 1 }]
+function get() { a }
+get()[0].x = 9
+a[0]

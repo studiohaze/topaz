@@ -1,0 +1,2 @@
+const X: int = 5
+X

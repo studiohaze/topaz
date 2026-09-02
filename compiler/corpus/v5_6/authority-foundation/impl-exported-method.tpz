@@ -1,0 +1,8 @@
+export record Point { x: int }
+
+impl Point {
+    export function coordinate(self) -> int { self.x }
+}
+
+let point: Point = Point { x: 1 }
+print("{point.coordinate()}")

@@ -1,0 +1,52 @@
+enum Token { Number(int), Plus, Star }
+
+function tokenize(text: string) -> Result<Array<Token>, string> {
+  let number = Regex.compile("[0-9]")?
+  let mut tokens: Array<Token> = []
+  for raw in text.split(" ") {
+    let part = raw.trim()
+    if part.byteLength() == 0 {
+      ()
+    } else if part == "+" {
+      tokens.push(Token.Plus)
+    } else if part == "*" {
+      tokens.push(Token.Star)
+    } else if number.isMatch(part) {
+      match toInt(part) {
+        case Some(n) => tokens.push(Token.Number(n))
+        case None => return Err("bad number: {part}")
+      }
+    } else {
+      return Err("bad token: {part}")
+    }
+  }
+  Ok(tokens)
+}
+
+function eval(tokens: Array<Token>) -> Result<int, string> {
+  if tokens.length == 0 { return Err("empty expression") }
+  let mut acc = match tokens[0] {
+    case Number(n) => n
+    case _ => return Err("expression must start with a number")
+  }
+  let mut i = 1
+  while i < tokens.length {
+    if i + 1 >= tokens.length { return Err("operator without rhs") }
+    let rhs = match tokens[i + 1] {
+      case Number(n) => n
+      case _ => return Err("operator rhs must be a number")
+    }
+    match tokens[i] {
+      case Plus => { acc += rhs }
+      case Star => { acc = acc * rhs }
+      case Number(_) => return Err("missing operator")
+    }
+    i += 2
+  }
+  Ok(acc)
+}
+
+match tokenize(input()).flatMap(eval) {
+  case Ok(value) => print("value={value}")
+  case Err(error) => print("error: {error}")
+}

@@ -1,0 +1,6 @@
+export function main(args: Array<string>, stdin: string) -> Result<int, string> {
+    let first = args[0]
+    let cleaned = stdin.trim()
+    print("{first}:{cleaned}:{args.length}")
+    Ok(0)
+}

@@ -1,0 +1,1 @@
+Codec.deflateCompress(bytes: Bytes.encodeUtf8("hi")).flatMap((df) => Codec.deflateDecompress(bytes: df)).map((b) => b.toHex())

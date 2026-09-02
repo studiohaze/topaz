@@ -1,0 +1,15 @@
+
+function add(a: int, b: int = 2) -> int {
+    a + b
+}
+function inc(x: int) -> int {
+    x + 1
+}
+function main() -> int {
+    let empty = []
+    let directCallbacks = [...empty, add]
+    let hofCallbacks = [...empty, inc]
+    let ys = [1, 2].map(hofCallbacks[0])
+    directCallbacks[0](a: 5) * 100 + ys.reduce(0, (acc, x) => acc + x)
+}
+main()

@@ -1,0 +1,3 @@
+function use(config: int) -> int { config }
+export let cache = use(0)
+export let config = 1

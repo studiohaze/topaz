@@ -1,0 +1,6 @@
+function greet(name: string, salutation: string = "Hello") -> string {
+    return "{salutation}, {name}!"
+}
+
+print(greet("Topaz"))
+print(greet("Topaz", "안녕"))

@@ -1,0 +1,1 @@
+Bytes.encodeUtf8("foob").toBase64()

@@ -1,0 +1,5 @@
+record P { x: int }
+impl Eq<P> { function equals(a: P, b: P) -> bool { false } }
+let p: P = P { x: 1 }
+print("{Eq.equals(p, p)}/{p == p}")
+0

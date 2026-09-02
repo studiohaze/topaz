@@ -1,0 +1,5 @@
+let y = 100
+let mut s = 0
+for x in [1, 2, 3] { let y = x * 2
+s = s + y }
+s

@@ -1,0 +1,7 @@
+function f(r: Result<int, int>) -> int {
+    match r {
+        case Ok(n) | Err(n) if n > 0 => n
+        case _ => -1
+    }
+}
+f(Err(3))

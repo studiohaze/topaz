@@ -1,0 +1,3 @@
+let z = BigInt.fromInt(0)
+match BigInt.fromInt(5).div(z) { case Ok(x) => x.toString(10)
+case Err(e) => e }

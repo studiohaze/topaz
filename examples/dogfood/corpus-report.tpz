@@ -1,0 +1,56 @@
+type CorpusStats = { total: int, ok: int, error: int, dirs: Array<string> }
+
+function parseJson(text: string) -> Result<JSONValue, string> {
+  match JSON.parse(text) {
+    case Ok(value) => Ok(value)
+    case Err(error) => Err("{error.line}:{error.column}: {error.message}")
+  }
+}
+
+function jsonArray(obj: JSONValue, key: string) -> Array<JSONValue> {
+  match obj.get(key) {
+    case Some(value) => value.asArray() ?? []
+    case None => []
+  }
+}
+
+function jsonString(obj: JSONValue, key: string) -> string {
+  match obj.get(key) {
+    case Some(value) => value.asString() ?? ""
+    case None => ""
+  }
+}
+
+function reportCorpus(text: string) -> Result<string, string> {
+  let doc = parseJson(text)?
+  let fixtures = jsonArray(doc, "fixtures")
+  let mut ok = 0
+  let mut error = 0
+  let mut dirs: Array<string> = []
+  for fixture in fixtures {
+    if jsonString(fixture, "result") == "ok" {
+      ok += 1
+    } else {
+      error += 1
+    }
+    let dir = jsonString(fixture, "dir")
+    if dir.byteLength() > 0 {
+      match dirs.indexOf(dir) {
+        case Some(_) => ()
+        case None => dirs.push(dir)
+      }
+    }
+  }
+  let stats: CorpusStats = {
+    total: fixtures.length,
+    ok: ok,
+    error: error,
+    dirs: dirs.sorted(),
+  }
+  Ok("fixtures={stats.total} ok={stats.ok} error={stats.error} dirs={stats.dirs.join(",")}")
+}
+
+match reportCorpus(input()) {
+  case Ok(line) => print(line)
+  case Err(error) => print("error: {error}")
+}

@@ -1,0 +1,40 @@
+type MemoEntry = { input: int, output: int }
+
+function findCached(cache: Array<MemoEntry>, input: int) -> Option<int> {
+    match cache {
+        case [] => None
+        case [first, ..rest] => {
+            if first.input == input {
+                Some(first.output)
+            } else {
+                findCached(rest, input)
+            }
+        }
+    }
+}
+
+// Memoization decorator for int -> int functions
+function memoizeInt(func: (int) -> int) -> (int) -> int {
+    let mut cache: Array<MemoEntry> = []
+
+    return (input: int) => {
+        match findCached(cache, input) {
+            case Some(output) => output
+            case None => {
+                let result = func(input)
+                cache.push({ input: input, output: result })
+                result
+            }
+        }
+    }
+}
+
+function slowFibonacci(n: int) -> int {
+    if n <= 1 { n } else { slowFibonacci(n - 1) + slowFibonacci(n - 2) }
+}
+
+// Optimize slow fibonacci with memoization
+let memoFibonacci = memoizeInt(slowFibonacci)
+
+// Now large numbers calculate quickly
+print("{memoFibonacci(20)}")  // Calculated quickly

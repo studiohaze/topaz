@@ -1,0 +1,13 @@
+
+function keep(key: string, value: int) -> bool {
+    value > 1
+}
+
+concurrent {
+    slow: {
+        let values = map { "a": 1, "b": 2 }
+        values.filter(keep)
+    }
+    fast: 0
+}
+0

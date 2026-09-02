@@ -1,0 +1,4 @@
+import fwd_const_module
+let v = fwd_const_module.getK()
+print("K is {v}")
+v

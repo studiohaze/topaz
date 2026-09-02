@@ -1,0 +1,4 @@
+function force(g: () -> int) -> int { g() }
+export let cache = force(() => helper())
+function helper() -> int { config }
+export let config = 1

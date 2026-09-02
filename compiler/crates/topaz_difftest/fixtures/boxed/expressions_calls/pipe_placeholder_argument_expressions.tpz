@@ -1,0 +1,7 @@
+let identity = (x) => x
+let add = (a, b) => a + b
+let block = 5 |> identity({ _ })
+let branch = 6 |> identity(if true { _ } else { 0 })
+let text = 7 |> identity("value {_}")
+let nested = 10 |> add(100 |> add(_, 1))
+"{block}:{branch}:{text}:{nested}"

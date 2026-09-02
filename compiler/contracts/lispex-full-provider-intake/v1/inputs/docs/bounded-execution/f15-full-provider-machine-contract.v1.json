@@ -1,0 +1,181 @@
+{
+  "schema": "lispex.full-provider-machine-contract/v1",
+  "status": "qualified-final-provider-contract",
+  "component": {
+    "id": "lispex-evaluator/rust-vm-current-profile/1",
+    "artifactSha256": "dd4cde2976d825ae99b542d308d87489ac96848e0710329dbb9173664d8c5ad8",
+    "artifactBytes": 1484873,
+    "imports": 0
+  },
+  "contracts": {
+    "languageProfileId": "lispex-profile-1.5",
+    "semanticProfileId": "lispex/r7rs-rule-current-profile-bounded/1",
+    "featureSetSha256": "6ff16159ab9c6758c1485b67c928a9b3b4a896e4f2ecf96e4cf3cbaf5ac22fae",
+    "meterModelId": "lispex-full-vm-meter/1",
+    "abiId": "lispex.embed-wasm-abi/v1",
+    "valueCodecId": "lispex.embed-value/v1",
+    "transcriptId": "lispex.embed-transcript/v1",
+    "receiptCoreId": "lispex.embed-receipt-core/v1"
+  },
+  "wasmAbi": {
+    "version": 65536,
+    "integerEncoding": "little-endian WebAssembly i32/i64 at the call boundary",
+    "exports": [
+      "lispex_embed_abi_version: () -> u32",
+      "lispex_embed_alloc: (u32) -> u32",
+      "lispex_embed_dealloc: (u32,u32) -> u32",
+      "lispex_embed_prepare: (u32,u32) -> packed-u64",
+      "lispex_embed_evaluate: (u32,u32) -> packed-u64",
+      "memory"
+    ],
+    "packedResponse": "high-u32 pointer followed by low-u32 length",
+    "imports": [],
+    "memory": {
+      "initialPages": 19,
+      "maximumPages": 256
+    }
+  },
+  "requestGrammar": {
+    "integerEncoding": "unsigned big-endian",
+    "prepare": [
+      "8 bytes ASCII LPXPRP01",
+      "u32 source length",
+      "source bytes",
+      "u64 raw_source_bytes",
+      "u64 prepare_work",
+      "u64 prepare_logical_allocation",
+      "u64 syntax_depth",
+      "end of input"
+    ],
+    "evaluate": [
+      "8 bytes ASCII LPXEVA01",
+      "u32 prepared length",
+      "prepared bytes",
+      "u32 canonical input length",
+      "canonical input bytes",
+      "u64 canonical_input_bytes",
+      "u64 eval_work",
+      "u64 eval_logical_allocation",
+      "u64 semantic_frames",
+      "u64 traversal_depth",
+      "u64 output_bytes",
+      "u64 diagnostic_bytes",
+      "u64 transcript_bytes",
+      "u64 transcript_events",
+      "u64 result_bytes",
+      "end of input"
+    ]
+  },
+  "responseGrammar": {
+    "integerEncoding": "unsigned big-endian",
+    "fields": [
+      "8 bytes ASCII LPXRSP01",
+      "u8 operation: prepare=1 evaluate=2",
+      "u8 category: prepared=0 complete=1 semantic-fault=2 exhausted=3 request-refusal=4 engine-fault=5",
+      "u16 code UTF-8 byte length",
+      "ASCII code bytes",
+      "u32 payload length and payload bytes",
+      "six optional SHA-256 fields, each u8 tag 0 or tag 1 plus 64 lowercase hexadecimal bytes",
+      "u8 usage tag 0 or tag 1 plus nine u64 nonportable counters",
+      "end of input"
+    ],
+    "digestSlots": [
+      "submitted source",
+      "canonical source",
+      "canonical input",
+      "bytecode",
+      "feature set",
+      "reserved absent"
+    ]
+  },
+  "nativeArtifactGrammar": {
+    "magic": "LPXFAR01",
+    "integerEncoding": "unsigned big-endian",
+    "fields": [
+      "u8 kind",
+      "u8 category",
+      "64 lowercase hexadecimal evaluator digest bytes",
+      "u8 exact-limit count followed by that many u64 limits",
+      "six optional SHA-256 identity fields with tag 0 or tag 1 plus 64 lowercase hexadecimal bytes",
+      "32 raw request SHA-256 bytes",
+      "u32 replay-request length and bytes",
+      "u32 response length and bytes",
+      "u32 portable-core length and bytes",
+      "32 raw SHA-256 bytes over every preceding artifact byte",
+      "end of input"
+    ],
+    "prepareLimitCount": 4,
+    "evaluateLimitCount": 14,
+    "prepareReplayRequestBytes": 0,
+    "evaluateReplayRequest": "exact evaluate request bytes",
+    "sourceRetained": false,
+    "trailingBytes": "forbidden"
+  },
+  "portableCore": {
+    "encoding": "lispex.embed-value/v1 canonical record",
+    "recordKeys": "strict UTF-8 byte order, unique",
+    "eligibleCategories": [
+      "deterministic-semantic-outcome",
+      "deterministic-request-refusal"
+    ],
+    "ineligibleCategories": [
+      "operational-interruption",
+      "engine-fault"
+    ],
+    "semanticFields": [
+      "schema",
+      "category",
+      "semantic_profile_id",
+      "feature_set_sha256",
+      "model_id",
+      "exact_limits",
+      "submitted_source_sha256",
+      "canonical_input_sha256",
+      "canonical_source_sha256",
+      "semantic_rule_sha256",
+      "request_sha256",
+      "engine_artifact_sha256",
+      "evaluation_sha256",
+      "outcome",
+      "exhausted_axis",
+      "transcript_sha256",
+      "result_sha256"
+    ],
+    "refusalFields": [
+      "schema",
+      "category",
+      "submission_sha256",
+      "engine_artifact_sha256",
+      "refusal_code",
+      "available_field_identities"
+    ],
+    "usageCountersIncluded": false,
+    "vouchEligible": false,
+    "externalActionAuthority": false
+  },
+  "hashDomains": [
+    "lispex.embedding.submission/v1",
+    "lispex.embedding.resource-contract/v1",
+    "lispex.embedding.request/v1",
+    "lispex.embedding.evaluation/v1",
+    "lispex.embedding.transcript/v1",
+    "lispex.embedding.result/v1",
+    "lispex.embedding.receipt-core/v1"
+  ],
+  "retainedRestrictedConsumerContract": {
+    "disposition": "separate-immutable-contract",
+    "path": "docs/bounded-execution/f15-retained-restricted-lda-c1-machine-contract.v1.json",
+    "reason": "LPXART01 does not contain the LPXFAR01 request digest, replay request, or trailing whole-envelope digest"
+  },
+  "vectors": "products/full-embed-evaluator/v1.15.8/vectors/vectors.v1.json",
+  "forbidden": {
+    "discovery": true,
+    "network": true,
+    "hostCapability": true,
+    "fallback": true,
+    "instancePooling": true,
+    "remoteTransport": true,
+    "vouchPromotion": true,
+    "consumerAdmissionAuthority": true
+  }
+}

@@ -1,0 +1,4 @@
+export record Point { x: int }
+export let offset = 2
+impl Point { export function shifted(self) -> int { self.x + offset } }
+export function make() -> Point { Point { x: 1 } }

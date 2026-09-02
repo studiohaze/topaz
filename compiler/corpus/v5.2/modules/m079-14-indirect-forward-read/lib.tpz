@@ -1,0 +1,3 @@
+function peek() -> int { later }
+export let a = peek()
+export let later = 1

@@ -1,0 +1,5 @@
+record P { prefix: string }
+impl P { function greet(self, name: string) -> string { "{self.prefix} {name}" } }
+let p: P = P { prefix: "hi" }
+print(p.greet(name: "Ada"))
+0

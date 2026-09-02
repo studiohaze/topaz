@@ -1,0 +1,5 @@
+let a = { x: 1, y: 2 }
+let b = a { x: 10 }
+print("{a.x} {b.x} {b.y}")
+let { x, y } = b
+print("{x + y}")

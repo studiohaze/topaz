@@ -1,0 +1,7 @@
+let mut i = 0
+let r: Option<int> = loop {
+  i = i + 1
+  if i == 2 { break Some(i) }
+  if i > 5 { break None }
+}
+r

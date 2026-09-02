@@ -1,0 +1,123 @@
+---
+title: '리스트 연산'
+description: '일반적인 Array, Map, Set 작업을 위한 canonical Topaz cookbook 패턴입니다.'
+covers: '§9, §11, §22'
+---
+
+이 페이지는 public Topaz 예시에서 사용하는 작은 컬렉션 표면을 위한 작업 cookbook입니다. 전체 이름 표면은 [핵심 함수](/ko/docs/reference/core-functions)를 참고하세요.
+
+## 컬렉션 만들기
+
+컬렉션을 만들 때는 `Array.of`, `Map.new`, `Set.of`를 사용합니다. 변경 작업에는 mutable binding이 필요합니다.
+
+```topaz
+let 숫자들 = Array.of(1, 2, 3, 4, 5)
+
+let mut 점수들: Map<string, int> = Map.new()
+점수들.insert("alice", 92)
+점수들.insert("bob", 78)
+
+let mut 태그들 = Set.of("docs")
+태그들.add("v5")
+
+print("숫자들: {숫자들}")
+```
+
+배열 리터럴은 배열 spread `...expr`를 받아 기존 배열의 원소를 제자리에 이어 붙일 수 있습니다:
+
+```topaz
+let 기본 = Array.of(1, 2)
+let 확장 = [0, ...기본, 3]     // [0, 1, 2, 3]
+```
+
+## 배열 변환하기
+
+파이프라인에서는 free `filter`, `map`, `reduce` helper를 사용합니다. piped collection은 `_`로 전달합니다.
+
+```topaz
+let 숫자들 = Array.of(1, 2, 3, 4, 5)
+
+let 짝수제곱합 = 숫자들
+    |> filter(_, x => x % 2 == 0)
+    |> map(_, x => x * x)
+    |> reduce(_, 0, (누적, x) => 누적 + x)   // reduce(xs, initial, f)
+
+print("짝수 제곱 합: {짝수제곱합}")  // 20
+```
+
+## 배열 조회하기
+
+배열은 `.length`, index access, 폴트 없는 `.get` 읽기, `in` membership을 지원합니다. 순회 순서는 인덱스 오름차순입니다.
+
+```topaz
+let 숫자들 = Array.of(1, 2, 3, 4, 5)
+
+let 개수 = 숫자들.length
+let 세번째 = 숫자들[2]          // 3 — 직접 인덱싱은 범위 밖이면 폴트
+let 안전값 = 숫자들.get(10)     // None — 폴트 없는 읽기, Option<int> 반환
+let 삼포함 = 3 in 숫자들
+
+print("개수: {개수}")
+print("세 번째: {세번째}")
+print("3 포함: {삼포함}")
+```
+
+인덱스가 범위를 벗어날 수 있으면 항상 `arr.get(i)`를 사용하고, `arr[i]`는 이미 유효함이 증명된 인덱스에만 쓰세요.
+
+## Map 엔트리 읽기와 제거
+
+`m.get`은 폴트 없는 map 읽기이고, `m.remove`는 키를 삭제하며 있던 값을 알려줍니다. 둘 다 `Option<V>`를 반환합니다.
+
+```topaz
+let mut 점수들: Map<string, int> = Map.new()
+점수들.insert("alice", 92)
+점수들.insert("bob", 78)
+
+let 앨리스점수 = 점수들.get("alice")    // Some(92) — 키가 없으면 None
+let 제거됨 = 점수들.remove("bob")       // Some(78) — 있으면 Some(이전값), 없으면 None
+let 없음 = 점수들.remove("carol")       // None
+
+match 점수들.get("alice") {
+    case Some(점수) => print("alice 점수: {점수}")
+    case None => print("alice 점수 없음")
+}
+```
+
+## Map 키 순회하기
+
+작업에 키만 필요하면 `map.keys`를 순회합니다. `map.keys`는 키 삽입 순서의 `Array<K>` **스냅샷**입니다 — 이후 맵을 변경해도 이미 만들어진 keys 배열은 바뀌지 않습니다.
+
+```topaz
+let mut 점수들: Map<string, int> = Map.new()
+점수들.insert("alice", 92)
+점수들.insert("bob", 78)
+
+for 이름 in 점수들.keys {
+    print("{이름}의 점수가 저장됨")    // "alice" 먼저, 그다음 "bob" (삽입 순서)
+}
+
+let 앨리스있음 = "alice" in 점수들.keys
+print("alice 있음: {앨리스있음}")
+```
+
+직접 `x in map`은 canonical Topaz가 아닙니다 — 멤버십은 keys 뷰를 거칩니다: `x in map.keys`.
+
+## Set membership
+
+Set에는 `Set.of`, mutable `add`/`remove`, membership check용 `in`을 사용합니다.
+
+```topaz
+let mut 태그들 = Set.of("docs")
+태그들.add("v5")
+
+let 문서있음 = "docs" in 태그들
+let 레거시있음 = "legacy" in 태그들
+let 삭제됨 = 태그들.remove("docs")      // 원소가 제거된 경우에만 true
+
+print("docs 있음: {문서있음}")
+print("legacy 있음: {레거시있음}")
+```
+
+## 경계
+
+Topaz public 예시는 별도 List 컬렉션, set algebra helper, sorting/grouping/zipping helper, lazy collection pipeline, parallel collection pipeline을 명시하지 않습니다. future 결정이 컬렉션 라이브러리를 확장하기 전까지는 `Array`, `Map`, `Set`과 위 canonical 표면을 사용하세요.

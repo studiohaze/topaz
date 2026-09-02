@@ -1,0 +1,10 @@
+let числа = Array.of(1, 2, 3, 4, 5)
+
+let mut оценки: Map<string, int> = Map.new()
+оценки.insert("alice", 92)
+оценки.insert("bob", 78)
+
+let mut теги = Set.of("docs")
+теги.add("v5")
+
+print("Числа: {числа}")

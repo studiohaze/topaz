@@ -1,0 +1,8 @@
+let names = ["Ann", "Bo", "Cy"]
+
+let summary = names
+  |> .length                  // property sugar: (xs => xs.length)
+  |> format("count=", _)      // placeholder: (n => format("count=", n))
+
+// Every placeholder in the nearest call receives the same piped value
+let line = names |> format("first of ", _, " is ", _)

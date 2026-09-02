@@ -1,0 +1,9 @@
+function wrap<T>(x: T) -> Result<T, string> {
+  Ok(x)
+}
+function use() -> Result<int, string> {
+  let v = wrap(5)?
+  Ok(v + 1)
+}
+print("{use()}")
+0

@@ -1,0 +1,24 @@
+
+function mark(label: string, value: Option<{ n: int, text: string }>) -> Option<{ n: int, text: string }> {
+    print(label)
+    value
+}
+function fallbackInt(label: string, value: int) -> int {
+    print(label)
+    value
+}
+function fallbackText(label: string, value: string) -> string {
+    print(label)
+    value
+}
+function main() -> string {
+    let some = mark("some", Some({ n: 0, text: "" }))
+    let none = mark("none", None)
+    let value = {
+        zero: some?.n ?? fallbackInt("zero-fallback", 7),
+        empty: some?.text ?? fallbackText("text-fallback", "fallback"),
+        missing: none?.n ?? fallbackInt("missing-fallback", 9)
+    }
+    "{value.zero}:{value.empty}:{value.missing}"
+}
+main()

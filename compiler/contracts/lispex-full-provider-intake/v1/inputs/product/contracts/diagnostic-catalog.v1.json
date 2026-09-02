@@ -1,0 +1,260 @@
+{
+  "schema": "lispex.diagnostic-catalog/v1",
+  "profile": "lispex-profile-1.5",
+  "columns": [
+    "code",
+    "severity",
+    "phase",
+    "family",
+    "render_template",
+    "irritant_projection",
+    "source_span",
+    "exit_status"
+  ],
+  "rows": [
+    [
+      "E100",
+      "error",
+      "reader",
+      "illegal-token-or-structure",
+      "E100 {source}:{line}:{column} {message}{irritants}",
+      "ordered-write-projection",
+      "one-based-source-span",
+      1
+    ],
+    [
+      "E110",
+      "error",
+      "normalizer",
+      "reserved-binding",
+      "E110 {source}:{line}:{column} {message}{irritants}",
+      "ordered-write-projection",
+      "one-based-source-span",
+      1
+    ],
+    [
+      "E120",
+      "error",
+      "reader-or-normalizer",
+      "forbidden-extension",
+      "E120 {source}:{line}:{column} {message}{irritants}",
+      "ordered-write-projection",
+      "one-based-source-span",
+      1
+    ],
+    [
+      "E130",
+      "error",
+      "normalizer",
+      "malformed-form",
+      "E130 {source}:{line}:{column} {message}{irritants}",
+      "ordered-write-projection",
+      "one-based-source-span",
+      1
+    ],
+    [
+      "E140",
+      "error",
+      "reader",
+      "malformed-dotted-list",
+      "E140 {source}:{line}:{column} {message}{irritants}",
+      "ordered-write-projection",
+      "one-based-source-span",
+      1
+    ],
+    [
+      "E150",
+      "error",
+      "reader",
+      "invalid-string-or-character",
+      "E150 {source}:{line}:{column} {message}{irritants}",
+      "ordered-write-projection",
+      "one-based-source-span",
+      1
+    ],
+    [
+      "E300",
+      "error",
+      "runtime",
+      "unbound-variable",
+      "E300 {source}:{line}:{column} {message}{irritants}",
+      "ordered-write-projection",
+      "one-based-source-span",
+      1
+    ],
+    [
+      "E301",
+      "error",
+      "runtime",
+      "apply-non-procedure",
+      "E301 {source}:{line}:{column} {message}{irritants}",
+      "ordered-write-projection",
+      "one-based-source-span",
+      1
+    ],
+    [
+      "E302",
+      "error",
+      "runtime",
+      "arity-mismatch",
+      "E302 {source}:{line}:{column} {message}{irritants}",
+      "ordered-write-projection",
+      "one-based-source-span",
+      1
+    ],
+    [
+      "E303",
+      "error",
+      "runtime",
+      "set-unbound",
+      "E303 {source}:{line}:{column} {message}{irritants}",
+      "ordered-write-projection",
+      "one-based-source-span",
+      1
+    ],
+    [
+      "E310",
+      "error",
+      "runtime",
+      "pair-expected",
+      "E310 {source}:{line}:{column} {message}{irritants}",
+      "ordered-write-projection",
+      "one-based-source-span",
+      1
+    ],
+    [
+      "E311",
+      "error",
+      "runtime",
+      "index-out-of-range",
+      "E311 {source}:{line}:{column} {message}{irritants}",
+      "ordered-write-projection",
+      "one-based-source-span",
+      1
+    ],
+    [
+      "E312",
+      "error",
+      "runtime",
+      "wrong-primitive-type",
+      "E312 {source}:{line}:{column} {message}{irritants}",
+      "ordered-write-projection",
+      "one-based-source-span",
+      1
+    ],
+    [
+      "E313",
+      "error",
+      "runtime",
+      "division-by-zero",
+      "E313 {source}:{line}:{column} {message}{irritants}",
+      "ordered-write-projection",
+      "one-based-source-span",
+      1
+    ],
+    [
+      "E314",
+      "error",
+      "reader-or-runtime",
+      "nonfinite-inexact",
+      "E314 {source}:{line}:{column} {message}{irritants}",
+      "ordered-write-projection",
+      "one-based-source-span",
+      1
+    ],
+    [
+      "E320",
+      "error",
+      "runtime",
+      "multiple-values-misuse",
+      "E320 {source}:{line}:{column} {message}{irritants}",
+      "ordered-write-projection",
+      "one-based-source-span",
+      1
+    ],
+    [
+      "E321",
+      "error",
+      "runtime",
+      "uninitialized-letrec-read",
+      "E321 {source}:{line}:{column} {message}{irritants}",
+      "ordered-write-projection",
+      "one-based-source-span",
+      1
+    ],
+    [
+      "E330",
+      "error",
+      "runtime",
+      "user-error",
+      "E330 {source}:{line}:{column} {message}{irritants}",
+      "ordered-write-projection",
+      "one-based-source-span",
+      1
+    ],
+    [
+      "E331",
+      "error",
+      "runtime",
+      "uncaught-raised-object",
+      "E331 {source}:{line}:{column} {message}{irritants}",
+      "ordered-write-projection",
+      "one-based-source-span",
+      1
+    ],
+    [
+      "E332",
+      "error",
+      "runtime",
+      "noncontinuable-handler-returned",
+      "E332 {source}:{line}:{column} {message}{irritants}",
+      "ordered-write-projection",
+      "one-based-source-span",
+      1
+    ],
+    [
+      "E340",
+      "error",
+      "runtime",
+      "inactive-escape-continuation",
+      "E340 {source}:{line}:{column} {message}{irritants}",
+      "ordered-write-projection",
+      "one-based-source-span",
+      1
+    ],
+    [
+      "recursion-limit",
+      "error",
+      "resource",
+      "non-tail-call-depth",
+      "recursion-limit {source}:{line}:{column} {message}{irritants}",
+      "ordered-write-projection",
+      "one-based-source-span",
+      2
+    ],
+    [
+      "W330",
+      "warning",
+      "runtime",
+      "deprecated-percent",
+      "W330 {source}:{line}:{column} {message}",
+      "ordered-write-projection",
+      "one-based-source-span",
+      0
+    ],
+    [
+      "W331",
+      "warning",
+      "runtime",
+      "deprecated-list-alias",
+      "W331 {source}:{line}:{column} {message}",
+      "ordered-write-projection",
+      "one-based-source-span",
+      0
+    ]
+  ],
+  "ordering": "first-error-aborts-warnings-in-occurrence-order",
+  "stderr": "utf8-bytes-each-diagnostic-one-terminal-lf",
+  "path_projection": "logical-source-id-only",
+  "stack_trace": false
+}

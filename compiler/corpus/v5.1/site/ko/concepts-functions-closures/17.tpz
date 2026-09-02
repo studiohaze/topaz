@@ -1,0 +1,19 @@
+// 좋은 예: 순수 함수
+function 세금계산(소득: float, 세율: float) -> float {
+    return 소득 * 세율
+}
+
+// 피해야 할: 부작용이 있는 함수
+let mut 전역카운터 = 0
+function 나쁜함수(값: int) -> int {
+    전역카운터 += 1  // 부작용!
+    return 값 * 2
+}
+
+// 좋은 대안: 상태 반환
+function 좋은함수(값: int, 현재카운터: int) -> { 결과: int, 새카운터: int } {
+    return {
+        결과: 값 * 2,
+        새카운터: 현재카운터 + 1
+    }
+}

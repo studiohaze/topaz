@@ -1,0 +1,82 @@
+{
+  "schema": "studio-haze.relationship-attestation/v1",
+  "id": "lispex-full-embed-evaluator-1/v1",
+  "relationship": "lispex.provides-full-embed-evaluator/v1",
+  "state": "qualified",
+  "subject": {
+    "component": "lispex-evaluator/rust-vm-current-profile/1",
+    "path": "embedding-readiness/release-dag/components/lispex-full-embed-evaluator-1.v1.json",
+    "sha256": "741275df24d81b7eb002657c285fb142a6f089ec5ebc744fbb5a88c749fc1b09"
+  },
+  "provider": {
+    "evaluator_artifact_sha256": "dd4cde2976d825ae99b542d308d87489ac96848e0710329dbb9173664d8c5ad8",
+    "language_profile_id": "lispex-profile-1.5",
+    "semantic_profile_id": "lispex/r7rs-rule-current-profile-bounded/1",
+    "feature_set_sha256": "6ff16159ab9c6758c1485b67c928a9b3b4a896e4f2ecf96e4cf3cbaf5ac22fae",
+    "model_id": "lispex-full-vm-meter/1",
+    "abi_id": "lispex.embed-wasm-abi/v1",
+    "value_codec_id": "lispex.embed-value/v1",
+    "transcript_id": "lispex.embed-transcript/v1",
+    "receipt_schema_id": "lispex.embed-receipt-core/v1",
+    "component_id": "lispex-evaluator/rust-vm-current-profile/1"
+  },
+  "evidence": {
+    "provider_root": {
+      "path": "docs/bounded-execution/f15-final-provider-root.v1.json",
+      "sha256": "6ef0fafd3467d5dbfc89291574f83220bd4e204b11e34b3a40ca9a064274bcd9"
+    },
+    "final_provider_court": {
+      "path": "docs/bounded-execution/f15-final-provider-court.v1.json",
+      "sha256": "d4810055356c4cbd6ff046786b88d1af78ead561b74c5d656d5bd784cd4ad4b1"
+    },
+    "records": [
+      {
+        "kind": "post-b7-structural-closure",
+        "path": "docs/bounded-execution/f15-provider-evidence/post-b7-structural-closure.v1.json",
+        "sha256": "f29f99f443405971697286d2f931fff32e048922cb9d8a864e0cac01215ce82d"
+      },
+      {
+        "kind": "post-closure-meter-site-reachability",
+        "path": "docs/bounded-execution/f15-provider-evidence/post-closure-meter-site-reachability.v1.json",
+        "sha256": "47f9f8f81634dc962218ee115cc7f68aa460f77eae6c00d86977dfa57bf35bed"
+      },
+      {
+        "kind": "post-closure-mutation",
+        "path": "docs/bounded-execution/f15-provider-evidence/post-closure-mutation.v1.json",
+        "sha256": "2c9cd10e6ad1e902ed83f443925136130a22909e62fe9ab04bbe67d724cef9cb"
+      },
+      {
+        "kind": "post-closure-property-fuzz",
+        "path": "docs/bounded-execution/f15-provider-evidence/post-closure-property-fuzz.v1.json",
+        "sha256": "db08b2f09b9e8fcdaf1012955c3bf84c5934e98c7ff7b02f7620d2ae8362f8fb"
+      },
+      {
+        "kind": "post-closure-safety-dominance",
+        "path": "docs/bounded-execution/f15-provider-evidence/post-closure-safety-dominance.v1.json",
+        "sha256": "89ccdafd38a4802df78beb4e3bec883cc309f66ca6cf520f185f9a87f6228bdd"
+      },
+      {
+        "kind": "cross-architecture-portable-core",
+        "path": "docs/bounded-execution/f15-provider-evidence/cross-architecture-portable-core.v1.json",
+        "sha256": "d552481c0c9d7c34c83a02852c2279fb8f34781fce8a31ed3f20a8eb8116e6f2"
+      },
+      {
+        "kind": "installed-source-free-product",
+        "path": "docs/bounded-execution/f15-provider-evidence/installed-source-free-product.v1.json",
+        "sha256": "e0494978ad8dea52e94e90fc01aeb803b7784cf09e88c18f6ba29fced8b01eb3"
+      }
+    ]
+  },
+  "build_dependency": false,
+  "limitations": [
+    "provider-attestation-not-topaz-admission",
+    "single-rust-vm-engine",
+    "no-topaz-target-admission",
+    "no-vouch-authority",
+    "not-publicly-released"
+  ],
+  "issuer": {
+    "owner": "lispex-release",
+    "signature_status": "unsigned-develop-provider-attestation"
+  }
+}

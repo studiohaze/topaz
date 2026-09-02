@@ -1,0 +1,9 @@
+let mut теги = Set.of("docs")
+теги.add("v5")
+
+let естьDocs = "docs" in теги
+let естьLegacy = "legacy" in теги
+let убрано = теги.remove("docs")         // true, только если элемент был удалён
+
+print("Есть docs: {естьDocs}")
+print("Есть legacy: {естьLegacy}")

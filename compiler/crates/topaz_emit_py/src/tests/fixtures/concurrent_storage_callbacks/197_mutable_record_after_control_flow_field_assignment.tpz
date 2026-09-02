@@ -1,0 +1,32 @@
+
+function spin(x: int) -> int {
+    let mut i = 0
+    while i < 3 {
+        i = i + 1
+    }
+    x
+}
+
+function quick(x: int) -> int {
+    let mut i = 0
+    while i < 3 {
+        i = i + 1
+    }
+    x
+}
+
+let mut callbacks = { primary: spin }
+let mut i = 0
+while i < 1 {
+    callbacks.primary = quick
+    i = i + 1
+}
+
+concurrent {
+    slow: {
+        let xs = [1]
+        xs.map(callbacks.primary)
+    }
+    fast: 0
+}
+0

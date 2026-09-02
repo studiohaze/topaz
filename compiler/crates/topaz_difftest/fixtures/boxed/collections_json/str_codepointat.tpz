@@ -1,0 +1,1 @@
+["가".codePointAt(0), "abc".codePointAt(1), "😀".codePointAt(0), "abc".codePointAt(-1), "abc".codePointAt(9)]

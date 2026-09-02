@@ -1,0 +1,8 @@
+
+enum Shape derives Eq, Order, Show { Dot, Circle(int) }
+function main() -> int {
+    match Shape.Dot {
+        case found: Shape => if found == Shape.Dot { 1 } else { 0 }
+    }
+}
+main()

@@ -1,0 +1,1 @@
+JSON.parseAs<{ name: string, age: int }>("\{\"name\":\"Ada\",\"age\":37\}")

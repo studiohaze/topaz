@@ -1,0 +1,20 @@
+// 조건부 체이닝
+function 사용자처리(사용자id: int) -> Result<string, string> {
+    let 사용자데이터 = match 데이터베이스에서사용자가져오기(사용자id) {
+        case Ok(데이터) => 데이터
+        case Err(오류) => { return Err("사용자 조회 실패: {오류}") }
+    }
+    
+    let 검증결과 = match 사용자검증(사용자데이터) {
+        case Ok(_) => ()
+        case Err(오류) => { return Err("검증 실패: {오류}") }
+    }
+    
+    let 처리결과 = match 사용자데이터처리(사용자데이터) {
+        case Ok(결과) => 결과
+        case Err(오류) => { return Err("처리 실패: {오류}") }
+    }
+    
+    return Ok("처리 완료: {처리결과}")
+}
+

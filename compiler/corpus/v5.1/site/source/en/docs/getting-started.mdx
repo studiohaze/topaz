@@ -1,0 +1,145 @@
+---
+title: 'Getting Started with Topaz'
+description: 'Run your first Topaz program with the v0.3 toolchain: hello, a ten-line tour, a real fault, and a two-file module unit.'
+covers: '§4, §5, §6, §7, §9, §10, §12, §13a, §16, §17, §22'
+---
+
+> **Pre-release note**: The Topaz toolchain (v0.3) exists and runs, but is not distributed yet — it lives in private CI until the open-source release, and distribution channels arrive with it. Every program on this page was executed against v0.3 exactly as shown, and the printed output is pinned byte-for-byte by the site verifier. See [Toolchain status](/en/docs/status) for what exists today and what proves it.
+
+## Your first program
+
+Create `hello.tpz`:
+
+```topaz
+let greeting = "Hello, Topaz!"
+print(greeting)
+```
+
+Run it:
+
+```text
+topaz run hello.tpz
+```
+
+```text output
+Hello, Topaz!
+```
+
+That is the whole loop: one file, `topaz run`, output. No project scaffolding, no manifest, no build step.
+
+## A ten-line tour
+
+`tour.tpz` touches the core of the language — `match` with guards and ranges, a mutable `Map`, a higher-order function, and option fallback:
+
+```topaz
+function classify(n: int) -> string {
+    return match n {
+        case 0 => "zero"
+        case x if x < 0 => "negative"
+        case 1..99 => "small"
+        case _ => "large"
+    }
+}
+
+let mut report: Map<string, string> = Map.new()
+for n in [-5, 0, 42, 1000] {
+    report.insert("{n}", classify(n))
+}
+
+print("{report.keys}")
+print("{map([1, 2, 3], (x: int) => x * x)}")
+print("{toInt("42") ?? 0}")
+```
+
+```text
+topaz run tour.tpz
+```
+
+```text output
+[-5, 0, 42, 1000]
+[1, 4, 9]
+42
+```
+
+Three things to notice:
+
+- `match` is an expression — `classify` returns its result directly. Arms take literals, ranges, bindings, and `if` guards.
+- `"{…}"` interpolation is the one way to format strings; it works on every value, including `report.keys`.
+- `toInt("42")` returns an optional, and `??` supplies the fallback. Nothing converts silently.
+
+## When a program stops
+
+An out-of-bounds index is not a recoverable error in Topaz — it is a **fault**: the program stops and the toolchain renders a diagnostic. `fault.tpz`:
+
+```topaz
+let xs = [10, 20, 30]
+let i = 7
+print("{xs[i]}")
+```
+
+```text
+topaz run fault.tpz
+```
+
+```text output
+error[TPZ4001]: index 7 is out of bounds for an array of length 3
+ --> fault.tpz:3:9
+  |
+3 | print("{xs[i]}")
+  |         ^^^^^
+
+```
+
+The process exits nonzero. Faults mark contract violations; absence you expect to handle is modeled with optionals instead — see [Error Handling](/en/docs/concepts/error-handling).
+
+## Modules in two files
+
+A directory of `.tpz` files is a **unit**. Files import each other by name; `export` is the only visibility control. `util.tpz`:
+
+```topaz
+export function shout(s: string) -> string {
+    return s + "!"
+}
+
+export let greeting: string = "hello"
+```
+
+`main.tpz`, in the same directory:
+
+```topaz
+import util
+
+print(util.shout(util.greeting))
+```
+
+```text
+topaz run main.tpz
+```
+
+```text output
+hello!
+```
+
+The resolver finds `util.tpz` next to the entry file — no manifest, no path configuration. The full rules (paths, collisions, cycles, initialization order) are in [Modules](/en/docs/concepts/modules).
+
+## Checking your toolchain
+
+When you have a build of the toolchain, confirm what it is:
+
+```text
+topaz version
+```
+
+```text output
+topaz 0.3.0 (Topaz v5.2, locked)
+```
+
+There is no public installer yet; the [status page](/en/docs/status) tracks distribution.
+
+## Next steps
+
+- **[Syntax](/en/docs/concepts/syntax)** — the surface shape of the language
+- **[Data Types](/en/docs/concepts/data-types)** — strings, numbers, collections, records
+- **[Functions & Closures](/en/docs/concepts/functions-closures)** — the functional core
+- **[Modules](/en/docs/concepts/modules)** — multi-file units in depth
+- **[Toolchain status](/en/docs/status)** — what runs today, and the gates that prove it

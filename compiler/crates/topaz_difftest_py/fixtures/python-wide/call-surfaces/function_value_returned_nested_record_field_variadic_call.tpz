@@ -1,0 +1,15 @@
+
+function sum(seed: int = 0, ...xs: int) -> int {
+    let mut total = seed
+    for x in xs {
+        total = total + x
+    }
+    total
+}
+function makeCallbacks() {
+    { nested: { total: sum } }
+}
+function main() -> int {
+    makeCallbacks().nested.total(3, ...[1, 2])
+}
+main()

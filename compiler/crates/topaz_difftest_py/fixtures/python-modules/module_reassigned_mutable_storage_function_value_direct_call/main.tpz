@@ -1,0 +1,10 @@
+
+import util
+function main() -> int {
+    let mut callbacks = util.oldCallbacks
+    let mut handlers = util.oldHandlers
+    callbacks = util.callbacks
+    handlers = util.handlers
+    callbacks[0](a: 5) + callbacks[1](y: 3, x: 10) + handlers.primary(y: 4, x: 7)
+}
+main()

@@ -1,0 +1,1677 @@
+// Iterative normalization from reader datums to executable kernel tables.
+// Capability accounting and lexical addressing are settled here; the machine
+// receives a closed Kernel rather than source or reader state.
+
+import lit.model {
+  GuestInt,
+  GuestRational,
+  ErrorObjectRow,
+  GuardClauseRow,
+  GuestValue,
+  NodeOp,
+  SpanRow,
+  OriginRow,
+  BinderRow,
+  GlobalRow,
+  NodeRow,
+  Kernel,
+  CapabilityTable,
+  FrontendRequest,
+  FrontendFault,
+  ReaderDatumKind,
+  ReaderDatum,
+  ReaderOutput,
+  LexicalFrame,
+  LexicalAddress,
+  ParsedFormals,
+  ParsedBinding,
+  NormalizeArena,
+  NormalizeOutput,
+  QuasiquotePart,
+  NodeLocation,
+  DefinitionShape,
+}
+import lit.frontend_lex_read {
+  frontendFault,
+  projectFrontendFault,
+  chargeFrontend,
+  addReaderDatum,
+  listDatumIds,
+  datumSymbol,
+}
+import lit.kernel_decode {
+  expectArray,
+  expectString,
+  expectInt,
+  expectBool,
+  requireLength,
+  copyInts,
+  validateReferences,
+}
+import lit.value_runtime {
+  allocateGuestIdentity,
+}
+
+function normalizeFault(arena: NormalizeArena, datum: int, code: string, templateId: string, message: string) -> FrontendFault {
+  let start = if datum >= 0 && datum < arena.datums.length { arena.datums[datum].startByte } else { 0 }
+  let end = if datum >= 0 && datum < arena.datums.length { arena.datums[datum].endByte } else { start }
+  frontendFault(code, templateId, "normalize", start, end, message, false)
+}
+
+function projectedNormalizeFault(
+  arena: NormalizeArena,
+  datum: int,
+  code: string,
+  templateId: string,
+  message: string,
+  diagnosticCode: string,
+  diagnosticPhase: string,
+  diagnosticMessage: string,
+) -> FrontendFault {
+  let fault = normalizeFault(arena, datum, code, templateId, message)
+  projectFrontendFault(fault, diagnosticCode, diagnosticPhase, diagnosticMessage, fault.startByte)
+}
+
+function reservedBinderFault(arena: NormalizeArena, datum: int, name: string, message: string) -> FrontendFault {
+  projectedNormalizeFault(
+    arena,
+    datum,
+    "LIT443",
+    "reserved-binder",
+    message,
+    "E110",
+    "normalizer",
+    "cannot bind reserved word `{name}`",
+  )
+}
+
+function chargeNormalize(arena: NormalizeArena, datum: int, amount: int) -> Result<(), FrontendFault> {
+  let start = if datum >= 0 && datum < arena.datums.length { arena.datums[datum].startByte } else { 0 }
+  let end = if datum >= 0 && datum < arena.datums.length { arena.datums[datum].endByte } else { start }
+  chargeFrontend(arena.transitions, amount, arena.transitionLimit, "normalize", start, end)
+}
+
+function h4CapabilityNames() -> Array<string> {
+  [
+    "+", "-", "=", "cons", "null?", "values", "call-with-values", "apply", "vector-ref", "vector-set!",
+    "call/cc", "dynamic-wind", "with-exception-handler", "raise", "raise-continuable", "error",
+    "error-object?", "error-object-message", "error-object-irritants", "*", "/", "<", ">", "<=", ">=",
+    "pair?", "car", "cdr", "list", "list?", "length", "append", "reverse", "eqv?", "eq?", "equal?",
+    "not", "number?", "integer?", "exact-integer?", "boolean?", "symbol?", "string?", "procedure?",
+    "vector?", "bytevector?", "make-vector", "vector", "vector-length", "vector->list", "list->vector",
+    "make-bytevector", "bytevector", "bytevector-length", "bytevector-u8-ref", "string-append", "string-length",
+    "string-ref", "string->symbol", "symbol->string", "char?", "char->integer", "integer->char", "number->string",
+    "string->number", "display", "write", "newline", "println", "map", "for-each", "vector-map",
+    "vector-for-each", "string-map", "string-for-each", "filter", "fold-left", "fold-right", "member", "assoc",
+  ]
+}
+
+function h4CapabilityDispositions() -> Array<string> {
+  let mut dispositions: Array<string> = []
+  let mut index = 0
+  while index < 80 {
+    dispositions.push(if index >= 65 { "unsupported-loud" } else { "supported" })
+    index += 1
+  }
+  dispositions
+}
+
+export function h6CapabilityRowsJson() -> string {
+  "[[0,\"!=\",\"runtime/!=\",\"native-profile-pinned\",[\"native-profile-pinned\"],\"native-profile-pinned\",\"native-profile-pinned\",[\"H6-unsupported-loud\"],\"deterministic-pinned\",false,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"!=\"],[1,\"%\",\"runtime/%\",\"native-profile-pinned\",[\"native-profile-pinned\"],\"native-profile-pinned\",\"native-profile-pinned\",[\"H6-unsupported-loud\"],\"deterministic-pinned\",false,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"%\"],[2,\"*\",\"numeric/multiply\",\"0+\",[\"number...\"],\"number\",\"exactly-one\",[\"HK250\"],\"deterministic-pinned\",false,\"linear-arguments\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"host-delegated-deterministic\",\"*\"],[3,\"+\",\"numeric/add\",\"0+\",[\"number...\"],\"number\",\"exactly-one\",[\"HK220\"],\"deterministic-pinned\",false,\"linear-arguments\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"host-delegated-deterministic\",\"+\"],[4,\"-\",\"numeric/subtract\",\"1+\",[\"number...\"],\"number\",\"exactly-one\",[\"HK221\"],\"deterministic-pinned\",false,\"linear-arguments\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"host-delegated-deterministic\",\"-\"],[5,\"/\",\"numeric/divide\",\"1+\",[\"number...\"],\"number\",\"exactly-one\",[\"HK251\",\"HK252\"],\"deterministic-pinned\",false,\"linear-arguments\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"host-delegated-deterministic\",\"/\"],[6,\"<\",\"numeric/less\",\"2+\",[\"number...\"],\"boolean\",\"exactly-one\",[\"HK253\"],\"deterministic-pinned\",false,\"linear-arguments\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"host-delegated-deterministic\",\"<\"],[7,\"<=\",\"numeric/less-or-equal\",\"2+\",[\"number...\"],\"boolean\",\"exactly-one\",[\"HK253\"],\"deterministic-pinned\",false,\"linear-arguments\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"host-delegated-deterministic\",\"<=\"],[8,\"=\",\"numeric/equal\",\"2+\",[\"number...\"],\"boolean\",\"exactly-one\",[\"HK222\"],\"deterministic-pinned\",false,\"linear-arguments\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"host-delegated-deterministic\",\"=\"],[9,\"==\",\"equality/equal\",\"2\",[\"value\",\"value\"],\"boolean\",\"exactly-one\",[\"HK261\"],\"deterministic-pinned\",false,\"cycle-safe-structural\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"hosted-implemented\",\"==\"],[10,\">\",\"numeric/greater\",\"2+\",[\"number...\"],\"boolean\",\"exactly-one\",[\"HK253\"],\"deterministic-pinned\",false,\"linear-arguments\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"host-delegated-deterministic\",\">\"],[11,\">=\",\"numeric/greater-or-equal\",\"2+\",[\"number...\"],\"boolean\",\"exactly-one\",[\"HK253\"],\"deterministic-pinned\",false,\"linear-arguments\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"host-delegated-deterministic\",\">=\"],[12,\"abs\",\"runtime/abs\",\"native-profile-pinned\",[\"native-profile-pinned\"],\"native-profile-pinned\",\"native-profile-pinned\",[\"H6-unsupported-loud\"],\"deterministic-pinned\",false,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"abs\"],[13,\"all?\",\"runtime/all?\",\"native-profile-pinned\",[\"native-profile-pinned\"],\"native-profile-pinned\",\"native-profile-pinned\",[\"H6-unsupported-loud\"],\"deterministic-pinned\",true,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"all?\"],[14,\"any?\",\"runtime/any?\",\"native-profile-pinned\",[\"native-profile-pinned\"],\"native-profile-pinned\",\"native-profile-pinned\",[\"H6-unsupported-loud\"],\"deterministic-pinned\",true,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"any?\"],[15,\"append\",\"aggregate/append\",\"0+\",[\"list...\",\"value\"],\"value\",\"exactly-one\",[\"HK258\"],\"deterministic-pinned\",false,\"linear-copied-spines\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"hosted-implemented\",\"append\"],[16,\"apply\",\"control/apply\",\"2+\",[\"procedure\",\"value...\",\"proper-list\"],\"value-packet\",\"any-values\",[\"HK211\",\"HK226\"],\"deterministic-pinned\",true,\"linear-arguments-plus-machine-dispatch\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"hosted-implemented\",\"apply\"],[17,\"assoc\",\"search/assoc\",\"2\",[\"value\",\"alist\"],\"pair-or-false\",\"exactly-one\",[\"HK260\"],\"deterministic-pinned\",false,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"assoc\"],[18,\"assq\",\"runtime/assq\",\"native-profile-pinned\",[\"native-profile-pinned\"],\"native-profile-pinned\",\"native-profile-pinned\",[\"H6-unsupported-loud\"],\"deterministic-pinned\",false,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"assq\"],[19,\"assv\",\"runtime/assv\",\"native-profile-pinned\",[\"native-profile-pinned\"],\"native-profile-pinned\",\"native-profile-pinned\",[\"H6-unsupported-loud\"],\"deterministic-pinned\",false,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"assv\"],[20,\"boolean=?\",\"runtime/boolean=?\",\"native-profile-pinned\",[\"native-profile-pinned\"],\"native-profile-pinned\",\"native-profile-pinned\",[\"H6-unsupported-loud\"],\"deterministic-pinned\",false,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"boolean=?\"],[21,\"boolean?\",\"predicate/boolean\",\"1\",[\"value\"],\"boolean\",\"exactly-one\",[\"HK254\"],\"deterministic-pinned\",false,\"constant\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"hosted-implemented\",\"boolean?\"],[22,\"bytevector\",\"aggregate/bytevector\",\"0+\",[\"byte...\"],\"bytevector\",\"exactly-one\",[\"HK266\"],\"deterministic-pinned\",false,\"linear-arguments\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"hosted-implemented\",\"bytevector\"],[23,\"bytevector-length\",\"aggregate/bytevector-length\",\"1\",[\"bytevector\"],\"exact-integer\",\"exactly-one\",[\"HK267\"],\"deterministic-pinned\",false,\"constant\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"hosted-implemented\",\"bytevector-length\"],[24,\"bytevector-u8-ref\",\"aggregate/bytevector-ref\",\"2\",[\"bytevector\",\"exact-nonnegative-integer\"],\"byte\",\"exactly-one\",[\"HK268\"],\"deterministic-pinned\",false,\"constant\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"hosted-implemented\",\"bytevector-u8-ref\"],[25,\"bytevector?\",\"predicate/bytevector\",\"1\",[\"value\"],\"boolean\",\"exactly-one\",[\"HK254\"],\"deterministic-pinned\",false,\"constant\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"hosted-implemented\",\"bytevector?\"],[26,\"caaaar\",\"runtime/caaaar\",\"native-profile-pinned\",[\"native-profile-pinned\"],\"native-profile-pinned\",\"native-profile-pinned\",[\"H6-unsupported-loud\"],\"deterministic-pinned\",false,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"caaaar\"],[27,\"caaadr\",\"runtime/caaadr\",\"native-profile-pinned\",[\"native-profile-pinned\"],\"native-profile-pinned\",\"native-profile-pinned\",[\"H6-unsupported-loud\"],\"deterministic-pinned\",false,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"caaadr\"],[28,\"caaar\",\"runtime/caaar\",\"native-profile-pinned\",[\"native-profile-pinned\"],\"native-profile-pinned\",\"native-profile-pinned\",[\"H6-unsupported-loud\"],\"deterministic-pinned\",false,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"caaar\"],[29,\"caadar\",\"runtime/caadar\",\"native-profile-pinned\",[\"native-profile-pinned\"],\"native-profile-pinned\",\"native-profile-pinned\",[\"H6-unsupported-loud\"],\"deterministic-pinned\",false,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"caadar\"],[30,\"caaddr\",\"runtime/caaddr\",\"native-profile-pinned\",[\"native-profile-pinned\"],\"native-profile-pinned\",\"native-profile-pinned\",[\"H6-unsupported-loud\"],\"deterministic-pinned\",false,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"caaddr\"],[31,\"caadr\",\"runtime/caadr\",\"native-profile-pinned\",[\"native-profile-pinned\"],\"native-profile-pinned\",\"native-profile-pinned\",[\"H6-unsupported-loud\"],\"deterministic-pinned\",false,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"caadr\"],[32,\"caar\",\"runtime/caar\",\"native-profile-pinned\",[\"native-profile-pinned\"],\"native-profile-pinned\",\"native-profile-pinned\",[\"H6-unsupported-loud\"],\"deterministic-pinned\",false,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"caar\"],[33,\"cadaar\",\"runtime/cadaar\",\"native-profile-pinned\",[\"native-profile-pinned\"],\"native-profile-pinned\",\"native-profile-pinned\",[\"H6-unsupported-loud\"],\"deterministic-pinned\",false,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"cadaar\"],[34,\"cadadr\",\"runtime/cadadr\",\"native-profile-pinned\",[\"native-profile-pinned\"],\"native-profile-pinned\",\"native-profile-pinned\",[\"H6-unsupported-loud\"],\"deterministic-pinned\",false,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"cadadr\"],[35,\"cadar\",\"runtime/cadar\",\"native-profile-pinned\",[\"native-profile-pinned\"],\"native-profile-pinned\",\"native-profile-pinned\",[\"H6-unsupported-loud\"],\"deterministic-pinned\",false,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"cadar\"],[36,\"caddar\",\"runtime/caddar\",\"native-profile-pinned\",[\"native-profile-pinned\"],\"native-profile-pinned\",\"native-profile-pinned\",[\"H6-unsupported-loud\"],\"deterministic-pinned\",false,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"caddar\"],[37,\"cadddr\",\"runtime/cadddr\",\"native-profile-pinned\",[\"native-profile-pinned\"],\"native-profile-pinned\",\"native-profile-pinned\",[\"H6-unsupported-loud\"],\"deterministic-pinned\",false,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"cadddr\"],[38,\"caddr\",\"runtime/caddr\",\"native-profile-pinned\",[\"native-profile-pinned\"],\"native-profile-pinned\",\"native-profile-pinned\",[\"H6-unsupported-loud\"],\"deterministic-pinned\",false,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"caddr\"],[39,\"cadr\",\"runtime/cadr\",\"native-profile-pinned\",[\"native-profile-pinned\"],\"native-profile-pinned\",\"native-profile-pinned\",[\"H6-unsupported-loud\"],\"deterministic-pinned\",false,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"cadr\"],[40,\"call-with-current-continuation\",\"control/upward-escape\",\"1\",[\"procedure\"],\"value-packet\",\"any-values\",[\"E340\",\"HK234\"],\"deterministic-pinned\",true,\"machine-transfer\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"hosted-implemented\",\"call-with-current-continuation\"],[41,\"call-with-values\",\"control/call-with-values\",\"2\",[\"procedure\",\"procedure\"],\"value-packet\",\"any-values\",[\"HK225\"],\"deterministic-pinned\",true,\"machine-dispatch\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"hosted-implemented\",\"call-with-values\"],[42,\"call/cc\",\"control/upward-escape\",\"1\",[\"procedure\"],\"value-packet\",\"any-values\",[\"E340\",\"HK234\"],\"deterministic-pinned\",true,\"machine-transfer\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"hosted-implemented\",\"call-with-current-continuation\"],[43,\"car\",\"aggregate/car\",\"1\",[\"pair\"],\"value\",\"exactly-one\",[\"HK255\"],\"deterministic-pinned\",false,\"constant\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"hosted-implemented\",\"car\"],[44,\"cdaaar\",\"runtime/cdaaar\",\"native-profile-pinned\",[\"native-profile-pinned\"],\"native-profile-pinned\",\"native-profile-pinned\",[\"H6-unsupported-loud\"],\"deterministic-pinned\",false,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"cdaaar\"],[45,\"cdaadr\",\"runtime/cdaadr\",\"native-profile-pinned\",[\"native-profile-pinned\"],\"native-profile-pinned\",\"native-profile-pinned\",[\"H6-unsupported-loud\"],\"deterministic-pinned\",false,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"cdaadr\"],[46,\"cdaar\",\"runtime/cdaar\",\"native-profile-pinned\",[\"native-profile-pinned\"],\"native-profile-pinned\",\"native-profile-pinned\",[\"H6-unsupported-loud\"],\"deterministic-pinned\",false,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"cdaar\"],[47,\"cdadar\",\"runtime/cdadar\",\"native-profile-pinned\",[\"native-profile-pinned\"],\"native-profile-pinned\",\"native-profile-pinned\",[\"H6-unsupported-loud\"],\"deterministic-pinned\",false,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"cdadar\"],[48,\"cdaddr\",\"runtime/cdaddr\",\"native-profile-pinned\",[\"native-profile-pinned\"],\"native-profile-pinned\",\"native-profile-pinned\",[\"H6-unsupported-loud\"],\"deterministic-pinned\",false,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"cdaddr\"],[49,\"cdadr\",\"runtime/cdadr\",\"native-profile-pinned\",[\"native-profile-pinned\"],\"native-profile-pinned\",\"native-profile-pinned\",[\"H6-unsupported-loud\"],\"deterministic-pinned\",false,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"cdadr\"],[50,\"cdar\",\"runtime/cdar\",\"native-profile-pinned\",[\"native-profile-pinned\"],\"native-profile-pinned\",\"native-profile-pinned\",[\"H6-unsupported-loud\"],\"deterministic-pinned\",false,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"cdar\"],[51,\"cddaar\",\"runtime/cddaar\",\"native-profile-pinned\",[\"native-profile-pinned\"],\"native-profile-pinned\",\"native-profile-pinned\",[\"H6-unsupported-loud\"],\"deterministic-pinned\",false,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"cddaar\"],[52,\"cddadr\",\"runtime/cddadr\",\"native-profile-pinned\",[\"native-profile-pinned\"],\"native-profile-pinned\",\"native-profile-pinned\",[\"H6-unsupported-loud\"],\"deterministic-pinned\",false,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"cddadr\"],[53,\"cddar\",\"runtime/cddar\",\"native-profile-pinned\",[\"native-profile-pinned\"],\"native-profile-pinned\",\"native-profile-pinned\",[\"H6-unsupported-loud\"],\"deterministic-pinned\",false,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"cddar\"],[54,\"cdddar\",\"runtime/cdddar\",\"native-profile-pinned\",[\"native-profile-pinned\"],\"native-profile-pinned\",\"native-profile-pinned\",[\"H6-unsupported-loud\"],\"deterministic-pinned\",false,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"cdddar\"],[55,\"cddddr\",\"runtime/cddddr\",\"native-profile-pinned\",[\"native-profile-pinned\"],\"native-profile-pinned\",\"native-profile-pinned\",[\"H6-unsupported-loud\"],\"deterministic-pinned\",false,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"cddddr\"],[56,\"cdddr\",\"runtime/cdddr\",\"native-profile-pinned\",[\"native-profile-pinned\"],\"native-profile-pinned\",\"native-profile-pinned\",[\"H6-unsupported-loud\"],\"deterministic-pinned\",false,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"cdddr\"],[57,\"cddr\",\"runtime/cddr\",\"native-profile-pinned\",[\"native-profile-pinned\"],\"native-profile-pinned\",\"native-profile-pinned\",[\"H6-unsupported-loud\"],\"deterministic-pinned\",false,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"cddr\"],[58,\"cdr\",\"aggregate/cdr\",\"1\",[\"pair\"],\"value\",\"exactly-one\",[\"HK256\"],\"deterministic-pinned\",false,\"constant\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"hosted-implemented\",\"cdr\"],[59,\"ceiling\",\"runtime/ceiling\",\"native-profile-pinned\",[\"native-profile-pinned\"],\"native-profile-pinned\",\"native-profile-pinned\",[\"H6-unsupported-loud\"],\"deterministic-pinned\",false,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"ceiling\"],[60,\"char->integer\",\"char/codepoint\",\"1\",[\"char\"],\"exact-integer\",\"exactly-one\",[\"HK274\"],\"deterministic-pinned\",false,\"constant\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"host-delegated-deterministic\",\"char->integer\"],[61,\"char-alphabetic?\",\"char/alphabetic\",\"1\",[\"char\"],\"boolean\",\"exactly-one\",[\"HK280\"],\"deterministic-pinned\",false,\"constant\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"host-delegated-deterministic\",\"char-alphabetic?\"],[62,\"char-ci<=?\",\"runtime/char-ci<=?\",\"native-profile-pinned\",[\"native-profile-pinned\"],\"native-profile-pinned\",\"native-profile-pinned\",[\"H6-unsupported-loud\"],\"deterministic-pinned\",false,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"char-ci<=?\"],[63,\"char-ci<?\",\"runtime/char-ci<?\",\"native-profile-pinned\",[\"native-profile-pinned\"],\"native-profile-pinned\",\"native-profile-pinned\",[\"H6-unsupported-loud\"],\"deterministic-pinned\",false,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"char-ci<?\"],[64,\"char-ci=?\",\"runtime/char-ci=?\",\"native-profile-pinned\",[\"native-profile-pinned\"],\"native-profile-pinned\",\"native-profile-pinned\",[\"H6-unsupported-loud\"],\"deterministic-pinned\",false,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"char-ci=?\"],[65,\"char-ci>=?\",\"runtime/char-ci>=?\",\"native-profile-pinned\",[\"native-profile-pinned\"],\"native-profile-pinned\",\"native-profile-pinned\",[\"H6-unsupported-loud\"],\"deterministic-pinned\",false,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"char-ci>=?\"],[66,\"char-ci>?\",\"runtime/char-ci>?\",\"native-profile-pinned\",[\"native-profile-pinned\"],\"native-profile-pinned\",\"native-profile-pinned\",[\"H6-unsupported-loud\"],\"deterministic-pinned\",false,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"char-ci>?\"],[67,\"char-downcase\",\"runtime/char-downcase\",\"native-profile-pinned\",[\"native-profile-pinned\"],\"native-profile-pinned\",\"native-profile-pinned\",[\"H6-unsupported-loud\"],\"deterministic-pinned\",false,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"char-downcase\"],[68,\"char-foldcase\",\"runtime/char-foldcase\",\"native-profile-pinned\",[\"native-profile-pinned\"],\"native-profile-pinned\",\"native-profile-pinned\",[\"H6-unsupported-loud\"],\"deterministic-pinned\",false,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"char-foldcase\"],[69,\"char-lower-case?\",\"runtime/char-lower-case?\",\"native-profile-pinned\",[\"native-profile-pinned\"],\"native-profile-pinned\",\"native-profile-pinned\",[\"H6-unsupported-loud\"],\"deterministic-pinned\",false,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"char-lower-case?\"],[70,\"char-numeric?\",\"char/numeric\",\"1\",[\"char\"],\"boolean\",\"exactly-one\",[\"HK281\"],\"deterministic-pinned\",false,\"constant\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"host-delegated-deterministic\",\"char-numeric?\"],[71,\"char-upcase\",\"runtime/char-upcase\",\"native-profile-pinned\",[\"native-profile-pinned\"],\"native-profile-pinned\",\"native-profile-pinned\",[\"H6-unsupported-loud\"],\"deterministic-pinned\",false,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"char-upcase\"],[72,\"char-upper-case?\",\"runtime/char-upper-case?\",\"native-profile-pinned\",[\"native-profile-pinned\"],\"native-profile-pinned\",\"native-profile-pinned\",[\"H6-unsupported-loud\"],\"deterministic-pinned\",false,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"char-upper-case?\"],[73,\"char-whitespace?\",\"runtime/char-whitespace?\",\"native-profile-pinned\",[\"native-profile-pinned\"],\"native-profile-pinned\",\"native-profile-pinned\",[\"H6-unsupported-loud\"],\"deterministic-pinned\",false,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"char-whitespace?\"],[74,\"char<=?\",\"runtime/char<=?\",\"native-profile-pinned\",[\"native-profile-pinned\"],\"native-profile-pinned\",\"native-profile-pinned\",[\"H6-unsupported-loud\"],\"deterministic-pinned\",false,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"char<=?\"],[75,\"char<?\",\"runtime/char<?\",\"native-profile-pinned\",[\"native-profile-pinned\"],\"native-profile-pinned\",\"native-profile-pinned\",[\"H6-unsupported-loud\"],\"deterministic-pinned\",false,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"char<?\"],[76,\"char=?\",\"char/equal\",\"2+\",[\"char...\"],\"boolean\",\"exactly-one\",[\"HK282\"],\"deterministic-pinned\",false,\"linear-arguments\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"host-delegated-deterministic\",\"char=?\"],[77,\"char>=?\",\"runtime/char>=?\",\"native-profile-pinned\",[\"native-profile-pinned\"],\"native-profile-pinned\",\"native-profile-pinned\",[\"H6-unsupported-loud\"],\"deterministic-pinned\",false,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"char>=?\"],[78,\"char>?\",\"runtime/char>?\",\"native-profile-pinned\",[\"native-profile-pinned\"],\"native-profile-pinned\",\"native-profile-pinned\",[\"H6-unsupported-loud\"],\"deterministic-pinned\",false,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"char>?\"],[79,\"char?\",\"predicate/char\",\"1\",[\"value\"],\"boolean\",\"exactly-one\",[\"HK254\"],\"deterministic-pinned\",false,\"constant\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"host-delegated-deterministic\",\"char?\"],[80,\"complex?\",\"runtime/complex?\",\"native-profile-pinned\",[\"native-profile-pinned\"],\"native-profile-pinned\",\"native-profile-pinned\",[\"H6-unsupported-loud\"],\"deterministic-pinned\",false,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"complex?\"],[81,\"cons\",\"aggregate/cons\",\"2\",[\"value\",\"value\"],\"pair\",\"exactly-one\",[\"HK223\"],\"deterministic-pinned\",false,\"constant\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"hosted-implemented\",\"cons\"],[82,\"display\",\"io/display\",\"1\",[\"value\"],\"none\",\"discard\",[\"HK260\"],\"deterministic-pinned\",false,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"display\"],[83,\"dynamic-wind\",\"control/dynamic-wind\",\"3\",[\"procedure\",\"procedure\",\"procedure\"],\"value-packet\",\"any-values\",[\"HK235\"],\"deterministic-pinned\",true,\"machine-transfer\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"hosted-implemented\",\"dynamic-wind\"],[84,\"empty?\",\"predicate/null\",\"1\",[\"value\"],\"boolean\",\"exactly-one\",[\"HK224\"],\"deterministic-pinned\",false,\"constant\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"hosted-implemented\",\"empty?\"],[85,\"eq?\",\"equality/eq\",\"2\",[\"value\",\"value\"],\"boolean\",\"exactly-one\",[\"HK261\"],\"deterministic-pinned\",false,\"constant\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"hosted-implemented\",\"eq?\"],[86,\"equal?\",\"equality/equal\",\"2\",[\"value\",\"value\"],\"boolean\",\"exactly-one\",[\"HK261\"],\"deterministic-pinned\",false,\"cycle-safe-structural\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"hosted-implemented\",\"==\"],[87,\"eqv?\",\"equality/eqv\",\"2\",[\"value\",\"value\"],\"boolean\",\"exactly-one\",[\"HK261\"],\"deterministic-pinned\",false,\"constant\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"hosted-implemented\",\"eqv?\"],[88,\"error\",\"control/error\",\"1+\",[\"string\",\"value...\"],\"none\",\"discard\",[\"E330\",\"HK233\"],\"deterministic-pinned\",false,\"machine-transfer\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"hosted-implemented\",\"error\"],[89,\"error-object-irritants\",\"error-object/irritants\",\"1\",[\"error-object\"],\"list\",\"exactly-one\",[\"HK244\"],\"deterministic-pinned\",false,\"linear-irritants\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"hosted-implemented\",\"error-object-irritants\"],[90,\"error-object-message\",\"error-object/message\",\"1\",[\"error-object\"],\"string\",\"exactly-one\",[\"HK243\"],\"deterministic-pinned\",false,\"constant\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"hosted-implemented\",\"error-object-message\"],[91,\"error-object?\",\"predicate/error-object\",\"1\",[\"value\"],\"boolean\",\"exactly-one\",[\"HK239\"],\"deterministic-pinned\",false,\"constant\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"hosted-implemented\",\"error-object?\"],[92,\"even?\",\"runtime/even?\",\"native-profile-pinned\",[\"native-profile-pinned\"],\"native-profile-pinned\",\"native-profile-pinned\",[\"H6-unsupported-loud\"],\"deterministic-pinned\",false,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"even?\"],[93,\"exact\",\"runtime/exact\",\"native-profile-pinned\",[\"native-profile-pinned\"],\"native-profile-pinned\",\"native-profile-pinned\",[\"H6-unsupported-loud\"],\"deterministic-pinned\",false,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"exact\"],[94,\"exact->inexact\",\"runtime/exact->inexact\",\"native-profile-pinned\",[\"native-profile-pinned\"],\"native-profile-pinned\",\"native-profile-pinned\",[\"H6-unsupported-loud\"],\"deterministic-pinned\",false,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"exact->inexact\"],[95,\"exact-integer-sqrt\",\"runtime/exact-integer-sqrt\",\"native-profile-pinned\",[\"native-profile-pinned\"],\"native-profile-pinned\",\"native-profile-pinned\",[\"H6-unsupported-loud\"],\"deterministic-pinned\",false,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"exact-integer-sqrt\"],[96,\"exact-integer?\",\"predicate/exact-integer\",\"1\",[\"value\"],\"boolean\",\"exactly-one\",[\"HK254\"],\"deterministic-pinned\",false,\"constant\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"hosted-implemented\",\"exact-integer?\"],[97,\"exact?\",\"numeric/exact\",\"1\",[\"number\"],\"boolean\",\"exactly-one\",[\"HK283\"],\"deterministic-pinned\",false,\"constant\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"host-delegated-deterministic\",\"exact?\"],[98,\"expt\",\"runtime/expt\",\"native-profile-pinned\",[\"native-profile-pinned\"],\"native-profile-pinned\",\"native-profile-pinned\",[\"H6-unsupported-loud\"],\"deterministic-pinned\",false,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"expt\"],[99,\"filter\",\"hof/filter\",\"2\",[\"procedure\",\"proper-list\"],\"list\",\"exactly-one\",[\"HK260\"],\"deterministic-pinned\",true,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"filter\"],[100,\"first\",\"aggregate/car\",\"1\",[\"pair\"],\"value\",\"exactly-one\",[\"HK255\"],\"deterministic-pinned\",false,\"constant\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"hosted-implemented\",\"car\"],[101,\"floor\",\"runtime/floor\",\"native-profile-pinned\",[\"native-profile-pinned\"],\"native-profile-pinned\",\"native-profile-pinned\",[\"H6-unsupported-loud\"],\"deterministic-pinned\",false,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"floor\"],[102,\"floor-quotient\",\"runtime/floor-quotient\",\"native-profile-pinned\",[\"native-profile-pinned\"],\"native-profile-pinned\",\"native-profile-pinned\",[\"H6-unsupported-loud\"],\"deterministic-pinned\",false,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"floor-quotient\"],[103,\"floor-remainder\",\"runtime/floor-remainder\",\"native-profile-pinned\",[\"native-profile-pinned\"],\"native-profile-pinned\",\"native-profile-pinned\",[\"H6-unsupported-loud\"],\"deterministic-pinned\",false,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"floor-remainder\"],[104,\"floor/\",\"runtime/floor/\",\"native-profile-pinned\",[\"native-profile-pinned\"],\"native-profile-pinned\",\"native-profile-pinned\",[\"H6-unsupported-loud\"],\"deterministic-pinned\",false,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"floor/\"],[105,\"fold-left\",\"hof/fold-left\",\"3\",[\"procedure\",\"value\",\"proper-list\"],\"value\",\"exactly-one\",[\"HK260\"],\"deterministic-pinned\",true,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"fold-left\"],[106,\"fold-right\",\"hof/fold-right\",\"3\",[\"procedure\",\"value\",\"proper-list\"],\"value\",\"exactly-one\",[\"HK260\"],\"deterministic-pinned\",true,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"fold-right\"],[107,\"for-each\",\"hof/for-each\",\"2\",[\"procedure\",\"proper-list\"],\"none\",\"discard\",[\"HK260\"],\"deterministic-pinned\",true,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"for-each\"],[108,\"gcd\",\"runtime/gcd\",\"native-profile-pinned\",[\"native-profile-pinned\"],\"native-profile-pinned\",\"native-profile-pinned\",[\"H6-unsupported-loud\"],\"deterministic-pinned\",false,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"gcd\"],[109,\"inexact\",\"runtime/exact->inexact\",\"native-profile-pinned\",[\"native-profile-pinned\"],\"native-profile-pinned\",\"native-profile-pinned\",[\"H6-unsupported-loud\"],\"deterministic-pinned\",false,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"exact->inexact\"],[110,\"inexact->exact\",\"runtime/exact\",\"native-profile-pinned\",[\"native-profile-pinned\"],\"native-profile-pinned\",\"native-profile-pinned\",[\"H6-unsupported-loud\"],\"deterministic-pinned\",false,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"exact\"],[111,\"inexact?\",\"numeric/inexact\",\"1\",[\"number\"],\"boolean\",\"exactly-one\",[\"HK283\"],\"deterministic-pinned\",false,\"constant\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"host-delegated-deterministic\",\"inexact?\"],[112,\"integer->char\",\"char/from-codepoint\",\"1\",[\"Unicode-scalar\"],\"char\",\"exactly-one\",[\"HK275\"],\"deterministic-pinned\",false,\"constant\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"host-delegated-deterministic\",\"integer->char\"],[113,\"integer?\",\"predicate/integer\",\"1\",[\"value\"],\"boolean\",\"exactly-one\",[\"HK254\"],\"deterministic-pinned\",false,\"constant\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"hosted-implemented\",\"integer?\"],[114,\"lcm\",\"runtime/lcm\",\"native-profile-pinned\",[\"native-profile-pinned\"],\"native-profile-pinned\",\"native-profile-pinned\",[\"H6-unsupported-loud\"],\"deterministic-pinned\",false,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"lcm\"],[115,\"length\",\"aggregate/length\",\"1\",[\"proper-list\"],\"exact-integer\",\"exactly-one\",[\"HK257\"],\"deterministic-pinned\",false,\"linear-spine\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"hosted-implemented\",\"length\"],[116,\"list\",\"aggregate/list\",\"0+\",[\"value...\"],\"list\",\"exactly-one\",[],\"deterministic-pinned\",false,\"linear-arguments\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"hosted-implemented\",\"list\"],[117,\"list->string\",\"aggregate/list-to-string\",\"1\",[\"proper-list-of-char\"],\"string\",\"exactly-one\",[\"HK284\"],\"deterministic-pinned\",false,\"linear-list\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"host-delegated-deterministic\",\"list->string\"],[118,\"list->vector\",\"aggregate/list-to-vector\",\"1\",[\"proper-list\"],\"mutable-vector\",\"exactly-one\",[\"HK264\"],\"deterministic-pinned\",false,\"linear-spine\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"hosted-implemented\",\"list->vector\"],[119,\"list-copy\",\"runtime/list-copy\",\"native-profile-pinned\",[\"native-profile-pinned\"],\"native-profile-pinned\",\"native-profile-pinned\",[\"H6-unsupported-loud\"],\"deterministic-pinned\",false,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"list-copy\"],[120,\"list-first\",\"runtime/list-first\",\"native-profile-pinned\",[\"native-profile-pinned\"],\"native-profile-pinned\",\"native-profile-pinned\",[\"H6-unsupported-loud\"],\"deterministic-pinned\",false,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"list-first\"],[121,\"list-ref\",\"runtime/list-ref\",\"native-profile-pinned\",[\"native-profile-pinned\"],\"native-profile-pinned\",\"native-profile-pinned\",[\"H6-unsupported-loud\"],\"deterministic-pinned\",false,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"list-ref\"],[122,\"list-rest\",\"runtime/list-rest\",\"native-profile-pinned\",[\"native-profile-pinned\"],\"native-profile-pinned\",\"native-profile-pinned\",[\"H6-unsupported-loud\"],\"deterministic-pinned\",false,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"list-rest\"],[123,\"list-tail\",\"runtime/list-tail\",\"native-profile-pinned\",[\"native-profile-pinned\"],\"native-profile-pinned\",\"native-profile-pinned\",[\"H6-unsupported-loud\"],\"deterministic-pinned\",false,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"list-tail\"],[124,\"list?\",\"predicate/list\",\"1\",[\"value\"],\"boolean\",\"exactly-one\",[\"HK254\"],\"deterministic-pinned\",false,\"linear-spine\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"hosted-implemented\",\"list?\"],[125,\"make-bytevector\",\"aggregate/make-bytevector\",\"1-or-2\",[\"exact-nonnegative-integer\",\"byte?\"],\"bytevector\",\"exactly-one\",[\"HK265\"],\"deterministic-pinned\",false,\"linear-size\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"hosted-implemented\",\"make-bytevector\"],[126,\"make-list\",\"runtime/make-list\",\"native-profile-pinned\",[\"native-profile-pinned\"],\"native-profile-pinned\",\"native-profile-pinned\",[\"H6-unsupported-loud\"],\"deterministic-pinned\",false,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"make-list\"],[127,\"make-string\",\"runtime/make-string\",\"native-profile-pinned\",[\"native-profile-pinned\"],\"native-profile-pinned\",\"native-profile-pinned\",[\"H6-unsupported-loud\"],\"deterministic-pinned\",false,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"make-string\"],[128,\"make-vector\",\"aggregate/make-vector\",\"1-or-2\",[\"exact-nonnegative-integer\",\"value?\"],\"mutable-vector\",\"exactly-one\",[\"HK262\"],\"deterministic-pinned\",false,\"linear-size\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"hosted-implemented\",\"make-vector\"],[129,\"map\",\"hof/map\",\"2\",[\"procedure\",\"proper-list\"],\"list\",\"exactly-one\",[\"HK260\"],\"deterministic-pinned\",true,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"map\"],[130,\"max\",\"runtime/max\",\"native-profile-pinned\",[\"native-profile-pinned\"],\"native-profile-pinned\",\"native-profile-pinned\",[\"H6-unsupported-loud\"],\"deterministic-pinned\",false,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"max\"],[131,\"member\",\"search/member\",\"2\",[\"value\",\"proper-list\"],\"list-or-false\",\"exactly-one\",[\"HK285\"],\"deterministic-pinned\",false,\"linear-list\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"hosted-implemented\",\"member\"],[132,\"memq\",\"search/memq\",\"2\",[\"value\",\"proper-list\"],\"list-or-false\",\"exactly-one\",[\"HK285\"],\"deterministic-pinned\",false,\"linear-list\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"hosted-implemented\",\"memq\"],[133,\"memv\",\"runtime/memv\",\"native-profile-pinned\",[\"native-profile-pinned\"],\"native-profile-pinned\",\"native-profile-pinned\",[\"H6-unsupported-loud\"],\"deterministic-pinned\",false,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"memv\"],[134,\"min\",\"runtime/min\",\"native-profile-pinned\",[\"native-profile-pinned\"],\"native-profile-pinned\",\"native-profile-pinned\",[\"H6-unsupported-loud\"],\"deterministic-pinned\",false,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"min\"],[135,\"modulo\",\"runtime/modulo\",\"native-profile-pinned\",[\"native-profile-pinned\"],\"native-profile-pinned\",\"native-profile-pinned\",[\"H6-unsupported-loud\"],\"deterministic-pinned\",false,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"modulo\"],[136,\"negative?\",\"runtime/negative?\",\"native-profile-pinned\",[\"native-profile-pinned\"],\"native-profile-pinned\",\"native-profile-pinned\",[\"H6-unsupported-loud\"],\"deterministic-pinned\",false,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"negative?\"],[137,\"newline\",\"io/newline\",\"0\",[],\"none\",\"discard\",[\"HK260\"],\"deterministic-pinned\",false,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"newline\"],[138,\"not\",\"predicate/not\",\"1\",[\"value\"],\"boolean\",\"exactly-one\",[\"HK254\"],\"deterministic-pinned\",false,\"constant\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"hosted-implemented\",\"not\"],[139,\"nth\",\"runtime/list-ref\",\"native-profile-pinned\",[\"native-profile-pinned\"],\"native-profile-pinned\",\"native-profile-pinned\",[\"H6-unsupported-loud\"],\"deterministic-pinned\",false,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"list-ref\"],[140,\"null?\",\"predicate/null\",\"1\",[\"value\"],\"boolean\",\"exactly-one\",[\"HK224\"],\"deterministic-pinned\",false,\"constant\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"hosted-implemented\",\"empty?\"],[141,\"number->string\",\"numeric/canonical-format\",\"1\",[\"number\"],\"string\",\"exactly-one\",[\"HK276\"],\"deterministic-pinned\",false,\"number-format-cost\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"host-delegated-deterministic\",\"number->string\"],[142,\"number?\",\"predicate/number\",\"1\",[\"value\"],\"boolean\",\"exactly-one\",[\"HK254\"],\"deterministic-pinned\",false,\"constant\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"hosted-implemented\",\"number?\"],[143,\"odd?\",\"runtime/odd?\",\"native-profile-pinned\",[\"native-profile-pinned\"],\"native-profile-pinned\",\"native-profile-pinned\",[\"H6-unsupported-loud\"],\"deterministic-pinned\",false,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"odd?\"],[144,\"pair?\",\"predicate/pair\",\"1\",[\"value\"],\"boolean\",\"exactly-one\",[\"HK254\"],\"deterministic-pinned\",false,\"constant\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"hosted-implemented\",\"pair?\"],[145,\"positive?\",\"runtime/positive?\",\"native-profile-pinned\",[\"native-profile-pinned\"],\"native-profile-pinned\",\"native-profile-pinned\",[\"H6-unsupported-loud\"],\"deterministic-pinned\",false,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"positive?\"],[146,\"println\",\"io/println\",\"1\",[\"value\"],\"none\",\"discard\",[\"HK260\"],\"deterministic-pinned\",false,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"println\"],[147,\"procedure?\",\"predicate/procedure\",\"1\",[\"value\"],\"boolean\",\"exactly-one\",[\"HK254\"],\"deterministic-pinned\",false,\"constant\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"hosted-implemented\",\"procedure?\"],[148,\"quotient\",\"runtime/quotient\",\"native-profile-pinned\",[\"native-profile-pinned\"],\"native-profile-pinned\",\"native-profile-pinned\",[\"H6-unsupported-loud\"],\"deterministic-pinned\",false,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"quotient\"],[149,\"raise\",\"control/raise\",\"1\",[\"value\"],\"none\",\"discard\",[\"E331\",\"HK237\"],\"deterministic-pinned\",false,\"machine-transfer\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"hosted-implemented\",\"raise\"],[150,\"raise-continuable\",\"control/raise-continuable\",\"1\",[\"value\"],\"value-packet\",\"any-values\",[\"E331\",\"HK238\"],\"deterministic-pinned\",false,\"machine-transfer\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"hosted-implemented\",\"raise-continuable\"],[151,\"rational?\",\"runtime/rational?\",\"native-profile-pinned\",[\"native-profile-pinned\"],\"native-profile-pinned\",\"native-profile-pinned\",[\"H6-unsupported-loud\"],\"deterministic-pinned\",false,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"rational?\"],[152,\"real?\",\"runtime/real?\",\"native-profile-pinned\",[\"native-profile-pinned\"],\"native-profile-pinned\",\"native-profile-pinned\",[\"H6-unsupported-loud\"],\"deterministic-pinned\",false,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"real?\"],[153,\"reduce\",\"hof/fold-left\",\"3\",[\"procedure\",\"value\",\"proper-list\"],\"value\",\"exactly-one\",[\"HK260\"],\"deterministic-pinned\",true,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"fold-left\"],[154,\"remainder\",\"runtime/remainder\",\"native-profile-pinned\",[\"native-profile-pinned\"],\"native-profile-pinned\",\"native-profile-pinned\",[\"H6-unsupported-loud\"],\"deterministic-pinned\",false,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"remainder\"],[155,\"rest\",\"aggregate/cdr\",\"1\",[\"pair\"],\"value\",\"exactly-one\",[\"HK256\"],\"deterministic-pinned\",false,\"constant\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"hosted-implemented\",\"cdr\"],[156,\"reverse\",\"aggregate/reverse\",\"1\",[\"proper-list\"],\"list\",\"exactly-one\",[\"HK259\"],\"deterministic-pinned\",false,\"linear-spine\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"hosted-implemented\",\"reverse\"],[157,\"round\",\"runtime/round\",\"native-profile-pinned\",[\"native-profile-pinned\"],\"native-profile-pinned\",\"native-profile-pinned\",[\"H6-unsupported-loud\"],\"deterministic-pinned\",false,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"round\"],[158,\"square\",\"runtime/square\",\"native-profile-pinned\",[\"native-profile-pinned\"],\"native-profile-pinned\",\"native-profile-pinned\",[\"H6-unsupported-loud\"],\"deterministic-pinned\",false,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"square\"],[159,\"string->list\",\"aggregate/string-to-list\",\"1\",[\"string\"],\"list-of-char\",\"exactly-one\",[\"HK286\"],\"deterministic-pinned\",false,\"linear-string\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"host-delegated-deterministic\",\"string->list\"],[160,\"string->number\",\"numeric/canonical-parse\",\"1\",[\"string\"],\"number-or-false\",\"exactly-one\",[\"HK277\"],\"deterministic-pinned\",false,\"number-parse-cost\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"host-delegated-deterministic\",\"string->number\"],[161,\"string->symbol\",\"symbol/intern\",\"1\",[\"string\"],\"symbol\",\"exactly-one\",[\"HK272\"],\"deterministic-pinned\",false,\"linear-bytes\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"host-delegated-deterministic\",\"string->symbol\"],[162,\"string->vector\",\"runtime/string->vector\",\"native-profile-pinned\",[\"native-profile-pinned\"],\"native-profile-pinned\",\"native-profile-pinned\",[\"H6-unsupported-loud\"],\"deterministic-pinned\",false,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"string->vector\"],[163,\"string-append\",\"string/append\",\"0+\",[\"string...\"],\"string\",\"exactly-one\",[\"HK269\"],\"deterministic-pinned\",false,\"linear-bytes\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"host-delegated-deterministic\",\"string-append\"],[164,\"string-ci<=?\",\"runtime/string-ci<=?\",\"native-profile-pinned\",[\"native-profile-pinned\"],\"native-profile-pinned\",\"native-profile-pinned\",[\"H6-unsupported-loud\"],\"deterministic-pinned\",false,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"string-ci<=?\"],[165,\"string-ci<?\",\"runtime/string-ci<?\",\"native-profile-pinned\",[\"native-profile-pinned\"],\"native-profile-pinned\",\"native-profile-pinned\",[\"H6-unsupported-loud\"],\"deterministic-pinned\",false,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"string-ci<?\"],[166,\"string-ci=?\",\"string/ci-equal\",\"2+\",[\"string...\"],\"boolean\",\"exactly-one\",[\"HK287\"],\"deterministic-pinned\",false,\"linear-arguments-and-string\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"host-delegated-deterministic\",\"string-ci=?\"],[167,\"string-ci>=?\",\"runtime/string-ci>=?\",\"native-profile-pinned\",[\"native-profile-pinned\"],\"native-profile-pinned\",\"native-profile-pinned\",[\"H6-unsupported-loud\"],\"deterministic-pinned\",false,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"string-ci>=?\"],[168,\"string-ci>?\",\"runtime/string-ci>?\",\"native-profile-pinned\",[\"native-profile-pinned\"],\"native-profile-pinned\",\"native-profile-pinned\",[\"H6-unsupported-loud\"],\"deterministic-pinned\",false,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"string-ci>?\"],[169,\"string-copy\",\"string/copy\",\"1-3\",[\"string\",\"optional-nonnegative-integer\",\"optional-nonnegative-integer\"],\"string\",\"exactly-one\",[\"HK288\"],\"deterministic-pinned\",false,\"linear-string\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"host-delegated-deterministic\",\"string-copy\"],[170,\"string-downcase\",\"runtime/string-downcase\",\"native-profile-pinned\",[\"native-profile-pinned\"],\"native-profile-pinned\",\"native-profile-pinned\",[\"H6-unsupported-loud\"],\"deterministic-pinned\",false,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"string-downcase\"],[171,\"string-foldcase\",\"runtime/string-foldcase\",\"native-profile-pinned\",[\"native-profile-pinned\"],\"native-profile-pinned\",\"native-profile-pinned\",[\"H6-unsupported-loud\"],\"deterministic-pinned\",false,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"string-foldcase\"],[172,\"string-for-each\",\"hof/string-for-each\",\"2\",[\"procedure\",\"string\"],\"none\",\"discard\",[\"HK260\"],\"deterministic-pinned\",true,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"string-for-each\"],[173,\"string-length\",\"string/length\",\"1\",[\"string\"],\"exact-integer\",\"exactly-one\",[\"HK270\"],\"deterministic-pinned\",false,\"linear-codepoints\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"host-delegated-deterministic\",\"string-length\"],[174,\"string-map\",\"hof/string-map\",\"2\",[\"procedure\",\"string\"],\"string\",\"exactly-one\",[\"HK260\"],\"deterministic-pinned\",true,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"string-map\"],[175,\"string-ref\",\"string/ref\",\"2\",[\"string\",\"exact-nonnegative-integer\"],\"char\",\"exactly-one\",[\"HK271\"],\"deterministic-pinned\",false,\"linear-codepoints\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"host-delegated-deterministic\",\"string-ref\"],[176,\"string-upcase\",\"runtime/string-upcase\",\"native-profile-pinned\",[\"native-profile-pinned\"],\"native-profile-pinned\",\"native-profile-pinned\",[\"H6-unsupported-loud\"],\"deterministic-pinned\",false,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"string-upcase\"],[177,\"string<=?\",\"runtime/string<=?\",\"native-profile-pinned\",[\"native-profile-pinned\"],\"native-profile-pinned\",\"native-profile-pinned\",[\"H6-unsupported-loud\"],\"deterministic-pinned\",false,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"string<=?\"],[178,\"string<?\",\"runtime/string<?\",\"native-profile-pinned\",[\"native-profile-pinned\"],\"native-profile-pinned\",\"native-profile-pinned\",[\"H6-unsupported-loud\"],\"deterministic-pinned\",false,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"string<?\"],[179,\"string=?\",\"string/equal\",\"2+\",[\"string...\"],\"boolean\",\"exactly-one\",[\"HK287\"],\"deterministic-pinned\",false,\"linear-arguments-and-string\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"host-delegated-deterministic\",\"string=?\"],[180,\"string>=?\",\"runtime/string>=?\",\"native-profile-pinned\",[\"native-profile-pinned\"],\"native-profile-pinned\",\"native-profile-pinned\",[\"H6-unsupported-loud\"],\"deterministic-pinned\",false,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"string>=?\"],[181,\"string>?\",\"runtime/string>?\",\"native-profile-pinned\",[\"native-profile-pinned\"],\"native-profile-pinned\",\"native-profile-pinned\",[\"H6-unsupported-loud\"],\"deterministic-pinned\",false,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"string>?\"],[182,\"string?\",\"predicate/string\",\"1\",[\"value\"],\"boolean\",\"exactly-one\",[\"HK254\"],\"deterministic-pinned\",false,\"constant\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"hosted-implemented\",\"string?\"],[183,\"substring\",\"string/substring\",\"3\",[\"string\",\"nonnegative-integer\",\"nonnegative-integer\"],\"string\",\"exactly-one\",[\"HK289\"],\"deterministic-pinned\",false,\"linear-result\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"host-delegated-deterministic\",\"substring\"],[184,\"symbol->string\",\"symbol/name\",\"1\",[\"symbol\"],\"string\",\"exactly-one\",[\"HK273\"],\"deterministic-pinned\",false,\"linear-bytes\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"host-delegated-deterministic\",\"symbol->string\"],[185,\"symbol=?\",\"runtime/symbol=?\",\"native-profile-pinned\",[\"native-profile-pinned\"],\"native-profile-pinned\",\"native-profile-pinned\",[\"H6-unsupported-loud\"],\"deterministic-pinned\",false,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"symbol=?\"],[186,\"symbol?\",\"predicate/symbol\",\"1\",[\"value\"],\"boolean\",\"exactly-one\",[\"HK254\"],\"deterministic-pinned\",false,\"constant\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"hosted-implemented\",\"symbol?\"],[187,\"truncate\",\"runtime/truncate\",\"native-profile-pinned\",[\"native-profile-pinned\"],\"native-profile-pinned\",\"native-profile-pinned\",[\"H6-unsupported-loud\"],\"deterministic-pinned\",false,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"truncate\"],[188,\"truncate-quotient\",\"runtime/truncate-quotient\",\"native-profile-pinned\",[\"native-profile-pinned\"],\"native-profile-pinned\",\"native-profile-pinned\",[\"H6-unsupported-loud\"],\"deterministic-pinned\",false,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"truncate-quotient\"],[189,\"truncate-remainder\",\"runtime/truncate-remainder\",\"native-profile-pinned\",[\"native-profile-pinned\"],\"native-profile-pinned\",\"native-profile-pinned\",[\"H6-unsupported-loud\"],\"deterministic-pinned\",false,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"truncate-remainder\"],[190,\"truncate/\",\"runtime/truncate/\",\"native-profile-pinned\",[\"native-profile-pinned\"],\"native-profile-pinned\",\"native-profile-pinned\",[\"H6-unsupported-loud\"],\"deterministic-pinned\",false,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"truncate/\"],[191,\"values\",\"control/values\",\"0+\",[\"value...\"],\"value-packet\",\"any-values\",[],\"deterministic-pinned\",false,\"linear-arguments\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"hosted-implemented\",\"values\"],[192,\"vector\",\"aggregate/vector\",\"0+\",[\"value...\"],\"mutable-vector\",\"exactly-one\",[],\"deterministic-pinned\",false,\"linear-arguments\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"hosted-implemented\",\"vector\"],[193,\"vector->list\",\"aggregate/vector-to-list\",\"1\",[\"vector\"],\"list\",\"exactly-one\",[\"HK263\"],\"deterministic-pinned\",false,\"linear-size\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"hosted-implemented\",\"vector->list\"],[194,\"vector->string\",\"runtime/vector->string\",\"native-profile-pinned\",[\"native-profile-pinned\"],\"native-profile-pinned\",\"native-profile-pinned\",[\"H6-unsupported-loud\"],\"deterministic-pinned\",false,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"vector->string\"],[195,\"vector-copy\",\"aggregate/vector-copy\",\"1-3\",[\"vector\",\"optional-nonnegative-integer\",\"optional-nonnegative-integer\"],\"vector\",\"exactly-one\",[\"HK290\"],\"deterministic-pinned\",false,\"linear-vector\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"host-delegated-deterministic\",\"vector-copy\"],[196,\"vector-for-each\",\"hof/vector-for-each\",\"2\",[\"procedure\",\"vector\"],\"none\",\"discard\",[\"HK260\"],\"deterministic-pinned\",true,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"vector-for-each\"],[197,\"vector-length\",\"aggregate/vector-length\",\"1\",[\"vector\"],\"exact-integer\",\"exactly-one\",[\"HK263\"],\"deterministic-pinned\",false,\"constant\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"hosted-implemented\",\"vector-length\"],[198,\"vector-map\",\"hof/vector-map\",\"2\",[\"procedure\",\"vector\"],\"vector\",\"exactly-one\",[\"HK260\"],\"deterministic-pinned\",true,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"vector-map\"],[199,\"vector-ref\",\"aggregate/vector-ref\",\"2\",[\"vector\",\"exact-nonnegative-integer\"],\"value\",\"exactly-one\",[\"HK227\"],\"deterministic-pinned\",false,\"constant\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"hosted-implemented\",\"vector-ref\"],[200,\"vector-set!\",\"aggregate/vector-set\",\"3\",[\"mutable-vector\",\"exact-nonnegative-integer\",\"value\"],\"value\",\"exactly-one\",[\"HK228\"],\"deterministic-pinned\",false,\"constant\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"hosted-implemented\",\"vector-set!\"],[201,\"vector?\",\"predicate/vector\",\"1\",[\"value\"],\"boolean\",\"exactly-one\",[\"HK254\"],\"deterministic-pinned\",false,\"constant\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"hosted-implemented\",\"vector?\"],[202,\"with-exception-handler\",\"control/exception-handler\",\"2\",[\"procedure\",\"procedure\"],\"value-packet\",\"any-values\",[\"E332\",\"HK236\"],\"deterministic-pinned\",true,\"machine-transfer\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"hosted-implemented\",\"with-exception-handler\"],[203,\"write\",\"io/write\",\"1\",[\"value\"],\"none\",\"discard\",[\"HK260\"],\"deterministic-pinned\",false,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"write\"],[204,\"zero?\",\"runtime/zero?\",\"native-profile-pinned\",[\"native-profile-pinned\"],\"native-profile-pinned\",\"native-profile-pinned\",[\"H6-unsupported-loud\"],\"deterministic-pinned\",false,\"unsupported\",\"native-and-wasm-reference-host\",\"hosted-h6-source-candidate-v0\",1,\"unsupported-loud\",\"zero?\"]]"
+}
+
+function completedNumericCapability(name: string) -> bool {
+  name == "%" || name == "abs" || name == "ceiling" || name == "complex?"
+    || name == "even?" || name == "exact" || name == "exact->inexact"
+    || name == "exact-integer-sqrt" || name == "expt" || name == "floor"
+    || name == "floor-quotient" || name == "floor-remainder" || name == "floor/"
+    || name == "gcd" || name == "inexact" || name == "inexact->exact" || name == "lcm"
+    || name == "max" || name == "min" || name == "modulo" || name == "negative?"
+    || name == "odd?" || name == "positive?" || name == "quotient" || name == "rational?"
+    || name == "real?" || name == "remainder" || name == "round" || name == "square"
+    || name == "truncate" || name == "truncate-quotient" || name == "truncate-remainder"
+    || name == "truncate/" || name == "zero?"
+}
+
+function completedListSearchCapability(name: string) -> bool {
+  name == "assoc" || name == "assq" || name == "assv"
+    || name == "caaaar" || name == "caaadr" || name == "caaar"
+    || name == "caadar" || name == "caaddr" || name == "caadr" || name == "caar"
+    || name == "cadaar" || name == "cadadr" || name == "cadar"
+    || name == "caddar" || name == "cadddr" || name == "caddr" || name == "cadr"
+    || name == "cdaaar" || name == "cdaadr" || name == "cdaar"
+    || name == "cdadar" || name == "cdaddr" || name == "cdadr" || name == "cdar"
+    || name == "cddaar" || name == "cddadr" || name == "cddar"
+    || name == "cdddar" || name == "cddddr" || name == "cdddr" || name == "cddr"
+    || name == "list-copy" || name == "list-first" || name == "list-ref"
+    || name == "list-rest" || name == "list-tail" || name == "make-list"
+    || name == "memv" || name == "nth"
+}
+
+function completedCharacterStringIoCapability(name: string) -> bool {
+  name == "!=" || name == "boolean=?"
+    || name == "char-ci<=?" || name == "char-ci<?" || name == "char-ci=?"
+    || name == "char-ci>=?" || name == "char-ci>?" || name == "char-downcase"
+    || name == "char-foldcase" || name == "char-lower-case?" || name == "char-upcase"
+    || name == "char-upper-case?" || name == "char-whitespace?" || name == "char<=?"
+    || name == "char<?" || name == "char>=?" || name == "char>?" || name == "display"
+    || name == "make-string" || name == "newline" || name == "println"
+    || name == "string->vector" || name == "string-ci<=?" || name == "string-ci<?"
+    || name == "string-ci>=?" || name == "string-ci>?" || name == "string-downcase"
+    || name == "string-foldcase" || name == "string-upcase" || name == "string<=?"
+    || name == "string<?" || name == "string>=?" || name == "string>?" || name == "symbol=?"
+    || name == "vector->string" || name == "write"
+}
+
+function completedHigherOrderCapability(name: string) -> bool {
+  name == "all?" || name == "any?" || name == "filter" || name == "fold-left"
+    || name == "fold-right" || name == "for-each" || name == "map" || name == "reduce"
+    || name == "string-for-each" || name == "string-map"
+    || name == "vector-for-each" || name == "vector-map"
+}
+
+export function h6CapabilityTable() -> Result<CapabilityTable, string> {
+  let canonical = h6CapabilityRowsJson()
+  let parsed = match JSON.parse(canonical) {
+    case Ok(value) => value
+    case Err(error) => return Err("LIT151 H6 capability rows: invalid resident JSON: {error}")
+  }
+  let raw = expectArray(parsed, "H6 capability rows")?
+  if raw.length != 205 { return Err("LIT151 H6 capability rows: expected 205 rows") }
+  let mut names: Array<string> = []
+  let mut dispositions: Array<string> = []
+  let mut index = 0
+  while index < raw.length {
+    let row = expectArray(raw[index], "H6 capability rows[{index}]")?
+    requireLength(row, 16, "H6 capability rows[{index}]")?
+    if expectInt(row[0], "H6 capability rows[{index}].id")? != index {
+      return Err("LIT152 H6 capability rows[{index}]: noncontiguous row")
+    }
+    let name = expectString(row[1], "H6 capability rows[{index}].name")?
+    let mayCallGuest = expectBool(row[9], "H6 capability rows[{index}].may-call-guest")?
+    let recordedDisposition = expectString(row[14], "H6 capability rows[{index}].disposition")?
+    let disposition = if completedNumericCapability(name)
+      || completedListSearchCapability(name)
+      || completedCharacterStringIoCapability(name)
+      || completedHigherOrderCapability(name) {
+      "hosted-implemented"
+    } else {
+      recordedDisposition
+    }
+    if disposition != "host-delegated-deterministic" && disposition != "hosted-implemented" && disposition != "unsupported-loud" {
+      return Err("LIT152 H6 capability rows[{index}]: unknown disposition")
+    }
+    if mayCallGuest && disposition == "host-delegated-deterministic" {
+      return Err("LIT152 H6 capability rows[{index}]: guest callback cannot be host delegated")
+    }
+    let mut prior = 0
+    while prior < names.length {
+      if names[prior] == name { return Err("LIT152 H6 capability rows[{index}]: duplicate name") }
+      prior += 1
+    }
+    names.push(name)
+    dispositions.push(disposition)
+    index += 1
+  }
+  Ok(CapabilityTable { names: names, dispositions: dispositions })
+}
+
+function capabilityId(arena: NormalizeArena, name: string) -> int {
+  let names = arena.capabilities
+  let mut index = 0
+  while index < names.length {
+    if names[index] == name { return index }
+    index += 1
+  }
+  -1
+}
+
+function reservedSyntax(name: string) -> bool {
+  name == "lambda" || name == "if" || name == "begin" || name == "set!" || name == "define"
+    || name == "let" || name == "let*" || name == "letrec" || name == "quote" || name == "quasiquote"
+    || name == "unquote" || name == "unquote-splicing" || name == "cond" || name == "case"
+    || name == "and" || name == "or" || name == "when" || name == "unless" || name == "do"
+    || name == "guard" || name == "else" || name == "=>"
+}
+
+function sourceLocation(arena: NormalizeArena, datum: int) -> NodeLocation {
+  let mut spans: Array<SpanRow> = arena.spans
+  let mut origins: Array<OriginRow> = arena.origins
+  let span = spans.length
+  spans.push(SpanRow { startByte: arena.datums[datum].startByte, endByte: arena.datums[datum].endByte })
+  let origin = origins.length
+  origins.push(OriginRow { kind: "source", span: span, rule: "", parent: -1 })
+  NodeLocation { span: span, origin: origin }
+}
+
+function derivedLocation(arena: NormalizeArena, datum: int, rule: string, intrinsic: bool) -> NodeLocation {
+  let mut spans: Array<SpanRow> = arena.spans
+  let mut origins: Array<OriginRow> = arena.origins
+  let span = spans.length
+  spans.push(SpanRow { startByte: arena.datums[datum].startByte, endByte: arena.datums[datum].endByte })
+  let parent = origins.length
+  origins.push(OriginRow { kind: "source", span: span, rule: "", parent: -1 })
+  let origin = origins.length
+  origins.push(OriginRow {
+    kind: if intrinsic { "intrinsic" } else { "generated" },
+    span: span,
+    rule: rule,
+    parent: parent,
+  })
+  if intrinsic {
+    let mut count: Array<int> = arena.intrinsicCount
+    count[0] += 1
+  }
+  NodeLocation { span: span, origin: origin }
+}
+
+function reserveNodeAt(arena: NormalizeArena, location: NodeLocation) -> int {
+  let mut nodes: Array<NodeRow> = arena.nodes
+  let id = nodes.length
+  nodes.push(NodeRow { span: location.span, origin: location.origin, op: NodeOp.Literal(-1) })
+  id
+}
+
+function reserveSourceNode(arena: NormalizeArena, datum: int) -> int {
+  reserveNodeAt(arena, sourceLocation(arena, datum))
+}
+
+function reserveGeneratedNode(arena: NormalizeArena, datum: int, rule: string) -> int {
+  reserveNodeAt(arena, derivedLocation(arena, datum, rule, false))
+}
+
+function setNodeOp(arena: NormalizeArena, node: int, op: NodeOp) {
+  let mut nodes: Array<NodeRow> = arena.nodes
+  let row = nodes[node]
+  nodes[node] = NodeRow { span: row.span, origin: row.origin, op: op }
+}
+
+function addSourceNode(arena: NormalizeArena, datum: int, op: NodeOp) -> int {
+  let node = reserveSourceNode(arena, datum)
+  setNodeOp(arena, node, op)
+  node
+}
+
+function addGeneratedNode(arena: NormalizeArena, datum: int, rule: string, op: NodeOp) -> int {
+  let node = reserveGeneratedNode(arena, datum, rule)
+  setNodeOp(arena, node, op)
+  node
+}
+
+function addIntrinsicNode(arena: NormalizeArena, datum: int, rule: string, capability: int) -> int {
+  let node = reserveNodeAt(arena, derivedLocation(arena, datum, rule, true))
+  setNodeOp(arena, node, NodeOp.Capability(capability))
+  node
+}
+
+function addBinder(arena: NormalizeArena, name: string, owner: int, slot: int, datum: int, generated: bool, rule: string) -> int {
+  let mut binders: Array<BinderRow> = arena.binders
+  let location = if generated { derivedLocation(arena, datum, rule, false) } else { sourceLocation(arena, datum) }
+  let id = binders.length
+  binders.push(BinderRow { name: name, owner: owner, slot: slot, origin: location.origin })
+  if generated {
+    let mut count: Array<int> = arena.generatedCount
+    count[0] += 1
+  }
+  id
+}
+
+function prependFrame(frame: LexicalFrame, frames: Array<LexicalFrame>) -> Array<LexicalFrame> {
+  let mut result: Array<LexicalFrame> = [frame]
+  for existing in frames { result.push(existing) }
+  result
+}
+
+function resolveLexical(arena: NormalizeArena, frames: Array<LexicalFrame>, name: string) -> Option<LexicalAddress> {
+  let mut depth = 0
+  for frame in frames {
+    let mut slot = 0
+    for binder in frame.binders {
+      if arena.binders[binder].name == name {
+        return Some(LexicalAddress { binder: binder, depth: depth, slot: slot })
+      }
+      slot += 1
+    }
+    depth += 1
+  }
+  None
+}
+
+function globalId(globals: Array<GlobalRow>, name: string) -> int {
+  let mut index = 0
+  while index < globals.length {
+    if globals[index].name == name { return index }
+    index += 1
+  }
+  -1
+}
+
+function readerDatumToGuest(arena: NormalizeArena, datum: int, identities: Array<int>, depth: int) -> Result<GuestValue, FrontendFault> {
+  if depth > 512 { return Err(normalizeFault(arena, datum, "LIT440", "quote-nesting-limit", "quoted datum nesting limit exceeded")) }
+  match arena.datums[datum].kind {
+    case DatumBool(value) => Ok(GuestValue.VBool(value))
+    case DatumInt(value) => Ok(GuestValue.VInt(value))
+    case DatumRational(value) => Ok(GuestValue.VRational(value))
+    case DatumReal(value) => Ok(GuestValue.VReal(value))
+    case DatumChar(value) => Ok(GuestValue.VChar(value))
+    case DatumString(value) => Ok(GuestValue.VString(allocateGuestIdentity(identities), value))
+    case DatumSymbol(value) => Ok(GuestValue.VSymbol(value))
+    case DatumNil => Ok(GuestValue.VNil)
+    case DatumPair(car, cdr) => Ok(GuestValue.VPair(
+      allocateGuestIdentity(identities),
+      readerDatumToGuest(arena, car, identities, depth + 1)?,
+      readerDatumToGuest(arena, cdr, identities, depth + 1)?,
+    ))
+    case DatumVector(values) => {
+      let mut converted: Array<GuestValue> = []
+      for value in values { converted.push(readerDatumToGuest(arena, value, identities, depth + 1)?) }
+      Ok(GuestValue.VVector(allocateGuestIdentity(identities), converted, false))
+    }
+    case DatumBytevector(values) => {
+      let mut copied: Array<int> = []
+      for value in values { copied.push(value) }
+      Ok(GuestValue.VBytevector(allocateGuestIdentity(identities), copied))
+    }
+  }
+}
+
+function addLiteralNode(arena: NormalizeArena, datum: int, valueDatum: int) -> Result<int, FrontendFault> {
+  let identities: Array<int> = [1]
+  let value = readerDatumToGuest(arena, valueDatum, identities, 0)?
+  let mut quotes: Array<GuestValue> = arena.quotes
+  let quote = quotes.length
+  quotes.push(value)
+  Ok(addSourceNode(arena, datum, NodeOp.Literal(quote)))
+}
+
+function addGeneratedLiteralNode(arena: NormalizeArena, datum: int, value: GuestValue, rule: string) -> int {
+  let mut quotes: Array<GuestValue> = arena.quotes
+  let quote = quotes.length
+  quotes.push(value)
+  addGeneratedNode(arena, datum, rule, NodeOp.Literal(quote))
+}
+
+function parseFormals(arena: NormalizeArena, datum: int) -> Result<ParsedFormals, FrontendFault> {
+  let mut names: Array<string> = []
+  let mut nameDatums: Array<int> = []
+  let mut restName = ""
+  let mut restDatum = -1
+  let mut cursor = datum
+  loop {
+    match arena.datums[cursor].kind {
+      case DatumNil => { break }
+      case DatumSymbol(name) => {
+        restName = name
+        restDatum = cursor
+        break
+      }
+      case DatumPair(car, cdr) => {
+        let name = match datumSymbol(arena.datums, car) {
+          case Some(value) => value
+          case None => return Err(normalizeFault(arena, car, "LIT441", "formal-must-be-symbol", "lambda formal must be a symbol"))
+        }
+        names.push(name)
+        nameDatums.push(car)
+        cursor = cdr
+      }
+      case _ => return Err(normalizeFault(arena, cursor, "LIT442", "malformed-formals", "malformed lambda formals"))
+    }
+  }
+  let mut all: Array<string> = []
+  for name in names { all.push(name) }
+  if restName.byteLength() > 0 { all.push(restName) }
+  let mut index = 0
+  while index < all.length {
+    if reservedSyntax(all[index]) {
+      let badDatum = if index < nameDatums.length { nameDatums[index] } else { restDatum }
+      return Err(reservedBinderFault(arena, badDatum, all[index], "reserved syntax cannot be bound"))
+    }
+    let mut other = 0
+    while other < index {
+      if all[other] == all[index] {
+        let badDatum = if index < nameDatums.length { nameDatums[index] } else { restDatum }
+        return Err(normalizeFault(arena, badDatum, "LIT444", "duplicate-formal", "duplicate lambda formal"))
+      }
+      other += 1
+    }
+    index += 1
+  }
+  Ok(ParsedFormals { names: names, nameDatums: nameDatums, restName: restName, restDatum: restDatum })
+}
+
+function parseBindings(arena: NormalizeArena, datum: int, allowStep: bool) -> Result<Array<ParsedBinding>, FrontendFault> {
+  let raw = listDatumIds(arena.datums, datum)?
+  let mut bindings: Array<ParsedBinding> = []
+  let mut names: Array<string> = []
+  for entry in raw {
+    let row = listDatumIds(arena.datums, entry)?
+    if row.length < 2 || row.length > (if allowStep { 3 } else { 2 }) {
+      return Err(normalizeFault(arena, entry, "LIT445", "malformed-binding", "binding must contain a name, initializer, and optional step"))
+    }
+    let name = match datumSymbol(arena.datums, row[0]) {
+      case Some(value) => value
+      case None => return Err(normalizeFault(arena, row[0], "LIT445", "binding-name-must-be-symbol", "binding name must be a symbol"))
+    }
+    if reservedSyntax(name) { return Err(reservedBinderFault(arena, row[0], name, "reserved syntax cannot be bound")) }
+    for existing in names {
+      if existing == name { return Err(normalizeFault(arena, row[0], "LIT446", "duplicate-binding", "duplicate binding name")) }
+    }
+    names.push(name)
+    bindings.push(ParsedBinding {
+      name: name,
+      nameDatum: row[0],
+      initDatum: row[1],
+      stepDatum: if row.length == 3 { row[2] } else { -1 },
+    })
+  }
+  Ok(bindings)
+}
+
+function isDefineDatum(arena: NormalizeArena, datum: int) -> bool {
+  match arena.datums[datum].kind {
+    case DatumPair(head, _) => match datumSymbol(arena.datums, head) {
+      case Some(name) => name == "define"
+      case None => false
+    }
+    case _ => false
+  }
+}
+
+function parseDefinition(arena: NormalizeArena, datum: int) -> Result<DefinitionShape, FrontendFault> {
+  let row = listDatumIds(arena.datums, datum)?
+  if row.length < 3 {
+    return Err(normalizeFault(arena, datum, "LIT447", "malformed-define", "define requires a target and value or body"))
+  }
+  match datumSymbol(arena.datums, row[1]) {
+    case Some(name) => {
+      if row.length != 3 { return Err(normalizeFault(arena, datum, "LIT447", "malformed-define", "variable define requires exactly one value")) }
+      if reservedSyntax(name) { return Err(reservedBinderFault(arena, row[1], name, "reserved syntax cannot be defined")) }
+      Ok(DefinitionShape {
+        name: name,
+        nameDatum: row[1],
+        functionForm: false,
+        formalsDatum: -1,
+        rhsDatum: row[2],
+        bodyDatums: [],
+      })
+    }
+    case None => match arena.datums[row[1]].kind {
+      case DatumPair(nameDatum, formalsDatum) => {
+        let name = match datumSymbol(arena.datums, nameDatum) {
+          case Some(value) => value
+          case None => return Err(normalizeFault(arena, nameDatum, "LIT447", "function-name-must-be-symbol", "function define name must be a symbol"))
+        }
+        if reservedSyntax(name) { return Err(reservedBinderFault(arena, nameDatum, name, "reserved syntax cannot be defined")) }
+        let mut body: Array<int> = []
+        let mut index = 2
+        while index < row.length { body.push(row[index]); index += 1 }
+        Ok(DefinitionShape {
+          name: name,
+          nameDatum: nameDatum,
+          functionForm: true,
+          formalsDatum: formalsDatum,
+          rhsDatum: -1,
+          bodyDatums: body,
+        })
+      }
+      case _ => Err(normalizeFault(arena, row[1], "LIT447", "malformed-define-target", "define target must be a symbol or function signature"))
+    }
+  }
+}
+
+function zeroValuesNode(arena: NormalizeArena, datum: int, rule: string) -> int {
+  let operator = addIntrinsicNode(arena, datum, rule, capabilityId(arena, "values"))
+  addGeneratedNode(arena, datum, rule, NodeOp.Apply(operator, []))
+}
+
+function normalizeSequence(
+  arena: NormalizeArena,
+  datums: Array<int>,
+  frames: Array<LexicalFrame>,
+  ownerDatum: int,
+  rule: string,
+) -> Result<int, FrontendFault> {
+  if datums.length == 0 { return Ok(zeroValuesNode(arena, ownerDatum, rule)) }
+  if datums.length == 1 { return normalizeExpr(arena, datums[0], frames) }
+  let mut nodes: Array<int> = []
+  for datum in datums { nodes.push(normalizeExpr(arena, datum, frames)?) }
+  Ok(addGeneratedNode(arena, ownerDatum, rule, NodeOp.Begin(nodes)))
+}
+
+function normalizeLambdaParts(
+  arena: NormalizeArena,
+  ownerDatum: int,
+  formalsDatum: int,
+  bodyDatums: Array<int>,
+  frames: Array<LexicalFrame>,
+  generatedRule: string,
+) -> Result<int, FrontendFault> {
+  if bodyDatums.length == 0 {
+    return Err(normalizeFault(arena, ownerDatum, "LIT448", "empty-lambda-body", "lambda body cannot be empty"))
+  }
+  let formals = parseFormals(arena, formalsDatum)?
+  let owner = if generatedRule.byteLength() == 0 {
+    reserveSourceNode(arena, ownerDatum)
+  } else {
+    reserveGeneratedNode(arena, ownerDatum, generatedRule)
+  }
+  let mut binderIds: Array<int> = []
+  let mut slot = 0
+  while slot < formals.names.length {
+    binderIds.push(addBinder(arena, formals.names[slot], owner, slot, formals.nameDatums[slot], false, ""))
+    slot += 1
+  }
+  let rest = if formals.restName.byteLength() == 0 {
+    -1
+  } else {
+    addBinder(arena, formals.restName, owner, slot, formals.restDatum, false, "")
+  }
+  let mut frameBinders = copyInts(binderIds)
+  if rest != -1 { frameBinders.push(rest) }
+  let localFrames = prependFrame(LexicalFrame { owner: owner, binders: frameBinders }, frames)
+  let body = normalizeBody(arena, bodyDatums, localFrames, ownerDatum, "lambda-body")?
+  setNodeOp(arena, owner, NodeOp.Lambda(binderIds, body, rest))
+  Ok(owner)
+}
+
+function bodyHasDefinition(arena: NormalizeArena, datums: Array<int>) -> bool {
+  for datum in datums {
+    if isDefineDatum(arena, datum) { return true }
+  }
+  false
+}
+
+function normalizeDefinitionBody(
+  arena: NormalizeArena,
+  datums: Array<int>,
+  frames: Array<LexicalFrame>,
+  ownerDatum: int,
+  rule: string,
+) -> Result<int, FrontendFault> {
+  let mut definitions: Array<DefinitionShape> = []
+  let mut remaining: Array<int> = []
+  let mut seenExpression = false
+  for datum in datums {
+    if isDefineDatum(arena, datum) {
+      if seenExpression {
+        return Err(normalizeFault(arena, datum, "LIT449", "definition-after-expression", "internal definitions must precede expressions"))
+      }
+      let shape = parseDefinition(arena, datum)?
+      for existing in definitions {
+        if existing.name == shape.name {
+          return Err(normalizeFault(arena, shape.nameDatum, "LIT450", "duplicate-internal-definition", "duplicate internal definition"))
+        }
+      }
+      definitions.push(shape)
+    } else {
+      seenExpression = true
+      remaining.push(datum)
+    }
+  }
+  let owner = reserveGeneratedNode(arena, ownerDatum, "internal-definitions")
+  let mut binderIds: Array<int> = []
+  let mut slot = 0
+  for definition in definitions {
+    binderIds.push(addBinder(arena, definition.name, owner, slot, definition.nameDatum, false, ""))
+    slot += 1
+  }
+  let localFrames = prependFrame(LexicalFrame { owner: owner, binders: binderIds }, frames)
+  let mut initializers: Array<int> = []
+  for definition in definitions {
+    if definition.functionForm {
+      initializers.push(normalizeLambdaParts(
+        arena,
+        definition.nameDatum,
+        definition.formalsDatum,
+        definition.bodyDatums,
+        localFrames,
+        "function-definition",
+      )?)
+    } else {
+      initializers.push(normalizeExpr(arena, definition.rhsDatum, localFrames)?)
+    }
+  }
+  let body = normalizeSequence(arena, remaining, localFrames, ownerDatum, "internal-definition-body")?
+  setNodeOp(arena, owner, NodeOp.Letrec(binderIds, initializers, body))
+  Ok(owner)
+}
+
+function normalizeBody(
+  arena: NormalizeArena,
+  datums: Array<int>,
+  frames: Array<LexicalFrame>,
+  ownerDatum: int,
+  rule: string,
+) -> Result<int, FrontendFault> {
+  if bodyHasDefinition(arena, datums) {
+    normalizeDefinitionBody(arena, datums, frames, ownerDatum, rule)
+  } else {
+    normalizeSequence(arena, datums, frames, ownerDatum, rule)
+  }
+}
+
+function normalizeBindingLambda(
+  arena: NormalizeArena,
+  ownerDatum: int,
+  bindings: Array<ParsedBinding>,
+  bodyDatums: Array<int>,
+  frames: Array<LexicalFrame>,
+  rule: string,
+) -> Result<int, FrontendFault> {
+  let owner = reserveGeneratedNode(arena, ownerDatum, rule)
+  let mut binderIds: Array<int> = []
+  let mut slot = 0
+  for binding in bindings {
+    binderIds.push(addBinder(arena, binding.name, owner, slot, binding.nameDatum, false, ""))
+    slot += 1
+  }
+  let localFrames = prependFrame(LexicalFrame { owner: owner, binders: binderIds }, frames)
+  let body = normalizeBody(arena, bodyDatums, localFrames, ownerDatum, "{rule}-body")?
+  setNodeOp(arena, owner, NodeOp.Lambda(binderIds, body, -1))
+  let mut operands: Array<int> = []
+  for binding in bindings { operands.push(normalizeExpr(arena, binding.initDatum, frames)?) }
+  Ok(addGeneratedNode(arena, ownerDatum, rule, NodeOp.Apply(owner, operands)))
+}
+
+function normalizeLetStarFrom(
+  arena: NormalizeArena,
+  ownerDatum: int,
+  bindings: Array<ParsedBinding>,
+  index: int,
+  bodyDatums: Array<int>,
+  frames: Array<LexicalFrame>,
+) -> Result<int, FrontendFault> {
+  if index >= bindings.length { return normalizeBody(arena, bodyDatums, frames, ownerDatum, "let-star-body") }
+  let binding = bindings[index]
+  let owner = reserveGeneratedNode(arena, ownerDatum, "let-star")
+  let binder = addBinder(arena, binding.name, owner, 0, binding.nameDatum, false, "")
+  let localFrames = prependFrame(LexicalFrame { owner: owner, binders: [binder] }, frames)
+  let body = normalizeLetStarFrom(arena, ownerDatum, bindings, index + 1, bodyDatums, localFrames)?
+  setNodeOp(arena, owner, NodeOp.Lambda([binder], body, -1))
+  let initializer = normalizeExpr(arena, binding.initDatum, frames)?
+  Ok(addGeneratedNode(arena, ownerDatum, "let-star", NodeOp.Apply(owner, [initializer])))
+}
+
+function normalizeLetrecForm(
+  arena: NormalizeArena,
+  ownerDatum: int,
+  bindings: Array<ParsedBinding>,
+  bodyDatums: Array<int>,
+  frames: Array<LexicalFrame>,
+  rule: string,
+) -> Result<int, FrontendFault> {
+  let owner = reserveSourceNode(arena, ownerDatum)
+  let mut binderIds: Array<int> = []
+  let mut slot = 0
+  for binding in bindings {
+    binderIds.push(addBinder(arena, binding.name, owner, slot, binding.nameDatum, false, ""))
+    slot += 1
+  }
+  let localFrames = prependFrame(LexicalFrame { owner: owner, binders: binderIds }, frames)
+  let mut initializers: Array<int> = []
+  for binding in bindings { initializers.push(normalizeExpr(arena, binding.initDatum, localFrames)?) }
+  let body = normalizeBody(arena, bodyDatums, localFrames, ownerDatum, "{rule}-body")?
+  setNodeOp(arena, owner, NodeOp.Letrec(binderIds, initializers, body))
+  Ok(owner)
+}
+
+function addressForBinder(arena: NormalizeArena, frames: Array<LexicalFrame>, binder: int) -> Option<LexicalAddress> {
+  let mut depth = 0
+  for frame in frames {
+    let mut slot = 0
+    for candidate in frame.binders {
+      if candidate == binder { return Some(LexicalAddress { binder: binder, depth: depth, slot: slot }) }
+      slot += 1
+    }
+    depth += 1
+  }
+  None
+}
+
+function generatedLocalRef(
+  arena: NormalizeArena,
+  datum: int,
+  rule: string,
+  frames: Array<LexicalFrame>,
+  binder: int,
+) -> Result<int, FrontendFault> {
+  match addressForBinder(arena, frames, binder) {
+    case Some(address) => Ok(addGeneratedNode(arena, datum, rule, NodeOp.LocalRef(address.binder, address.depth, address.slot)))
+    case None => Err(normalizeFault(arena, datum, "LIT469", "generated-binder-scope", "generated binder is not in lexical scope"))
+  }
+}
+
+function intrinsicCall(
+  arena: NormalizeArena,
+  datum: int,
+  rule: string,
+  name: string,
+  operands: Array<int>,
+) -> Result<int, FrontendFault> {
+  let capability = capabilityId(arena, name)
+  if capability < 0 { return Err(normalizeFault(arena, datum, "LIT470", "missing-intrinsic", "missing intrinsic capability {name}")) }
+  let operator = addIntrinsicNode(arena, datum, rule, capability)
+  Ok(addGeneratedNode(arena, datum, rule, NodeOp.Apply(operator, operands)))
+}
+
+function generatedBoolean(arena: NormalizeArena, datum: int, value: bool, rule: string) -> int {
+  addGeneratedLiteralNode(arena, datum, GuestValue.VBool(value), rule)
+}
+
+function normalizeAndFrom(
+  arena: NormalizeArena,
+  ownerDatum: int,
+  operands: Array<int>,
+  index: int,
+  frames: Array<LexicalFrame>,
+) -> Result<int, FrontendFault> {
+  if index >= operands.length { return Ok(generatedBoolean(arena, ownerDatum, true, "and-empty")) }
+  if index + 1 == operands.length { return normalizeExpr(arena, operands[index], frames) }
+  let test = normalizeExpr(arena, operands[index], frames)?
+  let consequent = normalizeAndFrom(arena, ownerDatum, operands, index + 1, frames)?
+  let alternate = generatedBoolean(arena, ownerDatum, false, "and-false")
+  Ok(addGeneratedNode(arena, ownerDatum, "and", NodeOp.IfNode(test, consequent, alternate)))
+}
+
+function normalizeOrFrom(
+  arena: NormalizeArena,
+  ownerDatum: int,
+  operands: Array<int>,
+  index: int,
+  frames: Array<LexicalFrame>,
+) -> Result<int, FrontendFault> {
+  if index >= operands.length { return Ok(generatedBoolean(arena, ownerDatum, false, "or-empty")) }
+  if index + 1 == operands.length { return normalizeExpr(arena, operands[index], frames) }
+  let owner = reserveGeneratedNode(arena, ownerDatum, "or")
+  let binder = addBinder(arena, "@lit/or-value", owner, 0, ownerDatum, true, "or-temp")
+  let localFrames = prependFrame(LexicalFrame { owner: owner, binders: [binder] }, frames)
+  let test = generatedLocalRef(arena, ownerDatum, "or-test", localFrames, binder)?
+  let consequent = generatedLocalRef(arena, ownerDatum, "or-result", localFrames, binder)?
+  let alternate = normalizeOrFrom(arena, ownerDatum, operands, index + 1, localFrames)?
+  let body = addGeneratedNode(arena, ownerDatum, "or", NodeOp.IfNode(test, consequent, alternate))
+  setNodeOp(arena, owner, NodeOp.Lambda([binder], body, -1))
+  let first = normalizeExpr(arena, operands[index], frames)?
+  Ok(addGeneratedNode(arena, ownerDatum, "or", NodeOp.Apply(owner, [first])))
+}
+
+function normalizeNamedLet(
+  arena: NormalizeArena,
+  ownerDatum: int,
+  nameDatum: int,
+  bindingsDatum: int,
+  bodyDatums: Array<int>,
+  frames: Array<LexicalFrame>,
+) -> Result<int, FrontendFault> {
+  let name = match datumSymbol(arena.datums, nameDatum) {
+    case Some(value) => value
+    case None => return Err(normalizeFault(arena, nameDatum, "LIT471", "named-let-name", "named let name must be a symbol"))
+  }
+  if reservedSyntax(name) { return Err(reservedBinderFault(arena, nameDatum, name, "reserved syntax cannot be bound")) }
+  let bindings = parseBindings(arena, bindingsDatum, false)?
+  let letrecOwner = reserveGeneratedNode(arena, ownerDatum, "named-let")
+  let loopBinder = addBinder(arena, name, letrecOwner, 0, nameDatum, false, "")
+  let letrecFrames = prependFrame(LexicalFrame { owner: letrecOwner, binders: [loopBinder] }, frames)
+
+  let lambdaOwner = reserveGeneratedNode(arena, ownerDatum, "named-let-lambda")
+  let mut parameterBinders: Array<int> = []
+  let mut slot = 0
+  for binding in bindings {
+    parameterBinders.push(addBinder(arena, binding.name, lambdaOwner, slot, binding.nameDatum, false, ""))
+    slot += 1
+  }
+  let lambdaFrames = prependFrame(LexicalFrame { owner: lambdaOwner, binders: parameterBinders }, letrecFrames)
+  let lambdaBody = normalizeBody(arena, bodyDatums, lambdaFrames, ownerDatum, "named-let-body")?
+  setNodeOp(arena, lambdaOwner, NodeOp.Lambda(parameterBinders, lambdaBody, -1))
+
+  let operator = generatedLocalRef(arena, ownerDatum, "named-let-call", letrecFrames, loopBinder)?
+  let mut operands: Array<int> = []
+  for binding in bindings { operands.push(normalizeExpr(arena, binding.initDatum, letrecFrames)?) }
+  let call = addGeneratedNode(arena, ownerDatum, "named-let-call", NodeOp.Apply(operator, operands))
+  setNodeOp(arena, letrecOwner, NodeOp.Letrec([loopBinder], [lambdaOwner], call))
+  Ok(letrecOwner)
+}
+
+function normalizeCondFrom(
+  arena: NormalizeArena,
+  ownerDatum: int,
+  clauses: Array<int>,
+  index: int,
+  frames: Array<LexicalFrame>,
+) -> Result<int, FrontendFault> {
+  if index >= clauses.length { return Ok(zeroValuesNode(arena, ownerDatum, "cond-no-match")) }
+  let clauseDatum = clauses[index]
+  let clause = match listDatumIds(arena.datums, clauseDatum) {
+    case Ok(value) => value
+    case Err(_) => return Err(normalizeFault(arena, clauseDatum, "LIT472", "cond-clause-shape", "cond clause must be a proper list"))
+  }
+  if clause.length == 0 { return Err(normalizeFault(arena, clauseDatum, "LIT472", "cond-clause-shape", "cond clause cannot be empty")) }
+  match datumSymbol(arena.datums, clause[0]) {
+    case Some("else") => {
+      if index + 1 != clauses.length { return Err(normalizeFault(arena, clauseDatum, "LIT473", "cond-else-position", "cond else clause must be last")) }
+      if clause.length < 2 { return Err(normalizeFault(arena, clauseDatum, "LIT474", "cond-else-body", "cond else clause requires a body")) }
+      let mut body: Array<int> = []
+      let mut bodyIndex = 1
+      while bodyIndex < clause.length { body.push(clause[bodyIndex]); bodyIndex += 1 }
+      normalizeSequence(arena, body, frames, clauseDatum, "cond-else")
+    }
+    case _ => {
+      if clause.length >= 2 {
+        match datumSymbol(arena.datums, clause[1]) {
+          case Some("=>") => return Err(normalizeFault(arena, clauseDatum, "LIT475", "cond-arrow-unsupported", "cond => clauses are unsupported in this profile"))
+          case _ => {}
+        }
+      }
+      let alternate = normalizeCondFrom(arena, ownerDatum, clauses, index + 1, frames)?
+      if clause.length == 1 {
+        let lambdaOwner = reserveGeneratedNode(arena, clauseDatum, "cond-test-value")
+        let binder = addBinder(arena, "@lit/cond-value", lambdaOwner, 0, clauseDatum, true, "cond-test-temp")
+        let localFrames = prependFrame(LexicalFrame { owner: lambdaOwner, binders: [binder] }, frames)
+        let test = generatedLocalRef(arena, clauseDatum, "cond-test", localFrames, binder)?
+        let consequent = generatedLocalRef(arena, clauseDatum, "cond-result", localFrames, binder)?
+        let body = addGeneratedNode(arena, clauseDatum, "cond", NodeOp.IfNode(test, consequent, alternate))
+        setNodeOp(arena, lambdaOwner, NodeOp.Lambda([binder], body, -1))
+        let value = normalizeExpr(arena, clause[0], frames)?
+        return Ok(addGeneratedNode(arena, clauseDatum, "cond", NodeOp.Apply(lambdaOwner, [value])))
+      }
+      let mut bodyDatums: Array<int> = []
+      let mut bodyIndex = 1
+      while bodyIndex < clause.length { bodyDatums.push(clause[bodyIndex]); bodyIndex += 1 }
+      let test = normalizeExpr(arena, clause[0], frames)?
+      let consequent = normalizeSequence(arena, bodyDatums, frames, clauseDatum, "cond-clause")?
+      Ok(addGeneratedNode(arena, clauseDatum, "cond", NodeOp.IfNode(test, consequent, alternate)))
+    }
+  }
+}
+
+function booleanOrNodes(arena: NormalizeArena, datum: int, nodes: Array<int>, index: int) -> int {
+  if index >= nodes.length { return generatedBoolean(arena, datum, false, "case-no-datum") }
+  if index + 1 == nodes.length { return nodes[index] }
+  let consequent = generatedBoolean(arena, datum, true, "case-match")
+  let alternate = booleanOrNodes(arena, datum, nodes, index + 1)
+  addGeneratedNode(arena, datum, "case-datum-or", NodeOp.IfNode(nodes[index], consequent, alternate))
+}
+
+function normalizeCaseClauses(
+  arena: NormalizeArena,
+  ownerDatum: int,
+  clauses: Array<int>,
+  index: int,
+  frames: Array<LexicalFrame>,
+  keyBinder: int,
+) -> Result<int, FrontendFault> {
+  if index >= clauses.length { return Ok(zeroValuesNode(arena, ownerDatum, "case-no-match")) }
+  let clauseDatum = clauses[index]
+  let clause = match listDatumIds(arena.datums, clauseDatum) {
+    case Ok(value) => value
+    case Err(_) => return Err(normalizeFault(arena, clauseDatum, "LIT476", "case-clause-shape", "case clause must be a proper list"))
+  }
+  if clause.length < 2 { return Err(normalizeFault(arena, clauseDatum, "LIT476", "case-clause-shape", "case clause requires datums and body")) }
+  match datumSymbol(arena.datums, clause[0]) {
+    case Some("else") => {
+      if index + 1 != clauses.length { return Err(normalizeFault(arena, clauseDatum, "LIT477", "case-else-position", "case else clause must be last")) }
+      let mut body: Array<int> = []
+      let mut bodyIndex = 1
+      while bodyIndex < clause.length { body.push(clause[bodyIndex]); bodyIndex += 1 }
+      normalizeSequence(arena, body, frames, clauseDatum, "case-else")
+    }
+    case _ => {
+      let datumChoices = match listDatumIds(arena.datums, clause[0]) {
+        case Ok(value) => value
+        case Err(_) => return Err(normalizeFault(arena, clause[0], "LIT478", "case-datum-list", "case datum choices must be a proper list"))
+      }
+      let mut comparisons: Array<int> = []
+      for choice in datumChoices {
+        let key = generatedLocalRef(arena, clauseDatum, "case-key", frames, keyBinder)?
+        let quoted = addLiteralNode(arena, choice, choice)?
+        comparisons.push(intrinsicCall(arena, clauseDatum, "case-eqv", "eqv?", [key, quoted])?)
+      }
+      let test = booleanOrNodes(arena, clauseDatum, comparisons, 0)
+      let mut bodyDatums: Array<int> = []
+      let mut bodyIndex = 1
+      while bodyIndex < clause.length { bodyDatums.push(clause[bodyIndex]); bodyIndex += 1 }
+      let consequent = normalizeSequence(arena, bodyDatums, frames, clauseDatum, "case-clause")?
+      let alternate = normalizeCaseClauses(arena, ownerDatum, clauses, index + 1, frames, keyBinder)?
+      Ok(addGeneratedNode(arena, clauseDatum, "case", NodeOp.IfNode(test, consequent, alternate)))
+    }
+  }
+}
+
+function normalizeCaseForm(
+  arena: NormalizeArena,
+  ownerDatum: int,
+  keyDatum: int,
+  clauses: Array<int>,
+  frames: Array<LexicalFrame>,
+) -> Result<int, FrontendFault> {
+  let owner = reserveGeneratedNode(arena, ownerDatum, "case")
+  let binder = addBinder(arena, "@lit/case-key", owner, 0, ownerDatum, true, "case-key-temp")
+  let localFrames = prependFrame(LexicalFrame { owner: owner, binders: [binder] }, frames)
+  let body = normalizeCaseClauses(arena, ownerDatum, clauses, 0, localFrames, binder)?
+  setNodeOp(arena, owner, NodeOp.Lambda([binder], body, -1))
+  let key = normalizeExpr(arena, keyDatum, frames)?
+  Ok(addGeneratedNode(arena, ownerDatum, "case", NodeOp.Apply(owner, [key])))
+}
+
+function generatedQuoteNode(arena: NormalizeArena, datum: int, rule: string) -> Result<int, FrontendFault> {
+  let identities: Array<int> = [1]
+  let value = readerDatumToGuest(arena, datum, identities, 0)?
+  Ok(addGeneratedLiteralNode(arena, datum, value, rule))
+}
+
+function quasiquoteTagged(
+  arena: NormalizeArena,
+  datum: int,
+  tag: string,
+  value: int,
+  rule: string,
+) -> Result<int, FrontendFault> {
+  let tagNode = addGeneratedLiteralNode(arena, datum, GuestValue.VSymbol(tag), rule)
+  let nilNode = addGeneratedLiteralNode(arena, datum, GuestValue.VNil, rule)
+  let valueList = intrinsicCall(arena, datum, rule, "cons", [value, nilNode])?
+  intrinsicCall(arena, datum, rule, "cons", [tagNode, valueList])
+}
+
+function normalizeQuasiquotePair(
+  arena: NormalizeArena,
+  datum: int,
+  frames: Array<LexicalFrame>,
+  depth: int,
+) -> Result<int, FrontendFault> {
+  let mut elements: Array<int> = []
+  let mut cursor = datum
+  loop {
+    match arena.datums[cursor].kind {
+      case DatumPair(car, cdr) => { elements.push(car); cursor = cdr }
+      case _ => { break }
+    }
+  }
+  let mut result = match arena.datums[cursor].kind {
+    case DatumNil => generatedQuoteNode(arena, cursor, "quasiquote-nil")?
+    case _ => {
+      let tail = normalizeQuasiquotePart(arena, cursor, frames, depth, false)?
+      if tail.splice { return Err(normalizeFault(arena, cursor, "LIT479", "quasiquote-tail-splice", "unquote-splicing is invalid in a dotted tail")) }
+      tail.node
+    }
+  }
+  let mut index = elements.length - 1
+  while index >= 0 {
+    let part = normalizeQuasiquotePart(arena, elements[index], frames, depth, true)?
+    result = if part.splice {
+      intrinsicCall(arena, elements[index], "quasiquote-splice", "append", [part.node, result])?
+    } else {
+      intrinsicCall(arena, elements[index], "quasiquote-cons", "cons", [part.node, result])?
+    }
+    index -= 1
+  }
+  Ok(result)
+}
+
+function normalizeQuasiquotePart(
+  arena: NormalizeArena,
+  datum: int,
+  frames: Array<LexicalFrame>,
+  depth: int,
+  allowSplice: bool,
+) -> Result<QuasiquotePart, FrontendFault> {
+  if depth > 256 { return Err(normalizeFault(arena, datum, "LIT480", "quasiquote-nesting-limit", "quasiquote nesting limit exceeded")) }
+  match arena.datums[datum].kind {
+    case DatumPair(_, _) => {
+      let row = match listDatumIds(arena.datums, datum) {
+        case Ok(value) => value
+        case Err(_) => []
+      }
+      if row.length > 0 {
+        match datumSymbol(arena.datums, row[0]) {
+          case Some("unquote") => {
+            if row.length != 2 { return Err(normalizeFault(arena, datum, "LIT481", "unquote-shape", "unquote requires exactly one expression")) }
+            if depth == 1 { return Ok(QuasiquotePart { node: normalizeExpr(arena, row[1], frames)?, splice: false }) }
+            let inner = normalizeQuasiquotePart(arena, row[1], frames, depth - 1, false)?
+            if inner.splice { return Err(normalizeFault(arena, datum, "LIT481", "nested-unquote-splice", "invalid nested unquote")) }
+            return Ok(QuasiquotePart { node: quasiquoteTagged(arena, datum, "unquote", inner.node, "quasiquote-unquote-data")?, splice: false })
+          }
+          case Some("unquote-splicing") => {
+            if row.length != 2 { return Err(normalizeFault(arena, datum, "LIT482", "unquote-splicing-shape", "unquote-splicing requires exactly one expression")) }
+            if depth == 1 {
+              if !allowSplice { return Err(normalizeFault(arena, datum, "LIT483", "misplaced-unquote-splicing", "unquote-splicing is only valid in list or vector element position")) }
+              return Ok(QuasiquotePart { node: normalizeExpr(arena, row[1], frames)?, splice: true })
+            }
+            let inner = normalizeQuasiquotePart(arena, row[1], frames, depth - 1, false)?
+            if inner.splice { return Err(normalizeFault(arena, datum, "LIT482", "nested-splice", "invalid nested unquote-splicing")) }
+            return Ok(QuasiquotePart { node: quasiquoteTagged(arena, datum, "unquote-splicing", inner.node, "quasiquote-splice-data")?, splice: false })
+          }
+          case Some("quasiquote") => {
+            if row.length != 2 { return Err(normalizeFault(arena, datum, "LIT484", "quasiquote-shape", "quasiquote requires exactly one datum")) }
+            let inner = normalizeQuasiquotePart(arena, row[1], frames, depth + 1, false)?
+            if inner.splice { return Err(normalizeFault(arena, datum, "LIT484", "nested-quasiquote-splice", "invalid nested quasiquote")) }
+            return Ok(QuasiquotePart { node: quasiquoteTagged(arena, datum, "quasiquote", inner.node, "quasiquote-data")?, splice: false })
+          }
+          case _ => {}
+        }
+      }
+      Ok(QuasiquotePart { node: normalizeQuasiquotePair(arena, datum, frames, depth)?, splice: false })
+    }
+    case DatumVector(values) => {
+      let mut result = addGeneratedLiteralNode(arena, datum, GuestValue.VNil, "quasiquote-vector")
+      let mut index = values.length - 1
+      while index >= 0 {
+        let part = normalizeQuasiquotePart(arena, values[index], frames, depth, true)?
+        result = if part.splice {
+          intrinsicCall(arena, values[index], "quasiquote-vector-splice", "append", [part.node, result])?
+        } else {
+          intrinsicCall(arena, values[index], "quasiquote-vector-cons", "cons", [part.node, result])?
+        }
+        index -= 1
+      }
+      Ok(QuasiquotePart {
+        node: intrinsicCall(arena, datum, "quasiquote-vector", "list->vector", [result])?,
+        splice: false,
+      })
+    }
+    case _ => Ok(QuasiquotePart { node: generatedQuoteNode(arena, datum, "quasiquote-atom")?, splice: false })
+  }
+}
+
+function normalizeQuasiquote(arena: NormalizeArena, ownerDatum: int, valueDatum: int, frames: Array<LexicalFrame>) -> Result<int, FrontendFault> {
+  let part = normalizeQuasiquotePart(arena, valueDatum, frames, 1, false)?
+  if part.splice { return Err(normalizeFault(arena, ownerDatum, "LIT483", "misplaced-unquote-splicing", "unquote-splicing is invalid at quasiquote root")) }
+  Ok(part.node)
+}
+
+function normalizeDoForm(
+  arena: NormalizeArena,
+  ownerDatum: int,
+  bindingsDatum: int,
+  terminationDatum: int,
+  commands: Array<int>,
+  frames: Array<LexicalFrame>,
+) -> Result<int, FrontendFault> {
+  let bindings = parseBindings(arena, bindingsDatum, true)?
+  let termination = match listDatumIds(arena.datums, terminationDatum) {
+    case Ok(value) => value
+    case Err(_) => return Err(normalizeFault(arena, terminationDatum, "LIT485", "do-termination-shape", "do termination clause must be a proper list"))
+  }
+  if termination.length == 0 { return Err(normalizeFault(arena, terminationDatum, "LIT485", "do-termination-shape", "do termination clause requires a test")) }
+
+  let letrecOwner = reserveGeneratedNode(arena, ownerDatum, "do")
+  let loopBinder = addBinder(arena, "@lit/do-loop", letrecOwner, 0, ownerDatum, true, "do-loop-binder")
+  let letrecFrames = prependFrame(LexicalFrame { owner: letrecOwner, binders: [loopBinder] }, frames)
+
+  let lambdaOwner = reserveGeneratedNode(arena, ownerDatum, "do-lambda")
+  let mut variableBinders: Array<int> = []
+  let mut slot = 0
+  for binding in bindings {
+    variableBinders.push(addBinder(arena, binding.name, lambdaOwner, slot, binding.nameDatum, false, ""))
+    slot += 1
+  }
+  let lambdaFrames = prependFrame(LexicalFrame { owner: lambdaOwner, binders: variableBinders }, letrecFrames)
+  let test = normalizeExpr(arena, termination[0], lambdaFrames)?
+  let mut resultDatums: Array<int> = []
+  let mut resultIndex = 1
+  while resultIndex < termination.length { resultDatums.push(termination[resultIndex]); resultIndex += 1 }
+  let consequent = normalizeSequence(arena, resultDatums, lambdaFrames, terminationDatum, "do-result")?
+
+  let operator = generatedLocalRef(arena, ownerDatum, "do-recur", lambdaFrames, loopBinder)?
+  let mut steps: Array<int> = []
+  let mut bindingIndex = 0
+  while bindingIndex < bindings.length {
+    let binding = bindings[bindingIndex]
+    if binding.stepDatum >= 0 {
+      steps.push(normalizeExpr(arena, binding.stepDatum, lambdaFrames)?)
+    } else {
+      steps.push(generatedLocalRef(arena, binding.nameDatum, "do-default-step", lambdaFrames, variableBinders[bindingIndex])?)
+    }
+    bindingIndex += 1
+  }
+  let recur = addGeneratedNode(arena, ownerDatum, "do-recur", NodeOp.Apply(operator, steps))
+  let alternate = if commands.length == 0 {
+    recur
+  } else {
+    let mut commandNodes: Array<int> = []
+    for command in commands { commandNodes.push(normalizeExpr(arena, command, lambdaFrames)?) }
+    commandNodes.push(recur)
+    addGeneratedNode(arena, ownerDatum, "do-commands", NodeOp.Begin(commandNodes))
+  }
+  let lambdaBody = addGeneratedNode(arena, ownerDatum, "do", NodeOp.IfNode(test, consequent, alternate))
+  setNodeOp(arena, lambdaOwner, NodeOp.Lambda(variableBinders, lambdaBody, -1))
+
+  let initialOperator = generatedLocalRef(arena, ownerDatum, "do-initial-call", letrecFrames, loopBinder)?
+  let mut initializers: Array<int> = []
+  for binding in bindings { initializers.push(normalizeExpr(arena, binding.initDatum, letrecFrames)?) }
+  let initialCall = addGeneratedNode(arena, ownerDatum, "do-initial-call", NodeOp.Apply(initialOperator, initializers))
+  setNodeOp(arena, letrecOwner, NodeOp.Letrec([loopBinder], [lambdaOwner], initialCall))
+  Ok(letrecOwner)
+}
+
+function normalizeGuardForm(
+  arena: NormalizeArena,
+  ownerDatum: int,
+  specDatum: int,
+  bodyDatums: Array<int>,
+  frames: Array<LexicalFrame>,
+) -> Result<int, FrontendFault> {
+  let spec = match listDatumIds(arena.datums, specDatum) {
+    case Ok(value) => value
+    case Err(_) => return Err(normalizeFault(arena, specDatum, "LIT486", "guard-spec-shape", "guard specification must be a proper list"))
+  }
+  if spec.length < 1 { return Err(normalizeFault(arena, specDatum, "LIT486", "guard-spec-shape", "guard specification requires a condition binder")) }
+  let name = match datumSymbol(arena.datums, spec[0]) {
+    case Some(value) => value
+    case None => return Err(normalizeFault(arena, spec[0], "LIT487", "guard-binder", "guard condition binder must be a symbol"))
+  }
+  if reservedSyntax(name) { return Err(reservedBinderFault(arena, spec[0], name, "reserved syntax cannot be bound")) }
+  let owner = reserveSourceNode(arena, ownerDatum)
+  let binder = addBinder(arena, name, owner, 0, spec[0], false, "")
+  let localFrames = prependFrame(LexicalFrame { owner: owner, binders: [binder] }, frames)
+  let mut clauses: Array<GuardClauseRow> = []
+  let mut elseNode = -1
+  let mut index = 1
+  while index < spec.length {
+    let clauseDatum = spec[index]
+    let clause = match listDatumIds(arena.datums, clauseDatum) {
+      case Ok(value) => value
+      case Err(_) => return Err(normalizeFault(arena, clauseDatum, "LIT488", "guard-clause-shape", "guard clause must be a proper list"))
+    }
+    if clause.length < 2 { return Err(normalizeFault(arena, clauseDatum, "LIT488", "guard-clause-shape", "guard clause requires test and body")) }
+    match datumSymbol(arena.datums, clause[0]) {
+      case Some("else") => {
+        if index + 1 != spec.length { return Err(normalizeFault(arena, clauseDatum, "LIT489", "guard-else-position", "guard else clause must be last")) }
+        let mut clauseBody: Array<int> = []
+        let mut bodyIndex = 1
+        while bodyIndex < clause.length { clauseBody.push(clause[bodyIndex]); bodyIndex += 1 }
+        elseNode = normalizeSequence(arena, clauseBody, localFrames, clauseDatum, "guard-else")?
+      }
+      case _ => {
+        if clause.length >= 2 {
+          match datumSymbol(arena.datums, clause[1]) {
+            case Some("=>") => return Err(normalizeFault(arena, clauseDatum, "LIT490", "guard-arrow", "guard does not support => clauses"))
+            case _ => {}
+          }
+        }
+        let test = normalizeExpr(arena, clause[0], localFrames)?
+        let mut clauseBody: Array<int> = []
+        let mut bodyIndex = 1
+        while bodyIndex < clause.length { clauseBody.push(clause[bodyIndex]); bodyIndex += 1 }
+        let body = normalizeSequence(arena, clauseBody, localFrames, clauseDatum, "guard-clause")?
+        clauses.push(GuardClauseRow { test: test, body: body })
+      }
+    }
+    index += 1
+  }
+  let body = normalizeBody(arena, bodyDatums, localFrames, ownerDatum, "guard-body")?
+  setNodeOp(arena, owner, NodeOp.GuardNode([binder], clauses, elseNode, body))
+  Ok(owner)
+}
+
+function normalizeSymbolReference(arena: NormalizeArena, datum: int, name: string, frames: Array<LexicalFrame>) -> Result<int, FrontendFault> {
+  match resolveLexical(arena, frames, name) {
+    case Some(address) => return Ok(addSourceNode(arena, datum, NodeOp.LocalRef(address.binder, address.depth, address.slot)))
+    case None => {}
+  }
+  let global = globalId(arena.globals, name)
+  if global >= 0 { return Ok(addSourceNode(arena, datum, NodeOp.GlobalRef(global, arena.globals[global].slot))) }
+  let capability = capabilityId(arena, name)
+  if capability >= 0 { return Ok(addSourceNode(arena, datum, NodeOp.Capability(capability))) }
+  if name == "define-syntax" {
+    return Err(projectedNormalizeFault(
+      arena,
+      datum,
+      "LIT451",
+      "unbound-reference",
+      "unbound reference {name}",
+      "E120",
+      "reader",
+      "`define-syntax` is a forbidden form (LISPEX §11)",
+    ))
+  }
+  let mut globals: Array<GlobalRow> = arena.globals
+  let location = sourceLocation(arena, datum)
+  let unresolved = globals.length
+  globals.push(GlobalRow {
+    name: name,
+    slot: unresolved,
+    origin: location.origin,
+    capability: -2,
+  })
+  Ok(addSourceNode(arena, datum, NodeOp.GlobalRef(unresolved, unresolved)))
+}
+
+function normalizeSet(arena: NormalizeArena, formDatum: int, targetDatum: int, rhsDatum: int, frames: Array<LexicalFrame>) -> Result<int, FrontendFault> {
+  let name = match datumSymbol(arena.datums, targetDatum) {
+    case Some(value) => value
+    case None => return Err(normalizeFault(arena, targetDatum, "LIT452", "set-target-must-be-symbol", "set! target must be a symbol"))
+  }
+  let rhs = normalizeExpr(arena, rhsDatum, frames)?
+  match resolveLexical(arena, frames, name) {
+    case Some(address) => return Ok(addSourceNode(arena, formDatum, NodeOp.SetLocal(address.binder, address.depth, address.slot, rhs)))
+    case None => {}
+  }
+  let global = globalId(arena.globals, name)
+  if global >= 0 { return Ok(addSourceNode(arena, formDatum, NodeOp.SetGlobal(global, arena.globals[global].slot, rhs))) }
+  Err(normalizeFault(arena, targetDatum, "LIT453", "unbound-set", "set! target is unbound"))
+}
+
+function normalizeLiteralAndIfForm(
+  arena: NormalizeArena,
+  datum: int,
+  row: Array<int>,
+  headName: Option<string>,
+  frames: Array<LexicalFrame>,
+) -> Result<int, FrontendFault> {
+  match headName {
+    case Some("quote") => {
+      if row.length != 2 { return Err(normalizeFault(arena, datum, "LIT456", "quote-arity", "quote requires exactly one datum")) }
+      addLiteralNode(arena, datum, row[1])
+    }
+    case Some("if") => {
+      if row.length != 4 { return Err(projectedNormalizeFault(
+        arena,
+        datum,
+        "LIT457",
+        "if-shape",
+        "if requires test, then, and else expressions",
+        "E130",
+        "normalizer",
+        "`if` must be `(if test then else)` (3-arm, else mandatory)",
+      )) }
+      Ok(addSourceNode(arena, datum, NodeOp.IfNode(
+        normalizeExpr(arena, row[1], frames)?,
+        normalizeExpr(arena, row[2], frames)?,
+        normalizeExpr(arena, row[3], frames)?,
+      )))
+    }
+    case _ => Err(normalizeFault(arena, datum, "LIT200", "internal-core-form-dispatch", "internal core form dispatch failure"))
+  }
+}
+
+function normalizeBeginForm(
+  arena: NormalizeArena,
+  datum: int,
+  row: Array<int>,
+  frames: Array<LexicalFrame>,
+) -> Result<int, FrontendFault> {
+  let mut body: Array<int> = []
+  let mut index = 1
+  while index < row.length { body.push(row[index]); index += 1 }
+  normalizeBody(arena, body, frames, datum, "begin")
+}
+
+function normalizeLambdaForm(
+  arena: NormalizeArena,
+  datum: int,
+  row: Array<int>,
+  frames: Array<LexicalFrame>,
+) -> Result<int, FrontendFault> {
+  if row.length < 3 { return Err(normalizeFault(arena, datum, "LIT458", "lambda-shape", "lambda requires formals and body")) }
+  let mut body: Array<int> = []
+  let mut index = 2
+  while index < row.length { body.push(row[index]); index += 1 }
+  normalizeLambdaParts(arena, datum, row[1], body, frames, "")
+}
+
+function normalizeSetForm(
+  arena: NormalizeArena,
+  datum: int,
+  row: Array<int>,
+  frames: Array<LexicalFrame>,
+) -> Result<int, FrontendFault> {
+  if row.length != 3 { return Err(normalizeFault(arena, datum, "LIT459", "set-shape", "set! requires target and value")) }
+  normalizeSet(arena, datum, row[1], row[2], frames)
+}
+
+function normalizeLetForm(
+  arena: NormalizeArena,
+  datum: int,
+  row: Array<int>,
+  frames: Array<LexicalFrame>,
+) -> Result<int, FrontendFault> {
+  if row.length < 3 { return Err(normalizeFault(arena, datum, "LIT460", "let-shape", "let requires bindings and body")) }
+  match datumSymbol(arena.datums, row[1]) {
+    case Some(_) => {
+      if row.length < 4 { return Err(normalizeFault(arena, datum, "LIT461", "named-let-shape", "named let requires bindings and body")) }
+      let mut body: Array<int> = []
+      let mut index = 3
+      while index < row.length { body.push(row[index]); index += 1 }
+      normalizeNamedLet(arena, datum, row[1], row[2], body, frames)
+    }
+    case None => {
+      let bindings = parseBindings(arena, row[1], false)?
+      let mut body: Array<int> = []
+      let mut index = 2
+      while index < row.length { body.push(row[index]); index += 1 }
+      normalizeBindingLambda(arena, datum, bindings, body, frames, "let")
+    }
+  }
+}
+
+function normalizeLetStarForm(arena: NormalizeArena, datum: int, row: Array<int>, frames: Array<LexicalFrame>) -> Result<int, FrontendFault> {
+  if row.length < 3 { return Err(normalizeFault(arena, datum, "LIT462", "let-star-shape", "let* requires bindings and body")) }
+  let bindings = parseBindings(arena, row[1], false)?
+  let mut body: Array<int> = []
+  let mut index = 2
+  while index < row.length { body.push(row[index]); index += 1 }
+  normalizeLetStarFrom(arena, datum, bindings, 0, body, frames)
+}
+
+function normalizeLetrecSyntaxForm(arena: NormalizeArena, datum: int, row: Array<int>, frames: Array<LexicalFrame>) -> Result<int, FrontendFault> {
+  if row.length < 3 { return Err(normalizeFault(arena, datum, "LIT463", "letrec-shape", "letrec requires bindings and body")) }
+  let bindings = parseBindings(arena, row[1], false)?
+  let mut body: Array<int> = []
+  let mut index = 2
+  while index < row.length { body.push(row[index]); index += 1 }
+  normalizeLetrecForm(arena, datum, bindings, body, frames, "letrec")
+}
+
+function normalizeBooleanControlForm(
+  arena: NormalizeArena,
+  datum: int,
+  row: Array<int>,
+  headName: Option<string>,
+  frames: Array<LexicalFrame>,
+) -> Result<int, FrontendFault> {
+  match headName {
+    case Some("and") => {
+      let mut operands: Array<int> = []
+      let mut index = 1
+      while index < row.length { operands.push(row[index]); index += 1 }
+      normalizeAndFrom(arena, datum, operands, 0, frames)
+    }
+    case Some("or") => {
+      let mut operands: Array<int> = []
+      let mut index = 1
+      while index < row.length { operands.push(row[index]); index += 1 }
+      normalizeOrFrom(arena, datum, operands, 0, frames)
+    }
+    case Some("when") | Some("unless") => {
+      if row.length < 2 { return Err(normalizeFault(arena, datum, "LIT491", "conditional-body-shape", "when/unless requires a test")) }
+      let mut bodyDatums: Array<int> = []
+      let mut index = 2
+      while index < row.length { bodyDatums.push(row[index]); index += 1 }
+      let test = normalizeExpr(arena, row[1], frames)?
+      let taken = normalizeSequence(arena, bodyDatums, frames, datum, "conditional-body")?
+      let empty = zeroValuesNode(arena, datum, "conditional-empty")
+      let isWhen = match headName { case Some("when") => true; case _ => false }
+      if isWhen {
+        Ok(addGeneratedNode(arena, datum, "when", NodeOp.IfNode(test, taken, empty)))
+      } else {
+        Ok(addGeneratedNode(arena, datum, "unless", NodeOp.IfNode(test, empty, taken)))
+      }
+    }
+    case _ => Err(normalizeFault(arena, datum, "LIT200", "internal-control-form-dispatch", "internal control form dispatch failure"))
+  }
+}
+
+function normalizeClauseControlForm(
+  arena: NormalizeArena,
+  datum: int,
+  row: Array<int>,
+  headName: Option<string>,
+  frames: Array<LexicalFrame>,
+) -> Result<int, FrontendFault> {
+  match headName {
+    case Some("cond") => {
+      if row.length == 1 {
+        return Err(projectedNormalizeFault(
+          arena,
+          datum,
+          "LIT472",
+          "empty-cond",
+          "empty cond",
+          "E130",
+          "normalizer",
+          "empty `cond`",
+        ))
+      }
+      let mut clauses: Array<int> = []
+      let mut index = 1
+      while index < row.length { clauses.push(row[index]); index += 1 }
+      normalizeCondFrom(arena, datum, clauses, 0, frames)
+    }
+    case Some("case") => {
+      if row.length < 2 { return Err(normalizeFault(arena, datum, "LIT492", "case-shape", "case requires a key expression")) }
+      let mut clauses: Array<int> = []
+      let mut index = 2
+      while index < row.length { clauses.push(row[index]); index += 1 }
+      normalizeCaseForm(arena, datum, row[1], clauses, frames)
+    }
+    case _ => Err(normalizeFault(arena, datum, "LIT200", "internal-control-form-dispatch", "internal control form dispatch failure"))
+  }
+}
+
+function normalizeExtendedControlForm(
+  arena: NormalizeArena,
+  datum: int,
+  row: Array<int>,
+  headName: Option<string>,
+  frames: Array<LexicalFrame>,
+) -> Result<int, FrontendFault> {
+  match headName {
+    case Some("quasiquote") => {
+      if row.length != 2 { return Err(normalizeFault(arena, datum, "LIT484", "quasiquote-shape", "quasiquote requires exactly one datum")) }
+      normalizeQuasiquote(arena, datum, row[1], frames)
+    }
+    case Some("do") => {
+      if row.length < 3 { return Err(normalizeFault(arena, datum, "LIT493", "do-shape", "do requires bindings and termination clause")) }
+      let mut commands: Array<int> = []
+      let mut index = 3
+      while index < row.length { commands.push(row[index]); index += 1 }
+      normalizeDoForm(arena, datum, row[1], row[2], commands, frames)
+    }
+    case Some("guard") => {
+      if row.length < 3 { return Err(normalizeFault(arena, datum, "LIT494", "guard-shape", "guard requires specification and body")) }
+      let mut body: Array<int> = []
+      let mut index = 2
+      while index < row.length { body.push(row[index]); index += 1 }
+      normalizeGuardForm(arena, datum, row[1], body, frames)
+    }
+    case _ => Err(normalizeFault(arena, datum, "LIT200", "internal-control-form-dispatch", "internal control form dispatch failure"))
+  }
+}
+
+function normalizeApplicationExpr(
+  arena: NormalizeArena,
+  datum: int,
+  row: Array<int>,
+  headName: Option<string>,
+  frames: Array<LexicalFrame>,
+) -> Result<int, FrontendFault> {
+  match headName {
+    case Some(name) => {
+      if reservedSyntax(name) {
+        return Err(normalizeFault(arena, datum, "LIT466", "unsupported-special-form", "special form {name} is not normalized"))
+      }
+    }
+    case None => {}
+  }
+  let operator = normalizeExpr(arena, row[0], frames)?
+  let mut operands: Array<int> = []
+  let mut index = 1
+  while index < row.length {
+    operands.push(normalizeExpr(arena, row[index], frames)?)
+    index += 1
+  }
+  Ok(addSourceNode(arena, datum, NodeOp.Apply(operator, operands)))
+}
+
+function normalizePairExpr(
+  arena: NormalizeArena,
+  datum: int,
+  frames: Array<LexicalFrame>,
+) -> Result<int, FrontendFault> {
+  let row = match listDatumIds(arena.datums, datum) {
+    case Ok(value) => value
+    case Err(_) => return Err(projectedNormalizeFault(
+      arena,
+      datum,
+      "LIT455",
+      "improper-application",
+      "improper list cannot be applied",
+      "E130",
+      "normalizer",
+      "improper (dotted) list is not a valid expression",
+    ))
+  }
+  if row.length == 0 { return Err(normalizeFault(arena, datum, "LIT454", "empty-application", "empty list is not an expression")) }
+  let headName = datumSymbol(arena.datums, row[0])
+  match headName {
+    case Some("define-syntax") => Err(projectedNormalizeFault(
+      arena,
+      datum,
+      "LIT466",
+      "forbidden-special-form",
+      "forbidden special form define-syntax",
+      "E120",
+      "normalizer",
+      "`define-syntax` is a forbidden form (LISPEX §11)",
+    ))
+    case Some("quote") | Some("if") => {
+      normalizeLiteralAndIfForm(arena, datum, row, headName, frames)
+    }
+    case Some("begin") => normalizeBeginForm(arena, datum, row, frames)
+    case Some("lambda") => normalizeLambdaForm(arena, datum, row, frames)
+    case Some("set!") => normalizeSetForm(arena, datum, row, frames)
+    case Some("let") => normalizeLetForm(arena, datum, row, frames)
+    case Some("let*") => normalizeLetStarForm(arena, datum, row, frames)
+    case Some("letrec") => normalizeLetrecSyntaxForm(arena, datum, row, frames)
+    case Some("and") | Some("or") | Some("when") | Some("unless") => {
+      normalizeBooleanControlForm(arena, datum, row, headName, frames)
+    }
+    case Some("cond") | Some("case") => {
+      normalizeClauseControlForm(arena, datum, row, headName, frames)
+    }
+    case Some("quasiquote") | Some("do") | Some("guard") => {
+      normalizeExtendedControlForm(arena, datum, row, headName, frames)
+    }
+    case Some("define") => Err(normalizeFault(arena, datum, "LIT464", "define-context", "define is only valid at top level or at the start of a body"))
+    case Some("unquote") | Some("unquote-splicing") => Err(normalizeFault(arena, datum, "LIT465", "unquote-outside-quasiquote", "unquote is only valid inside quasiquote"))
+    case _ => normalizeApplicationExpr(arena, datum, row, headName, frames)
+  }
+}
+
+function normalizeExpr(arena: NormalizeArena, datum: int, frames: Array<LexicalFrame>) -> Result<int, FrontendFault> {
+  chargeNormalize(arena, datum, 1)?
+  match arena.datums[datum].kind {
+    case DatumBool(_) | DatumInt(_) | DatumRational(_) | DatumReal(_) | DatumChar(_) | DatumString(_) | DatumVector(_) | DatumBytevector(_) => {
+      addLiteralNode(arena, datum, datum)
+    }
+    case DatumSymbol(name) => normalizeSymbolReference(arena, datum, name, frames)
+    case DatumNil => Err(normalizeFault(arena, datum, "LIT454", "empty-application", "empty list is not an expression"))
+    case DatumPair(_, _) => normalizePairExpr(arena, datum, frames)
+  }
+}
+
+function collectTopLevelGlobals(arena: NormalizeArena, roots: Array<int>) -> Result<(), FrontendFault> {
+  let mut globals: Array<GlobalRow> = arena.globals
+  for root in roots {
+    if isDefineDatum(arena, root) {
+      let definition = parseDefinition(arena, root)?
+      if globalId(globals, definition.name) < 0 {
+        let location = sourceLocation(arena, definition.nameDatum)
+        let slot = globals.length
+        globals.push(GlobalRow {
+          name: definition.name,
+          slot: slot,
+          origin: location.origin,
+          capability: -1,
+        })
+      }
+    }
+  }
+  Ok(())
+}
+
+function normalizeTopLevel(arena: NormalizeArena, datum: int) -> Result<int, FrontendFault> {
+  if !isDefineDatum(arena, datum) { return normalizeExpr(arena, datum, []) }
+  let definition = parseDefinition(arena, datum)?
+  let global = globalId(arena.globals, definition.name)
+  if global < 0 { return Err(normalizeFault(arena, datum, "LIT467", "missing-global-row", "top-level definition was not predeclared")) }
+  let rhs = if definition.functionForm {
+    normalizeLambdaParts(arena, definition.nameDatum, definition.formalsDatum, definition.bodyDatums, [], "function-definition")?
+  } else {
+    normalizeExpr(arena, definition.rhsDatum, [])?
+  }
+  Ok(addSourceNode(arena, datum, NodeOp.SetGlobal(global, arena.globals[global].slot, rhs)))
+}
+
+function normalizeSourceWithTable(
+  request: FrontendRequest,
+  reader: ReaderOutput,
+  feature: string,
+  capabilityTable: CapabilityTable,
+  preserveRoots: bool,
+) -> Result<NormalizeOutput, FrontendFault> {
+  let transitions: Array<int> = [if feature == "hosted-kernel-h6/v0" { 0 } else { reader.transitions }]
+  let generatedCount: Array<int> = [0]
+  let intrinsicCount: Array<int> = [0]
+  let arena = NormalizeArena {
+    datums: reader.datums,
+    spans: [],
+    origins: [],
+    binders: [],
+    globals: [],
+    nodes: [],
+    quotes: [],
+    transitions: transitions,
+    transitionLimit: request.normalizationLimit,
+    generatedCount: generatedCount,
+    intrinsicCount: intrinsicCount,
+    capabilities: capabilityTable.names,
+  }
+  collectTopLevelGlobals(arena, reader.roots)?
+  let mut topNodes: Array<int> = []
+  for root in reader.roots { topNodes.push(normalizeTopLevel(arena, root)?) }
+  let rootDatum = if reader.roots.length == 0 { addReaderDatum(reader.datums, 0, 0, ReaderDatumKind.DatumNil) } else { reader.roots[0] }
+  let root = if topNodes.length == 0 {
+    zeroValuesNode(arena, rootDatum, "empty-program")
+  } else if topNodes.length == 1 || preserveRoots {
+    topNodes[0]
+  } else {
+    addGeneratedNode(arena, rootDatum, "top-level-sequence", NodeOp.Begin(topNodes))
+  }
+  let roots = if preserveRoots {
+    if topNodes.length == 0 { [root] } else { topNodes }
+  } else {
+    [root]
+  }
+  let kernel = Kernel {
+    feature: feature,
+    sourceId: request.sourceId,
+    sourceSha: request.sourceSha,
+    spans: arena.spans,
+    origins: arena.origins,
+    binders: arena.binders,
+    globals: arena.globals,
+    roots: roots,
+    nodes: arena.nodes,
+    quotes: arena.quotes,
+    capabilities: capabilityTable.names,
+    capabilityDispositions: capabilityTable.dispositions,
+  }
+  match validateReferences(kernel) {
+    case Ok(_) => {}
+    case Err(error) => return Err(normalizeFault(arena, rootDatum, "LIT468", "kernel-validation", "projected kernel failed validation: {error}"))
+  }
+  Ok(NormalizeOutput {
+    kernel: kernel,
+    transitions: transitions[0],
+    generatedBinders: generatedCount[0],
+    intrinsicReferences: intrinsicCount[0],
+  })
+}
+
+export function normalizeSource(request: FrontendRequest, reader: ReaderOutput) -> Result<NormalizeOutput, FrontendFault> {
+  normalizeSourceWithTable(
+    request,
+    reader,
+    "hosted-kernel-h5/v0",
+    CapabilityTable { names: h4CapabilityNames(), dispositions: h4CapabilityDispositions() },
+    false,
+  )
+}
+
+export function normalizeSourceH6(
+  request: FrontendRequest,
+  reader: ReaderOutput,
+  capabilityTable: CapabilityTable,
+) -> Result<NormalizeOutput, FrontendFault> {
+  normalizeSourceWithTable(request, reader, "hosted-kernel-h6/v0", capabilityTable, true)
+}

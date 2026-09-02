@@ -1,0 +1,5 @@
+record map {
+    value: int,
+}
+
+let value: map = map { "value": 1 }

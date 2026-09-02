@@ -1,0 +1,5 @@
+record Box<T> {
+    value: T | null = null,
+}
+
+let ambiguous = Box {}

@@ -1,0 +1,35 @@
+import std.path
+import std.regex
+import std.csv
+import std.toml
+import std.url
+import std.date
+import std.bigint
+import std.decimal
+
+function resultString<T>(value: Result<T, string>) -> string {
+  match value {
+    case Ok(_) => "ok"
+    case Err(error) => error
+  }
+}
+
+function optionString<T>(value: Option<T>) -> string {
+  match value {
+    case Some(_) => "some"
+    case None => "none"
+  }
+}
+
+let badPath = resultString(path.from("../secrets.txt"))
+let badRegex = resultString(regex.compile("[abc"))
+let badCsv = resultString(csv.parse("\"unterminated"))
+let badHeader = resultString(csv.parseWithHeader("name\nAda,36"))
+let badToml = resultString(toml.parse("name = "))
+let badUrl = resultString(url.parse("https://example.com:abc/"))
+let badDate = resultString(date.parseIso("2024-02-30"))
+let badYmd = resultString(date.fromYmd(2023, 2, 29))
+let badBig = optionString(bigint.parse("2", 2))
+let badDecimal = optionString(decimal.parse("12."))
+
+print("{badPath}|{badRegex}|{badCsv}|{badHeader}|{badToml}|{badUrl}|{badDate}|{badYmd}|{badBig}|{badDecimal}")

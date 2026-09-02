@@ -1,0 +1,14 @@
+// Array destructuring
+let [first, second, ..rest] = [1, 2, 3, 4, 5]
+print("{first}")    // 1
+print("{rest}")     // [3, 4, 5]
+
+// Object destructuring
+let { name, age } = user
+print("Name: {name}, Age: {age}")
+
+// Destructure inside the function body
+function greet(user: { name: string, age: int }) {
+    let { name, age } = user
+    print("Hello, {name}! You are {age} years old.")
+}

@@ -1,0 +1,17 @@
+
+enum List<T> derives Eq, Order, Show { Nil, Cons(T, List<T>) }
+function sum(xs: List<int>) -> int {
+    match xs {
+        case Nil => 0
+        case Cons(head, tail) => head + sum(tail)
+    }
+}
+function main() -> string {
+    let xs: List<int> = List.Cons(1, List.Cons(2, List.Cons(3, List.Nil)))
+    let typed = match xs {
+        case found: List<int> => sum(found)
+        case _ => -1
+    }
+    "{xs}:{typed}"
+}
+main()

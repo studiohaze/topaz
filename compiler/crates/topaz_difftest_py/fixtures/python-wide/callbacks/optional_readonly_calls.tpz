@@ -1,0 +1,44 @@
+
+function mark(label: string, n: int) -> int {
+    print(label)
+    n
+}
+function main() -> Result<string, string> {
+    let xs: Option<Array<int>> = Some([4, 5])
+    let noneXs: Option<Array<int>> = None
+    let m: Option<Map<string, int>> = Some(map { "a": 2 })
+    let bytes: Option<Bytes> = Some(Bytes.encodeUtf8(s: "AZ"))
+    let json: Option<JSONValue> = Some(JSON.parse(text: "\{\"x\":3,\"arr\":[10,20]\}")?)
+    let jsonArr: Option<JSONValue> = Some(JSON.parse(text: "[10,20]")?)
+    let got = match xs?.get(mark("idx", 1)) {
+        case Some(n) => n
+        case None => 0
+    }
+    let skipped = match noneXs?.get(mark("skip", 0)) {
+        case Some(n) => n
+        case None => 7
+    }
+    let mapValue = m?.getOr("a", 9) ?? 0
+    let has = m?.containsKey("a") ?? false
+    let decoded = match bytes?.decodeUtf8() {
+        case Some(Ok(text)) => text
+        case _ => "none"
+    }
+    let slicedLen = match bytes?.slice(0, 2) {
+        case Some(b) => b.length()
+        case None => 0
+    }
+    let jsonInt = match json?.get("x") {
+        case Some(value) => match value.asInt() {
+            case Some(n) => n
+            case None => 0
+        }
+        case None => 0
+    }
+    let arrItem = match jsonArr?.at(1) {
+        case Some(value) => JSON.stringify(value: value)?
+        case None => "none"
+    }
+    Ok(value: "{got}:{skipped}:{mapValue}:{has}:{decoded}:{slicedLen}:{jsonInt}:{arrItem}")
+}
+main()

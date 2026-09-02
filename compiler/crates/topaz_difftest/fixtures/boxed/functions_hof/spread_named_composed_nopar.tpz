@@ -1,0 +1,4 @@
+function vsum(...xs: int) -> int { xs.length }
+function id(x: int) -> int { x }
+let h = vsum >> id
+h(...[1], a: 2)

@@ -1,0 +1,5 @@
+import lib.math
+import lib.text { shout }
+let r = math.triple(7)
+print(shout("nested {r}"))
+r

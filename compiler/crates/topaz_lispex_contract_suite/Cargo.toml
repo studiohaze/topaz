@@ -1,0 +1,21 @@
+[package]
+name = "topaz_lispex_contract_suite"
+description = "Executable suite for the complete Lispex embedding contract"
+version.workspace = true
+license.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+num-bigint = { workspace = true }
+num-integer = { workspace = true }
+sha2 = { workspace = true }
+wasmtime = { workspace = true }
+
+[lints]
+workspace = true
+
+[[bin]]
+name = "topaz-lispex-contract-suite"
+path = "src/main.rs"

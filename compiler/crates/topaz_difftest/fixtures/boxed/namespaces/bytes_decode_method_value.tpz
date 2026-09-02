@@ -1,0 +1,3 @@
+let b = Bytes.encodeUtf8("abc")
+let f = b.decodeUtf8
+f()

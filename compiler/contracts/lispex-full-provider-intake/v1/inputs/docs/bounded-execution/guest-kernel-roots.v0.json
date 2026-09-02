@@ -1,0 +1,282 @@
+{
+  "schema": "lispex.f11-guest-kernel-roots/v0",
+  "status": "b7-evaluation-allocation-mir-closed",
+  "public_contract": false,
+  "rust_toolchain": "1.88.0",
+  "source_authorities": {
+    "interp/src/bounded_execution.rs": "d333aa909ae29ba903e6b3c1732156f19fb26f106cbb9c8fbd89d9cc71cac386",
+    "interp/src/bytecode.rs": "9bb28496094cf247a872bd3ace93d12daafa5485a7d306f454ee3aa85364898d",
+    "interp/src/bytecode_compile.rs": "304d303843028235282d09b007abfab72ff99b2376a05c5f84f2b474aafac4b0",
+    "interp/src/bytecode_vm.rs": "c19b688d7e40860d1065486b35fe8f7e46eb6b4a8740821a39b2a1a3e104d5ac",
+    "interp/src/canonical.rs": "ed6234168928dda2c83b9f640630a8be22685963742e107a4b1351544c4a547b",
+    "interp/src/core.rs": "8feb68bfefc642de4a1b89a5de7c3b8655d984fc9622c8782d44dd21c9cbe273",
+    "interp/src/core_ir.rs": "2e255d349a65c6fcd68b57727581d09fb0cb575cd97c71395c7d36cfd5c30679",
+    "interp/src/core_ir_lower.rs": "b5b562c594bbd81532e7044d94c2d2cc0f7fe3dd211c77d67c88df26897fad39",
+    "interp/src/draft_meter.rs": "76b195a8e5fd40d6d3612aae0a9823bb602a6334cd6b9c4710f6e7eae966e1fb",
+    "interp/src/embed_product.rs": "bbb9c5446d739370b20b4626ed6554b1279b788f96d0317f35acd3dd53373d8f",
+    "interp/src/embed_value.rs": "301725292ba727c99973deb62a45ce1b0367a2a02c54089a91b7e3e1b3c15185",
+    "interp/src/error.rs": "862cae6346d8e98c2fde706d15c116697109cc9020f7b592f7798854e0ea6467",
+    "interp/src/eval.rs": "ca56c4258b5ae7e56a2858becb0f11e675ac2c49169be74564d846a6973a17bd",
+    "interp/src/normalize.rs": "012d2b52e1f7a4a6acb58ec1ff2dd13e58944ecde77e1cd9b660e7bbb84ea3b3",
+    "interp/src/number.rs": "563f97f39ce1d5c8ef56f8077b7381414b2a56f3d0c5d71c5568b99f28739430",
+    "interp/src/reader.rs": "7c6b00af6fb9312f7bd41590df47e12737f64de6527701333ab1392b9c8851ec",
+    "interp/src/syntax.rs": "778bd86ff34d67ab191e60ff0b26bf4033bc2211458d056cbb28a8e9f26287a5",
+    "interp/src/value.rs": "9e274325b7d9dd095a98a81b4af896b07cdc4deacee2fa875c86eaccdfc4c4d8"
+  },
+  "entrypoints": [
+    {
+      "name": "candidate_prepare_wire",
+      "source": "interp/src/embed_product.rs",
+      "required_mir_calls": [
+        "prepare_b3_rule",
+        "prepared_b3_rule_bytes"
+      ]
+    },
+    {
+      "name": "candidate_evaluate_wire",
+      "source": "interp/src/embed_product.rs",
+      "required_mir_calls": [
+        "read_b3_prepared_rule",
+        "evaluate_b3_rule_with_canonical_input"
+      ]
+    },
+    {
+      "name": "prepare_b3_rule",
+      "source": "interp/src/bounded_execution.rs",
+      "required_mir_calls": [
+        "DraftPreparationMeter::admit_raw_source",
+        "DraftPreparationMeter::reserve_phase"
+      ]
+    },
+    {
+      "name": "evaluate_b3_rule",
+      "source": "interp/src/bounded_execution.rs",
+      "required_mir_calls": [
+        "evaluate_b3_rule_inner"
+      ]
+    },
+    {
+      "name": "evaluate_b3_rule_with_canonical_input",
+      "source": "interp/src/bounded_execution.rs",
+      "required_mir_calls": [
+        "decode_canonical_input",
+        "canonical_input_hash_hex",
+        "evaluate_b3_rule_inner_with_meter"
+      ]
+    },
+    {
+      "name": "evaluate_b3_rule_inner_with_meter",
+      "source": "interp/src/bounded_execution.rs",
+      "required_mir_calls": [
+        "DraftEvaluationMeter::reserve_setup",
+        "run_bytecode_with_draft_meter_and_input",
+        "draft_transcript_bytes",
+        "DraftEvaluationMeter::reserve_hash"
+      ]
+    },
+    {
+      "name": "decode_canonical_input",
+      "source": "interp/src/embed_value.rs",
+      "required_mir_calls": [
+        "validate_canonical_input",
+        "decode_validated"
+      ]
+    },
+    {
+      "name": "run_bytecode_with_draft_meter",
+      "source": "interp/src/bytecode_vm.rs",
+      "required_mir_calls": ["run_bytecode_with_draft_meter_and_input"]
+    },
+    {
+      "name": "equal_with_observer",
+      "source": "interp/src/eval.rs",
+      "required_mir_calls": [
+        "reserve_equality_work",
+        "reserve_equality_visited",
+        "EqualityObserver>::before_value"
+      ]
+    },
+    {
+      "name": "string_append_with_observer",
+      "source": "interp/src/eval.rs",
+      "required_mir_calls": [
+        "StringAppendObserver>::reserve_output",
+        "String::push_str"
+      ]
+    }
+  ],
+  "evaluation_loop_authorities": [
+    {
+      "id": "root-program-loop",
+      "selector": {
+        "signature_starts_with": "run_bytecode_with_host_and_draft("
+      },
+      "expected_backedges": 2,
+      "guards": [
+        {
+          "id": "root-permit",
+          "pattern": "RootRunAuthority::consume_root",
+          "kind": "precharged-bounded",
+          "expected_backedges": 2
+        }
+      ]
+    },
+    {
+      "id": "vm-task-loop",
+      "selector": {
+        "signature_includes": ["bytecode_vm.rs", ">::execute("]
+      },
+      "expected_backedges": 1,
+      "guards": [
+        {
+          "id": "task-iteration-charge",
+          "pattern": "VmMachine::authorize_task_iteration",
+          "kind": "incremental",
+          "expected_backedges": 1
+        }
+      ]
+    },
+    {
+      "id": "structural-equality-loops",
+      "selector": {
+        "signature_starts_with": "equal_with_observer("
+      },
+      "expected_backedges": 5,
+      "guards": [
+        {
+          "id": "outer-work-probe",
+          "pattern": "EqualityObserver>::before_stack_probe",
+          "kind": "incremental",
+          "expected_backedges": 2
+        },
+        {
+          "id": "vector-work-precharge",
+          "pattern": "EqualityObserver>::reserve_stack_entries",
+          "kind": "precharged-bounded",
+          "expected_backedges": 1
+        },
+        {
+          "id": "byte-visit-charge",
+          "pattern": "EqualityObserver>::before_byte",
+          "kind": "incremental",
+          "expected_backedges": 2
+        }
+      ]
+    },
+    {
+      "id": "string-append-loop",
+      "selector": {
+        "signature_starts_with": "string_append_with_observer("
+      },
+      "expected_backedges": 1,
+      "guards": [
+        {
+          "id": "output-precharge",
+          "pattern": "StringAppendObserver>::reserve_output",
+          "kind": "precharged-bounded",
+          "expected_backedges": 1
+        }
+      ]
+    },
+    {
+      "id": "canonical-input-validation-loops",
+      "selector": {
+        "signature_starts_with": "validate_canonical_input("
+      },
+      "expected_backedges": 3,
+      "guards": [
+        {
+          "id": "byte-derived-validation-budget",
+          "pattern": "InputValidationBudget::consume",
+          "kind": "precharged-bounded",
+          "expected_backedges": 3
+        }
+      ]
+    },
+    {
+      "id": "canonical-input-decoder-loops",
+      "selector": {
+        "signature_starts_with": "decode_validated("
+      },
+      "expected_backedges": 2,
+      "guards": [
+        {
+          "id": "decoder-loop-charge",
+          "pattern": "DraftEvaluationMeter::reserve_input_loop",
+          "kind": "incremental",
+          "expected_backedges": 1
+        },
+        {
+          "id": "value-assembly-charge",
+          "pattern": "DraftEvaluationMeter::reserve_input_assembly",
+          "kind": "incremental",
+          "expected_backedges": 1
+        }
+      ]
+    }
+  ],
+  "preparation_phase_authorities": [
+    {
+      "id": "raw-admission",
+      "phase": "RawAdmission",
+      "closure_index": 0,
+      "target_pattern": "source_hash_hex"
+    },
+    {
+      "id": "utf8-and-scalars",
+      "phase": "Utf8AndScalars",
+      "closure_index": 1,
+      "target_pattern": "from_utf8"
+    },
+    {
+      "id": "reader",
+      "phase": "Reader",
+      "closure_index": 2,
+      "target_pattern": "read_program_with_resource_limits"
+    },
+    {
+      "id": "normalizer",
+      "phase": "Normalizer",
+      "closure_index": 3,
+      "target_pattern": "normalize_program"
+    },
+    {
+      "id": "core-ir-lowering",
+      "phase": "CoreIrLowering",
+      "closure_index": 4,
+      "target_pattern": "lower_core_to_ir"
+    },
+    {
+      "id": "bytecode-compile-verify",
+      "phase": "BytecodeCompileVerify",
+      "closure_index": 5,
+      "target_pattern": "compile_core_ir"
+    },
+    {
+      "id": "restricted-profile-admission",
+      "phase": "RestrictedProfileAdmission",
+      "closure_index": 6,
+      "target_pattern": "admit_b3_bytecode"
+    },
+    {
+      "id": "artifact-serialization-identity",
+      "phase": "ArtifactSerializationIdentity",
+      "closure_index": 7,
+      "target_pattern": "bytecode_bytes"
+    }
+  ],
+  "source_scope_closed": true,
+  "mir_root_scope_closed": true,
+  "mir_evaluation_backedge_dominance_complete": true,
+  "mir_frontend_backedge_dominance_complete": true,
+  "mir_backedge_dominance_complete": true,
+  "private_host_recursion_ceiling": 256,
+  "private_host_recursion_ceiling_enforced": true,
+  "recursive_component_inventory": "docs/bounded-execution/recursive-components.v0.json",
+  "recursive_component_inventory_complete": true,
+  "mir_recursive_component_guards_complete": false,
+  "mir_allocation_sink_permits_complete": true,
+  "dependency_allowlist_complete": true,
+  "b7_complete": false,
+  "implementation_ready": false
+}

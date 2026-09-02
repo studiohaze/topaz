@@ -1,0 +1,14 @@
+
+import util
+let mut cb = util.sortedBy
+concurrent {
+    slow: {
+        let xs = [1]
+        xs.map(cb)
+    }
+    boom: {
+        let ys = [1]
+        ys[2]
+    }
+}
+0

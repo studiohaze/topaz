@@ -1,0 +1,17 @@
+function разделить(a: float, b: float) -> Result<float, string> {
+    if b == 0.0 {
+        Err("деление на ноль")
+    } else {
+        Ok(a / b)
+    }
+}
+
+function вычислить(a: float, b: float) -> Result<float, string> {
+    let частное = разделить(a, b)?
+    Ok(частное + 1.0)
+}
+
+match вычислить(10.0, 2.0) {
+    case Ok(значение) => print("Результат: {значение}")
+    case Err(ошибка) => print("Ошибка: {ошибка}")
+}

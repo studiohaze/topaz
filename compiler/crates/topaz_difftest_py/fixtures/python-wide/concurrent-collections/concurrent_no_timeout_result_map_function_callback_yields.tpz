@@ -1,0 +1,16 @@
+
+function spin(x: int) -> int {
+    let mut i = 0
+    while i < 200 {
+        i = i + 1
+    }
+    1 / 0
+}
+
+concurrent {
+    slow: {
+        let value: Result<int, string> = Ok(1)
+        value.map(spin)
+    }
+}
+0

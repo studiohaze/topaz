@@ -1,0 +1,19 @@
+
+import model
+function main() -> string {
+    let ready = model.ready()
+    let busy = model.busy(3)
+    let a = match busy {
+        case Busy(n) => n
+        case Ready => 0
+    }
+    let b = match ready {
+        case found: model.Status => if found == model.ready() { "typed" } else { "miss" }
+        case _ => "miss"
+    }
+    let mut labels = Map.new()
+    labels.insert(busy, "hit")
+    let statuses = set { ready, model.ready(), busy }
+    "{ready}:{busy}:{a}:{b}:{model.ready() < busy}:{statuses.length}:{labels.getOr(model.busy(3), "miss")}"
+}
+main()

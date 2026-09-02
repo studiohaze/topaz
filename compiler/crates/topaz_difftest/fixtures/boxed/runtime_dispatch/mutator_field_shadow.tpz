@@ -1,0 +1,2 @@
+let mut r = { push: (x) => x + 1 }
+r.push(5)

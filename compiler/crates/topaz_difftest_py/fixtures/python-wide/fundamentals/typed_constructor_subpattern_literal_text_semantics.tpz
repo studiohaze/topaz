@@ -1,0 +1,27 @@
+
+function main() -> int {
+    let opt_float: Option<int | float> = Some(7.0)
+    let a = match opt_float {
+        case Some(n: 7) => 10
+        case _ => 0
+    }
+    let opt_int: Option<int | float> = Some(7)
+    let b = match opt_int {
+        case Some(n: 7.0) => 100
+        case Some(_) => 3
+        case _ => 0
+    }
+    let slash_t: Result<string, string> = Ok("a\\tb")
+    let c = match slash_t {
+        case Ok(s: "a\\tb") => 5
+        case _ => 0
+    }
+    let tab: Result<string, string> = Ok("a	b")
+    let d = match tab {
+        case Ok(s: "a\\tb") => 100
+        case Ok(_) => 6
+        case _ => 0
+    }
+    a + b + c + d
+}
+main()

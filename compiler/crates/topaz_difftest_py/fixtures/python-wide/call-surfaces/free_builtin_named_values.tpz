@@ -1,0 +1,31 @@
+
+function okInt(n: int) -> Result<int, string> {
+    Ok(value: n)
+}
+function errInt() -> Result<int, string> {
+    Err(value: "bad")
+}
+function someInt() -> Option<int> {
+    Some(value: 2)
+}
+function main() -> int {
+    print(value: "named")
+    let parsed = match toInt(text: "40") {
+        case Some(n) => n
+        case None => 0
+    }
+    let ok = match okInt(parsed) {
+        case Ok(n) => n
+        case Err(_) => 0
+    }
+    let err = match errInt() {
+        case Ok(_) => 0
+        case Err(e) => if e == "bad" { 1 } else { 0 }
+    }
+    let some = match someInt() {
+        case Some(n) => n
+        case None => 0
+    }
+    ok + err + some
+}
+main()

@@ -1,0 +1,3 @@
+let bad: Map<string, int> = Map.new()
+let values = set { bad }
+print("{values}")

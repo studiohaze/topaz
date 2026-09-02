@@ -1,0 +1,3 @@
+import a.strings as text
+function text(x: int) -> int { x }
+let y = 1

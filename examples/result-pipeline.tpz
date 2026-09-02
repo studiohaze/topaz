@@ -1,0 +1,18 @@
+// result-pipeline.tpz — Option/Result, matching Some/None, and the `?`
+// operator that short-circuits on Err.
+// Run: topaz run examples/result-pipeline.tpz
+
+function parsePort(text: string) -> Result<int, string> {
+    return match toInt(text) {
+        case Some(port) => Ok(port)
+        case None => Err("not a number: {text}")
+    }
+}
+
+function openPort(text: string) -> Result<string, string> {
+    let port = parsePort(text)?          // unwrap, or return the Err
+    return Ok("listening on :{port}")
+}
+
+print("{openPort("8080")}")
+print("{openPort("oops")}")

@@ -1,0 +1,5 @@
+function pos(x: int) -> Result<int, string> {
+  if x > 0 { Ok(x * 10) } else { Err("neg") }
+}
+let ok: Result<int, string> = Ok(5)
+ok.flatMap(pos)

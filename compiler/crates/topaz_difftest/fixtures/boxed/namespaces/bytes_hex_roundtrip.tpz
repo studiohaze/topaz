@@ -1,0 +1,1 @@
+Bytes.fromHex(Bytes.encodeUtf8("foobar").toHex()).flatMap((b) => b.decodeUtf8())

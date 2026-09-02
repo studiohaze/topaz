@@ -1,0 +1,604 @@
+// Guest values, identities, cells, environments, closures, and conditions.
+// Machine and primitive leaves share these allocation and equality operations;
+// protocol rendering remains outside the runtime model.
+
+import lit.model {
+  GuestInt,
+  GuestRational,
+  ErrorObjectRow,
+  GuardClauseRow,
+  GuestValue,
+  EqualityWork,
+  ValuePacket,
+  MachineSignal,
+  EnvironmentRow,
+  ClosureRow,
+  ContinuationFrame,
+  ContinuationRow,
+  DynamicFrame,
+  DynamicRow,
+}
+import lit.numeric {
+  guestInt,
+  guestIntZero,
+  guestIntIsOne,
+  guestIntEqual,
+  renderGuestInt,
+  rationalEqual,
+  renderReal,
+  realToRational,
+}
+
+export function allocateGuestIdentity(identities: Array<int>) -> int {
+  let mut counter = identities
+  let identity = counter[0]
+  counter[0] = identity + 1
+  identity
+}
+
+export function cloneGuest(value: GuestValue, identities: Array<int>) -> GuestValue {
+  match value {
+    case VBool(flag) => GuestValue.VBool(flag)
+    case VInt(number) => GuestValue.VInt(guestInt(number.negative, number.limbs))
+    case VRational(number) => GuestValue.VRational(GuestRational {
+      numerator: guestInt(number.numerator.negative, number.numerator.limbs),
+      denominator: guestInt(false, number.denominator.limbs),
+    })
+    case VReal(number) => GuestValue.VReal(number)
+    case VChar(scalar) => GuestValue.VChar(scalar)
+    case VString(_, text) => GuestValue.VString(allocateGuestIdentity(identities), text)
+    case VSymbol(name) => GuestValue.VSymbol(name)
+    case VNil => GuestValue.VNil
+    case VPair(_, car, cdr) => GuestValue.VPair(
+      allocateGuestIdentity(identities),
+      cloneGuest(car, identities),
+      cloneGuest(cdr, identities),
+    )
+    case VVector(_, values, mutable) => {
+      let mut copied: Array<GuestValue> = []
+      for item in values { copied.push(cloneGuest(item, identities)) }
+      GuestValue.VVector(allocateGuestIdentity(identities), copied, mutable)
+    }
+    case VBytevector(_, bytes) => {
+      let mut copied: Array<int> = []
+      for byte in bytes { copied.push(byte) }
+      GuestValue.VBytevector(allocateGuestIdentity(identities), copied)
+    }
+    case VClosure(id) => GuestValue.VClosure(id)
+    case VPrimitive(id) => GuestValue.VPrimitive(id)
+    case VEscape(id) => GuestValue.VEscape(id)
+    case VError(_, error, irritants) => {
+      let mut copiedIrritants: Array<GuestValue> = []
+      for irritant in irritants { copiedIrritants.push(cloneGuest(irritant, identities)) }
+      GuestValue.VError(
+        allocateGuestIdentity(identities),
+        ErrorObjectRow { code: error.code, message: error.message },
+        copiedIrritants,
+      )
+    }
+    case VUninitialized => GuestValue.VUninitialized
+  }
+}
+
+export function packetValues(packet: ValuePacket) -> Array<GuestValue> {
+  match packet {
+    case One(value) => [value]
+    case Many(values) => values
+  }
+}
+
+export function packetFrom(values: Array<GuestValue>) -> ValuePacket {
+  if values.length == 1 { ValuePacket.One(values[0]) } else { ValuePacket.Many(values) }
+}
+
+export function appendGuest(values: Array<GuestValue>, value: GuestValue) -> Array<GuestValue> {
+  let mut result = values
+  result.push(value)
+  result
+}
+
+export function packetOne(packet: ValuePacket, context: string) -> Result<GuestValue, string> {
+  match packet {
+    case One(value) => Ok(value)
+    case Many(values) => Err("E320 multiple values in {context}: got {values.length}")
+  }
+}
+
+export function singleValueSignal(diagnostic: string) -> MachineSignal {
+  MachineSignal.ProjectedRuntimeSignal(
+    diagnostic,
+    "E320",
+    "a single value is required here, but the expression produced zero or multiple values",
+    [],
+  )
+}
+
+export function callbackSingleValueSignal(diagnostic: string, identities: Array<int>) -> MachineSignal {
+  MachineSignal.ConditionSignal(
+    GuestValue.VError(
+      allocateGuestIdentity(identities),
+      ErrorObjectRow {
+        code: "E320",
+        message: "a single value is required here, but the procedure produced zero or multiple values",
+      },
+      [],
+    ),
+    false,
+    diagnostic,
+  )
+}
+
+export function truthy(value: GuestValue) -> bool {
+  match value {
+    case VBool(false) => false
+    case _ => true
+  }
+}
+
+export function allocateCell(cells: Array<GuestValue>, value: GuestValue) -> int {
+  let mut store = cells
+  let id = store.length
+  store.push(value)
+  id
+}
+
+export function writeCell(cells: Array<GuestValue>, id: int, value: GuestValue) -> Result<(), string> {
+  if id < 0 || id >= cells.length { return Err("LIT200 internal cell reference") }
+  let mut store = cells
+  store[id] = value
+  Ok(())
+}
+
+export function allocateEnvironment(environments: Array<EnvironmentRow>, parent: int, cells: Array<int>) -> int {
+  let mut store = environments
+  let id = store.length
+  store.push(EnvironmentRow { parent: parent, cells: cells })
+  id
+}
+
+export function allocateClosure(closures: Array<ClosureRow>, fixedArity: int, hasRest: bool, body: int, environment: int) -> int {
+  let mut store = closures
+  let id = store.length
+  store.push(ClosureRow { fixedArity: fixedArity, hasRest: hasRest, body: body, environment: environment })
+  id
+}
+
+export function allocateContinuation(
+  continuations: Array<ContinuationRow>,
+  frame: ContinuationFrame,
+  parent: int,
+) -> int {
+  let mut store = continuations
+  let depth = if parent < 0 { 1 } else { store[parent].depth + 1 }
+  let id = store.length
+  store.push(ContinuationRow { frame: frame, parent: parent, depth: depth })
+  id
+}
+
+export function allocateDynamic(
+  dynamics: Array<DynamicRow>,
+  suppressed: Array<bool>,
+  frame: DynamicFrame,
+  parent: int,
+) -> int {
+  let mut store = dynamics
+  let mut suppression = suppressed
+  let id = store.length
+  store.push(DynamicRow { frame: frame, parent: parent })
+  suppression.push(false)
+  id
+}
+
+export function isProcedure(value: GuestValue) -> bool {
+  match value {
+    case VClosure(_) | VPrimitive(_) | VEscape(_) => true
+    case _ => false
+  }
+}
+
+export function isCatchableSignal(signal: MachineSignal) -> bool {
+  match signal {
+    case RuntimeSignal(_) | ProjectedRuntimeSignal(_, _, _, _) | ConditionSignal(_, _, _) => true
+    case EscapeSignal(_, _) | ResourceSignal(_) => false
+  }
+}
+
+function runtimeErrorObject(diagnostic: string) -> ErrorObjectRow {
+  let scalars = diagnostic.scalars()
+  if scalars.length >= 5 && scalars[0] == "E" && scalars[4] == " " {
+    return ErrorObjectRow {
+      code: scalars.slice(0, 4).join(""),
+      message: scalars.slice(5, scalars.length).join(""),
+    }
+  }
+  ErrorObjectRow { code: "intrinsic", message: diagnostic }
+}
+
+export function conditionObject(signal: MachineSignal, identities: Array<int>) -> GuestValue {
+  match signal {
+    case RuntimeSignal(diagnostic) => GuestValue.VError(
+      allocateGuestIdentity(identities),
+      runtimeErrorObject(diagnostic),
+      [],
+    )
+    case ProjectedRuntimeSignal(diagnostic, _, _, _) => GuestValue.VError(
+      allocateGuestIdentity(identities),
+      runtimeErrorObject(diagnostic),
+      [],
+    )
+    case ConditionSignal(value, _, _) => value
+    case _ => GuestValue.VError(
+      allocateGuestIdentity(identities),
+      ErrorObjectRow { code: "LIT200", message: "internal non-condition signal" },
+      [],
+    )
+  }
+}
+
+export function conditionContinuable(signal: MachineSignal) -> bool {
+  match signal {
+    case ConditionSignal(_, continuable, _) => continuable
+    case _ => false
+  }
+}
+
+export function runtimeDiagnosticIsUserError(value: string) -> bool {
+  value.startsWith("E330 ")
+}
+
+export function nearestConditionTarget(
+  dynamics: Array<DynamicRow>,
+  suppressed: Array<bool>,
+  dynamic: int,
+) -> int {
+  let mut cursor = dynamic
+  while cursor >= 0 {
+    match dynamics[cursor].frame {
+      case HandlerDynamic(_) => if !suppressed[cursor] { return cursor }
+      case GuardDynamic(_, _, _, _) => return cursor
+      case _ => {}
+    }
+    cursor = dynamics[cursor].parent
+  }
+  -1
+}
+
+export function localCell(environments: Array<EnvironmentRow>, environment: int, depth: int, slot: int) -> Result<int, string> {
+  let mut cursor = environment
+  let mut remaining = depth
+  while remaining > 0 {
+    if cursor < 0 || cursor >= environments.length { return Err("E300 invalid lexical depth") }
+    cursor = environments[cursor].parent
+    remaining -= 1
+  }
+  if cursor < 0 || cursor >= environments.length { return Err("E300 invalid lexical environment") }
+  let row = environments[cursor]
+  if slot < 0 || slot >= row.cells.length { return Err("E300 invalid lexical slot") }
+  Ok(row.cells[slot])
+}
+
+export function requireArity(name: string, actual: int, minimum: int, maximum: int) -> Result<(), string> {
+  if actual < minimum || (maximum >= 0 && actual > maximum) {
+    let expected = if maximum == minimum { "{minimum}" } else if maximum < 0 { "at least {minimum}" } else { "{minimum}..{maximum}" }
+    return Err("E302 {name}: expected {expected} arguments, got {actual}")
+  }
+  Ok(())
+}
+
+export function properList(value: GuestValue) -> Result<Array<GuestValue>, string> {
+  guestListElements(value, "apply", "E312")
+}
+
+export function guestListElements(value: GuestValue, name: string, code: string) -> Result<Array<GuestValue>, string> {
+  let mut result: Array<GuestValue> = []
+  let mut cursor = value
+  loop {
+    match cursor {
+      case VNil => { break }
+      case VPair(_, car, cdr) => {
+        result.push(car)
+        cursor = cdr
+      }
+      case _ => return Err("{code} {name}: proper list required")
+    }
+  }
+  Ok(result)
+}
+
+export function requireHigherOrderArity(name: string, actual: int) -> Result<(), string> {
+  let expectedCount = if name == "reduce" || name == "fold-left" || name == "fold-right" { 3 } else { 2 }
+  if actual == expectedCount { return Ok(()) }
+  let expected = if expectedCount == 3 {
+    "3 arguments (a procedure, an init, and a list)"
+  } else if name == "string-map" || name == "string-for-each" {
+    "2 arguments (a procedure and a string)"
+  } else if name == "vector-map" || name == "vector-for-each" {
+    "2 arguments (a procedure and a vector)"
+  } else if name == "all?" || name == "any?" || name == "filter" {
+    "2 arguments (a predicate and a list)"
+  } else {
+    "2 arguments (a procedure and a list)"
+  }
+  Err("E302 {name}: expected {expected}, got {actual}")
+}
+
+export function reversedGuestValues(values: Array<GuestValue>) -> Array<GuestValue> {
+  let mut result: Array<GuestValue> = []
+  let mut index = values.length - 1
+  while index >= 0 {
+    result.push(values[index])
+    index -= 1
+  }
+  result
+}
+
+export function higherOrderInvocationArguments(
+  name: string,
+  element: GuestValue,
+  accumulator: GuestValue,
+) -> Array<GuestValue> {
+  if name == "reduce" || name == "fold-left" { [accumulator, element] }
+  else if name == "fold-right" { [element, accumulator] }
+  else { [element] }
+}
+
+export function completedHigherOrderPacket(
+  name: string,
+  collected: Array<GuestValue>,
+  accumulator: GuestValue,
+  identities: Array<int>,
+) -> ValuePacket {
+  if name == "map" || name == "filter" {
+    return ValuePacket.One(guestList(collected, identities))
+  }
+  if name == "vector-map" {
+    return ValuePacket.One(GuestValue.VVector(allocateGuestIdentity(identities), collected, true))
+  }
+  if name == "string-map" {
+    let mut text = ""
+    for value in collected {
+      match value {
+        case VChar(scalar) => { text += scalarText(scalar) }
+        case _ => {}
+      }
+    }
+    return ValuePacket.One(GuestValue.VString(allocateGuestIdentity(identities), text))
+  }
+  if name == "reduce" || name == "fold-left" || name == "fold-right" {
+    return ValuePacket.One(accumulator)
+  }
+  if name == "all?" { return ValuePacket.One(GuestValue.VBool(true)) }
+  if name == "any?" { return ValuePacket.One(GuestValue.VBool(false)) }
+  ValuePacket.Many([])
+}
+
+export function guestIntFromNonnegative(value: int) -> GuestInt {
+  if value <= 0 { return guestIntZero() }
+  let mut remaining = value
+  let mut limbs: Array<int> = []
+  while remaining > 0 {
+    limbs.push(remaining % 10000)
+    remaining = remaining / 10000
+  }
+  guestInt(false, limbs)
+}
+
+export function guestCount(value: GuestValue, name: string) -> Result<int, string> {
+  match value {
+    case VInt(number) => {
+      if number.negative { return Err("E311 {name}: size is negative") }
+      match toInt(renderGuestInt(number)) {
+        case Some(count) => if count <= 1000000 { Ok(count) } else { Err("E311 {name}: size is too large") }
+        case None => Err("E311 {name}: size is too large")
+      }
+    }
+    case _ => Err("E312 {name}: exact nonnegative integer required")
+  }
+}
+
+export function guestByte(value: GuestValue, name: string) -> Result<int, string> {
+  let byte = guestCount(value, name)?
+  if byte > 255 { return Err("E312 {name}: byte required") }
+  Ok(byte)
+}
+
+export function guestListWithTail(values: Array<GuestValue>, tail: GuestValue, identities: Array<int>) -> GuestValue {
+  let mut result = tail
+  let mut index = values.length - 1
+  while index >= 0 {
+    result = GuestValue.VPair(allocateGuestIdentity(identities), values[index], result)
+    index -= 1
+  }
+  result
+}
+
+export function guestList(values: Array<GuestValue>, identities: Array<int>) -> GuestValue {
+  guestListWithTail(values, GuestValue.VNil, identities)
+}
+
+function isNumberValue(value: GuestValue) -> bool {
+  match value {
+    case VInt(_) | VRational(_) | VReal(_) => true
+    case _ => false
+  }
+}
+
+function isIntegerValue(value: GuestValue) -> bool {
+  match value {
+    case VInt(_) => true
+    case VReal(number) => match realToRational(number) {
+      case Ok(rational) => guestIntIsOne(rational.denominator)
+      case Err(_) => false
+    }
+    case _ => false
+  }
+}
+
+export function primitivePredicate(name: string, value: GuestValue) -> bool {
+  if name == "number?" { return isNumberValue(value) }
+  if name == "integer?" { return isIntegerValue(value) }
+  if name == "procedure?" { return isProcedure(value) }
+  match value {
+    case VInt(_) => name == "exact-integer?"
+    case VBool(_) => name == "boolean?"
+    case VSymbol(_) => name == "symbol?"
+    case VString(_, _) => name == "string?"
+    case VPair(_, _, _) => name == "pair?"
+    case VVector(_, _, _) => name == "vector?"
+    case VBytevector(_, _) => name == "bytevector?"
+    case VChar(_) => name == "char?"
+    case _ => false
+  }
+}
+
+export function eqvGuest(left: GuestValue, right: GuestValue) -> bool {
+  match left {
+    case VBool(value) => match right {
+      case VBool(other) => value == other
+      case _ => false
+    }
+    case VInt(value) => match right {
+      case VInt(other) => guestIntEqual(value, other)
+      case _ => false
+    }
+    case VRational(value) => match right {
+      case VRational(other) => rationalEqual(value, other)
+      case _ => false
+    }
+    case VReal(value) => match right {
+      case VReal(other) => renderReal(value) == renderReal(other)
+      case _ => false
+    }
+    case VChar(value) => match right {
+      case VChar(other) => value == other
+      case _ => false
+    }
+    case VString(identity, _) => match right {
+      case VString(other, _) => identity == other
+      case _ => false
+    }
+    case VSymbol(value) => match right {
+      case VSymbol(other) => value == other
+      case _ => false
+    }
+    case VNil => match right {
+      case VNil => true
+      case _ => false
+    }
+    case VPair(identity, _, _) => match right {
+      case VPair(other, _, _) => identity == other
+      case _ => false
+    }
+    case VVector(identity, _, _) => match right {
+      case VVector(other, _, _) => identity == other
+      case _ => false
+    }
+    case VBytevector(identity, _) => match right {
+      case VBytevector(other, _) => identity == other
+      case _ => false
+    }
+    case VClosure(identity) => match right {
+      case VClosure(other) => identity == other
+      case _ => false
+    }
+    case VPrimitive(identity) => match right {
+      case VPrimitive(other) => identity == other
+      case _ => false
+    }
+    case VEscape(identity) => match right {
+      case VEscape(other) => identity == other
+      case _ => false
+    }
+    case VError(identity, _, _) => match right {
+      case VError(other, _, _) => identity == other
+      case _ => false
+    }
+    case VUninitialized => match right {
+      case VUninitialized => true
+      case _ => false
+    }
+  }
+}
+
+function bytevectorsEqual(left: Array<int>, right: Array<int>) -> bool {
+  if left.length != right.length { return false }
+  let mut index = 0
+  while index < left.length {
+    if left[index] != right[index] { return false }
+    index += 1
+  }
+  true
+}
+
+export function equalGuest(left: GuestValue, right: GuestValue) -> bool {
+  let mut work: Array<EqualityWork> = [EqualityWork { left: left, right: right }]
+  let mut visited: Set<string> = Set.of<string>()
+  while work.length > 0 {
+    let current = work[work.length - 1]
+    work = work.slice(0, work.length - 1)
+    match current.left {
+      case VPair(identity, car, cdr) => match current.right {
+        case VPair(otherIdentity, otherCar, otherCdr) => {
+          if identity != otherIdentity {
+            let key = "pair:{identity}:{otherIdentity}"
+            if !(key in visited) {
+              visited.add(key)
+              work.push(EqualityWork { left: car, right: otherCar })
+              work.push(EqualityWork { left: cdr, right: otherCdr })
+            }
+          }
+        }
+        case _ => return false
+      }
+      case VVector(identity, values, _) => match current.right {
+        case VVector(otherIdentity, otherValues, _) => {
+          if identity != otherIdentity {
+            if values.length != otherValues.length { return false }
+            let key = "vector:{identity}:{otherIdentity}"
+            if !(key in visited) {
+              visited.add(key)
+              let mut index = 0
+              while index < values.length {
+                work.push(EqualityWork { left: values[index], right: otherValues[index] })
+                index += 1
+              }
+            }
+          }
+        }
+        case _ => return false
+      }
+      case VString(_, text) => match current.right {
+        case VString(_, other) => if text != other { return false }
+        case _ => return false
+      }
+      case VBytevector(_, bytes) => match current.right {
+        case VBytevector(_, other) => if !bytevectorsEqual(bytes, other) { return false }
+        case _ => return false
+      }
+      case _ => if !eqvGuest(current.left, current.right) { return false }
+    }
+  }
+  true
+}
+
+export function lowerHex(value: int) -> string {
+  let digits = "0123456789abcdef".scalars()
+  if value == 0 { return "0" }
+  let mut remaining = value
+  let mut reversed: Array<string> = []
+  while remaining > 0 {
+    reversed.push(digits[remaining % 16])
+    remaining = remaining / 16
+  }
+  let mut output = ""
+  let mut index = reversed.length - 1
+  while index >= 0 {
+    output += reversed[index]
+    index -= 1
+  }
+  output
+}
+
+export function scalarText(scalar: int) -> string {
+  fromCodePoint(scalar) ?? ""
+}

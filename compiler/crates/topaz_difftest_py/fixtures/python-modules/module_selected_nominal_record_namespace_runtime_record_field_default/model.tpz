@@ -1,0 +1,3 @@
+
+import config
+export record User { name: string, age: int = config.inner.base }

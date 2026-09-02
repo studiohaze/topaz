@@ -1,0 +1,53 @@
+# corpus/v5.2/compat/same-shape manifest (CDR-002 §3). Phase A: every
+# fixture is parse-phase and runnable; resolve-phase fixtures
+# (corpus/v5.2/modules/) land separately and are counted as
+# pending until the resolver ships.
+
+[totals]
+recorded = 7
+runnable = 7
+pending = 0
+
+[[fixture]]
+file = "base-export-linebreak.tpz"
+phase = "parse"
+versions = "both"
+result = "ok"
+
+[[fixture]]
+file = "base-import-shapes.tpz"
+phase = "parse"
+versions = "both"
+result = "ok"
+
+[[fixture]]
+file = "err001-guard-shape.tpz"
+phase = "parse"
+versions = "both"
+result = "ok"
+
+[[fixture]]
+file = "record-vs-block.tpz"
+phase = "parse"
+versions = "both"
+result = "ok"
+
+[[fixture]]
+file = "c3-head-word-positions.tpz"
+phase = "parse"
+versions = "both"
+result = "ok"
+
+[[fixture]]
+file = "c3-tagged-adjacency.tpz"
+phase = "parse"
+versions = "both"
+result = "error"
+code = "TPZ2002"
+
+[[fixture]]
+file = "c3-colon-brace.tpz"
+phase = "parse"
+versions = "both"
+result = "error"
+code = "TPZ2001"

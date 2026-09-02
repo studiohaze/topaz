@@ -1,0 +1,14 @@
+
+function main() -> int {
+    let a = match Set.of(1, 2) {
+        case s: Set<int> => 4
+        case _ => 0
+    }
+    let m = map { "a": 1 }
+    let b = match m {
+        case value: Map<string, int> => 5
+        case _ => 0
+    }
+    a + b
+}
+main()

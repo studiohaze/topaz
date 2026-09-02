@@ -1,0 +1,9 @@
+record User { name: string, age: int }
+impl User {
+  function greeting(self) -> string {
+    "Hi {self.name} ({self.age})"
+  }
+}
+let u: User = User { name: "Ada", age: 36 }
+print(u.greeting())
+0

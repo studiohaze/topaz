@@ -1,0 +1,56 @@
+{
+  "schema": "lispex.f15-provider-evidence/v1",
+  "subjects": {
+    "evaluator_source_revision": "e3909e56491b53c61a63efaff51b6093019d8b27",
+    "provider_wire_revision": "451027beb8daff90c09364a1fd38a2a9f3790e55",
+    "qualification_revision": "8e7d4bf2a1bc550b5e1315449002cf2938952ec4",
+    "artifact_sha256": "dd4cde2976d825ae99b542d308d87489ac96848e0710329dbb9173664d8c5ad8",
+    "executable_profile_id": "lispex/r7rs-rule-current-profile-bounded/1",
+    "feature_set_sha256": "6ff16159ab9c6758c1485b67c928a9b3b4a896e4f2ecf96e4cf3cbaf5ac22fae"
+  },
+  "execution_input": {
+    "path": "docs/bounded-execution/f15-final-provider-execution-inputs.v1.json",
+    "sha256": "6222dc50e99ca51ac85e6f214b2c03a692493c1aac9b6c9ec6b17c30bc10df28"
+  },
+  "kind": "post-b7-structural-closure",
+  "primaryEvidence": [
+    {
+      "path": "docs/bounded-execution/guest-kernel-roots.v0.json",
+      "sha256": "9e07800dad68fd3139c5a0ba5ffeb3b1a6ef5f5de64172daae6a7d230202540a"
+    },
+    {
+      "path": "docs/bounded-execution/evaluation-allocation-mir.v0.json",
+      "sha256": "a167dfe3e8d63e9cda69214f16a1d6135ff45099c3fdee3c620f6464d89cd377"
+    },
+    {
+      "path": "docs/bounded-execution/recursive-components.v0.json",
+      "sha256": "1d029f8412e76dfd968a153498fcd5947fca922b2e8e1796c726cc0daf35bfe5"
+    },
+    {
+      "path": "docs/bounded-execution/guest-kernel-dependency-allowlist.v0.json",
+      "sha256": "c463f4d93bed11614b5854049caea734c0c124c8cb2bf072a0683afbb14b611f"
+    },
+    {
+      "path": "docs/bounded-execution/full-profile-cost-classification.v0.json",
+      "sha256": "1f3c0c07561e994bd67adf2611e85259ce6711745150620936ad23eb89ebee5f"
+    },
+    {
+      "path": "docs/bounded-execution/full-guest-control-classification.v0.json",
+      "sha256": "3ebcf7562ac79a23b5d7b77a72c467e29c511643b32fcbaf8567f5665e90f720"
+    },
+    {
+      "path": "docs/bounded-execution/f15-final-semantic-surface-closure.v1.json",
+      "sha256": "271ac76509fd77363eb317f0511b697604484d653ffd9d5a09194d691b4bb8d8"
+    }
+  ],
+  "result": {
+    "status": "passed",
+    "closedWorldRoots": true,
+    "backedgeDominance": true,
+    "recursionGuards": true,
+    "allocationSinkGates": true,
+    "dependencyCapabilityAllowlist": true,
+    "wasmImports": 0,
+    "sourceRevision": "e3909e56491b53c61a63efaff51b6093019d8b27"
+  }
+}

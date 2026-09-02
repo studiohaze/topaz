@@ -1,0 +1,2 @@
+match Decimal.fromInt(1).div(Decimal.fromInt(0), 2) { case Ok(d) => d.toString()
+case Err(e) => e }

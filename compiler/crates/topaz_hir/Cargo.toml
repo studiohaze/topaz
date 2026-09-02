@@ -1,0 +1,21 @@
+[package]
+name = "topaz_hir"
+description = "Engine-neutral typed and lowered IR for the Topaz compiler"
+version.workspace = true
+license.workspace = true
+edition = "2024"
+
+[dependencies]
+# topaz_hir depends ONLY on the AST + spans — never on topaz_check. The
+# dependency direction is `check -> hir` (the checker may later produce
+# `CallFacts` defined here), never `hir -> check`; otherwise `topaz_emit ->
+# topaz_hir -> topaz_check` would drag the checker onto the difftest no-check
+# path (CDR-006 §7).
+topaz_diag = { path = "../topaz_diag" }
+topaz_syntax = { path = "../topaz_syntax" }
+
+[dev-dependencies]
+topaz_parser = { path = "../topaz_parser" }
+
+[lints]
+workspace = true

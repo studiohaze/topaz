@@ -1,0 +1,49 @@
+import data_lens_core { DataFormat, SortMode, applyLens, parseData }
+import std.http { HttpRequest, HttpResponse, header, json, text }
+
+function queryValue(req: HttpRequest, name: string) -> string {
+  match req.url.query().get(name) {
+    case Some(values) => values.get(0) ?? ""
+    case None => ""
+  }
+}
+
+function analyze(req: HttpRequest) -> HttpResponse {
+  let mediaType = header(req, "content-type") ?? ""
+  let format = if mediaType.contains("text/csv") {
+    DataFormat.Csv
+  } else if mediaType.contains("application/json") {
+    DataFormat.Json
+  } else {
+    return text(415, "content-type must be text/csv or application/json")
+  }
+  let source = match req.body.decodeUtf8() {
+    case Ok(value) => value
+    case Err(error) => return text(400, "request body must be UTF-8: {error}")
+  }
+  let rows = match parseData(source, format) {
+    case Ok(value) => value
+    case Err(error) => return text(400, error)
+  }
+  let activeOnly = queryValue(req, "active") == "true"
+  let sort = if queryValue(req, "sort") == "value" { SortMode.ByValue } else { SortMode.ByName }
+  let result = applyLens(rows, queryValue(req, "query"), activeOnly, sort)
+  match json(200, result) {
+    case Ok(response) => response
+    case Err(error) => text(500, "cannot encode response: {error}")
+  }
+}
+
+export function handle(req: HttpRequest) -> HttpResponse {
+  let path = req.url.path()
+  if req.method == "GET" && path == "/health" {
+    return text(200, "ok")
+  }
+  if path != "/v1/analyze" {
+    return text(404, "not found")
+  }
+  if req.method != "POST" {
+    return text(405, "method not allowed")
+  }
+  analyze(req)
+}

@@ -1,0 +1,14 @@
+let path = p"/home/{user}/docs/{fileName}"         // path normalization
+let pattern = r"^[a-z0-9_]+$"                       // regex with light escapes
+let cmd = sh"grep {pattern} {file}"                 // safe shell template (execution policy‑controlled)
+
+// SQL: parameters are always bound (no raw string insertion)
+let query = sql"SELECT * FROM users WHERE age > {age} AND city = {city}"
+
+// Multiline SQL composes with the triple-quoted form
+let report = sql"""
+    SELECT name, total
+    FROM orders
+    WHERE region = {region}
+    ORDER BY total DESC
+    """

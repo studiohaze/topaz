@@ -1,0 +1,15 @@
+
+function apply(cb: { total: (int, ...int) -> int }) -> int {
+    cb.total(3, ...[1, 2])
+}
+function sum(seed: int, ...xs: int) -> int {
+    let mut total = seed
+    for x in xs {
+        total = total + x
+    }
+    total
+}
+function main() -> int {
+    apply({ total: sum })
+}
+main()

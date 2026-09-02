@@ -1,0 +1,10 @@
+
+function mark(label: string, xs: Array<int>) -> Array<int> {
+    print(label)
+    xs
+}
+function main() -> int {
+    let m = Map.new(...mark("map", [1]))
+    m.length
+}
+main()

@@ -1,0 +1,7 @@
+
+function f() -> int {
+    let mut xs = [1, 2]
+    xs[2] = 9
+    0
+}
+f()

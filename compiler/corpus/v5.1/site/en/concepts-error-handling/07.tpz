@@ -1,0 +1,33 @@
+// Automatic error propagation with ? operator
+function complexCalculation(a: float, b: float, c: float) -> Result<float, string> {
+    let first = divide(a, b)?          // Auto return on error
+    let second = squareRoot(first)?    // Auto return on error
+    let final = divide(second, c)?     // Auto return on error
+    
+    return Ok(final)
+}
+
+// Above code is equivalent to:
+function complexCalculation_manual(a: float, b: float, c: float) -> Result<float, string> {
+    return match divide(a, b) {
+        case Ok(first) => match squareRoot(first) {
+            case Ok(second) => match divide(second, c) {
+                case Ok(final) => Ok(final)
+                case Err(error) => Err(error)
+            }
+            case Err(error) => Err(error)
+        }
+        case Err(error) => Err(error)
+    }
+}
+
+// Option values use explicit match (`?` applies to Result only)
+function firstAndSecondSum(array: Array<int>) -> Option<int> {
+    match firstElementInt(array) {
+        case Some(first) => match array.get(1) {
+            case Some(second) => Some(first + second)
+            case None => None
+        }
+        case None => None
+    }
+}

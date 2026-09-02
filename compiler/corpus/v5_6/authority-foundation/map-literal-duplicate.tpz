@@ -1,0 +1,2 @@
+let values = map { "same": 1, "same": 2 }
+print("{values}")

@@ -1,0 +1,8 @@
+
+import math
+function main() -> int {
+    let total = math.add(20, 22)
+    print("{total}")
+    total
+}
+main()

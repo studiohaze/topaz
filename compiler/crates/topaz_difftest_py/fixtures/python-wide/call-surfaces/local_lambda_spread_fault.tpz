@@ -1,0 +1,7 @@
+
+function main() -> int {
+    let f = (a: int) => a
+    let xs = [1]
+    f(...xs)
+}
+main()

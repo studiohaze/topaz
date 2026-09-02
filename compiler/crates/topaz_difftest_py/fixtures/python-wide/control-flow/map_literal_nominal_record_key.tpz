@@ -1,0 +1,4 @@
+record User { id: int }
+let u = User { id: 1 }
+let m = map { u: "Ada" }
+m.getOr(User { id: 1 }, "miss")

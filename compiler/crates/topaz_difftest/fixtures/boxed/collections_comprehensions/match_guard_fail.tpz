@@ -1,0 +1,5 @@
+let n = -3
+match n {
+  case x if x > 0 => "pos"
+  case _ => "neg"
+}

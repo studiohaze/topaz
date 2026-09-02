@@ -1,0 +1,22 @@
+// Simple arrow function
+let square = (x: int) => x * x
+let greet = (name: string) => "Hi, {name}!"
+
+// Arrow function without parameters
+let randomNumber = () => Math.random() * 100.0
+
+// Complex arrow function
+let userInfo = (name: string, age: int) => {
+    let status = if age >= 18 { "adult" } else { "minor" }
+    return {
+        name: name,
+        age: age,
+        status: status
+    }
+}
+
+// Usage examples
+print("{square(5)}")               // 25
+print(greet("TopazDev"))           // "Hi, TopazDev!"
+let info = userInfo("John", 25)
+print("{info.name} is an {info.status}")  // "John is an adult"

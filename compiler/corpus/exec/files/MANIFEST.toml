@@ -1,0 +1,12 @@
+# corpus/exec/files — §22.3 host file transcripts (CDR-003 §11)
+
+[totals]
+recorded = 1
+runnable = 1
+pending = 0
+
+[[fixture]]
+file = "open-write.tpz"
+phase = "exec"
+versions = "5.2"
+result = "ok"

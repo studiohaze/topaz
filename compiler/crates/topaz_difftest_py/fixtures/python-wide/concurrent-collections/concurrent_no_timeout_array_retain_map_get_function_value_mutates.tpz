@@ -1,0 +1,24 @@
+
+function keep(x: int) -> bool {
+    let mut i = 0
+    while i < 200 {
+        i = i + 1
+    }
+    x > 2
+}
+
+let callbacks = map { "keep": keep }
+
+let r = concurrent {
+    slow: {
+        let mut xs = [1, 2, 3, 4]
+        let before = xs[0] + xs[1] + xs[2] + xs[3]
+        match callbacks.get("keep") {
+            case Some(cb) => xs.retain(cb)
+            case None => ()
+        }
+        before * 10 + xs[0] + xs[1]
+    }
+    fast: 0
+}
+r.slow + r.fast

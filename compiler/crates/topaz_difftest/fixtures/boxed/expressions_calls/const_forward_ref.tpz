@@ -1,0 +1,3 @@
+let y = X
+const X = 10
+y

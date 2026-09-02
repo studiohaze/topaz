@@ -1,0 +1,197 @@
+---
+title: 'Core Functions'
+description: 'Canonical Topaz public-example surface for the small built-in function and helper set defined by the SPEC.'
+covers: '§11, §13, §14, §15, §16, §22'
+---
+
+Topaz keeps the public canonical function surface intentionally small. These are the names public examples may use without inventing a larger standard library. A future standard-library specification may refine this surface, but canonical docs stay within the forms below.
+
+## Output and Conversion
+
+`print` takes a `string` only — non-string values are printed via interpolation. `toInt(text: string)` returns `Option<int>` and never fails silently: handle the `None` case explicitly.
+
+```topaz
+print("Hello, Topaz!")
+
+// toInt returns Option<int>
+let answer = match toInt("42") {
+    case Some(value) => value
+    case None => 0
+}
+print("Parsed answer: {answer}")
+```
+
+```topaz
+function parsePort(text: string) -> Result<int, string> {
+    if text == "" {
+        return Err("Port is required")
+    }
+
+    match toInt(text) {
+        case Some(port) => Ok(port)
+        case None => Err("Port must be an integer")
+    }
+}
+```
+
+## Strings
+
+Strings are not indexable and expose no `.length`. Scalar-level access goes through `s.scalars()`, which returns an `Array<string>` of single-scalar strings.
+
+```topaz
+let word = "topaz"
+let scalars = word.scalars()           // ["t", "o", "p", "a", "z"]
+let length = word.scalars().length     // 5
+print("Scalar count: {length}")
+```
+
+## Files and Resources
+
+Resource operations are Result-first. Open the resource with `?`, register cleanup with `defer`, and return the final operation result.
+
+```topaz
+function readText(path: string) -> Result<string, string> {
+    let file = open(path)?
+    defer { file.close() }
+
+    let content = file.read()?
+    Ok(content)
+}
+
+function writeText(path: string, content: string) -> Result<(), string> {
+    let file = open(path)?
+    defer { file.close() }
+
+    file.write(content)
+}
+```
+
+## JSON and Regex (Reserved Names)
+
+`JSON.parse` and `regex.match` are **reserved** standard-library names: they are not part of the typed minimum until `JSONValue`, `Regex`, and `Match` are specified. Canonical examples may mention them only where their return shape is irrelevant, with a deferral note — do not write code that depends on what they return.
+
+Regex *template values* are canonical today via the single-line `r"..."` tagged form:
+
+```topaz
+let digits = r"^[0-9]+$"     // a regex template value (no matching API yet)
+```
+
+## Collections
+
+The canonical collection constructors are `Array.of`, `Map.new`, and `Set.of`. Mutating collection operations require mutable bindings.
+
+```topaz
+let mut numbers = Array.of(1, 2, 3)
+numbers.push(4)
+
+let count = numbers.length
+let third = numbers[2]           // 3 — direct indexing faults when out of bounds
+let safe = numbers.get(10)       // None — non-faulting read returns Option<int>
+let hasFour = 4 in numbers
+
+print("Count: {count}")
+print("Third: {third}")
+print("Has four: {hasFour}")
+```
+
+`arr.get` is the canonical non-faulting read; prefer it whenever the index might be out of range.
+
+```topaz
+let mut scores: Map<string, int> = Map.new()
+scores.insert("alice", 10)
+scores.insert("bob", 20)
+
+let aliceScore = scores.get("alice")     // Some(10) — None when the key is absent
+let removed = scores.remove("bob")       // Some(20) — Some(old) if present, else None
+let knowsAlice = "alice" in scores.keys  // membership goes through the keys view
+print("Has alice: {knowsAlice}")
+```
+
+`m.keys` is an `Array<K>` **snapshot** in key insertion order — mutating the map later does not change an already produced keys array. Direct `x in map` is not canonical; use `x in map.keys`.
+
+```topaz
+let mut tags = Set.of("docs")
+tags.add("v5")
+
+let hasDocs = "docs" in tags
+let dropped = tags.remove("docs")        // true iff an element was removed
+print("Has docs: {hasDocs}")
+```
+
+## map, filter, and reduce
+
+`map`, `filter`, and `reduce` are ordinary functions. Their signatures are `map(xs, f)`, `filter(xs, f)`, and `reduce(xs, initial, f)` — the initial value comes **before** the reducer. With pipelines, pass the piped value through `_`.
+
+```topaz
+let numbers = Array.of(1, 2, 3, 4, 5, 6)
+
+let result = numbers
+    |> filter(_, x => x % 2 == 0)
+    |> map(_, x => x * x)
+    |> reduce(_, 0, (acc, x) => acc + x)
+
+print("Sum of even squares: {result}")
+```
+
+## Result Helpers
+
+Use `Ok`, `Err`, `match`, and `?` propagation for recoverable failures.
+
+```topaz
+function loadPort(path: string) -> Result<int, string> {
+    let content = readText(path)?
+    parsePort(content)
+}
+
+match loadPort("app.port") {
+    case Ok(port) => print("Port: {port}")
+    case Err(error) => print("Config error: {error}")
+}
+```
+
+## Concurrent Blocks
+
+`concurrent` returns the record of arm results. The `else` block must return a same-shaped fallback record in canonical public examples.
+
+```topaz
+function profileSnapshot() -> { name: string } {
+    { name: "Topaz" }
+}
+
+function recentActivity() -> Array<string> {
+    Array.of("login", "edit")
+}
+
+function emptyProfile() -> { name: string } {
+    { name: "offline" }
+}
+
+let dashboard = concurrent(timeout: 3s) {
+    profile: profileSnapshot()
+    activity: recentActivity()
+} else {
+    {
+        profile: emptyProfile(),
+        activity: Array.of("offline")
+    }
+}
+
+print("Activity items: {dashboard.activity.length}")
+```
+
+## Tagged Templates
+
+Tagged templates are values. The shell template tag builds a shell template value; it does not execute a command by itself.
+
+```topaz
+let appName = "topaz"
+let userId = 42
+let dir = p"/var/{appName}"
+
+let configPath = p"/etc/{appName}/config.toml"
+let digits = r"^[0-9]+$"
+let listCommand = sh"ls {dir}"
+let lookup = sql"select * from users where id = {userId}"
+```
+
+This page is intentionally narrow: if a helper is not listed here or defined in the surrounding example, do not treat it as canonical Topaz public surface.

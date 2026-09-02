@@ -1,0 +1,30 @@
+[package]
+name = "data_lens_service"
+version = "0.1.0"
+language = "5.18"
+entry = "src/main.tpz"
+
+[build]
+target = "http-service"
+deterministic = true
+
+[service]
+bind = "127.0.0.1"
+port = 8080
+workers = 1
+max_connections = 64
+queue_capacity = 32
+max_target_bytes = 8192
+max_header_bytes = 16384
+max_headers = 64
+max_body_bytes = 1048576
+header_timeout_ms = 5000
+body_timeout_ms = 5000
+handler_timeout_ms = 1000
+shutdown_grace_ms = 5000
+log_format = "text"
+
+[dependencies]
+std = "5.18"
+lens_labels = "1.0.0"
+data_lens_core = { path = "../data-lens-core", hash = "sha256:2ad67cd92214842b1141765d1d31b87383aa828d8ea50e52d9664323a7007e9f" }

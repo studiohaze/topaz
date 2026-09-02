@@ -1,0 +1,8 @@
+
+export enum Status derives Eq, Order, Show { Ready, Busy(int) }
+export function ready() -> Status {
+    Status.Ready
+}
+export function busy(n: int) -> Status {
+    Status.Busy(n)
+}

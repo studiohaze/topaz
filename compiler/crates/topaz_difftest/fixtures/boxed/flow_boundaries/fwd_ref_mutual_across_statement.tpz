@@ -1,0 +1,8 @@
+function isEven(n: int) -> bool {
+  if n == 0 { true } else { isOdd(n - 1) }
+}
+let sep = 1
+function isOdd(n: int) -> bool {
+  if n == 0 { false } else { isEven(n - 1) }
+}
+isEven(4)

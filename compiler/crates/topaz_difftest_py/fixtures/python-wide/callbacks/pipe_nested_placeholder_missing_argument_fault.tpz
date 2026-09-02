@@ -1,0 +1,8 @@
+
+function add(a: int, b: int) -> int {
+    a + b
+}
+function main() -> int {
+    1 |> add(10 + _)
+}
+main()

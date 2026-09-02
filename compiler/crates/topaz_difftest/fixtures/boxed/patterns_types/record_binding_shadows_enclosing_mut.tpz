@@ -1,0 +1,5 @@
+let mut x = 99
+let r = { x: 5 }
+let f = () => match r { case { x } => x
+case _ => 0 }
+f()

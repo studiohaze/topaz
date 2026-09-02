@@ -1,0 +1,72 @@
+{
+  "schema": "studio-haze.coordination-snapshot/v1",
+  "id": "lispex-1.15.8-full-provider/v1",
+  "status": "vendored-exact-provider-material-not-release-build-input",
+  "policy": {
+    "path": "embedding-readiness/release-coordination-policy.v1.json",
+    "sha256": "4a8480138ca5fc14348b0162b3bee6c7b5e69551c6c994b7109b9dd77b5e38e6"
+  },
+  "component_manifest": {
+    "path": "embedding-readiness/release-dag/components/lispex-full-embed-evaluator-1.v1.json",
+    "sha256": "741275df24d81b7eb002657c285fb142a6f089ec5ebc744fbb5a88c749fc1b09"
+  },
+  "dispositions": {
+    "path": "embedding-readiness/release-dag/dispositions/lispex-1.15.8-full-provider.v1.json",
+    "sha256": "89319d4c738ce5b98a8ba3178a795722dc52782d721d454b0ef55045a660c07a"
+  },
+  "attestation_history": {
+    "path": "embedding-readiness/release-dag/history/lispex-attestation-history.v7.json",
+    "sha256": "fc0627faa43cbd6b0225ed98621418e6282af4f6811e50d76d81cc3aad553877"
+  },
+  "retention_record": {
+    "path": "embedding-readiness/release-dag/retention/lispex-v1.15.8-full-embed-evaluator.v1.json",
+    "sha256": "4ddd77db7d4e39a9e7a7ff9d1c2ff900cec02a22069ce6d47a5724b5a135006a"
+  },
+  "final_provider_court": {
+    "path": "docs/bounded-execution/f15-final-provider-court.v1.json",
+    "sha256": "d4810055356c4cbd6ff046786b88d1af78ead561b74c5d656d5bd784cd4ad4b1"
+  },
+  "provider_root": {
+    "path": "docs/bounded-execution/f15-final-provider-root.v1.json",
+    "sha256": "6ef0fafd3467d5dbfc89291574f83220bd4e204b11e34b3a40ca9a064274bcd9"
+  },
+  "relationship_records": [
+    {
+      "path": "embedding-readiness/release-dag/attestations/lispex-full-embed-evaluator-1.v1.json",
+      "sha256": "320af9cefe541f5196ac82a3250db7dca273ce102cdf75cb046e38870a25d9d6"
+    },
+    {
+      "path": "embedding-readiness/release-dag/attestations/lispex-full-embed-evaluator-redistribution-1.v1.json",
+      "sha256": "70412c2f69a45bef54fa7cf7cfafef05e1a301ced92d24e33ec7886819ada460"
+    },
+    {
+      "path": "embedding-readiness/release-dag/attestations/lispex-embed-evaluator-1.12.4.v1.json",
+      "sha256": "c99fa300aa916c3eec9339cd437d027032753cf72640cc71caf44b77e8cd66ad"
+    }
+  ],
+  "resolved_artifacts": [
+    {
+      "id": "lispex-evaluator/rust-vm-current-profile/1",
+      "sha256": "dd4cde2976d825ae99b542d308d87489ac96848e0710329dbb9173664d8c5ad8"
+    },
+    {
+      "id": "lispex-full-embed-evaluator-redistribution/1",
+      "sha256": "7b28fb74bd0d05b9b6aee190a2d4cb863f5b0fcea7ed23946bd00068a3fc4511"
+    },
+    {
+      "id": "lispex-embed-evaluator/1.12.4",
+      "sha256": "fa6e52559e1f5a43e50a3b7ac0cc5add6930cff0aed8aaff462cff4609362870"
+    },
+    {
+      "id": "lispex-embed-evaluator-redistribution/1.12.4",
+      "sha256": "fd8c2ba441c977c207147690272f09df3ce3b74c1bd3223c295593a3c5dd1b92"
+    },
+    {
+      "id": "topaz-compiler/5.11",
+      "sha256": "3c5742ee9a34836db49acf47930a127fffc5eb00fa417e5240f91a33ad5d9123"
+    }
+  ],
+  "network_required": false,
+  "uses_latest": false,
+  "build_input": false
+}

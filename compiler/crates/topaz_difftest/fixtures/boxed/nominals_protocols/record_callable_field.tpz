@@ -1,0 +1,5 @@
+record Box { f: () -> int }
+function run(b: Box) -> int { return b.f() }
+let b: Box = Box { f: () => 42 }
+print("{run(b)}")
+0

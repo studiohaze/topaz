@@ -1,0 +1,2 @@
+let rec = { okOrElse: (x: int) => x }
+rec.okOrElse(f: 5)

@@ -1,0 +1,17 @@
+
+function mark(label: string, xs: Array<int>) -> Array<int> {
+    print(label)
+    xs
+}
+function inc(x: int) -> int {
+    x + 1
+}
+let mut m: Option<Map<string, int>> = Some(map { "a": 1 })
+let failed = inc |> m?.update(loop {
+    print("key")
+    break "a"
+}, 0, _, ...loop {
+    print("update-spread")
+    break mark("update", [0])
+})
+"unreachable"

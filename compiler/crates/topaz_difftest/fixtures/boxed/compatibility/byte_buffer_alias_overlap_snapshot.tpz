@@ -1,0 +1,9 @@
+let mut buffer = ByteBuffer.allocate(6, 1)
+buffer.set(0, 9)
+buffer.set(1, 8)
+let mut alias = buffer
+alias.copy(alias, 0, 2, 4)
+let snapshot = alias.toBytes()
+let mut copied = ByteBuffer.fromBytes(snapshot)
+copied.set(0, 7)
+alias.toBytes().toHex() + "|" + copied.toBytes().toHex()

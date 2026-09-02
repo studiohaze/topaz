@@ -1,0 +1,20 @@
+// Conditional chaining
+function processUser(userId: int) -> Result<string, string> {
+    let userData = match getUserFromDatabase(userId) {
+        case Ok(data) => data
+        case Err(error) => { return Err("User fetch failed: {error}") }
+    }
+    
+    let validationResult = match validateUser(userData) {
+        case Ok(_) => ()
+        case Err(error) => { return Err("Validation failed: {error}") }
+    }
+    
+    let processResult = match processUserData(userData) {
+        case Ok(result) => result
+        case Err(error) => { return Err("Processing failed: {error}") }
+    }
+    
+    return Ok("Processing complete: {processResult}")
+}
+

@@ -1,0 +1,11 @@
+let 사용자: Option<{ 이름: string, 프로필: Option<{ 도시: string }> }> =
+    Some({ 이름: "Ann", 프로필: Some({ 도시: "Seoul" }) })
+
+let 이름옵션 = 사용자?.이름                 // Option<string>
+let 도시옵션 = 사용자?.프로필?.도시         // Option<string>
+let 도시     = 사용자?.프로필?.도시 ?? "Unknown"  // string
+
+let 없음사용자: Option<{ 이름: string }> = None
+let 기본이름 = 없음사용자?.이름 ?? "guest"       // "guest"
+
+// 내부적으로 Option mapping/flat-mapping 또는 동등한 nullable 검사로 환원됩니다

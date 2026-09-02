@@ -1,0 +1,48 @@
+// Stateful closure
+function createAccount(initialBalance: float) -> { deposit: (float) -> float, withdraw: (float) -> float, checkBalance: () -> float } {
+    let mut balance = initialBalance
+    
+    return {
+        deposit: (amount: float) => {
+            balance += amount
+            balance
+        },
+        withdraw: (amount: float) => {
+            if amount <= balance {
+                balance -= amount
+            }
+            balance
+        },
+        checkBalance: () => balance
+    }
+}
+
+let myAccount = createAccount(1000.0)
+print("{myAccount.deposit(500.0)}")     // 1500.0
+print("{myAccount.withdraw(200.0)}")    // 1300.0
+print("{myAccount.checkBalance()}")     // 1300.0
+
+// Environment-capturing closure
+type AppConfig = { theme: string, language: string, notifications: bool }
+
+function createConfigManager(defaultConfig: AppConfig) -> { setTheme: (string) -> string, theme: () -> string } {
+    let mut currentConfig = defaultConfig
+    
+    return {
+        setTheme: (theme: string) => {
+            currentConfig = currentConfig{ theme: theme }
+            currentConfig.theme
+        },
+        theme: () => currentConfig.theme
+    }
+}
+
+let appConfig = createConfigManager({
+    theme: "dark",
+    language: "English",
+    notifications: true
+})
+
+print(appConfig.theme())          // "dark"
+appConfig.setTheme("light")
+print(appConfig.theme())          // "light"

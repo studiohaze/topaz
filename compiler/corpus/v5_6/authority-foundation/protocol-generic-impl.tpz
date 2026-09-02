@@ -1,0 +1,3 @@
+record Box<T> { value: T }
+impl Show<Box> { function show(value: Box<int>) -> string { "box" } }
+0

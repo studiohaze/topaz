@@ -1,0 +1,3 @@
+let v = [None, 4]
+let [Some(x), ..tail] = v
+x

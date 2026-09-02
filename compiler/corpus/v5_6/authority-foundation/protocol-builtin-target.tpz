@@ -1,0 +1,2 @@
+impl Show<int> { function show(value: int) -> string { "int" } }
+0

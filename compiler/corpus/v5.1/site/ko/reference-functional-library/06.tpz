@@ -1,0 +1,17 @@
+function 나누기(a: float, b: float) -> Result<float, string> {
+    if b == 0.0 {
+        Err("0으로 나눌 수 없습니다")
+    } else {
+        Ok(a / b)
+    }
+}
+
+function 계산(a: float, b: float) -> Result<float, string> {
+    let 몫 = 나누기(a, b)?
+    Ok(몫 + 1.0)
+}
+
+match 계산(10.0, 2.0) {
+    case Ok(값) => print("결과: {값}")
+    case Err(오류) => print("오류: {오류}")
+}

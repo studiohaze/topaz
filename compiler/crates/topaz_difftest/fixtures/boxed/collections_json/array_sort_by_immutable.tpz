@@ -1,0 +1,2 @@
+let xs = [3, 1, 2]
+xs.sortBy((x) => x)

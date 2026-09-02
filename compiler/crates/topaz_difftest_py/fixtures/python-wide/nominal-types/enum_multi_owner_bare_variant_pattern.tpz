@@ -1,0 +1,10 @@
+
+enum A derives Eq, Order, Show { Same, Other }
+enum B derives Eq, Order, Show { Same, Else }
+function main() -> int {
+    match B.Same {
+        case Same => 1
+        case Else => 2
+    }
+}
+main()

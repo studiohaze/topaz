@@ -1,0 +1,9 @@
+
+function addImpl(a: int, b: int = 2) -> int {
+    a + b
+}
+function subImpl(a: int, b: int = 100) -> int {
+    a - b
+}
+export let add = addImpl
+export let sub = subImpl

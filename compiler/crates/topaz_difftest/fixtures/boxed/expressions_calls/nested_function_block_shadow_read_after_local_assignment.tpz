@@ -1,0 +1,14 @@
+function main() -> int {
+    function f() -> int {
+        let mut a = 1
+        a = a + 1
+        let x = 1
+        if true {
+            let x = 100
+        } else {
+        }
+        a + x
+    }
+    f()
+}
+main()

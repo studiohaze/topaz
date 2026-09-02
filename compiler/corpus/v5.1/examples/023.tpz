@@ -1,0 +1,6 @@
+function isEmpty(items: Array<int>) -> bool {
+    match items {
+        case [] => true
+        case _ => false
+    }
+}

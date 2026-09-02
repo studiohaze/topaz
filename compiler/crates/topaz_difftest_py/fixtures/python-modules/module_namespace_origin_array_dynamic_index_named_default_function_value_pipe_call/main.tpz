@@ -1,0 +1,11 @@
+
+	import util
+	function main() -> int {
+	    let i = 0
+	    let j = 1
+	    let a = 5 |> util.callbacks[i](a: _)
+	    let b = 15 |> (util.callbacks)[j](a: _)
+	    a * 10 + b
+	}
+	main()
+	

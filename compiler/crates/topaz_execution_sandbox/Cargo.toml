@@ -1,0 +1,19 @@
+[package]
+name = "topaz_execution_sandbox"
+description = "Target-scoped sandbox foundation for bounded Topaz workers"
+version.workspace = true
+license.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+topaz_check = { workspace = true }
+topaz_diag = { workspace = true }
+topaz_host_none = { workspace = true }
+topaz_interp = { workspace = true }
+topaz_parser = { workspace = true }
+topaz_syntax = { workspace = true }
+topaz_value = { workspace = true }
+
+[lints]
+workspace = true

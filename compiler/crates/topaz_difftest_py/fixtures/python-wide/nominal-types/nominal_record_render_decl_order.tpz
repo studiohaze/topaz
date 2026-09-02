@@ -1,0 +1,5 @@
+
+record User { name: string, age: int }
+let u = User { name: "Ada", age: 36 }
+print("{u}")
+u.age

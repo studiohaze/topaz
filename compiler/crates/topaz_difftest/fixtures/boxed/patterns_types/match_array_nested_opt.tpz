@@ -1,0 +1,2 @@
+match [Some(1), None] { case n: Array<Option<int>> => 1
+case _ => 0 }

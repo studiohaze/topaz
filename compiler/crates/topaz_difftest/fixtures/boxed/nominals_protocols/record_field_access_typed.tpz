@@ -1,0 +1,6 @@
+record User { name: string, age: int }
+function older(u: User) -> int { return u.age + 1 }
+function who(u: User) -> string { return u.name }
+let u: User = User { name: "Ada", age: 36 }
+print("{who(u)}:{older(u)}")
+0

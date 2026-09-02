@@ -1,0 +1,376 @@
+// Diagnostic helpers and validation of declared derive capabilities.
+// The leaf appends stable checker diagnostics to shared state but does not drive
+// type formation or expression inference.
+
+import types { SyntaxNode }
+import checker_types { TypeValue }
+import checker.model {
+  CheckerState,
+  EnumDefinition,
+  RecordDefinition,
+  constructor,
+  literal,
+  nominal,
+  primitive,
+}
+import checker.type_algebra { widen }
+import checker.syntax_index {
+  addDiagnostic,
+  child,
+  children,
+  containsString,
+  enumDefinitionIndex,
+  recordDefinitionIndex,
+  text,
+  typeParameterNames,
+  unwrapExport,
+}
+import checker.nominals { substitute }
+import checker.protocols_methods {
+  appendConformance,
+  enumDefinitionForType,
+  newtypeDefinitionForType,
+  protocolConformanceIndex,
+  recordDefinitionForType,
+}
+import checker.members_capabilities {
+  capabilityPath,
+  jsonCapability,
+  nominalCapabilityKey,
+}
+
+function deriveTypeCapability(
+  state: CheckerState,
+  moduleIndex: int,
+  value: TypeValue,
+  protocol: string,
+  seen: Array<string>,
+) -> bool {
+  let widened = widen(value)
+  if widened.kind == "nominal-record" {
+    let key = nominalCapabilityKey(widened)
+    if containsString(seen, key) {
+      return protocol != "JSON"
+    }
+    return match recordDefinitionForType(state, moduleIndex, widened) {
+      case Some(definition) => {
+        if definition.typeParameters.length != widened.arguments.length {
+          return false
+        }
+        for field in definition.fields {
+          if !deriveTypeCapability(
+            state,
+            definition.moduleIndex,
+            substitute(
+              field.typeValue,
+              definition.typeParameters,
+              widened.arguments,
+            ),
+            protocol,
+            capabilityPath(seen, key),
+          ) {
+            return false
+          }
+        }
+        true
+      }
+      case None => false
+    }
+  }
+  if widened.kind == "enum" {
+    let key = nominalCapabilityKey(widened)
+    if containsString(seen, key) {
+      return protocol != "JSON"
+    }
+    return match enumDefinitionForType(state, moduleIndex, widened) {
+      case Some(definition) => {
+        if definition.typeParameters.length != widened.arguments.length {
+          return false
+        }
+        for variant in definition.variants {
+          for payload in variant.payloads {
+            if !deriveTypeCapability(
+              state,
+              definition.moduleIndex,
+              substitute(
+                payload,
+                definition.typeParameters,
+                widened.arguments,
+              ),
+              protocol,
+              capabilityPath(seen, key),
+            ) {
+              return false
+            }
+          }
+        }
+        true
+      }
+      case None => false
+    }
+  }
+  if widened.kind == "newtype" {
+    let key = nominalCapabilityKey(widened)
+    if containsString(seen, key) {
+      return protocol != "JSON"
+    }
+    return match newtypeDefinitionForType(state, moduleIndex, widened) {
+      case Some(definition) => if definition.typeParameters.length !=
+        widened.arguments.length {
+        false
+      } else {
+        deriveTypeCapability(
+          state,
+          definition.moduleIndex,
+          substitute(
+            definition.base,
+            definition.typeParameters,
+            widened.arguments,
+          ),
+          protocol,
+          capabilityPath(seen, key),
+        )
+      }
+      case None => false
+    }
+  }
+  if widened.kind == "primitive" {
+    if protocol == "Eq" {
+      return true
+    }
+    if protocol == "Order" {
+      return widened.name == "int" || widened.name == "string"
+    }
+    return widened.name == "int" || widened.name == "string" ||
+      widened.name == "bool" || widened.name == "unit"
+  }
+  if widened.kind == "literal" {
+    if protocol == "Eq" {
+      return true
+    }
+    if protocol == "Order" {
+      return widened.name == "int" || widened.name == "string"
+    }
+    return widened.name != "float"
+  }
+  if widened.kind == "union" {
+    if protocol != "Eq" {
+      return false
+    }
+    for member in widened.members {
+      if !deriveTypeCapability(state, moduleIndex, member, protocol, seen) {
+        return false
+      }
+    }
+    return true
+  }
+  if widened.kind == "record" {
+    if protocol == "Order" {
+      return false
+    }
+    for field in widened.fields {
+      if !deriveTypeCapability(state, moduleIndex, field, protocol, seen) {
+        return false
+      }
+    }
+    return true
+  }
+  if widened.kind == "constructor" {
+    if protocol == "Order" {
+      return false
+    }
+    if protocol == "Eq" {
+      if widened.name == "Map" || widened.name == "Set" {
+        return false
+      }
+      for argument in widened.arguments {
+        if !deriveTypeCapability(state, moduleIndex, argument, protocol, seen) {
+          return false
+        }
+      }
+      return true
+    }
+    return jsonCapability(state, moduleIndex, widened, seen, false) == "accept" &&
+      jsonCapability(state, moduleIndex, widened, seen, true) == "accept"
+  }
+  if widened.kind == "bytes" || widened.kind == "path" ||
+    widened.kind == "url" || widened.kind == "date" ||
+    widened.kind == "big-int" || widened.kind == "decimal" {
+    return protocol == "Eq" || protocol == "Order"
+  }
+  if widened.kind == "match" || widened.kind == "rounding-mode" {
+    return protocol == "Eq"
+  }
+  widened.kind == "json-value" && protocol == "JSON"
+}
+
+function firstRecordDeriveFailure(
+  state: CheckerState,
+  definition: RecordDefinition,
+  protocol: string,
+) -> string {
+  for field in definition.fields {
+    if !deriveTypeCapability(
+      state,
+      definition.moduleIndex,
+      field.typeValue,
+      protocol,
+      [],
+    ) {
+      return "field `{field.name}`"
+    }
+  }
+  ""
+}
+
+function firstEnumDeriveFailure(
+  state: CheckerState,
+  definition: EnumDefinition,
+  protocol: string,
+) -> string {
+  for variant in definition.variants {
+    let mut index = 0
+    for payload in variant.payloads {
+      if !deriveTypeCapability(
+        state,
+        definition.moduleIndex,
+        payload,
+        protocol,
+        [],
+      ) {
+        return "variant `{variant.name}` payload #{index}"
+      }
+      index += 1
+    }
+  }
+  ""
+}
+
+function recordDerivedConformance(
+  state: CheckerState,
+  moduleIndex: int,
+  typeName: string,
+  protocol: string,
+  node: SyntaxNode,
+) -> () {
+  let existingIndex = protocolConformanceIndex(
+    state,
+    moduleIndex,
+    typeName,
+    protocol,
+  )
+  if existingIndex >= 0 {
+    let how = match state.conformances.get(existingIndex) {
+      case Some(existing) => if existing.derived {
+        "is derived more than once"
+      } else {
+        "is already implemented manually"
+      }
+      case None => "is derived more than once"
+    }
+    addDiagnostic(
+      state,
+      moduleIndex,
+      "TPZ5521",
+      "`{typeName}` conformance to `{protocol}` {how}; a conformance must be unique",
+      "",
+      node,
+    )
+  } else {
+    appendConformance(state, moduleIndex, typeName, protocol, true)
+  }
+  ()
+}
+
+export function checkDerives(state: CheckerState) -> () {
+  for module in state.modules {
+    for statement in module.root.children {
+      let item = unwrapExport(statement)
+      if item.kind == "statement/record" || item.kind == "statement/enum" {
+        let name = match child(item, "name") {
+          case Some(found) => text(module.source, found)
+          case None => ""
+        }
+        let typeParameterCount = typeParameterNames(module.source, item).length
+        for derived in children(item, "derives") {
+          let protocol = text(module.source, derived)
+          if protocol != "Eq" && protocol != "Order" &&
+            protocol != "Show" && protocol != "JSON" {
+            addDiagnostic(
+              state,
+              module.moduleIndex,
+              "TPZ5530",
+              "unknown protocol `{protocol}` in `derives` for `{name}`; derivable protocols are `Eq`, `Order`, `Show`, `JSON`",
+              "",
+              derived,
+            )
+          } else if typeParameterCount > 0 {
+            addDiagnostic(
+              state,
+              module.moduleIndex,
+              "TPZ5022",
+              "cannot derive `{protocol}` for generic nominal `{name}` yet; conditional generic conformance is not defined",
+              "",
+              derived,
+            )
+          } else {
+            let failure = if protocol == "Show" {
+              ""
+            } else if item.kind == "statement/record" {
+              match state.records.get(recordDefinitionIndex(
+                state,
+                module.moduleIndex,
+                name,
+              )) {
+                case Some(definition) => firstRecordDeriveFailure(
+                  state,
+                  definition,
+                  protocol,
+                )
+                case None => "nominal"
+              }
+            } else {
+              match state.enums.get(enumDefinitionIndex(
+                state,
+                module.moduleIndex,
+                name,
+              )) {
+                case Some(definition) => firstEnumDeriveFailure(
+                  state,
+                  definition,
+                  protocol,
+                )
+                case None => "nominal"
+              }
+            }
+            if failure == "" {
+              recordDerivedConformance(
+                state,
+                module.moduleIndex,
+                name,
+                protocol,
+                derived,
+              )
+            } else {
+              addDiagnostic(
+                state,
+                module.moduleIndex,
+                "TPZ5530",
+                if protocol == "Eq" {
+                  "cannot derive `Eq` for `{name}`: {failure} has a non-comparable type"
+                } else if protocol == "Order" {
+                  "cannot derive `Order` for `{name}`: {failure} is not totally orderable"
+                } else {
+                  "cannot derive `JSON` for `{name}`: {failure} cannot round-trip through JSON"
+                },
+                "",
+                derived,
+              )
+            }
+          }
+        }
+      }
+    }
+  }
+  ()
+}

@@ -1,0 +1,36 @@
+
+function okDbl(x: int) -> Result<int, string> {
+    Ok(x * 2)
+}
+
+function okInc(x: int) -> Result<int, string> {
+    Ok(x + 1)
+}
+
+function okZero(x: int) -> Result<int, string> {
+    Ok(0)
+}
+
+function choose(i: int) -> int {
+    let r = concurrent {
+        slow: {
+            let mut cbs = [okZero, okInc]
+            match i {
+                case 0 => -1
+                case 1 => {
+                    cbs[i] = okDbl
+                    let out = Ok(3).flatMap(f: cbs[i])
+                    match out {
+                        case Ok(n) => n
+                        case Err(_) => -3
+                    }
+                }
+                case _ => -2
+            }
+        }
+        fast: 0
+    }
+    r.slow + r.fast
+}
+
+choose(1)

@@ -1,0 +1,9 @@
+
+function mark(label: string, xs: Array<Bytes>) -> Array<Bytes> {
+    print(label)
+    xs
+}
+function main() -> Bytes {
+    Bytes.concat(...mark("bytes", [Bytes.encodeUtf8("x")]))
+}
+main()

@@ -1,0 +1,8 @@
+
+import util { answer as solve }
+function main() -> int {
+    let total = solve(21)
+    print("{total}")
+    total
+}
+main()

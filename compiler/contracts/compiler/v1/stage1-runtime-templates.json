@@ -1,0 +1,20 @@
+{
+  "schema": "topaz.compiler.fixed-point-runtime-templates/v1",
+  "payloadSchema": "topaz.compiler.fixed-point-ir-payload/v1",
+  "templates": [
+    {
+      "identity": "compiler-ir-table/v2",
+      "source": "compiler/crates/topaz_self_frontend/topaz/emitter.tpz",
+      "sha256": "79b4af8e5544a04eb021fe093dda38ed15b655e8dc56faef151807a8cb925d74",
+      "rustDependencies": []
+    }
+  ],
+  "forbiddenTargetDependencies": [
+    "topaz_parser",
+    "topaz_resolve",
+    "topaz_check",
+    "topaz_lower",
+    "topaz_emit",
+    "topaz_interp"
+  ]
+}

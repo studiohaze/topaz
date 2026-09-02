@@ -1,0 +1,5 @@
+newtype UserId = int
+let a = UserId(1) == UserId(1)
+let b = UserId(1) == UserId(2)
+print("{a}/{b}")
+0

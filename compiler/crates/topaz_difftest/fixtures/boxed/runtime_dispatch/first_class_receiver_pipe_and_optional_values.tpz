@@ -1,0 +1,7 @@
+let viaPipe = [1, 2] |> .map
+let piped = viaPipe(f: (x) => x + 1)
+let mut optional: Option<Array<int>> = Some([3])
+let maybePush = optional?.push
+match maybePush { case Some(push) => { push(4)
+{ piped: piped, optional: optional } }
+case None => { piped: piped, optional: optional } }

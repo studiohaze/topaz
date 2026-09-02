@@ -1,0 +1,28 @@
+
+function mark(label: string, value: Option<{ n: int, text: string }>) -> Option<{ n: int, text: string }> {
+    print(label)
+    value
+}
+function markInt(label: string, value: int) -> int {
+    print(label)
+    value
+}
+function markText(label: string, value: string) -> string {
+    print(label)
+    value
+}
+function add(a: int, b: int) -> int {
+    a + b
+}
+function label(prefix: string, value: string) -> string {
+    "{prefix}:{value}"
+}
+function main() -> string {
+    let some = mark("some-pipe", Some({ n: 0, text: "" }))
+    let none = mark("none-pipe", None)
+    let zero = markInt("lhs-zero", 5) |> add(some?.n ?? markInt("zero-fallback", 7))
+    let missing = markInt("lhs-missing", 5) |> add(none?.n ?? markInt("missing-fallback", 9))
+    let empty = markText("lhs-empty", "x") |> label(some?.text ?? markText("text-fallback", "fallback"))
+    "{zero}:{missing}:{empty}"
+}
+main()

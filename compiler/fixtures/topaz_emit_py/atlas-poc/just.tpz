@@ -1,0 +1,119 @@
+// B3 (Latin + CJK) — full fixed-point justification penalty in Topaz. Must equal just_fp.rs.
+let B = 1000000
+let R = 100000000
+let CAP = 25000
+function roundDiv(n: int, d: int) -> int { let q = n / d; let r = n % d; if r >= (d + 1) / 2 { q + 1 } else { q } }
+function firstCp(t: string) -> int { t.codePointAt(0) ?? -1 }
+function singleScalar(t: string) -> bool { t.scalars().length == 1 }
+function isWordSpace(t: string) -> bool { singleScalar(t) && (firstCp(t) == 32 || firstCp(t) == 160) }
+function isU0020(t: string) -> bool { singleScalar(t) && firstCp(t) == 32 }
+function isCjkJustChar(c: int) -> bool {
+  (c >= 4352 && c <= 4607) || (c >= 12592 && c <= 12687) || (c >= 13312 && c <= 19903)
+  || (c >= 19968 && c <= 40959) || (c >= 44032 && c <= 55203) || (c >= 63744 && c <= 64255)
+}
+function isJustPunctCp(c: int) -> bool {
+  c == 46 || c == 44 || c == 59 || c == 58 || c == 33 || c == 63 || c == 34 || c == 39
+  || c == 40 || c == 41 || c == 91 || c == 93 || c == 123 || c == 125
+  || c == 12290 || c == 12289 || c == 65292 || c == 65294
+  || c == 12300 || c == 12301 || c == 12302 || c == 12303 || c == 12298 || c == 12299 || c == 12296 || c == 12297
+}
+function isSingleCjk(t: string) -> bool { singleScalar(t) && isCjkJustChar(firstCp(t)) }
+function isJustPunctUnit(t: string) -> bool {
+  let mut found = false
+  for s in t.scalars() { if isJustPunctCp(firstCp(s)) { found = true } }
+  found
+}
+function isCjkGapCand(l: string, r: string) -> bool { isSingleCjk(l) && isSingleCjk(r) && !isJustPunctUnit(l) && !isJustPunctUnit(r) }
+function isKrWsGapCand(l: string, s: string, r: string) -> bool {
+  isSingleCjk(l) && isWordSpace(s) && isSingleCjk(r) && !isJustPunctUnit(l) && !isJustPunctUnit(r)
+}
+function cjkGapCount(texts: Array<string>, start: int, end: int) -> int {
+  let mut g = 0
+  let mut i = start
+  while i + 1 < end { if isCjkGapCand(texts[i], texts[i + 1]) { g = g + 1 }; i = i + 1 }
+  i = start
+  while i + 2 < end {
+    if isKrWsGapCand(texts[i], texts[i + 1], texts[i + 2]) {
+      if !isCjkGapCand(texts[i], texts[i + 1]) { g = g + 1 }
+      if !isCjkGapCand(texts[i + 1], texts[i + 2]) { g = g + 1 }
+    }
+    i = i + 1
+  }
+  g
+}
+
+function justPenalty(adv: Array<int>, texts: Array<string>, target: int, minGap: int, ratioM: int,
+                     maxAdj: int, maxGap: int, maxGapRatioR: int, mode: int, isLast: bool) -> int {
+  if isLast { return 0 }
+  let n = texts.length
+  let mut eff = n
+  while eff > 0 && isWordSpace(texts[eff - 1]) { eff = eff - 1 }
+  if eff == 0 { return CAP * B }
+  if target <= 0 { return CAP * B }
+  let mut original = 0
+  let mut a = 0
+  while a < eff { original = original + adv[a]; a = a + 1 }
+  if original * 1000 < target * ratioM { return CAP * B }
+  let adjustment = target - original
+  if adjustment <= 1 { return 0 }
+  if adjustment > maxAdj { return CAP * B + roundDiv((adjustment - maxAdj) * B, 1000) }
+  if mode == 0 {
+    let mut gap = 0
+    let mut j = 0
+    while j < eff { if isU0020(texts[j]) { gap = gap + 1 }; j = j + 1 }
+    if gap < minGap || gap == 0 { return CAP * B }
+    let won = adjustment - gap * maxGap
+    if won > gap { return CAP * B + roundDiv(won * B, gap) }
+  } else {
+    let gap = cjkGapCount(texts, 0, eff)
+    if gap < minGap || gap == 0 { return CAP * B }
+    // representative CJK advance: sum + count of single-cjk units; None (-> CAP) if count==0 or any adv<=1
+    let mut repSum = 0
+    let mut repCount = 0
+    let mut bad = false
+    let mut k = 0
+    while k < eff {
+      if isSingleCjk(texts[k]) {
+        if adv[k] <= 1 { bad = true }
+        repSum = repSum + adv[k]
+        repCount = repCount + 1
+      }
+      k = k + 1
+    }
+    if bad || repCount == 0 { return CAP * B }
+    let won = adjustment - gap * maxGap
+    let ratioR = roundDiv(adjustment * repCount * R, gap * repSum)
+    let ror = ratioR - maxGapRatioR
+    if won > gap || ror > 100000 {
+      let wt = if won > 0 { roundDiv(won * B, gap) } else { 0 }
+      let rt = if ror > 0 { ror * 100 } else { 0 }
+      return CAP * B + wt + rt
+    }
+  }
+  0
+}
+
+function 처리(input: string) -> string {
+  let lines = input.split("\n")
+  let hdr = lines[0].split(" ")
+  let target = toInt(hdr[0]) ?? 0
+  let minGap = toInt(hdr[1]) ?? 0
+  let ratioM = toInt(hdr[2]) ?? 0
+  let maxAdj = toInt(hdr[3]) ?? 0
+  let maxGap = toInt(hdr[4]) ?? 0
+  let maxGapRatioR = toInt(hdr[5]) ?? 0
+  let mode = toInt(hdr[6]) ?? 0
+  let isLast = (toInt(hdr[7]) ?? 0) != 0
+  let mut adv: Array<int> = []
+  let mut texts: Array<string> = []
+  let mut li = 1
+  while li < lines.length {
+    let parts = lines[li].split("\t")
+    adv.push(toInt(parts[0]) ?? 0)
+    texts.push(if parts.length >= 2 { parts[1] } else { "" })
+    li = li + 1
+  }
+  "{justPenalty(adv, texts, target, minGap, ratioM, maxAdj, maxGap, maxGapRatioR, mode, isLast)}"
+}
+
+print(처리(input()))

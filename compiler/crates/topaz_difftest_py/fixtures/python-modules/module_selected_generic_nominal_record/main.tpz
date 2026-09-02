@@ -1,0 +1,7 @@
+
+import model { Box as ForeignBox }
+function main() -> int {
+    let b = ForeignBox { value: 7 }
+    b.value
+}
+main()

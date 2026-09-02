@@ -1,0 +1,8 @@
+function a() -> int {
+  b()
+}
+let x = a()
+function b() -> int {
+  7
+}
+x

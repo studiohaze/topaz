@@ -1,0 +1,2 @@
+export type User = { id: int }
+export function load() -> User { { id: 1 } }

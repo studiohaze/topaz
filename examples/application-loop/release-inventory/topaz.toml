@@ -1,0 +1,17 @@
+[package]
+name = "release_inventory"
+version = "0.1.0"
+language = "5.18"
+entry = "src/main.tpz"
+
+[build]
+target = "native"
+deterministic = true
+
+[dependencies]
+std = "5.18"
+report_slug = "1.0.0"
+
+[capabilities.fs]
+read = ["data"]
+write = ["out"]

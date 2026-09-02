@@ -1,0 +1,3 @@
+print("before fault")
+let denominator = 0
+1 / denominator

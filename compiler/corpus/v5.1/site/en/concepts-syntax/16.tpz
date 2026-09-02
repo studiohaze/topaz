@@ -1,0 +1,16 @@
+let mut total = 0
+let mut n = 1
+
+while total + n <= 100 {
+    total = total + n
+    n = n + 1
+}
+
+print("sum: {total}")
+
+// break / continue target the innermost enclosing loop
+for item in [3, -1, 7, 120, 5] {
+    if item < 0 { continue }
+    if item > 99 { break }
+    print("{item}")
+}

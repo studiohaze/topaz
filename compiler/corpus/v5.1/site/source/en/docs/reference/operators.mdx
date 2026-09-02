@@ -1,0 +1,426 @@
+---
+title: 'Operators'
+description: 'Learn all Topaz operators with a complete guide. Master the usage and precedence of arithmetic, comparison, logical, assignment, and special operators.'
+covers: '§2, §7, §8, §9, §10, §11, §12'
+---
+
+> **Library names note**: Helper names beyond the standard-library minimum — `simpleCondition`, `expensiveFunction`, `userMap` — are illustrative placeholders, not canonical APIs.
+
+Topaz provides various **operators** to manipulate and calculate data. Understanding the exact behavior and precedence of all operators is crucial. 
+
+##  Arithmetic Operators
+
+### Basic Arithmetic Operations
+
+```topaz
+// Basic arithmetic operators
+let a = 10
+let b = 3
+
+let addition = a + b        // 13
+let subtraction = a - b     // 7  
+let multiplication = a * b  // 30
+let division = a / b        // 3 — integer division truncates toward zero
+let remainder = a % b       // 1
+let exponentiation = a ** b // 1000
+
+// float arithmetic stays in the float domain (no implicit mixing)
+let ratio = 10.0 / 3.0      // 3.333...
+
+print("Addition: {addition}")
+print("Subtraction: {subtraction}")
+print("Multiplication: {multiplication}")
+print("Division: {division}")
+print("Remainder: {remainder}")
+print("Exponentiation: {exponentiation}")
+```
+
+### Unary Operators
+
+```topaz
+let positive = +42     // 42 (explicit positive)
+let negative = -42     // -42 (negation)
+
+let number = 15
+let negated = -number  // -15
+
+print("Original value: {number}")
+print("Negated: {negated}")
+```
+
+### Increment/Decrement
+
+Topaz v5.2 does not specify shortcut increment or decrement operators. Use explicit reassignment with `let mut`.
+
+```topaz
+let mut counter = 5
+counter = counter + 1
+counter = counter - 1
+```
+
+### Compound Assignment Operators
+
+```topaz
+let mut value = 10
+
+value += 5     // value = value + 5 = 15
+value -= 3     // value = value - 3 = 12  
+value *= 2     // value = value * 2 = 24
+value /= 4     // value = value / 4 = 6
+value %= 4     // value = value % 4 = 2
+
+print("Final value: {value}")
+```
+
+##  Comparison Operators
+
+### Basic Comparisons
+
+```topaz
+let x = 10
+let y = 20
+let z = 10
+
+// Equality comparison
+let equal = x == z         // true
+let notEqual = x != y      // true
+
+// Size comparison
+let lessThan = x < y            // true
+let lessThanOrEqual = x <= z    // true
+let greaterThan = y > x         // true
+let greaterThanOrEqual = z >= x // true
+
+print("x == z: {equal}")
+print("x != y: {notEqual}")
+print("x < y: {lessThan}")
+print("y > x: {greaterThan}")
+```
+
+### Type-Safe Comparison
+
+```topaz
+// Topaz enforces type-safe comparison
+let integer = 42
+let floatValue = 42.0
+let text = "42"
+
+// Only same types can be compared
+let intComparison = integer == 42          // true
+let floatComparison = floatValue == 42.0   // true
+
+// Different type comparison requires explicit conversion
+let stringComparison = "{integer}" == text     // true
+let numberComparison = match toInt(text) {     // toInt returns Option<int>
+    case Some(value) => integer == value
+    case None => false
+}
+
+print("Type conversion comparison: {stringComparison}")
+```
+
+### Special Comparison Operators
+
+Topaz v5.2 does not include a spaceship (`<=>`) operator.
+
+##  Logical Operators
+
+### Basic Logical Operations
+
+```topaz
+let trueValue = true
+let falseValue = false
+
+// Logical AND
+let andResult = trueValue && falseValue     // false
+let andResult2 = trueValue && trueValue     // true
+
+// Logical OR  
+let orResult = trueValue || falseValue      // true
+let orResult2 = falseValue || falseValue    // false
+
+// Logical NOT
+let notResult = !trueValue           // false
+let notResult2 = !falseValue         // true
+
+print("AND result: {andResult}")
+print("OR result: {orResult}")
+print("NOT result: {notResult}")
+```
+
+### Short-circuit Evaluation
+
+```topaz
+function sideEffectFunction() -> bool {
+    print("Function was called!")
+    return true
+}
+
+// AND short-circuit - second not executed if first is false
+let shortAnd = false && sideEffectFunction()  // Function not called
+
+// OR short-circuit - second not executed if first is true
+let shortOr = true || sideEffectFunction()   // Function not called
+
+print("Short AND: {shortAnd}")
+print("Short OR: {shortOr}")
+```
+
+### Null Coalescing Operator
+
+`a ?? b` evaluates to `a` when `a` is not `None` and not `null`; otherwise it evaluates `b`.
+
+```topaz
+// Null coalescing operator (??)
+let name: string | null = null
+let display = name ?? "guest"
+
+print("Display name: {display}")
+
+let user: Option<{ name: string, profile: Option<{ city: string }> }> =
+    Some({ name: "TopazDev", profile: Some({ city: "Seoul" }) })
+
+let city = user?.profile?.city ?? "Unknown"
+print("City: {city}")
+
+let ageOpt: Option<int> = Some(25)
+let age = match ageOpt {
+    case Some(v) => v
+    case None => 0
+}
+print("Age: {age}")
+```
+
+### Null‑Coalescing Assignment (??=)
+
+Statement‑only assignment that initializes a variable if it is currently `None`/`null`. It does not produce an expression value.
+
+```topaz
+let mut name: Option<string> = None
+name ??= Some("guest")     // name becomes Some("guest")
+name ??= Some("override")  // no-op (already Some)
+```
+
+##  Bitwise / Shift Operators
+
+Topaz v5.2 does not specify bitwise or shift operators. (The token some languages use for shifts is reserved for a different SPEC-level purpose — see the note under Operator Precedence.)
+
+##  Special Operators
+
+### Type Operators
+
+`typeof`/`instanceof` are not Topaz v5.2 operators. Use `match` with type patterns for narrowing (see the control-flow page).
+
+### Range Operators
+
+```topaz
+// Range operators (.. inclusive, ..< exclusive upper bound)
+let inclusive = 1..5       // 1, 2, 3, 4, 5
+let exclusive = 1..<5      // 1, 2, 3, 4
+
+for i in inclusive { print("{i}") }
+for i in exclusive { print("{i}") }
+```
+
+### Membership Operator (`in`)
+
+```topaz
+// Arrays/Lists/Sets
+let ok1 = 3 in [1, 2, 3]                  // true
+let ok2 = "a" in Set.of("a", "b")        // true
+
+// Map keys (via keys view)
+let hasId = "id" in userMap.keys          // bool
+
+// Ranges
+let inside = 5 in 1..10                    // true
+let outside = 10 in 1..<10                 // false
+```
+
+### Record Updates and Variadic Parameters
+
+Topaz v5.2 does not use JavaScript-style object spread for records. Use record update syntax on an existing record. (Array spread `...expr` in array literals and at variadic call tails is canonical — see the functions page.)
+
+```topaz
+let user = { name: "Ann", age: 30 }
+let older = user{ age: 31 }
+
+function sum(...numbers: int) -> int {
+    let mut total = 0
+    for number in numbers {
+        total += number
+    }
+    total
+}
+```
+
+The `...` marker is canonical for variadic parameters such as `...numbers: int`.
+
+### Optional Chaining (?.)
+
+Option-safe only. Parses when the left-hand side is `Option<T>` or a nullable union (e.g., `T | null`). This is not generic object chaining; use `.` for regular members.
+
+```topaz
+let user: Option<{ name: string, profile: Option<{ city: string }> }> =
+    Some({ name: "Ann", profile: Some({ city: "Seoul" }) })
+
+let nameOpt = user?.name              // Option<string>
+let cityOpt = user?.profile?.city     // Option<string>
+let city    = user?.profile?.city ?? "Unknown"  // string
+
+let noneUser: Option<{ name: string }> = None
+let fallback = noneUser?.name ?? "guest"       // "guest"
+
+// Desugars to Option mapping/flat-mapping or equivalent nullable checks
+```
+
+### Pipe Operator
+
+```topaz
+// Pipe operator (|>)
+let result = 10
+    |> (x => x * 2)        // 20
+    |> (x => x + 5)        // 25
+    |> (x => "{x}")        // "25"
+
+// Useful for function chaining
+let data = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    |> filter(_, x => x % 2 == 0)     // [2, 4, 6, 8, 10]
+    |> map(_, x => x * x)             // [4, 16, 36, 64, 100]
+    |> reduce(_, 0, (a, b) => a + b)  // 220
+
+print("Pipe result: {result}")
+print("Chaining result: {data}")
+```
+
+##  Operator Precedence
+
+Operators are listed from highest precedence to lowest:
+
+| Level | Operators | Associativity |
+| --- | --- | --- |
+| 1 | calls, indexing, member access, optional access, result propagation: `()` `[]` `.` `?.` postfix `?` | left |
+| 2 | exponentiation: `**` | right |
+| 3 | unary: `+` `-` `!` `~` | right |
+| 4 | multiplicative: `*` `/` `%` | left |
+| 5 | additive: `+` `-` | left |
+| 6 | range: `..` `..<` | left |
+| 7 | comparison and membership: `<` `<=` `>` `>=` `==` `!=` `in` | left |
+| 8 | logical and: `&&` | left |
+| 9 | logical or: `\|\|` | left |
+| 10 | null coalescing: `??` | left |
+| 11 | pipeline: `\|>` | left |
+
+Assignment forms (`=`, `+=`, `-=`, `*=`, `/=`, `%=`, `??=`) are **statements**, not expressions — they do not participate in expression precedence and do not produce values. A SPEC-level composition operator (`>>`) occupies the precedence level between `??` and `|>` but is not part of any current profile surface; public examples compose with `|>` pipelines or wrapper lambdas.
+
+```topaz
+// |> binds loosest, so the arithmetic happens first
+let double = (x: int) => x * 2
+let piped = 3 + 2 |> double()        // 10 — equals (3 + 2) |> double()
+
+// Range precedence: additive binds tighter than ..
+let range = (1 + 0)..(5 - 0)
+let within = 3 in range              // true
+```
+
+##  Custom Type Helper Functions
+
+Topaz v5.2 does not specify operator overloading. Use explicit helper functions for custom type operations.
+
+```topaz
+// In canonical docs, demonstrate custom operator semantics with explicit helpers
+type Vector = { x: float, y: float }
+
+function addVector(left: Vector, right: Vector) -> Vector {
+    return { x: left.x + right.x, y: left.y + right.y }
+}
+
+function scaleVector(vector: Vector, scalar: float) -> Vector {
+    return { x: vector.x * scalar, y: vector.y * scalar }
+}
+
+function equalVector(left: Vector, right: Vector) -> bool {
+    return left.x == right.x && left.y == right.y
+}
+
+function vectorToString(vector: Vector) -> string {
+    return "Vector({vector.x}, {vector.y})"
+}
+
+// Usage examples
+let vector1: Vector = { x: 3.0, y: 4.0 }
+let vector2: Vector = { x: 1.0, y: 2.0 }
+
+let sum = addVector(vector1, vector2)       // Vector(4.0, 6.0)
+let scaled = scaleVector(vector1, 2.0)      // Vector(6.0, 8.0)
+let equal = equalVector(vector1, vector2)   // false
+
+print("Vector sum: {vectorToString(sum)}")
+print("Vector scaled: {vectorToString(scaled)}")
+print("Vectors equal: {equal}")
+```
+
+##  Safe Operator Usage
+
+### 1. Division by Zero Prevention
+
+```topaz
+function safeDivide(numerator: float, denominator: float) -> Result<float, string> {
+    if denominator == 0.0 {
+        return Err("Cannot divide by zero")
+    }
+    return Ok(numerator / denominator)
+}
+
+// Usage example
+match safeDivide(10.0, 0.0) {
+    case Ok(result) => print("Division result: {result}")
+    case Err(error) => print("Error: {error}")
+}
+```
+
+### 2. Type Safety
+
+```topaz
+// Ensure safety with explicit conversion — toInt returns Option<int>
+let stringNumber = "123"
+let actualNumber = match toInt(stringNumber) {
+    case Some(value) => value
+    case None => {
+        print("Number conversion failed")
+        0
+    }
+}
+
+let result = actualNumber + 100
+print("Safe calculation result: {result}")
+```
+
+##  Performance Optimization Tips
+
+### 1. Expensive Operation Optimization
+
+```topaz
+// Use multiplication instead of exponentiation (for small exponents)
+let value = 8
+let square = value * value           // instead of value ** 2
+let cube = value * value * value     // instead of value ** 3
+
+// Use multiplication instead of division (float domain)
+let measurement = 8.0
+let half = measurement * 0.5         // instead of measurement / 2.0
+```
+
+### 2. Leverage Short-circuit Evaluation
+
+```topaz
+// Put expensive function calls later
+let result = simpleCondition() && expensiveFunction()
+
+// Optimize null checks with Option helpers
+let defaultValue = "fallback"
+let object: Option<{ property: Option<{ subProperty: string }> }> = None
+let value = object?.property?.subProperty ?? defaultValue
+```
+
+**Understanding and properly using** Topaz operators allows you to write efficient and safe code! Always keep operator precedence and type safety in mind. 

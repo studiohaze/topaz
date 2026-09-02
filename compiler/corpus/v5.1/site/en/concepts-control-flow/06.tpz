@@ -1,0 +1,8 @@
+let mut budget = 100
+
+for cost in [30, -1, 25, 80, 10] {
+    if cost < 0 { continue }      // skip invalid entries
+    if cost > budget { break }    // stop at the first unaffordable item
+    budget = budget - cost
+    print("Bought for {cost}, remaining budget {budget}")
+}

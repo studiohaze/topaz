@@ -1,0 +1,9 @@
+
+function main() -> int {
+    let base = 10
+    function addBase(x: int) -> int {
+        base + x
+    }
+    addBase(4)
+}
+main()

@@ -1,0 +1,16 @@
+[package]
+name = "corpus_pkg"
+version = "0.1.0"
+language = "5.4"
+entry = "src/main.tpz"
+
+[build]
+target = "native"
+deterministic = true
+
+[dependencies]
+std = "5.4"
+
+[capabilities.fs]
+read = []
+write = []

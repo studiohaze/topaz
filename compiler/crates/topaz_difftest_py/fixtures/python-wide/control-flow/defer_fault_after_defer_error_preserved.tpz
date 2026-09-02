@@ -1,0 +1,14 @@
+
+function cleanup() -> Result<int, string> {
+    Err("cleanup")
+}
+function f() -> int {
+    {
+        defer cleanup()
+        print("normal-block")
+    }
+    defer print("pending")
+    let z = 0
+    1 / z
+}
+f()

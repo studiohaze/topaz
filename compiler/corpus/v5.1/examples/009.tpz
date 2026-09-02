@@ -1,0 +1,5 @@
+let kind = match amount {
+    case n: int if n > 0 => "positive"
+    case n: int if n < 0 => "negative"
+    case _ => "zero or non-numeric"
+}

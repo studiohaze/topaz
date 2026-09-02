@@ -1,0 +1,3 @@
+let f = Date.parseIso
+match f("2024-03-01") { case Ok(d) => d.addDays(-1).toIso()
+case Err(e) => e }

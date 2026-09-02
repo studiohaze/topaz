@@ -1,0 +1,2 @@
+match [Some(2), 9, 10] { case [Some(x), ..rest] => x + rest.length
+case _ => 0 }

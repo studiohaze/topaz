@@ -1,0 +1,13 @@
+
+function main() -> int {
+    let a = match [1, 2] {
+        case [x, 2] | [0, x] => x
+        case _ => 0
+    }
+    let b = match [0, 7] {
+        case [x, 2] | [0, x] => x
+        case _ => 0
+    }
+    a + b
+}
+main()

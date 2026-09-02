@@ -1,0 +1,3 @@
+
+export const answer = 40
+export let extra = 2

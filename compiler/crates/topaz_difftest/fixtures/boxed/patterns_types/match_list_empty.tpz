@@ -1,0 +1,2 @@
+match Array.of() { case [] => 1
+case _ => 0 }

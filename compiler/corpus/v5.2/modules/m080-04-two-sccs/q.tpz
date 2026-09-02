@@ -1,0 +1,2 @@
+import p
+export function ok() -> int { 1 }

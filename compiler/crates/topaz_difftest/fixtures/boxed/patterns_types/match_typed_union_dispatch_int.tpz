@@ -1,0 +1,2 @@
+((x: int | string) => match x { case s: string => 0
+case n: int => n })(5)

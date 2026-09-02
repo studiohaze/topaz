@@ -1,0 +1,4 @@
+record P { x: int, tag: string }
+let xs = [P { x: 2, tag: "z" }, P { x: 1, tag: "a" }, P { x: 1, tag: "b" }]
+print("{xs.sorted()}")
+0

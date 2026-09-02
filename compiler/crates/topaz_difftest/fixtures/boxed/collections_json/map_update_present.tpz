@@ -1,0 +1,5 @@
+let mut m = Map.new()
+m.insert("a", 1)
+m.insert("b", 2)
+m.update("a", 0, (v) => v + 100)
+m.getOr("a", -1)

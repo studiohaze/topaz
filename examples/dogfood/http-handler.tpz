@@ -1,0 +1,21 @@
+import std.http { HttpRequest, HttpResponse, header, request, text }
+
+export function handle(req: HttpRequest) -> HttpResponse {
+  if req.url.path() == "/health" {
+    return text(200, "ok")
+  }
+  let trace = header(req, "x-trace") ?? "none"
+  text(404, "missing {req.url.path()} trace={trace}")
+}
+
+function demo() -> Result<string, string> {
+  let url = URL.parse("https://example.test/health")?
+  let req = request("GET", url, map { "x-trace": ["abc"] }, Bytes.encodeUtf8(""))
+  let res = handle(req)
+  Ok("{res.status}:{res.body.decodeUtf8()?}:{header(req, "x-trace") ?? "none"}")
+}
+
+match demo() {
+  case Ok(line) => print(line)
+  case Err(error) => print("error: {error}")
+}

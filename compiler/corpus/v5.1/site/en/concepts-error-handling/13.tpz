@@ -1,0 +1,15 @@
+// Compiler forces handling of all cases
+type NetworkErrorKind = "connection_failed" | "timeout" | "authentication_failed" | "server_error"
+type NetworkError = { kind: NetworkErrorKind, message: string, code: int | null }
+
+function handleNetworkRequest(result: Result<string, NetworkError>) -> string {
+    match result {
+        case Ok(data) => "Success: {data}"
+        case Err(error) => match error.kind {
+            case "connection_failed" => "Cannot connect to network"
+            case "timeout" => "Request timed out"
+            case "authentication_failed" => "Authentication required"
+            case "server_error" => "Server error (code: {error.code})"
+        }
+    }
+}

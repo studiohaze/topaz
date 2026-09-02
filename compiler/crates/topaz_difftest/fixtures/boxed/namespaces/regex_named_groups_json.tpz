@@ -1,0 +1,3 @@
+match Regex.compile("(?P<word>[A-Za-z]+)-(\\d+)") { case Ok(re) => match re.find("abc-42") { case Some(m) => JSON.stringify(m)
+case None => Err("none") }
+case Err(e) => Err(e) }

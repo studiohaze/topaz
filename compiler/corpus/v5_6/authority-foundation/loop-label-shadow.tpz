@@ -1,0 +1,7 @@
+let value = loop 'target {
+    let inner = loop 'target {
+        break 'target 2
+    }
+    break 'target inner + 3
+}
+value

@@ -1,0 +1,5 @@
+let mut s = 0
+for x in [1, 2] { for y in [10, 20, 30] { if y == 20 { break }
+s = s + y }
+s = s + x }
+s

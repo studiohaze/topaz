@@ -1,0 +1,7 @@
+export record BufferEnvelope {
+    payload: ByteBuffer
+}
+
+export function envelope() -> BufferEnvelope {
+    return BufferEnvelope { payload: ByteBuffer.allocate(1) }
+}

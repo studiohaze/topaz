@@ -1,0 +1,29 @@
+[package]
+workspace = "../../difftest"
+name = "topaz_difftest_py"
+version.workspace = true
+license.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+
+# Workspace-internal Python witness differential harness. Unlike the Rust/native
+# harnesses, Python is a subprocess column: source resolves once, emits through
+# `topaz_emit_py`, then runs under the pinned CPython and `topaz_py_rt`.
+[dependencies]
+topaz_emit_py = { workspace = true }
+topaz_check = { workspace = true }
+topaz_interp = { workspace = true }
+topaz_resolve = { workspace = true }
+topaz_rt = { workspace = true }
+topaz_syntax = { workspace = true }
+topaz_value = { workspace = true }
+
+[build-dependencies]
+topaz_emit = { workspace = true }
+topaz_resolve = { workspace = true }
+topaz_syntax = { workspace = true }
+topaz_lower = { workspace = true }
+
+[lints]
+workspace = true

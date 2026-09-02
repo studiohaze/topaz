@@ -1,0 +1,19 @@
+
+let maybeN = toInt(text: loop {
+    print("to-int")
+    break "42"
+})
+let n = maybeN ?? 0
+print(loop {
+    print("print-arg")
+    break "hello"
+})
+let s = Some(loop {
+    break 7
+})
+let v = match s {
+    case Some(x) => x
+    case None => 0
+}
+print("{n}:{v}")
+0

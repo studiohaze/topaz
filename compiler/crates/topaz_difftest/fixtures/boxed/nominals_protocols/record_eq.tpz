@@ -1,0 +1,5 @@
+record P { x: int, y: int }
+let a = P { x: 1, y: 2 } == P { x: 1, y: 2 }
+let b = P { x: 1, y: 2 } == P { x: 1, y: 3 }
+print("{a}/{b}")
+0

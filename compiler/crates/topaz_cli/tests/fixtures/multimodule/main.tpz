@@ -1,0 +1,4 @@
+import mathlib
+let r = mathlib.double(mathlib.ANSWER)
+print("double the answer is {r}")
+r

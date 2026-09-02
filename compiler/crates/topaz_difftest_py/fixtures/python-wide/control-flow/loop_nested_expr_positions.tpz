@@ -1,0 +1,15 @@
+
+let a = 10 + loop {
+    break 5
+}
+let xs = [loop {
+    break a - 12
+}, 4]
+let r = {
+    left: xs[0],
+    right: loop {
+        break xs[1] + 3
+    }
+}
+print("{r.left}:{r.right}")
+r.left + r.right

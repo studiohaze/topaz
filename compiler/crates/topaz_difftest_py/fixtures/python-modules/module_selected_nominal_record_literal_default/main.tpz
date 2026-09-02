@@ -1,0 +1,10 @@
+
+import model { User as Person }
+function main() -> string {
+    let u = Person { name: "Ada" }
+    let v = Person { ...u, age: 40 }
+    match v {
+        case Person { name, age } => "{name}:{u.age}:{age}"
+    }
+}
+main()

@@ -1,0 +1,2 @@
+function f(...xs: int) -> int { xs[3] }
+f(...[10, 20, 30], 40)

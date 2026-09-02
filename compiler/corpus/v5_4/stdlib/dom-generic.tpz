@@ -1,0 +1,27 @@
+import std.dom { Html, Command, addClass, attr, dispatch, element, event, setText, text }
+
+enum Msg derives Show {
+  SaveClicked,
+  Toggle(bool),
+}
+
+function view() -> Html<Msg> {
+  let label = text<Msg>("Save")
+  element<Msg>(
+    "button",
+    [attr("id", "save"), attr("type", "button")],
+    [event<Msg>("click", Msg.SaveClicked)],
+    [label]
+  )
+}
+
+function update(msg: Msg) -> Array<Command<Msg>> {
+  let setStatus = setText<Msg>("#status", "{msg}")
+  let markOk = addClass<Msg>("#status", "ok")
+  let bounce = dispatch<Msg>(msg)
+  [setStatus, markOk, bounce]
+}
+
+let html = view()
+let commands = update(Msg.Toggle(true))
+print("{html}|{commands.join(";")}")

@@ -1,0 +1,10 @@
+type Point = { x: int, y: int }
+
+function classify(p: Point) -> string {
+    match p {
+        case { x: 0, y: 0 } => "origin"
+        case { x: 0 } => "on y-axis"
+        case { y: 0 } => "on x-axis"
+        case _ => "general"
+    }
+}

@@ -1,0 +1,135 @@
+:root {
+  color-scheme: light dark;
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+  background: #0b1020;
+  color: #edf3ff;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: linear-gradient(135deg, #111a35, #090d18 55%);
+}
+
+.shell {
+  width: min(82rem, calc(100% - 2rem));
+  margin: 0 auto;
+  padding: 2rem 0 4rem;
+}
+
+.hero {
+  margin-bottom: 1rem;
+}
+
+.hero h1 {
+  margin: 0;
+  font-size: clamp(2.5rem, 7vw, 5rem);
+}
+
+.eyebrow {
+  color: #a8b8ff;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 1rem;
+}
+
+.editor,
+.preview {
+  min-height: 36rem;
+  padding: 1.25rem;
+  border: 1px solid #46537f;
+  border-radius: 1rem;
+  background: rgba(13, 20, 41, 0.9);
+  box-shadow: 0 1rem 3rem rgba(0, 0, 0, 0.28);
+}
+
+textarea {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 29rem;
+  margin: 0.5rem 0 0.75rem;
+  padding: 1rem;
+  resize: vertical;
+  border: 1px solid #53649a;
+  border-radius: 0.65rem;
+  background: #080d1b;
+  color: inherit;
+  font: 0.95rem/1.6 ui-monospace, "SFMono-Regular", Consolas, monospace;
+}
+
+button {
+  min-height: 2.6rem;
+  padding: 0.5rem 0.9rem;
+  border: 1px solid #7185cc;
+  border-radius: 0.6rem;
+  background: #263a7a;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+#status {
+  color: #b9c7f5;
+}
+
+#markdown-preview {
+  overflow-wrap: anywhere;
+}
+
+#markdown-preview :first-child {
+  margin-top: 0;
+}
+
+#markdown-preview code {
+  padding: 0.1em 0.35em;
+  border-radius: 0.35rem;
+  background: #ffffff18;
+}
+
+#markdown-preview pre {
+  overflow: auto;
+  padding: 1rem;
+  border-radius: 0.6rem;
+  background: #050914;
+}
+
+#markdown-preview blockquote {
+  margin-left: 0;
+  padding-left: 1rem;
+  border-left: 0.25rem solid #7185cc;
+}
+
+#markdown-preview table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+#markdown-preview th,
+#markdown-preview td {
+  padding: 0.5rem;
+  border: 1px solid #53649a;
+  text-align: left;
+}
+
+#markdown-preview img {
+  max-width: 100%;
+}
+
+@media (max-width: 54rem) {
+  .workspace {
+    grid-template-columns: 1fr;
+  }
+}

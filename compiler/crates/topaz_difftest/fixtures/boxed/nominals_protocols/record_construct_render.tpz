@@ -1,0 +1,5 @@
+record User { name: string, age: int }
+let u: User = User { name: "Grace", age: 30 }
+print("{u}")
+print("{u.name}/{u.age}")
+0

@@ -1,0 +1,20 @@
+// Using if as an expression
+let message = if time < 12 {
+    "Good morning!"
+} else if time < 18 {
+    "Good afternoon!"
+} else {
+    "Good evening!"
+}
+
+// Complex conditional calculation
+let shippingCost = if orderAmount >= 50000 {
+    0
+} else if distance <= 10 {
+    3000
+} else {
+    5000
+}
+
+print(message)
+print("Shipping cost: {shippingCost}")

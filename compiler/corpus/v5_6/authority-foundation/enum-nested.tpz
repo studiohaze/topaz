@@ -1,0 +1,11 @@
+function build() -> int {
+    enum Local {
+        Value(int),
+    }
+    let local: Local = Local.Value(7)
+    match local {
+        case Value(found) => found
+    }
+}
+
+print("{build()}")

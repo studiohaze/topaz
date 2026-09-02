@@ -1,0 +1,7 @@
+function processFile(path: string) -> Result<string, string> {
+    let file = open(path)?
+    defer { file.close() }                  // always closes (LIFO)
+
+    let content = file.read()?              // work with the resource
+    Ok(content)
+}

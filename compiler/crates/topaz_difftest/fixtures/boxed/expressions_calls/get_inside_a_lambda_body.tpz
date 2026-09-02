@@ -1,0 +1,2 @@
+let f = (a) => a.get(0)
+f(Array.of(10, 20))

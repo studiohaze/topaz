@@ -1,0 +1,6 @@
+
+function main() -> int {
+    let f = 1 >> ((x) => x)
+    f(2)
+}
+main()

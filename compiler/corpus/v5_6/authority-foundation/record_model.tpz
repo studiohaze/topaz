@@ -1,0 +1,7 @@
+export record User {
+    name: string,
+}
+
+export function make() -> User {
+    User { name: "Ada" }
+}

@@ -1,0 +1,12 @@
+export function area(w: float, h: float) -> float { return w * h }
+
+export type Size = { w: float, h: float }
+
+export let defaultSize: Size = { w: 1.0, h: 1.0 }
+
+export const maxSide = 4096
+
+function clamp(v: float) -> float {    // 비공개 헬퍼
+    if v > 4096.0 { return 4096.0 }
+    return v
+}

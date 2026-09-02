@@ -1,0 +1,2 @@
+function f(a: int, tag: string = "z", ...xs: int) -> string { "{a}/{tag}/{xs.length}" }
+f(1, ...[2], 3, tag: "q")

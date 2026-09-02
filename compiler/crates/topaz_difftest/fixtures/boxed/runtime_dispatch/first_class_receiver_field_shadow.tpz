@@ -1,0 +1,5 @@
+let receiver = { push: (x: int) => x + 1, map: (x: int) => x * 2, write: (s: string) => s + "!" }
+let push = receiver.push
+let mapValue = receiver.map
+let write = receiver.write
+{ push: push(4), map: mapValue(5), write: write("ok") }

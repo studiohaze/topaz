@@ -1,0 +1,1 @@
+JSON.stringify({ xs: [1, 2], who: "가" })

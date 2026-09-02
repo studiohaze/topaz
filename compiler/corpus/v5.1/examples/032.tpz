@@ -1,0 +1,9 @@
+let dashboard = concurrent(timeout: 3s) {
+    user: loadUser(userId)
+    posts: loadPosts(userId)
+} else {
+    {
+        user: None,
+        posts: []
+    }
+}

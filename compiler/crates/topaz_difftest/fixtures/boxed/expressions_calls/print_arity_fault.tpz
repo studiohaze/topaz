@@ -1,0 +1,2 @@
+let f = print
+f("a", "b")

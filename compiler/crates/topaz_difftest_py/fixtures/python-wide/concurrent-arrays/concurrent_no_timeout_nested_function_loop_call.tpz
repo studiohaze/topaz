@@ -1,0 +1,15 @@
+
+let r = concurrent {
+    a: {
+        function helper() -> int {
+            let mut i = 0
+            while i < 3 {
+                i = i + 1
+            }
+            i
+        }
+        helper()
+    }
+    b: 5
+}
+r.a + r.b

@@ -1,0 +1,8 @@
+let numbers = Array.of(1, 2, 3, 4, 5)
+
+let evenSquaresSum = numbers
+    |> filter(_, x => x % 2 == 0)
+    |> map(_, x => x * x)
+    |> reduce(_, 0, (acc, x) => acc + x)   // reduce(xs, initial, f)
+
+print("Sum of even squares: {evenSquaresSum}")  // 20

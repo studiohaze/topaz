@@ -1,0 +1,2 @@
+match 5 { case 9 if 1 / 0 > 0 => 1
+case _ => 2 }

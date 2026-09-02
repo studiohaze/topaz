@@ -1,0 +1,17 @@
+// Topaz enforces type-safe comparison
+let integer = 42
+let floatValue = 42.0
+let text = "42"
+
+// Only same types can be compared
+let intComparison = integer == 42          // true
+let floatComparison = floatValue == 42.0   // true
+
+// Different type comparison requires explicit conversion
+let stringComparison = "{integer}" == text     // true
+let numberComparison = match toInt(text) {     // toInt returns Option<int>
+    case Some(value) => integer == value
+    case None => false
+}
+
+print("Type conversion comparison: {stringComparison}")

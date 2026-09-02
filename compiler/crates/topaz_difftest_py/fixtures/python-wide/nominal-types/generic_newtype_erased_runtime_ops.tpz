@@ -1,0 +1,13 @@
+
+newtype Box<T> = T
+function main() -> string {
+    let a = Box(7)
+    let b = Box(7)
+    let matched = match a {
+        case Box(value) => value + 1
+    }
+    let mut m = Map.new()
+    m.insert(a, "hit")
+    "{a}:{a.value()}:{matched}:{a == b}:{m.getOr(b, "miss")}"
+}
+main()

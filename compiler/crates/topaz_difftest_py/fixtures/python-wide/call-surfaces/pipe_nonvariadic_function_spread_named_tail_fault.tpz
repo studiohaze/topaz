@@ -1,0 +1,16 @@
+
+function f(a: int, b: int = 0) -> int {
+    a + b
+}
+function markArray(label: string, xs: Array<int>) -> Array<int> {
+    print(label)
+    xs
+}
+function markInt(label: string, value: int) -> int {
+    print(label)
+    value
+}
+function main() -> int {
+    1 |> f(...markArray("spread", [2]), b: markInt("named", 3))
+}
+main()

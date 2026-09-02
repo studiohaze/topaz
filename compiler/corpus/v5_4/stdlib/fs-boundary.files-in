@@ -1,0 +1,3 @@
+data/input.txt = alpha
+out/existing.txt = seed
+out/result.txt = old

@@ -1,0 +1,11 @@
+[package]
+name = "dual_toolchain_fixture"
+version = "0.1.0"
+language = "5.16"
+entry = "src/main.tpz"
+
+[dependencies]
+std = "5.16"
+
+[build]
+deterministic = true

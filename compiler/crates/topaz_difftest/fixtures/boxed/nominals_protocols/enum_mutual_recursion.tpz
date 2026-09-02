@@ -1,0 +1,14 @@
+enum A { Stop, GoA(B) }
+enum B { GoB(A) }
+function depthA(a: A) -> int {
+  match a {
+    case Stop => 0
+    case GoA(b) => match b {
+      case GoB(inner) => 2 + depthA(inner)
+    }
+  }
+}
+let v: A = A.GoA(B.GoB(A.GoA(B.GoB(A.Stop))))
+print("{depthA(v)}")
+print("{v}")
+0

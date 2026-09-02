@@ -1,0 +1,41 @@
+
+function main() -> int {
+    let int_or_float_a: int | float = 7.0
+    let a = match int_or_float_a {
+        case n: 7 => 10
+        case _ => 0
+    }
+    let int_or_float_b: int | float = 7
+    let b = match int_or_float_b {
+        case n: 7 => 11
+        case _ => 0
+    }
+    let c = match 7 {
+        case n: 7.0 => 100
+        case _ => 3
+    }
+    let d = match 7.0 {
+        case n: 7.0 => 4
+        case _ => 0
+    }
+    let slash_t = "a\\tb"
+    let e = match slash_t {
+        case s: "a\\tb" => 5
+        case _ => 0
+    }
+    let tab = "a	b"
+    let f = match tab {
+        case s: "a\\tb" => 100
+        case _ => 6
+    }
+    let g = match true {
+        case flag: true => 7
+        case _ => 0
+    }
+    let h = match null {
+        case value: null => 8
+        case _ => 0
+    }
+    a + b + c + d + e + f + g + h
+}
+main()

@@ -1,0 +1,11 @@
+function f() {
+  {
+    defer print("outer")
+    {
+      defer print("inner")
+      print("body")
+    }
+    print("mid")
+  }
+}
+f()

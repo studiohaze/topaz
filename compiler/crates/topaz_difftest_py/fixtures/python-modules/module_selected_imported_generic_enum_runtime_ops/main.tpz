@@ -1,0 +1,23 @@
+
+import model { Box as ForeignBox }
+function main() -> string {
+    let one: ForeignBox<int> = ForeignBox.One(7)
+    let two: ForeignBox<int> = ForeignBox.Two(2, 3)
+    let a = match one {
+        case One(value) => value
+        case Empty => 0
+        case Two(left, right) => left + right
+    }
+    let b = match two {
+        case found: ForeignBox<int> => if found == ForeignBox.Two(2, 3) { "typed" } else { "miss" }
+    }
+    let c = match ForeignBox.One("x") {
+        case found: ForeignBox<int> => "bad"
+        case _ => "mismatch"
+    }
+    let mut labels = Map.new()
+    labels.insert(one, "hit")
+    let boxes = set { ForeignBox.Empty, ForeignBox.Empty, one, two }
+    "{one}:{two}:{a}:{b}:{c}:{labels.getOr(ForeignBox.One(7), "miss")}:{boxes.length}"
+}
+main()

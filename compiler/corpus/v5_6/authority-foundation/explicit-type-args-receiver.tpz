@@ -1,0 +1,2 @@
+let values: Array<int> = [1, 2]
+values.map<string>((value: int) => "{value}").join(",")

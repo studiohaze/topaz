@@ -1,0 +1,6 @@
+function записатьЛог(сообщение: string) -> Result<(), string> {
+    let файл = open("app.log")?
+    defer { файл.close() }
+    файл.write(сообщение)?
+    return Ok(())
+}

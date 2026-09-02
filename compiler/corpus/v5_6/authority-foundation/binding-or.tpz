@@ -1,0 +1,6 @@
+let value: Option<int> = Some(7)
+let found = match value {
+    case Some(n) | Some(n) => n
+    case None => 0
+}
+print("{found}")

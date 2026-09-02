@@ -1,0 +1,55 @@
+record Box<T> {
+  value: T,
+}
+
+newtype Id<T> = T
+
+record Config {
+  host: string,
+  port: int = 8080,
+}
+
+impl Config {
+  function addr(self) -> string {
+    "{self.host}:{self.port}"
+  }
+}
+
+enum Op {
+  Add,
+  Mul,
+}
+
+enum Expr {
+  Num(int),
+  Bin(Op, Expr, Expr),
+}
+
+impl Expr {
+  function eval(self) -> int {
+    match self {
+      case Num(n) => n
+      case Bin(op, left, right) => match op {
+        case Add => left.eval() + right.eval()
+        case Mul => left.eval() * right.eval()
+      }
+    }
+  }
+}
+
+let nums: Box<int> = Box { value: 7 }
+let word: Box<string> = Box { value: "hi" }
+let id: Id<string> = Id("u-42")
+let unwrapped = match id {
+  case Id(value) => value
+}
+let cfg: Config = Config { host: "localhost" }
+let updated: Config = Config { ...cfg, port: 9090 }
+let expr: Expr = Expr.Bin(
+  Op.Add,
+  Expr.Num(nums.value),
+  Expr.Bin(Op.Mul, Expr.Num(2), Expr.Num(3)),
+)
+
+print("{expr.eval()}|{word.value}|{unwrapped}|{cfg.addr()}|{updated.addr()}")
+print("{expr}")

@@ -1,0 +1,2 @@
+let b = Bytes.encodeUtf8("AZ")
+"{b.get(0)}/{b.get(9)}/{b.toArray().length}"

@@ -1,0 +1,11 @@
+function 첫원소<T>(xs: Array<T>) -> Option<T> {
+    match xs {
+        case [] => None
+        case [첫, ..] => Some(첫)
+    }
+}
+
+let 첫번째: Option<int> = 첫원소([1, 2, 3])
+
+type 쌍<T> = { 첫: T, 둘: T }
+let 범위: 쌍<int> = { 첫: 0, 둘: 100 }

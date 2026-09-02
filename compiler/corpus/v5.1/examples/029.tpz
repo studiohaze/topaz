@@ -1,0 +1,6 @@
+function divide(a: float, b: float) -> Result<float, string> {
+    if b == 0.0 {
+        return Err("Cannot divide by zero")
+    }
+    return Ok(a / b)
+}

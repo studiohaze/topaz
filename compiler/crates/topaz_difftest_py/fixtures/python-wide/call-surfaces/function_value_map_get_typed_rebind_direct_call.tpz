@@ -1,0 +1,15 @@
+
+function add(a: int, b: int = 2) -> int {
+    a + b
+}
+function main() -> int {
+    let callbacks = map { "plus": add }
+    match callbacks.get("plus") {
+        case Some(raw) => {
+            let cb: (int, int) -> int = raw
+            cb(5, 2)
+        }
+        case None => 0
+    }
+}
+main()

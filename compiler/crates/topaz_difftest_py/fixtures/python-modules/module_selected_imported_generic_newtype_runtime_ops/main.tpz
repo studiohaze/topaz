@@ -1,0 +1,17 @@
+
+import model { Box as ForeignBox }
+function main() -> string {
+    let a = ForeignBox(7)
+    let b = ForeignBox(7)
+    let matched = match a {
+        case ForeignBox(value) => value + 1
+    }
+    let typed = match a {
+        case found: ForeignBox<int> => found.value() + 2
+        case _ => 0
+    }
+    let mut m = Map.new()
+    m.insert(a, "hit")
+    "{a}:{a.value()}:{matched}:{typed}:{a == b}:{m.getOr(b, "miss")}"
+}
+main()

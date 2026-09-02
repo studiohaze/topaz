@@ -1,0 +1,9 @@
+record User {
+    name: string,
+}
+
+let user: User = User { name: "Ada" }
+let label = match user {
+    case User { missing } => missing
+}
+print(label)

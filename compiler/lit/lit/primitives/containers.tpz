@@ -1,0 +1,471 @@
+// Vector, bytevector, string-container, and sequence conversion primitives.
+// Dispatch selects this family by name; allocation and guest-value identity stay
+// in lit.value_runtime.
+
+import lit.model {
+  GuestInt,
+  GuestRational,
+  ErrorObjectRow,
+  GuardClauseRow,
+  GuestValue,
+  ValuePacket,
+  MachineSignal,
+  NodeOp,
+  SpanRow,
+  OriginRow,
+  BinderRow,
+  GlobalRow,
+  NodeRow,
+  Kernel,
+  MachineMode,
+  KernelInvokeStep,
+}
+import lit.numeric {
+  guestIntZero,
+  guestIndex,
+}
+import lit.value_runtime {
+  allocateGuestIdentity,
+  requireArity,
+  guestListElements,
+  guestIntFromNonnegative,
+  guestCount,
+  guestByte,
+  guestList,
+  primitivePredicate,
+}
+import lit.unicode_text {
+  guestStringSlice,
+  primitiveIndex,
+  stringFromGuestChars,
+  guestCharsFromString,
+}
+import lit.primitives.numeric_pairs {
+  searchListTail,
+}
+
+export function invokePrimitiveContainers(
+  name: string,
+  arguments: Array<GuestValue>,
+  continuation: int,
+  kernel: Kernel,
+  guestIdentities: Array<int>,
+  allocations: int,
+  maxContinuationDepth: int,
+  initialTransfers: int,
+  dynamic: int,
+  emittedOutput: string,
+) -> Option<KernelInvokeStep> {
+  let mut transfers = initialTransfers
+  let mut mode = MachineMode.HaltMode
+  match name {
+    case "number?" | "integer?" | "exact-integer?" | "boolean?" | "symbol?" | "string?" | "procedure?" | "vector?" | "bytevector?" => match requireArity(name, arguments.length, 1, 1) {
+      case Err(error) => {
+        transfers += 1
+        mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+      }
+      case Ok(_) => {
+        let answer = primitivePredicate(name, arguments[0])
+        mode = MachineMode.DeliverMode(ValuePacket.One(GuestValue.VBool(answer)), continuation)
+      }
+    }
+    case "make-vector" => match requireArity("make-vector", arguments.length, 1, 2) {
+      case Err(error) => {
+        transfers += 1
+        mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+      }
+      case Ok(_) => match guestCount(arguments[0], "make-vector") {
+        case Err(error) => {
+          transfers += 1
+          mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+        }
+        case Ok(count) => {
+          let fill = if arguments.length == 2 { arguments[1] } else { GuestValue.VInt(guestIntZero()) }
+          let mut values: Array<GuestValue> = []
+          let mut index = 0
+          while index < count { values.push(fill); index += 1 }
+          mode = MachineMode.DeliverMode(
+            ValuePacket.One(GuestValue.VVector(
+              allocateGuestIdentity(guestIdentities),
+              values,
+              true,
+            )),
+            continuation,
+          )
+        }
+      }
+    }
+    case "vector" => {
+      mode = MachineMode.DeliverMode(
+        ValuePacket.One(GuestValue.VVector(
+          allocateGuestIdentity(guestIdentities),
+          arguments,
+          true,
+        )),
+        continuation,
+      )
+    }
+    case "vector-length" => match requireArity("vector-length", arguments.length, 1, 1) {
+      case Err(error) => {
+        transfers += 1
+        mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+      }
+      case Ok(_) => match arguments[0] {
+        case VVector(_, values, _) => {
+          mode = MachineMode.DeliverMode(
+            ValuePacket.One(GuestValue.VInt(guestIntFromNonnegative(values.length))),
+            continuation,
+          )
+        }
+        case _ => {
+          transfers += 1
+          mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal("HK263 vector-length: vector required"), continuation)
+        }
+      }
+    }
+    case "vector->list" => match requireArity("vector->list", arguments.length, 1, 1) {
+      case Err(error) => {
+        transfers += 1
+        mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+      }
+      case Ok(_) => match arguments[0] {
+        case VVector(_, values, _) => {
+          mode = MachineMode.DeliverMode(ValuePacket.One(guestList(values, guestIdentities)), continuation)
+        }
+        case _ => {
+          transfers += 1
+          mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal("HK263 vector->list: vector required"), continuation)
+        }
+      }
+    }
+    case "list->vector" => match requireArity("list->vector", arguments.length, 1, 1) {
+      case Err(error) => {
+        transfers += 1
+        mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+      }
+      case Ok(_) => match guestListElements(arguments[0], "list->vector", "HK264") {
+        case Ok(values) => {
+          mode = MachineMode.DeliverMode(
+            ValuePacket.One(GuestValue.VVector(
+              allocateGuestIdentity(guestIdentities),
+              values,
+              true,
+            )),
+            continuation,
+          )
+        }
+        case Err(error) => {
+          transfers += 1
+          mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+        }
+      }
+    }
+    case "make-bytevector" => match requireArity("make-bytevector", arguments.length, 1, 2) {
+      case Err(error) => {
+        transfers += 1
+        mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+      }
+      case Ok(_) => match guestCount(arguments[0], "make-bytevector") {
+        case Err(error) => {
+          transfers += 1
+          mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+        }
+        case Ok(count) => {
+          let fillResult = if arguments.length == 2 { guestByte(arguments[1], "make-bytevector") } else { Ok(0) }
+          match fillResult {
+            case Err(error) => {
+              transfers += 1
+              mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+            }
+            case Ok(fill) => {
+              let mut bytes: Array<int> = []
+              let mut index = 0
+              while index < count { bytes.push(fill); index += 1 }
+              mode = MachineMode.DeliverMode(
+                ValuePacket.One(GuestValue.VBytevector(
+                  allocateGuestIdentity(guestIdentities),
+                  bytes,
+                )),
+                continuation,
+              )
+            }
+          }
+        }
+      }
+    }
+    case "bytevector" => {
+      let mut bytes: Array<int> = []
+      let mut failed: Option<string> = None
+      for argument in arguments {
+        if failed == None {
+          match guestByte(argument, "bytevector") {
+            case Ok(byte) => { bytes.push(byte) }
+            case Err(error) => { failed = Some(error) }
+          }
+        }
+      }
+      match failed {
+        case Some(error) => {
+          transfers += 1
+          mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+        }
+        case None => {
+          mode = MachineMode.DeliverMode(
+            ValuePacket.One(GuestValue.VBytevector(
+              allocateGuestIdentity(guestIdentities),
+              bytes,
+            )),
+            continuation,
+          )
+        }
+      }
+    }
+    case "bytevector-length" => match requireArity("bytevector-length", arguments.length, 1, 1) {
+      case Err(error) => {
+        transfers += 1
+        mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+      }
+      case Ok(_) => match arguments[0] {
+        case VBytevector(_, bytes) => {
+          mode = MachineMode.DeliverMode(
+            ValuePacket.One(GuestValue.VInt(guestIntFromNonnegative(bytes.length))),
+            continuation,
+          )
+        }
+        case _ => {
+          transfers += 1
+          mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal("HK267 bytevector-length: bytevector required"), continuation)
+        }
+      }
+    }
+    case "bytevector-u8-ref" => match requireArity("bytevector-u8-ref", arguments.length, 2, 2) {
+      case Err(error) => {
+        transfers += 1
+        mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+      }
+      case Ok(_) => match arguments[0] {
+        case VBytevector(_, bytes) => match guestIndex(arguments[1], "bytevector-u8-ref") {
+          case Ok(index) => if index >= 0 && index < bytes.length {
+            mode = MachineMode.DeliverMode(
+              ValuePacket.One(GuestValue.VInt(guestIntFromNonnegative(bytes[index]))),
+              continuation,
+            )
+          } else {
+            transfers += 1
+            mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal("HK268 bytevector-u8-ref: index out of range"), continuation)
+          }
+          case Err(error) => {
+            transfers += 1
+            mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+          }
+        }
+        case _ => {
+          transfers += 1
+          mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal("HK268 bytevector-u8-ref: bytevector required"), continuation)
+        }
+      }
+    }
+    case _ => { return None }
+  }
+  Some(KernelInvokeStep {
+    mode: mode,
+    allocations: allocations,
+    maxContinuationDepth: maxContinuationDepth,
+    transfers: transfers,
+    dynamic: dynamic,
+    emittedOutput: emittedOutput,
+  })
+}
+
+export function invokePrimitiveSequenceConversionsAndCopies(
+  name: string,
+  arguments: Array<GuestValue>,
+  continuation: int,
+  kernel: Kernel,
+  guestIdentities: Array<int>,
+  allocations: int,
+  maxContinuationDepth: int,
+  initialTransfers: int,
+  dynamic: int,
+  emittedOutput: string,
+) -> Option<KernelInvokeStep> {
+  let mut transfers = initialTransfers
+  let mut mode = MachineMode.HaltMode
+  match name {
+    case "list->string" => match requireArity("list->string", arguments.length, 1, 1) {
+      case Err(error) => {
+        transfers += 1
+        mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+      }
+      case Ok(_) => match stringFromGuestChars(arguments[0], guestIdentities) {
+        case Ok(value) => { mode = MachineMode.DeliverMode(ValuePacket.One(value), continuation) }
+        case Err(error) => {
+          transfers += 1
+          mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+        }
+      }
+    }
+    case "member" | "memq" => match requireArity(name, arguments.length, 2, 2) {
+      case Err(error) => {
+        transfers += 1
+        mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+      }
+      case Ok(_) => match searchListTail(arguments[0], arguments[1], name, name == "memq") {
+        case Ok(value) => { mode = MachineMode.DeliverMode(ValuePacket.One(value), continuation) }
+        case Err(error) => {
+          transfers += 1
+          mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+        }
+      }
+    }
+    case "string->list" => match requireArity("string->list", arguments.length, 1, 1) {
+      case Err(error) => {
+        transfers += 1
+        mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+      }
+      case Ok(_) => match arguments[0] {
+        case VString(_, text) => {
+          mode = MachineMode.DeliverMode(ValuePacket.One(guestCharsFromString(text, guestIdentities)), continuation)
+        }
+        case _ => {
+          transfers += 1
+          mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal("HK286 string->list: string required"), continuation)
+        }
+      }
+    }
+    case "string-copy" => match requireArity("string-copy", arguments.length, 1, 3) {
+      case Err(error) => {
+        transfers += 1
+        mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+      }
+      case Ok(_) => match arguments[0] {
+        case VString(_, text) => {
+          let scalarCount = text.scalars().length
+          let startResult = if arguments.length >= 2 { primitiveIndex(arguments[1], "string-copy", "HK288") } else { Ok(0) }
+          let endResult = if arguments.length >= 3 { primitiveIndex(arguments[2], "string-copy", "HK288") } else { Ok(scalarCount) }
+          match startResult {
+            case Err(error) => {
+              transfers += 1
+              mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+            }
+            case Ok(start) => match endResult {
+              case Err(error) => {
+                transfers += 1
+                mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+              }
+              case Ok(end) => match guestStringSlice(text, start, end, "string-copy", "HK288") {
+                case Ok(copied) => {
+                  mode = MachineMode.DeliverMode(ValuePacket.One(GuestValue.VString(allocateGuestIdentity(guestIdentities), copied)), continuation)
+                }
+                case Err(error) => {
+                  transfers += 1
+                  mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+                }
+              }
+            }
+          }
+        }
+        case _ => {
+          transfers += 1
+          mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal("HK288 string-copy: string required"), continuation)
+        }
+      }
+    }
+    case "substring" => match requireArity("substring", arguments.length, 3, 3) {
+      case Err(error) => {
+        transfers += 1
+        mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+      }
+      case Ok(_) => match arguments[0] {
+        case VString(_, text) => match primitiveIndex(arguments[1], "substring", "HK289") {
+          case Err(error) => {
+            transfers += 1
+            mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+          }
+          case Ok(start) => match primitiveIndex(arguments[2], "substring", "HK289") {
+            case Err(error) => {
+              transfers += 1
+              mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+            }
+            case Ok(end) => match guestStringSlice(text, start, end, "substring", "HK289") {
+              case Ok(copied) => {
+                mode = MachineMode.DeliverMode(ValuePacket.One(GuestValue.VString(allocateGuestIdentity(guestIdentities), copied)), continuation)
+              }
+              case Err(error) => {
+                transfers += 1
+                mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+              }
+            }
+          }
+        }
+        case _ => {
+          transfers += 1
+          mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal("HK289 substring: string required"), continuation)
+        }
+      }
+    }
+    case "vector-copy" => match requireArity("vector-copy", arguments.length, 1, 3) {
+      case Err(error) => {
+        transfers += 1
+        mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+      }
+      case Ok(_) => match arguments[0] {
+        case VVector(_, values, _) => {
+          let startResult = if arguments.length >= 2 { primitiveIndex(arguments[1], "vector-copy", "HK290") } else { Ok(0) }
+          let endResult = if arguments.length >= 3 { primitiveIndex(arguments[2], "vector-copy", "HK290") } else { Ok(values.length) }
+          match startResult {
+            case Err(error) => {
+              transfers += 1
+              mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+            }
+            case Ok(start) => match endResult {
+              case Err(error) => {
+                transfers += 1
+                mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal(error), continuation)
+              }
+              case Ok(end) => {
+                if start > end || end > values.length {
+                  transfers += 1
+                  mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal("HK290 vector-copy: invalid element range"), continuation)
+                } else {
+                  let mut copied: Array<GuestValue> = []
+                  let mut index = start
+                  while index < end { copied.push(values[index]); index += 1 }
+                  mode = MachineMode.DeliverMode(
+                    ValuePacket.One(GuestValue.VVector(allocateGuestIdentity(guestIdentities), copied, true)),
+                    continuation,
+                  )
+                }
+              }
+            }
+          }
+        }
+        case _ => {
+          transfers += 1
+          mode = MachineMode.TransferMode(MachineSignal.RuntimeSignal("HK290 vector-copy: vector required"), continuation)
+        }
+      }
+    }
+    case "map" | "for-each" | "vector-map" | "vector-for-each" | "string-map" | "string-for-each" | "filter" | "fold-left" | "fold-right" => {
+      transfers += 1
+      mode = MachineMode.TransferMode(
+        MachineSignal.ProjectedRuntimeSignal(
+          "HK260 {name}: unsupported in hosted-kernel-h4/v0",
+          "backend-unsupported",
+          "capability is not yet implemented by the selected backend",
+          [],
+        ),
+        continuation,
+      )
+    }
+    case _ => { return None }
+  }
+  Some(KernelInvokeStep {
+    mode: mode,
+    allocations: allocations,
+    maxContinuationDepth: maxContinuationDepth,
+    transfers: transfers,
+    dynamic: dynamic,
+    emittedOutput: emittedOutput,
+  })
+}

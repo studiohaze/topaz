@@ -1,0 +1,2 @@
+newtype UserId = int
+let id = UserId(1, 2)

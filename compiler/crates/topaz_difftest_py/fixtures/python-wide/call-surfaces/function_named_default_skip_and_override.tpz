@@ -1,0 +1,5 @@
+
+function mix(a: int, b: int = 10, c: int = 1) -> int {
+    a + b + c
+}
+mix(c: 3, a: 2) + mix(1, c: 2) + mix(1, b: 2, c: 3)

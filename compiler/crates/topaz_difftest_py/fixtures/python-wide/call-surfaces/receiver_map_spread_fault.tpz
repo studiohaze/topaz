@@ -1,0 +1,12 @@
+
+function mark(label: string, xs: Array<string>) -> Array<string> {
+    print(label)
+    xs
+}
+function makeMap() -> Map<string, int> {
+    map { "x": 1 }
+}
+function main() -> bool {
+    makeMap().containsKey(...mark("map", ["x"]))
+}
+main()

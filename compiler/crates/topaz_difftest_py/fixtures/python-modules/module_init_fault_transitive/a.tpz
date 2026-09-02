@@ -1,0 +1,3 @@
+
+import bad
+export let value = bad.value + 1

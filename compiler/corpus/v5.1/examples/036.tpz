@@ -1,0 +1,1 @@
+let listCmd = sh"ls -la"

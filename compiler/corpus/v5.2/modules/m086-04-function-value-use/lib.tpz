@@ -1,0 +1,4 @@
+function pick(g: () -> int) -> int { g() }
+function f() -> int { later }
+export let a = pick(f)
+export let later = 1

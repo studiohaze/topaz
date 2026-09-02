@@ -1,0 +1,37 @@
+[package]
+name = "bounded_lispex_decision_application"
+version = "0.1.0"
+language = "5.18"
+entry = "src/main.tpz"
+
+[build]
+target = "native"
+deterministic = true
+
+[dependencies]
+std = "5.18"
+
+[lispex]
+profile = "lispex/r7rs-rule-embedded-core/1"
+application = "topaz/lispex-decision-application/1"
+application_quotas = "rules/application.quotas.json"
+
+[[lispex.rule]]
+name = "approve"
+source = "rules/approve.lspx"
+limits = "rules/approve.limits.json"
+
+[[lispex.rule]]
+name = "classify"
+source = "rules/classify.lspx"
+limits = "rules/classify.limits.json"
+
+[[lispex.rule]]
+name = "deadline_probe"
+source = "rules/deadline-probe.lspx"
+limits = "rules/deadline-probe.limits.json"
+
+[[lispex.rule]]
+name = "semantic_limit_probe"
+source = "rules/approve.lspx"
+limits = "rules/semantic-limit-probe.limits.json"

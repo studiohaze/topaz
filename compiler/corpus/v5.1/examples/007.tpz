@@ -1,0 +1,5 @@
+let label = match status {
+    case 200 => "ok"
+    case 404 => "not found"
+    case _ => "other"
+}

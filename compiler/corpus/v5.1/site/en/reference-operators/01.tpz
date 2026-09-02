@@ -1,0 +1,20 @@
+// Basic arithmetic operators
+let a = 10
+let b = 3
+
+let addition = a + b        // 13
+let subtraction = a - b     // 7  
+let multiplication = a * b  // 30
+let division = a / b        // 3 — integer division truncates toward zero
+let remainder = a % b       // 1
+let exponentiation = a ** b // 1000
+
+// float arithmetic stays in the float domain (no implicit mixing)
+let ratio = 10.0 / 3.0      // 3.333...
+
+print("Addition: {addition}")
+print("Subtraction: {subtraction}")
+print("Multiplication: {multiplication}")
+print("Division: {division}")
+print("Remainder: {remainder}")
+print("Exponentiation: {exponentiation}")

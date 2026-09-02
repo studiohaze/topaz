@@ -1,0 +1,7 @@
+
+import util
+function main() -> int {
+    print("{util.answer}:{util.extra}")
+    util.answer + util.extra
+}
+main()

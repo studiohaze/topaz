@@ -1,0 +1,10 @@
+
+import model { User as Person }
+let base = 999
+record Local { name: string, age: int = base }
+function main() -> string {
+    let u = Person { name: "Ada" }
+    let l = Local { name: "Entry" }
+    "{u.age}:{l.age}:{base}"
+}
+main()

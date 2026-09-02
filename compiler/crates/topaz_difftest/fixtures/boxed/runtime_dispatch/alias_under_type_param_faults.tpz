@@ -1,0 +1,6 @@
+type T = int
+function f<T>(x: T) {
+  let y: T = x
+  y
+}
+f("no")

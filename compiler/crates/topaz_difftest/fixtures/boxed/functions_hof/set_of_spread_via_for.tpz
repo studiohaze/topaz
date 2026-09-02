@@ -1,0 +1,4 @@
+let xs = [10, 20, 30]
+let mut s = 0
+for x in Set.of(...xs) { s = s + x }
+s

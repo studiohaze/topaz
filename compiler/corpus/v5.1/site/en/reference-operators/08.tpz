@@ -1,0 +1,13 @@
+function sideEffectFunction() -> bool {
+    print("Function was called!")
+    return true
+}
+
+// AND short-circuit - second not executed if first is false
+let shortAnd = false && sideEffectFunction()  // Function not called
+
+// OR short-circuit - second not executed if first is true
+let shortOr = true || sideEffectFunction()   // Function not called
+
+print("Short AND: {shortAnd}")
+print("Short OR: {shortOr}")

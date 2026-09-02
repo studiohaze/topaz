@@ -1,0 +1,6 @@
+record Config { host: string, port: int = 8080, debug: bool = false }
+let a: Config = Config { host: "localhost" }
+let b: Config = Config { host: "x", port: 9090 }
+print("{a}")
+print("{b}")
+0

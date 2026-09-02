@@ -1,0 +1,6 @@
+function lead() { print("L")
+() => "lead" }
+function extra() { print("X")
+() => "extra" }
+let oo: Option<Option<int>> = Some(None)
+lead() |> oo?.okOrElse(extra())

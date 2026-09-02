@@ -1,0 +1,23 @@
+// Option 타입 매칭
+let 선택값: Option<string> = Some("토파즈")
+
+match 선택값 {
+    case Some(값) => print("값이 있음: {값}")
+    case None => print("값이 없음")
+}
+
+// Result 타입 매칭
+function 나누기(a: int, b: int) -> Result<int, string> {
+    if b == 0 {
+        return Err("0으로 나눌 수 없습니다")
+    }
+    return Ok(a / b)
+}
+
+let 분자 = 10
+let 분모 = 2
+
+match 나누기(분자, 분모) {
+    case Ok(결과) => print("나누기 결과: {결과}")
+    case Err(오류) => print("오류: {오류}")
+}

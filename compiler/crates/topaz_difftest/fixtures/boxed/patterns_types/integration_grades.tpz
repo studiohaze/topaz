@@ -1,0 +1,7 @@
+function grade(score: int) { if score >= 90 { "A" } else if score >= 80 { "B" } else if score >= 70 { "C" } else { "F" } }
+let scores = [95, 82, 67, 78, 91]
+let grades = map(scores, grade)
+let passing = filter(scores, (s) => s >= 70)
+let total = reduce(scores, 0, (acc, s) => acc + s)
+print("graded {scores.length} scores, {passing.length} passing, total {total}")
+grades

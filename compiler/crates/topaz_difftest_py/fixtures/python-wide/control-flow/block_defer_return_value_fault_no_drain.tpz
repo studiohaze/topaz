@@ -1,0 +1,9 @@
+
+function f() -> int {
+    {
+        defer print("block-clean")
+        let z = 0
+        return 1 / z
+    }
+}
+f()

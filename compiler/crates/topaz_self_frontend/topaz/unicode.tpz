@@ -1,0 +1,339 @@
+import unicode_tables {
+  CANONICAL_COMBINING_CLASS_KEYS,
+  CANONICAL_COMBINING_CLASS_VALUES,
+  CANONICAL_DECOMPOSITION_KEYS,
+  CANONICAL_DECOMPOSITION_OFFSETS,
+  CANONICAL_DECOMPOSITION_VALUES,
+  CASE_FOLD_KEYS,
+  CASE_FOLD_OFFSETS,
+  CASE_FOLD_VALUES,
+  CodePointRange,
+  EMOJI_RANGES,
+  LETTER_RANGES,
+  NUMBER_RANGES,
+}
+
+// Unicode Standard Annex #15 constants for algorithmic Hangul decomposition.
+const HANGUL_SYLLABLE_BASE = 44032
+const HANGUL_SYLLABLE_LIMIT = 55204
+const HANGUL_LEADING_BASE = 4352
+const HANGUL_VOWEL_BASE = 4449
+const HANGUL_TRAILING_BASE = 4519
+const HANGUL_SYLLABLES_PER_LEADING = 588
+const HANGUL_TRAILING_COUNT = 28
+// Suggestions skip short names and admit edits up to one third of the longer spelling.
+const MIN_SUGGESTION_SCALARS = 4
+const MAX_SUGGESTION_SCALARS = 64
+const SUGGESTION_DISTANCE_DIVISOR = 3
+const MAX_SUGGESTION_BYTES = 256
+// This sentinel exceeds every admitted suggestion length.
+const NO_SUGGESTION_DISTANCE = 1000000
+
+function contains(ranges: Array<CodePointRange>, codePoint: int) -> bool {
+  let mut lo = 0
+  let mut hi = ranges.length
+  while lo < hi {
+    let middle = lo + (hi - lo) / 2
+    let range = ranges[middle]
+    if codePoint < range.first {
+      hi = middle
+    } else if codePoint > range.last {
+      lo = middle + 1
+    } else {
+      return true
+    }
+  }
+  false
+}
+
+function sequenceIndex(keys: Array<int>, codePoint: int) -> int {
+  let mut lo = 0
+  let mut hi = keys.length
+  while lo < hi {
+    let middle = lo + (hi - lo) / 2
+    let candidate = keys[middle]
+    if codePoint < candidate {
+      hi = middle
+    } else if codePoint > candidate {
+      lo = middle + 1
+    } else {
+      return middle
+    }
+  }
+  -1
+}
+
+function combiningClass(codePoint: int) -> int {
+  let index = sequenceIndex(CANONICAL_COMBINING_CLASS_KEYS, codePoint)
+  if index >= 0 {
+    return CANONICAL_COMBINING_CLASS_VALUES[index]
+  }
+  0
+}
+
+function decompose(codePoint: int, output: Array<int>) -> () {
+  let mut target = output
+  if codePoint >= HANGUL_SYLLABLE_BASE && codePoint < HANGUL_SYLLABLE_LIMIT {
+    let syllable = codePoint - HANGUL_SYLLABLE_BASE
+    target.push(HANGUL_LEADING_BASE + syllable / HANGUL_SYLLABLES_PER_LEADING)
+    target.push(HANGUL_VOWEL_BASE +
+      (syllable % HANGUL_SYLLABLES_PER_LEADING) / HANGUL_TRAILING_COUNT)
+    let trailing = syllable % HANGUL_TRAILING_COUNT
+    if trailing != 0 {
+      target.push(HANGUL_TRAILING_BASE + trailing)
+    }
+    return ()
+  }
+  let index = sequenceIndex(CANONICAL_DECOMPOSITION_KEYS, codePoint)
+  if index < 0 {
+    target.push(codePoint)
+    return ()
+  }
+  let mut offset = CANONICAL_DECOMPOSITION_OFFSETS[index]
+  let limit = CANONICAL_DECOMPOSITION_OFFSETS[index + 1]
+  while offset < limit {
+    target.push(CANONICAL_DECOMPOSITION_VALUES[offset])
+    offset += 1
+  }
+  ()
+}
+
+function codePointText(codePoint: int) -> string {
+  match fromCodePoint(codePoint) {
+    case Some(value) => value
+    case None => ""
+  }
+}
+
+export function nfd(value: string) -> string {
+  let mut codePoints: Array<int> = []
+  for scalar in value.scalars() {
+    match scalar.codePointAt(0) {
+      case Some(codePoint) => decompose(codePoint, codePoints)
+      case None => ()
+    }
+  }
+  let mut index = 1
+  while index < codePoints.length {
+    let left = codePoints[index - 1]
+    let right = codePoints[index]
+    let leftClass = combiningClass(left)
+    let rightClass = combiningClass(right)
+    if rightClass != 0 && leftClass > rightClass {
+      codePoints[index - 1] = right
+      codePoints[index] = left
+      if index > 1 {
+        index -= 1
+      } else {
+        index += 1
+      }
+    } else {
+      index += 1
+    }
+  }
+  let mut output: Array<string> = []
+  for codePoint in codePoints {
+    output.push(codePointText(codePoint))
+  }
+  output.join("")
+}
+
+export function caseFold(value: string) -> string {
+  let mut output: Array<string> = []
+  for scalar in value.scalars() {
+    match scalar.codePointAt(0) {
+      case Some(codePoint) => {
+        let index = sequenceIndex(CASE_FOLD_KEYS, codePoint)
+        if index < 0 {
+          output.push(scalar)
+        } else {
+          let mut offset = CASE_FOLD_OFFSETS[index]
+          let limit = CASE_FOLD_OFFSETS[index + 1]
+          while offset < limit {
+            output.push(codePointText(CASE_FOLD_VALUES[offset]))
+            offset += 1
+          }
+        }
+      }
+      case None => ()
+    }
+  }
+  output.join("")
+}
+
+function isIdentifierStartCodePoint(codePoint: int) -> bool {
+  codePoint == 95 ||
+    contains(LETTER_RANGES, codePoint) ||
+    contains(EMOJI_RANGES, codePoint)
+}
+
+function isIdentifierContinueCodePoint(codePoint: int) -> bool {
+  isIdentifierStartCodePoint(codePoint) || contains(NUMBER_RANGES, codePoint)
+}
+
+function byteAt(bytes: Bytes, index: int) -> int {
+  match bytes.get(index) {
+    case Some(value) => value
+    case None => -1
+  }
+}
+
+export function utf8Width(first: int) -> int {
+  if first >= 0 && first < 128 { return 1 }
+  if first >= 194 && first <= 223 { return 2 }
+  if first >= 224 && first <= 239 { return 3 }
+  if first >= 240 && first <= 244 { return 4 }
+  0
+}
+
+function codePointAt(bytes: Bytes, index: int, width: int) -> Option<int> {
+  match bytes.slice(index, index + width).decodeUtf8() {
+    case Ok(text) => text.codePointAt(0)
+    case Err(_) => None
+  }
+}
+
+function identifierWidth(bytes: Bytes, index: int, allowNumber: bool) -> int {
+  let first = byteAt(bytes, index)
+  if first >= 0 && first < 128 {
+    let isStart = first == 95 ||
+      (first >= 65 && first <= 90) ||
+      (first >= 97 && first <= 122)
+    return if isStart || allowNumber && first >= 48 && first <= 57 { 1 } else { 0 }
+  }
+  let width = utf8Width(first)
+  if width == 0 { return 0 }
+  match codePointAt(bytes, index, width) {
+    case Some(codePoint) => {
+      let accepted = if allowNumber {
+        isIdentifierContinueCodePoint(codePoint)
+      } else {
+        isIdentifierStartCodePoint(codePoint)
+      }
+      if accepted { width } else { 0 }
+    }
+    case None => 0
+  }
+}
+
+export function identifierStartWidth(bytes: Bytes, index: int) -> int {
+  identifierWidth(bytes, index, false)
+}
+
+function identifierContinueWidth(bytes: Bytes, index: int) -> int {
+  identifierWidth(bytes, index, true)
+}
+
+export function identifierContinueEnd(bytes: Bytes, start: int) -> int {
+  let mut index = start
+  let mut width = identifierContinueWidth(bytes, index)
+  while width > 0 {
+    index += width
+    width = identifierContinueWidth(bytes, index)
+  }
+  index
+}
+
+export function identifierEnd(bytes: Bytes, start: int) -> int {
+  let width = identifierStartWidth(bytes, start)
+  if width == 0 { return start }
+  identifierContinueEnd(bytes, start + width)
+}
+
+function minimum3(left: int, middle: int, right: int) -> int {
+  let mut best = left
+  if middle < best {
+    best = middle
+  }
+  if right < best {
+    best = right
+  }
+  best
+}
+
+function osaDistance(leftScalars: Array<string>, rightScalars: Array<string>) -> int {
+  let mut previousPrevious: Array<int> = []
+  let mut previous: Array<int> = []
+  let mut current: Array<int> = []
+  let mut column = 0
+  while column <= rightScalars.length {
+    previousPrevious.push(0)
+    previous.push(column)
+    current.push(0)
+    column += 1
+  }
+  let mut row = 1
+  while row <= leftScalars.length {
+    current[0] = row
+    column = 1
+    while column <= rightScalars.length {
+      let substitution = previous[column - 1] +
+        if leftScalars[row - 1] == rightScalars[column - 1] {
+          0
+        } else {
+          1
+        }
+      let deletion = previous[column] + 1
+      let insertion = current[column - 1] + 1
+      let mut best = minimum3(substitution, deletion, insertion)
+      if row > 1 && column > 1 &&
+        leftScalars[row - 1] == rightScalars[column - 2] &&
+        leftScalars[row - 2] == rightScalars[column - 1] {
+        let transposition = previousPrevious[column - 2] + 1
+        if transposition < best {
+          best = transposition
+        }
+      }
+      current[column] = best
+      column += 1
+    }
+    let recycled = previousPrevious
+    previousPrevious = previous
+    previous = current
+    current = recycled
+    row += 1
+  }
+  previous[rightScalars.length]
+}
+
+export function didYouMean(target: string, candidates: Array<string>) -> string {
+  if target.byteLength() > MAX_SUGGESTION_BYTES {
+    return ""
+  }
+  let targetScalars = target.scalars()
+  let targetLength = targetScalars.length
+  if targetLength > MAX_SUGGESTION_SCALARS {
+    return ""
+  }
+  let mut best = ""
+  let mut bestDistance = NO_SUGGESTION_DISTANCE
+  for candidate in candidates {
+    if candidate != target && candidate.byteLength() <= MAX_SUGGESTION_BYTES {
+      let candidateScalars = candidate.scalars()
+      let candidateLength = candidateScalars.length
+      if candidateLength >= MIN_SUGGESTION_SCALARS &&
+        candidateLength <= MAX_SUGGESTION_SCALARS {
+        let longest = if targetLength > candidateLength { targetLength } else { candidateLength }
+        let mut threshold = longest / SUGGESTION_DISTANCE_DIVISOR
+        if threshold < 1 {
+          threshold = 1
+        }
+        let lengthDifference = if targetLength > candidateLength {
+          targetLength - candidateLength
+        } else {
+          candidateLength - targetLength
+        }
+        if lengthDifference <= threshold {
+          let distance = osaDistance(targetScalars, candidateScalars)
+          if distance <= threshold &&
+            (best == "" || distance < bestDistance ||
+              distance == bestDistance && candidate < best) {
+            best = candidate
+            bestDistance = distance
+          }
+        }
+      }
+    }
+  }
+  if best == "" { "" } else { "; did you mean `{best}`?" }
+}

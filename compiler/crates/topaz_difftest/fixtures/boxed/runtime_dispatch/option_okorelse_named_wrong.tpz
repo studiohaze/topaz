@@ -1,0 +1,4 @@
+function mk() { print("M")
+() => "e" }
+let o: Option<int> = None
+o.okOrElse(g: mk())

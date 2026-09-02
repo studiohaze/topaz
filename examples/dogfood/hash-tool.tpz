@@ -1,0 +1,8 @@
+export function main(args: Array<string>, stdin: string) -> Result<int, string> {
+  let bytes = match Cli.option(args, "--input") {
+    case Some(path) => FS.readBytes(path)?
+    case None => Bytes.encodeUtf8(stdin)
+  }
+  print(Hash.sha256(bytes).toHex())
+  Ok(0)
+}

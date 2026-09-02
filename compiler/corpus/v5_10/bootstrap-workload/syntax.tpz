@@ -1,0 +1,48 @@
+export record Syntax {
+  kind: string,
+  text: string,
+  lo: int,
+  hi: int,
+  children: Array<Syntax>,
+}
+
+export record Diagnostic {
+  code: string,
+  lo: int,
+  hi: int,
+  message: string,
+}
+
+export function atom(text: string, lo: int, hi: int) -> Syntax {
+  Syntax {
+    kind: "atom",
+    text: text,
+    lo: lo,
+    hi: hi,
+    children: [],
+  }
+}
+
+export function group(name: string, children: Array<Syntax>) -> Syntax {
+  Syntax {
+    kind: "group",
+    text: name,
+    lo: match children.get(0) {
+      case Some(child) => start(child)
+      case None => 0
+    },
+    hi: match children.get(children.length - 1) {
+      case Some(child) => finish(child)
+      case None => 0
+    },
+    children: children,
+  }
+}
+
+export function start(node: Syntax) -> int {
+  node.lo
+}
+
+export function finish(node: Syntax) -> int {
+  node.hi
+}

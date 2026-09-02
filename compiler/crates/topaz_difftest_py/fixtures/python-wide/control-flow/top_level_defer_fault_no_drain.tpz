@@ -1,0 +1,5 @@
+
+defer print("top-clean")
+print("top-body")
+let z = 0
+1 / z

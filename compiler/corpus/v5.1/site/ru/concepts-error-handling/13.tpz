@@ -1,0 +1,15 @@
+// Компилятор принуждает к обработке всех случаев
+type ВидСетевойОшибки = "connection_failed" | "timeout" | "authentication_failed" | "server_error"
+type СетеваяОшибка = { вид: ВидСетевойОшибки, сообщение: string, код: int | null }
+
+function обработатьСетевойЗапрос(результат: Result<string, СетеваяОшибка>) -> string {
+    match результат {
+        case Ok(данные) => "Успех: {данные}"
+        case Err(ошибка) => match ошибка.вид {
+            case "connection_failed" => "Не удается подключиться к сети"
+            case "timeout" => "Истекло время ожидания запроса"
+            case "authentication_failed" => "Требуется аутентификация"
+            case "server_error" => "Ошибка сервера (код: {ошибка.код})"
+        }
+    }
+}

@@ -1,0 +1,10 @@
+
+function mark(label: string, xs: Array<int>) -> Array<int> {
+    print(label)
+    xs
+}
+function main() -> Option<Result<int, Array<int>>> {
+    let opt: Option<Option<int>> = Some(None)
+    opt?.okOrElse(...mark("option-ok", [0]))
+}
+main()

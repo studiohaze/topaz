@@ -1,0 +1,8 @@
+
+type Scalar<T> = T
+type Lookup = Map<string, int>
+record Box<T> { value: Scalar<T>, lookup: Lookup, fallback: int = 3 }
+match JSON.parseAs<Box<int>>("\{\"value\":7,\"lookup\":\{\"answer\":8\}\}") {
+    case Ok(boxed) => boxed.value + boxed.lookup.getOr("answer", 0) + boxed.fallback
+    case Err(_) => 0
+}

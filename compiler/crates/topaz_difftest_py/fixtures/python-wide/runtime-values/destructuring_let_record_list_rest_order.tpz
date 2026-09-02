@@ -1,0 +1,11 @@
+
+function makeRecord() {
+    print("record")
+    { x: 1, nested: { y: 2 } }
+}
+function main() -> string {
+    let { x, nested: { y } } = makeRecord()
+    let [head, ..tail] = [3, 4, 5]
+    "{x}:{y}:{head}:{tail}"
+}
+main()

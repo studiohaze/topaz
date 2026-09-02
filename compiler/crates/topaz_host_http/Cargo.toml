@@ -1,0 +1,15 @@
+[package]
+name = "topaz_host_http"
+version.workspace = true
+license.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+http-body-util = { workspace = true }
+hyper = { workspace = true }
+hyper-util = { workspace = true }
+tokio = { workspace = true }
+
+[lints]
+workspace = true

@@ -1,0 +1,4 @@
+
+export function add(a: int, b: int = 1, c: int = 0) -> int {
+    a + b + c
+}

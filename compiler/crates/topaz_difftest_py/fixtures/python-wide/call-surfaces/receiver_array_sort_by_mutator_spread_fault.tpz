@@ -1,0 +1,12 @@
+
+function mark(label: string, xs: Array<(int) -> int>) -> Array<(int) -> int> {
+    print(label)
+    xs
+}
+function key(x: int) -> int { x }
+function main() -> Array<int> {
+    let mut xs = [2, 1]
+    xs.sortBy(...mark("array-sort", [key]))
+    xs
+}
+main()

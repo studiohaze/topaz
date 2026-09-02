@@ -1,0 +1,12 @@
+
+function main() -> string {
+    let arrayHit = 2 in [1, 2, 3]
+    let arrayMiss = "z" in ["a"]
+    let rangeHit = 2 in (1..4)
+    let rangeMiss = 4 in (1..<4)
+    let s = Set.of("a", "b")
+    let setHit = "b" in s
+    let setMiss = "z" in s
+    "{arrayHit}:{arrayMiss}:{rangeHit}:{rangeMiss}:{setHit}:{setMiss}"
+}
+main()

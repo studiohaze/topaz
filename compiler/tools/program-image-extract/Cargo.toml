@@ -1,0 +1,15 @@
+[package]
+name = "topaz_program_image_extract"
+version.workspace = true
+license.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+topaz_value = { workspace = true }
+
+[lints]
+workspace = true

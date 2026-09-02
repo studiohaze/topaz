@@ -1,0 +1,8 @@
+let 앱이름 = "topaz"
+let 사용자ID = 42
+let 디렉터리 = p"/var/{앱이름}"
+
+let 설정경로 = p"/etc/{앱이름}/config.toml"
+let 숫자패턴 = r"^[0-9]+$"
+let 목록명령 = sh"ls {디렉터리}"
+let 조회 = sql"select * from users where id = {사용자ID}"

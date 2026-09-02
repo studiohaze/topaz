@@ -1,0 +1,8 @@
+// Use multiplication instead of exponentiation (for small exponents)
+let value = 8
+let square = value * value           // instead of value ** 2
+let cube = value * value * value     // instead of value ** 3
+
+// Use multiplication instead of division (float domain)
+let measurement = 8.0
+let half = measurement * 0.5         // instead of measurement / 2.0

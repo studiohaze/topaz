@@ -1,0 +1,5 @@
+schema = "topaz.compiler.artifact-inputs/v1"
+compiler_source_root = "../topaz_self_frontend/topaz"
+generated_artifacts_manifest = "../../generated/topaz_compiler_generated_artifacts.json"
+program_image = "../../generated/topaz_compiler_program_image.bin"
+target_facts = "../../generated/topaz_compiler_target_facts.json"

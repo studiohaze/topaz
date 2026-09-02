@@ -1,0 +1,2 @@
+import utils.strings { trim }
+let t = trim("x")

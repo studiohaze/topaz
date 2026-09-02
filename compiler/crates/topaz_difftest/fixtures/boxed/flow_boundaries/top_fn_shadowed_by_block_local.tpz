@@ -1,0 +1,11 @@
+function f() -> int {
+  1
+}
+let r = {
+  function f() -> int {
+    2
+  }
+  f()
+}
+print("{f()} {r}")
+0

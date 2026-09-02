@@ -1,0 +1,2 @@
+export const BAD = toInt.field
+export function ok(n: int) { n }

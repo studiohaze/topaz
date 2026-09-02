@@ -1,0 +1,18 @@
+
+function spin(x: int) -> int {
+    x
+}
+
+let mut inner = { primary: spin }
+let field = "primary"
+inner[field] = spin
+let callbacks = { nested: inner }
+
+concurrent {
+    slow: {
+        let xs = [1]
+        xs.map(callbacks.nested.primary)
+    }
+    fast: 0
+}
+0

@@ -1,0 +1,937 @@
+---
+title: 'Recursion'
+description: 'Historical recursion guidance with legacy and runtime-oriented examples.'
+---
+
+<Tip tone="warning" triggerLabel="Legacy guide" title="Legacy guide">
+**Why legacy?** This guide preserves Rust-style recursion patterns (trait bounds, where-clauses, borrow-like helpers) from earlier Topaz iterations.
+
+**What replaces it?** Canonical recursion lives in [Functions & Closures](/en/docs/concepts/functions-closures) and [Control Flow](/en/docs/concepts/control-flow).
+
+**Status:** Legacy — pre-v5.1, non-canonical; use the reference pages for current syntax. The examples below are preserved unmodified for historical reference and are not canonical Topaz.
+</Tip>
+
+This page keeps older recursion patterns available for migration and comparison.
+
+##  Basic Concepts of Recursion
+
+### What is Recursion?
+
+Recursion is a programming technique where a function **calls itself**. It solves complex problems by breaking them down into smaller identical problems.
+
+```rust
+// Simplest recursion - factorial
+function factorial(n: int) -> int {
+    match n {
+        case 0 | 1 => 1                    // Base case
+        case _ => n * factorial(n - 1)      // Recursive call
+    }
+} test {
+    assert factorial(0) == 1
+    assert factorial(1) == 1
+    assert factorial(5) == 120
+    assert factorial(10) == 3628800
+}
+
+// Fibonacci sequence
+function fibonacci(n: int) -> int {
+    match n {
+        case 0 => 0
+        case 1 => 1
+        case _ => fibonacci(n - 1) + fibonacci(n - 2)
+    }
+} test {
+    assert fibonacci(0) == 0
+    assert fibonacci(1) == 1
+    assert fibonacci(8) == 21
+    assert fibonacci(12) == 144
+}
+
+print("factorial(5) = {factorial(5)}")
+print("fibonacci(8) = {fibonacci(8)}")
+```
+
+### Core Elements of Recursion
+
+1. **Base Case**: The condition that stops recursion
+2. **Recursive Relation**: The part that calls itself
+3. **Convergence**: Must eventually reach the base case
+
+##  Various Recursion Patterns
+
+### Linear Recursion
+
+```rust
+// Sum of array elements
+function arraySum(array: Array<int>, index: int = 0) -> int {
+    if index >= array.length {
+        return 0
+    }
+    return array[index] + arraySum(array, index + 1)
+}
+
+// String reversal
+function reverseString(str: string) -> string {
+    if str.length <= 1 {
+        return str
+    }
+    
+    let firstChar = str.charAt(0)
+    let remainder = str.substring(1)
+    
+    return reverseString(remainder) + firstChar
+}
+
+// Greatest Common Divisor (Euclidean algorithm)
+function gcd(a: int, b: int) -> int {
+    match b {
+        case 0 => a
+        case _ => gcd(b, a % b)
+    }
+} test {
+    let numbers = [1, 2, 3, 4, 5]
+    assert arraySum(numbers) == 15
+    
+    assert reverseString("hello") == "olleh"
+    assert reverseString("Topaz") == "zapoT"
+    
+    assert gcd(48, 18) == 6
+    assert gcd(100, 25) == 25
+}
+
+print("Array sum: {arraySum([1, 2, 3, 4, 5])}")
+print("String reverse: {reverseString("Hello World")}")
+print("GCD(48, 18): {gcd(48, 18)}")
+```
+
+### Divide and Conquer
+
+```rust
+// Binary search
+function binarySearch<T>(
+    array: Array<T>,
+    target: T,
+    start: int = 0,
+    end: int = -1
+) -> Option<int>
+where
+    T: PartialOrd + PartialEq
+{
+    let actualEnd = if end == -1 { array.length - 1 } else { end }
+    
+    if start > actualEnd {
+        return None
+    }
+    
+    let middle = (start + actualEnd) / 2
+    
+    match array[middle] {
+        case x if x == target => Some(middle)
+        case x if x > target => binarySearch(array, target, start, middle - 1)
+        case _ => binarySearch(array, target, middle + 1, actualEnd)
+    }
+}
+
+// Merge sort
+function mergeSort(array: Array<int>) -> Array<int> {
+    if array.length <= 1 {
+        return array
+    }
+    
+    let middle = array.length / 2
+    let left = array[0..middle].to_vec()
+    let right = array[middle..].to_vec()
+    
+    let sortedLeft = mergeSort(left)
+    let sortedRight = mergeSort(right)
+    
+    return merge(sortedLeft, sortedRight)
+}
+
+function merge(left: Array<int>, right: Array<int>) -> Array<int> {
+    let mut result: Array<int> = []
+    let mut i = 0
+    let mut j = 0
+    
+    while i < left.length && j < right.length {
+        if left[i] <= right[j] {
+            result.push(left[i])
+            i += 1
+        } else {
+            result.push(right[j])
+            j += 1
+        }
+    }
+    
+    // Add remaining elements
+    result.extend(&left[i..])
+    result.extend(&right[j..])
+    
+    return result
+}
+
+// Quick sort
+function quickSort(array: Array<int>) -> Array<int> {
+    if array.length <= 1 {
+        return array
+    }
+    
+    let pivot = array[array.length / 2]
+    let smaller = array.filter(|&x| x < pivot)
+    let equal = array.filter(|&x| x == pivot)
+    let larger = array.filter(|&x| x > pivot)
+    
+    return [
+        ...quickSort(smaller),
+        ...equal,
+        ...quickSort(larger)
+    ]
+} test {
+    let sortedArray = [1, 3, 5, 7, 9, 11, 13]
+    assert binarySearch(sortedArray, 7) == Some(3)
+    assert binarySearch(sortedArray, 14) == None
+    
+    let randomArray = [64, 34, 25, 12, 22, 11, 90]
+    let sortResult1 = mergeSort(randomArray.clone())
+    let sortResult2 = quickSort(randomArray.clone())
+    
+    assert sortResult1 == [11, 12, 22, 25, 34, 64, 90]
+    assert sortResult2 == [11, 12, 22, 25, 34, 64, 90]
+}
+
+print("Binary search result: {binarySearch([1, 3, 5, 7, 9], 5)}")
+print("Merge sort: {mergeSort([3, 1, 4, 1, 5, 9])}")
+print("Quick sort: {quickSort([3, 1, 4, 1, 5, 9])}")
+```
+
+### Tree Recursion
+
+```rust
+// Binary tree structure
+enum BinaryTree<T> {
+    Empty,
+    Node {
+        value: T,
+        left: Box<BinaryTree<T>>,
+        right: Box<BinaryTree<T>>
+    }
+}
+
+impl<T> BinaryTree<T>
+where
+    T: Clone + std::fmt::Display + PartialOrd
+{
+    function newNode(value: T) -> BinaryTree<T> {
+        return BinaryTree::Node {
+            value,
+            left: Box::new(BinaryTree::Empty),
+            right: Box::new(BinaryTree::Empty)
+        }
+    }
+    
+    // Insert value into tree
+    function insert(&mut self, newValue: T) {
+        match self {
+            case BinaryTree::Empty => {
+                *self = BinaryTree::newNode(newValue)
+            }
+            case BinaryTree::Node { value, left, right } => {
+                if newValue <= *value {
+                    left.insert(newValue)
+                } else {
+                    right.insert(newValue)
+                }
+            }
+        }
+    }
+    
+    // Search tree
+    function search(&self, target: &T) -> bool {
+        match self {
+            case BinaryTree::Empty => false
+            case BinaryTree::Node { value, left, right } => {
+                if target == value {
+                    return true
+                } else if target < value {
+                    return left.search(target)
+                } else {
+                    return right.search(target)
+                }
+            }
+        }
+    }
+    
+    // In-order traversal
+    function inOrderTraversal(&self) -> Array<T> {
+        match self {
+            case BinaryTree::Empty => []
+            case BinaryTree::Node { value, left, right } => {
+                let mut result = left.inOrderTraversal()
+                result.push(value.clone())
+                result.extend(right.inOrderTraversal())
+                return result
+            }
+        }
+    }
+    
+    // Calculate tree height
+    function height(&self) -> int {
+        match self {
+            case BinaryTree::Empty => 0
+            case BinaryTree::Node { left, right, .. } => {
+                let leftHeight = left.height()
+                let rightHeight = right.height()
+                return 1 + std::cmp::max(leftHeight, rightHeight)
+            }
+        }
+    }
+    
+    // Count nodes
+    function nodeCount(&self) -> int {
+        match self {
+            case BinaryTree::Empty => 0
+            case BinaryTree::Node { left, right, .. } => {
+                return 1 + left.nodeCount() + right.nodeCount()
+            }
+        }
+    }
+} test {
+    let mut tree = BinaryTree::Empty
+    
+    // Insert values
+    let values = [5, 3, 7, 1, 9, 4, 6]
+    for value in values {
+        tree.insert(value)
+    }
+    
+    // Search tests
+    assert tree.search(&5) == true
+    assert tree.search(&10) == false
+    
+    // In-order traversal (sorted order)
+    let traversalResult = tree.inOrderTraversal()
+    assert traversalResult == [1, 3, 4, 5, 6, 7, 9]
+    
+    // Tree properties
+    assert tree.height() == 4
+    assert tree.nodeCount() == 7
+}
+
+// Usage example
+let mut myTree = BinaryTree::Empty
+[15, 10, 20, 8, 12, 16, 25].iter().for_each(|&value| myTree.insert(value))
+
+print("Tree in-order traversal: {myTree.inOrderTraversal()}")
+print("Tree height: {myTree.height()}")
+print("Node count: {myTree.nodeCount()}")
+print("Search 15: {myTree.search(&15)}")
+```
+
+##  Recursion Optimization Techniques
+
+### Tail Recursion
+
+```rust
+// Regular recursion vs tail recursion comparison
+
+// Regular recursion - stack overflow risk
+function factorial_regular(n: int) -> int {
+    if n <= 1 {
+        return 1
+    }
+    return n * factorial_regular(n - 1)  // Multiplication after recursive call
+}
+
+// Tail recursion - optimizable
+function factorial_tail(n: int, accumulator: int = 1) -> int {
+    if n <= 1 {
+        return accumulator
+    }
+    return factorial_tail(n - 1, accumulator * n)  // Recursive call is last operation
+}
+
+// Fibonacci tail recursion
+function fibonacci_tail(n: int, a: int = 0, b: int = 1) -> int {
+    match n {
+        case 0 => a
+        case 1 => b
+        case _ => fibonacci_tail(n - 1, b, a + b)
+    }
+}
+
+// List reversal tail recursion
+function reverse_tail<T>(
+    original: Array<T>,
+    result: Array<T> = [],
+    index: int = 0
+) -> Array<T> {
+    if index >= original.length {
+        return result
+    }
+    
+    let mut newResult = [original[index]].to_vec()
+    newResult.extend(result)
+    
+    return reverse_tail(original, newResult, index + 1)
+}
+
+// Power calculation tail recursion
+function power_tail(base: int, exponent: int, accumulator: int = 1) -> int {
+    match exponent {
+        case 0 => accumulator
+        case n if n % 2 == 0 => power_tail(base * base, n / 2, accumulator)
+        case n => power_tail(base, n - 1, accumulator * base)
+    }
+} test {
+    // Performance comparison tests
+    assert factorial_regular(10) == factorial_tail(10)
+    assert fibonacci_tail(10) == 55
+    
+    let originalList = [1, 2, 3, 4, 5]
+    let reversedList = reverse_tail(originalList)
+    assert reversedList == [5, 4, 3, 2, 1]
+    
+    assert power_tail(2, 10) == 1024
+    assert power_tail(3, 4) == 81
+}
+
+print("Tail recursion factorial(10): {factorial_tail(10)}")
+print("Tail recursion fibonacci(15): {fibonacci_tail(15)}")
+print("Power 2^10: {power_tail(2, 10)}")
+```
+
+### Memoization
+
+```rust
+use std::collections::HashMap
+
+// Memoization wrapper structure
+struct Memoization<K, V>
+where
+    K: Clone + std::hash::Hash + Eq,
+    V: Clone
+{
+    cache: HashMap<K, V>,
+    function: fn(K, &mut Memoization<K, V>) -> V
+}
+
+impl<K, V> Memoization<K, V>
+where
+    K: Clone + std::hash::Hash + Eq,
+    V: Clone
+{
+    function new(function: fn(K, &mut Memoization<K, V>) -> V) -> Self {
+        return Memoization {
+            cache: HashMap::new(),
+            function
+        }
+    }
+    
+    function call(&mut self, argument: K) -> V {
+        match self.cache.get(&argument) { case Some(result) => return result.clone(), case None => {} }
+        
+        let result = (self.function)(argument.clone(), self)
+        self.cache.insert(argument, result.clone())
+        return result
+    }
+}
+
+// Memoized fibonacci
+function fibonacci_memo_func(n: int, memo: &mut Memoization<int, int>) -> int {
+    match n {
+        case 0 => 0
+        case 1 => 1
+        case _ => memo.call(n - 1) + memo.call(n - 2)
+    }
+}
+
+// Combination calculation (nCr) memoization
+function combination_memo_func(
+    params: (int, int),
+    memo: &mut Memoization<(int, int), int>
+) -> int {
+    let (n, r) = params
+    
+    match (n, r) {
+        case (_, 0) | (n, r) if n == r => 1
+        case (n, r) if r > n => 0
+        case (n, r) => {
+            return memo.call((n - 1, r - 1)) + memo.call((n - 1, r))
+        }
+    }
+}
+
+// Longest Common Subsequence (LCS) memoization
+function LCS_memo_func(
+    params: (string, string),
+    memo: &mut Memoization<(string, string), int>
+) -> int {
+    let (string1, string2) = params
+    
+    if string1.is_empty() || string2.is_empty() {
+        return 0
+    }
+    
+    if string1.chars().last() == string2.chars().last() {
+        let prefix1 = &string1[..string1.len() - 1]
+        let prefix2 = &string2[..string2.len() - 1]
+        return 1 + memo.call((prefix1.to_string(), prefix2.to_string()))
+    } else {
+        let prefix1 = &string1[..string1.len() - 1]
+        let prefix2 = &string2[..string2.len() - 1]
+        let case1 = memo.call((string1.clone(), prefix2.to_string()))
+        let case2 = memo.call((prefix1.to_string(), string2.clone()))
+        return std::cmp::max(case1, case2)
+    }
+} test {
+    // Fibonacci memoization test
+    let mut fibonacciMemo = Memoization::new(fibonacci_memo_func)
+    assert fibonacciMemo.call(10) == 55
+    assert fibonacciMemo.call(20) == 6765
+    
+    // Combination memoization test
+    let mut combinationMemo = Memoization::new(combination_memo_func)
+    assert combinationMemo.call((5, 2)) == 10
+    assert combinationMemo.call((10, 3)) == 120
+    
+    // LCS memoization test
+    let mut LCSMemo = Memoization::new(LCS_memo_func)
+    let result = LCSMemo.call(("ABCDGH".to_string(), "AEDFHR".to_string()))
+    assert result == 3  // "ADH"
+}
+
+// Usage example
+let mut fibonacciMemo = Memoization::new(fibonacci_memo_func)
+print("Memoized fibonacci(30): {fibonacciMemo.call(30)}")
+
+let mut combinationMemo = Memoization::new(combination_memo_func)
+print("Combination C(20, 10): {combinationMemo.call((20, 10))}")
+```
+
+##  Practical Recursion Applications
+
+### Backtracking
+
+```rust
+// N-Queens problem
+function solveNQueens(n: int) -> Array<Array<int>> {
+    let mut solutions: Array<Array<int>> = []
+    let mut currentSolution: Array<int> = vec![0; n]
+    
+    function backtrack(row: int) {
+        if row == n {
+            solutions.push(currentSolution.clone())
+            return
+        }
+        
+        for col in 0..n {
+            if isSafePosition(row, col, &currentSolution) {
+                currentSolution[row] = col
+                backtrack(row + 1)
+                // Backtracking: automatically restores previous state
+            }
+        }
+    }
+    
+    function isSafePosition(row: int, col: int, solution: &Array<int>) -> bool {
+        for prevRow in 0..row {
+            let prevCol = solution[prevRow]
+            
+            // Check same column
+            if prevCol == col {
+                return false
+            }
+            
+            // Check diagonals
+            if (prevRow - row).abs() == (prevCol as int - col as int).abs() {
+                return false
+            }
+        }
+        return true
+    }
+    
+    backtrack(0)
+    return solutions
+}
+
+// Maze escape
+struct Maze {
+    grid: Array<Array<bool>>,  // true = path, false = wall
+    height: int,
+    width: int
+}
+
+impl Maze {
+    function new(grid: Array<Array<bool>>) -> Maze {
+        let height = grid.len() as int
+        let width = if height > 0 { grid[0].len() as int } else { 0 }
+        
+        return Maze { grid, height, width }
+    }
+    
+    function findPath(&self) -> Option<Array<(int, int)>> {
+        let mut visited: Array<Array<bool>> = vec![vec![false; self.width as usize]; self.height as usize]
+        let mut path: Array<(int, int)> = []
+        
+        if self.DFS(0, 0, &mut visited, &mut path) {
+            return Some(path)
+        } else {
+            return None
+        }
+    }
+    
+    function DFS(
+        &self,
+        row: int,
+        col: int,
+        visited: &mut Array<Array<bool>>,
+        path: &mut Array<(int, int)>
+    ) -> bool {
+        // Boundary check
+        if row < 0 || row >= self.height || col < 0 || col >= self.width {
+            return false
+        }
+        
+        // Wall or already visited
+        if !self.grid[row as usize][col as usize] || visited[row as usize][col as usize] {
+            return false
+        }
+        
+        // Add current position to path
+        path.push((row, col))
+        visited[row as usize][col as usize] = true
+        
+        // Reached destination
+        if row == self.height - 1 && col == self.width - 1 {
+            return true
+        }
+        
+        // Explore 4 directions
+        let directions = [(0, 1), (1, 0), (0, -1), (-1, 0)]
+        for (dr, dc) in directions {
+            if self.DFS(row + dr, col + dc, visited, path) {
+                return true
+            }
+        }
+        
+        // Backtracking: remove from path
+        path.pop()
+        visited[row as usize][col as usize] = false
+        
+        return false
+    }
+} test {
+    // 4-Queens problem test
+    let solutions = solveNQueens(4)
+    assert solutions.len() == 2  // 4x4 has 2 solutions
+    
+    // Maze test
+    let mazeGrid = [
+        [true, false, true, true],
+        [true, true, false, true],
+        [false, true, true, true],
+        [false, false, false, true]
+    ]
+    
+    let myMaze = Maze::new(mazeGrid.map(|row| row.to_vec()).to_vec())
+    let path = myMaze.findPath()
+    assert path.is_some()
+}
+
+// Usage example
+let solutions = solveNQueens(8)  // 8-Queens problem
+print("8-Queens solution count: {solutions.len()}")
+
+match solutions.first() { case Some(firstSolution) => print("First solution: {firstSolution:?}"), case None => {} }
+```
+
+### Dynamic Programming with Recursion
+
+```rust
+// Knapsack problem
+struct Item {
+    weight: int,
+    value: int,
+    name: string
+}
+
+function knapsack_recursive(
+    items: &Array<Item>,
+    capacity: int,
+    index: int = 0
+) -> int {
+    // Base condition
+    if index >= items.len() || capacity <= 0 {
+        return 0
+    }
+    
+    let currentItem = &items[index]
+    
+    // Can't include current item
+    if currentItem.weight > capacity {
+        return knapsack_recursive(items, capacity, index + 1)
+    }
+    
+    // Choose maximum of two options
+    let includeCase = currentItem.value + knapsack_recursive(
+        items,
+        capacity - currentItem.weight,
+        index + 1
+    )
+    let excludeCase = knapsack_recursive(items, capacity, index + 1)
+    
+    return std::cmp::max(includeCase, excludeCase)
+}
+
+// Edit distance
+function editDistance_recursive(string1: &str, string2: &str) -> int {
+    if string1.is_empty() {
+        return string2.len() as int
+    }
+    if string2.is_empty() {
+        return string1.len() as int
+    }
+    
+    let chars1: Vec<char> = string1.chars().collect()
+    let chars2: Vec<char> = string2.chars().collect()
+    
+    if chars1.last() == chars2.last() {
+        let prefix1: String = chars1[..chars1.len()-1].iter().collect()
+        let prefix2: String = chars2[..chars2.len()-1].iter().collect()
+        return editDistance_recursive(&prefix1, &prefix2)
+    }
+    
+    let prefix1: String = chars1[..chars1.len()-1].iter().collect()
+    let prefix2: String = chars2[..chars2.len()-1].iter().collect()
+    
+    let insert = 1 + editDistance_recursive(string1, &prefix2)
+    let delete = 1 + editDistance_recursive(&prefix1, string2)
+    let replace = 1 + editDistance_recursive(&prefix1, &prefix2)
+    
+    return std::cmp::min(insert, std::cmp::min(delete, replace))
+}
+
+// Stair climbing problem
+function climbStairs(n: int) -> int {
+    match n {
+        case 0 => 1
+        case 1 => 1
+        case 2 => 2
+        case _ => climbStairs(n - 1) + climbStairs(n - 2)
+    }
+} test {
+    // Knapsack problem test
+    let items = [
+        Item { weight: 10, value: 60, name: "book".to_string() },
+        Item { weight: 20, value: 100, name: "computer".to_string() },
+        Item { weight: 30, value: 120, name: "television".to_string() }
+    ]
+    
+    let maxValue = knapsack_recursive(&items, 50)
+    assert maxValue == 220  // book + computer = 60 + 100 + 60 = 220
+    
+    // Edit distance test
+    assert editDistance_recursive("kitten", "sitting") == 3
+    assert editDistance_recursive("hello", "hallo") == 1
+    
+    // Stair climbing test
+    assert climbStairs(1) == 1
+    assert climbStairs(3) == 3
+    assert climbStairs(5) == 8
+}
+
+print("Knapsack max value: {knapsack_recursive(&items, 50)}")
+print("Edit distance (hello -> world): {editDistance_recursive("hello", "world")}")
+print("Ways to climb 10 stairs: {climbStairs(10)}")
+```
+
+##  Recursion Precautions
+
+### Stack Overflow Prevention
+
+```rust
+// Dangerous recursion - potential stack overflow
+function dangerousRecursion(n: int) -> int {
+    if n <= 0 {
+        return 0
+    }
+    return 1 + dangerousRecursion(n - 1)  // Stack overflow for large n
+}
+
+// Safe iterative version
+function safeIteration(n: int) -> int {
+    let mut result = 0
+    for i in 1..=n {
+        result += 1
+    }
+    return result
+}
+
+// Safe recursion with stack overflow check
+function safeRecursion(n: int, depth: int = 0) -> Result<int, string> {
+    const MAX_DEPTH: int = 1000
+    
+    if depth > MAX_DEPTH {
+        return Err("Recursion depth exceeded: stack overflow risk".to_string())
+    }
+    
+    if n <= 0 {
+        return Ok(0)
+    }
+    
+    match safeRecursion(n - 1, depth + 1) {
+        case Ok(result) => Ok(1 + result)
+        case Err(error) => Err(error)
+    }
+}
+
+// Trampoline technique to prevent stack overflow
+enum Trampoline<T> {
+    Done(T),
+    Continue(Box<dyn FnOnce() -> Trampoline<T>>)
+}
+
+function executeTrampoline<T>(mut result: Trampoline<T>) -> T {
+    loop {
+        match result {
+            case Trampoline::Done(value) => return value
+            case Trampoline::Continue(function) => result = function()
+        }
+    }
+}
+
+function factorial_trampoline(n: int, accumulator: int = 1) -> Trampoline<int> {
+    if n <= 1 {
+        return Trampoline::Done(accumulator)
+    }
+    
+    return Trampoline::Continue(Box::new(move || {
+        factorial_trampoline(n - 1, accumulator * n)
+    }))
+} test {
+    // Safe recursion test
+    assert safeRecursion(100).is_ok()
+    assert safeRecursion(2000).is_err()
+    
+    // Trampoline test
+    let result = executeTrampoline(factorial_trampoline(10))
+    assert result == 3628800
+}
+
+print("Safe recursion (100): {safeRecursion(100).unwrap()}")
+print("Trampoline factorial(10): {executeTrampoline(factorial_trampoline(10))}")
+```
+
+##  Functional Recursion Patterns
+
+### Higher-Order Functions and Recursion
+
+```rust
+// Recursive map implementation
+function recursive_map<T, U>(
+    array: Array<T>,
+    transformFunc: fn(T) -> U,
+    index: int = 0
+) -> Array<U> {
+    if index >= array.len() {
+        return []
+    }
+    
+    let mut result = [transformFunc(array[index].clone())]
+    result.extend(recursive_map(array, transformFunc, index + 1))
+    return result
+}
+
+// Recursive filter implementation
+function recursive_filter<T>(
+    array: Array<T>,
+    predicateFunc: fn(&T) -> bool,
+    index: int = 0
+) -> Array<T> {
+    if index >= array.len() {
+        return []
+    }
+    
+    let currentElement = &array[index]
+    let remainingResult = recursive_filter(array.clone(), predicateFunc, index + 1)
+    
+    if predicateFunc(currentElement) {
+        let mut result = [currentElement.clone()]
+        result.extend(remainingResult)
+        return result
+    } else {
+        return remainingResult
+    }
+}
+
+// Recursive reduce implementation
+function recursive_reduce<T, U>(
+    array: Array<T>,
+    initialValue: U,
+    reduceFunc: fn(U, T) -> U,
+    index: int = 0
+) -> U {
+    if index >= array.len() {
+        return initialValue
+    }
+    
+    let newInitialValue = reduceFunc(initialValue, array[index].clone())
+    return recursive_reduce(array, newInitialValue, reduceFunc, index + 1)
+}
+
+// Y combinator implementation
+function Y<F, T>(function: F) -> impl Fn(T) -> T
+where
+    F: Fn(&dyn Fn(T) -> T, T) -> T,
+    T: 'static
+{
+    move |input| {
+        let recursiveFunc = |myself: &dyn Fn(T) -> T, parameter: T| -> T {
+            function(myself, parameter)
+        }
+        recursiveFunc(&recursiveFunc, input)
+    }
+} test {
+    let numbers = [1, 2, 3, 4, 5]
+    
+    // Recursive map test
+    let squares = recursive_map(numbers.clone(), |x| x * x)
+    assert squares == [1, 4, 9, 16, 25]
+    
+    // Recursive filter test
+    let evens = recursive_filter(numbers.clone(), |&x| x % 2 == 0)
+    assert evens == [2, 4]
+    
+    // Recursive reduce test
+    let sum = recursive_reduce(numbers.clone(), 0, |acc, x| acc + x)
+    assert sum == 15
+}
+
+print("Recursive map (squares): {recursive_map([1, 2, 3, 4], |x| x * x)}")
+print("Recursive filter (evens): {recursive_filter([1, 2, 3, 4, 5, 6], |&x| x % 2 == 0)}")
+print("Recursive reduce (sum): {recursive_reduce([1, 2, 3, 4, 5], 0, |acc, x| acc + x)}")
+```
+
+##  Mastering Recursion
+
+Recursion is a powerful tool for elegantly solving complex problems:
+
+###  When to use recursion:
+- **Tree/Graph structures** processing
+- **Divide and conquer** algorithms
+- **Backtracking** problems
+- **Mathematical definitions** that are recursive
+
+###  Recursion precautions:
+- Clearly define **base conditions**
+- Prevent **stack overflow**
+- Consider **performance optimization** (memoization, tail recursion)
+- Consider **debugging** difficulty
+
+###  Topaz recursion advantages:
+- **Pattern matching** for clear condition separation
+- **Type safety** for error prevention
+- **Functional programming** paradigm support
+- Automatic **tail recursion optimization**
+
+Explore the beautiful world of recursion with Topaz! 

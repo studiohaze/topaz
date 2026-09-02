@@ -1,0 +1,12 @@
+function applyTwiceInt(transform: (int) -> int, value: int) -> int {
+    transform(transform(value))
+}
+
+function multiplier(factor: int) -> (int) -> int {
+    return (value: int) => value * factor
+}
+
+let triple = multiplier(3)
+let result = applyTwiceInt(triple, 5)
+
+print("Result: {result}")  // 45

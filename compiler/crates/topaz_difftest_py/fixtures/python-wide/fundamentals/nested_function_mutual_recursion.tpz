@@ -1,0 +1,19 @@
+
+function main() -> int {
+    function isEven(n: int) -> bool {
+        if n == 0 {
+            true
+        } else {
+            isOdd(n - 1)
+        }
+    }
+    function isOdd(n: int) -> bool {
+        if n == 0 {
+            false
+        } else {
+            isEven(n - 1)
+        }
+    }
+    if isOdd(5) { 1 } else { 0 }
+}
+main()

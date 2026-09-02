@@ -1,0 +1,2 @@
+let f = Hash.crc32
+f(Bytes.encodeUtf8("hello"))

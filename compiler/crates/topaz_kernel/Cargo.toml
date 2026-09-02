@@ -1,0 +1,20 @@
+[package]
+name = "topaz_kernel"
+description = "Engine-neutral compiler-kernel facade and Stage 0 source-fact protocol"
+version.workspace = true
+license.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+topaz_check = { workspace = true }
+topaz_diag = { workspace = true }
+topaz_hir = { workspace = true }
+topaz_lower = { workspace = true }
+topaz_emit = { workspace = true }
+topaz_resolve = { workspace = true }
+topaz_syntax = { workspace = true }
+topaz_value = { workspace = true }
+
+[lints]
+workspace = true

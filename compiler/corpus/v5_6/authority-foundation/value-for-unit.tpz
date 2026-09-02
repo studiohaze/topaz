@@ -1,0 +1,3 @@
+let values: () = for value in [1, 2] {
+    value
+}

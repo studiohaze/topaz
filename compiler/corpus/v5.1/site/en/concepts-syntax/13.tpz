@@ -1,0 +1,9 @@
+type UserInput = string | int | null
+
+function process(input: UserInput) -> string {
+    match input {
+        case text: string => "String: {text}"
+        case number: int => "Number: {number}"
+        case null => "No input"
+    }
+}

@@ -1,0 +1,13 @@
+
+function f() -> Result<int, string> {
+    let v0 = Bytes.encodeUtf8("").toBase64()
+    let v1 = Bytes.encodeUtf8("f").toBase64()
+    let v2 = Bytes.encodeUtf8("fo").toBase64()
+    let v3 = Bytes.encodeUtf8("foo").toBase64()
+    let v4 = Bytes.encodeUtf8("foob").toBase64()
+    let v5 = Bytes.encodeUtf8("fooba").toBase64()
+    let v6 = Bytes.encodeUtf8("foobar").toBase64()
+    print("{v0}:{v1}:{v2}:{v3}:{v4}:{v5}:{v6}")
+    Ok(0)
+}
+f()

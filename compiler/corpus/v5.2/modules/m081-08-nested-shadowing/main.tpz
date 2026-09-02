@@ -1,0 +1,5 @@
+import utils.strings
+function f() -> string {
+    let strings = { trim: "local" }
+    strings.trim
+}

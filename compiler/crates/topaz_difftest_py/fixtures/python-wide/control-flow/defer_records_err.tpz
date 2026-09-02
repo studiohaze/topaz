@@ -1,0 +1,7 @@
+
+function fail() -> Result<int, string> { Err("boom") }
+function f() -> Result<int, string> {
+    defer fail()
+    Ok(1)
+}
+f()

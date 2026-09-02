@@ -1,0 +1,2 @@
+let o: Option<int> = if true { Some(1) } else { None }
+print("{o}")

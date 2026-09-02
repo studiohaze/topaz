@@ -1,0 +1,50 @@
+// Allow partial failures in multiple operations
+function batchProcess(fileList: Array<string>) -> { success: Array<string>, failures: Array<{ file: string, error: string }> } {
+    let mut successList: Array<string> = []
+    let mut failureList: Array<{ file: string, error: string }> = []
+    
+    for file in fileList {
+        match processFile(file) {
+            case Ok(result) => {
+                successList.push(result)
+                print("Success: {file}")
+            }
+            case Err(error) => {
+                failureList.push({ file: file, error: error })
+                print("Failed: {file} - {error}")
+            }
+        }
+    }
+    
+    return { success: successList, failures: failureList }
+}
+
+// Processing Result arrays
+function collectFloatResults(results: Array<Result<float, string>>) -> Result<Array<float>, Array<string>> {
+    let mut successValues: Array<float> = []
+    let mut errors: Array<string> = []
+    
+    for result in results {
+        match result {
+            case Ok(value) => successValues.push(value)
+            case Err(error) => errors.push(error)
+        }
+    }
+    
+    if errors.length > 0 {
+        Err(errors)
+    } else {
+        Ok(successValues)
+    }
+}
+
+let calculationResults = [
+    divide(10.0, 2.0),   // Ok(5.0)
+    divide(8.0, 4.0),    // Ok(2.0)
+    divide(6.0, 0.0)     // Err("Cannot divide by zero")
+]
+
+match collectFloatResults(calculationResults) {
+    case Ok(values) => print("All calculations successful: {values}")
+    case Err(errors) => print("Some calculations failed: {errors}")
+}

@@ -1,0 +1,98 @@
+// Parse facade over the self compiler's token and grammar leaves.
+// Flattening stays here because it shapes the public preview tree, while parser
+// state, recovery, and grammar families remain below parser/.
+
+import types { ParseResult, PreviewAstNode, PreviewToken, SyntaxNode }
+import parser.core { Parser, ParserRequest, ParserService }
+import parser.declarations_modules { parseBlock, parseProgram }
+import parser.expressions { parseExpressionBp }
+
+function dispatchParserService(
+  parser: Parser,
+  request: ParserRequest,
+) -> Result<SyntaxNode, string> {
+  if request.kind == "parse-block" {
+    return parseBlock(
+      dispatchParserService,
+      parser,
+      request.field,
+      request.index,
+    )
+  }
+  parseExpressionBp(
+    dispatchParserService,
+    parser,
+    request.precedence,
+    request.field,
+    request.index,
+  )
+}
+
+function parserService() -> ParserService {
+  dispatchParserService
+}
+
+function flatten(
+  value: SyntaxNode,
+  parent: int,
+  depth: int,
+  maxNodes: int,
+  maxDepth: int,
+  output: Array<PreviewAstNode>,
+) -> Result<int, string> {
+  if depth > maxDepth {
+    return Err("front-end preview AST depth exceeds {maxDepth}")
+  }
+  if output.length >= maxNodes {
+    return Err("front-end preview AST node count exceeds {maxNodes}")
+  }
+  let mut rows = output
+  let ordinal = output.length
+  let mut attributeNames: Array<string> = []
+  let mut attributeKinds: Array<string> = []
+  let mut attributeValues: Array<string> = []
+  for attribute in value.attributes {
+    attributeNames.push(attribute.name)
+    attributeKinds.push(attribute.kind)
+    attributeValues.push(attribute.value)
+  }
+  rows.push(PreviewAstNode {
+    kind: value.kind,
+    lo: value.lo,
+    hi: value.hi,
+    parent: parent,
+    field: value.field,
+    index: value.index,
+    attributeNames: attributeNames,
+    attributeKinds: attributeKinds,
+    attributeValues: attributeValues,
+  })
+  for child in value.children {
+    flatten(child, ordinal, depth + 1, maxNodes, maxDepth, output)?
+  }
+  Ok(ordinal)
+}
+
+// Parses a normalized token stream into the bounded preview AST.
+export function parse(
+  tokens: Array<PreviewToken>,
+  source: string,
+  maxNodes: int,
+  maxDepth: int,
+) -> Result<ParseResult, string> {
+  let bytes = Bytes.encodeUtf8(source)
+  let parser = Parser {
+    source: bytes,
+    tokens: tokens,
+    position: [0],
+    lastHi: [0],
+    pendingGt: [],
+    nakedLambda: [true],
+    recordUpdate: [true],
+    diagnostics: [],
+  }
+  let root = parseProgram(parserService(), parser, bytes.length())
+  let mut nodes: Array<PreviewAstNode> = []
+  flatten(root, -1, 0, maxNodes, maxDepth, nodes)?
+  Ok(ParseResult { root: root, nodes: nodes, diagnostics: parser.diagnostics })
+}

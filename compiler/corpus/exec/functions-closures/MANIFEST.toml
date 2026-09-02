@@ -1,0 +1,18 @@
+# corpus/exec/functions-closures — execution transcripts (CDR-003 §11)
+
+[totals]
+recorded = 2
+runnable = 2
+pending = 0
+
+[[fixture]]
+file = "closure-counter.tpz"
+phase = "exec"
+versions = "5.2"
+result = "ok"
+
+[[fixture]]
+file = "recursion-fib.tpz"
+phase = "exec"
+versions = "5.2"
+result = "ok"

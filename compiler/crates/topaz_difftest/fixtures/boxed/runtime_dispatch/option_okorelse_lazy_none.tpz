@@ -1,0 +1,2 @@
+let r = (None).okOrElse(() => print("X"))
+r

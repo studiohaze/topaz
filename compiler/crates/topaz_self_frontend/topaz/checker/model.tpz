@@ -1,0 +1,608 @@
+// Shared data contracts for the acyclic checker module graph.
+// Records carry state, signatures, and call plans across leaves; semantic work
+// remains with type, expression, call, statement, and body modules.
+
+import types {
+  PreviewCheckDiagnostic,
+  PreviewResolvedDeclaration,
+  PreviewTypeAtom,
+  PreviewTypedCall,
+  PreviewTypedCapture,
+  PreviewTypedNode,
+  ResolveResult,
+  SyntaxNode,
+}
+import checker_types { TypeValue }
+
+// Callback boundary that keeps expression, call, statement, and body recursion acyclic.
+export record CheckerRequest {
+  kind: string,
+  moduleIndex: int,
+  source: Bytes,
+  node: SyntaxNode,
+  typeValue: TypeValue,
+}
+
+export record CheckerResponse {
+  typeValue: TypeValue,
+  boolValue: bool,
+}
+
+export type CheckerService = (CheckerState, CheckerRequest) -> CheckerResponse
+
+export function serviceInferExpression(
+  service: CheckerService,
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  expression: SyntaxNode,
+) -> TypeValue {
+  service(state, CheckerRequest {
+    kind: "infer-expression",
+    moduleIndex: moduleIndex,
+    source: source,
+    node: expression,
+    typeValue: emptyType("unknown"),
+  }).typeValue
+}
+
+export function serviceBuiltinNamespaceObject(
+  service: CheckerService,
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  expression: SyntaxNode,
+) -> bool {
+  service(state, CheckerRequest {
+    kind: "builtin-namespace-object",
+    moduleIndex: moduleIndex,
+    source: source,
+    node: expression,
+    typeValue: emptyType("unknown"),
+  }).boolValue
+}
+
+export function serviceCheckBlock(
+  service: CheckerService,
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  block: SyntaxNode,
+) -> TypeValue {
+  service(state, CheckerRequest {
+    kind: "check-block",
+    moduleIndex: moduleIndex,
+    source: source,
+    node: block,
+    typeValue: emptyType("unknown"),
+  }).typeValue
+}
+
+export function serviceCheckBlockExpected(
+  service: CheckerService,
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  block: SyntaxNode,
+  expected: TypeValue,
+) -> TypeValue {
+  service(state, CheckerRequest {
+    kind: "check-block-expected",
+    moduleIndex: moduleIndex,
+    source: source,
+    node: block,
+    typeValue: expected,
+  }).typeValue
+}
+
+export function serviceGateCollectionKey(
+  service: CheckerService,
+  state: CheckerState,
+  moduleIndex: int,
+  node: SyntaxNode,
+  key: TypeValue,
+) -> () {
+  let _ = service(state, CheckerRequest {
+    kind: "gate-collection-key",
+    moduleIndex: moduleIndex,
+    source: Bytes.encodeUtf8(""),
+    node: node,
+    typeValue: key,
+  })
+  ()
+}
+
+// This decodes the parser's high type-parameter component and low bound ordinal.
+export const TYPE_BOUND_INDEX_STRIDE = 4294967296
+
+// These decimal limits are u64::MAX divided by each unit's millisecond multiplier.
+export const MAX_DURATION_MILLISECONDS = "18446744073709551615"
+
+export const MAX_DURATION_SECONDS = "18446744073709551"
+
+export const MAX_DURATION_MINUTES = "307445734561825"
+
+// Text parsing represents i64::MIN without first constructing an overflowing positive literal.
+export const MINIMUM_INT_DECIMAL = "-9223372036854775808"
+
+// Constant integer power accepts the same unsigned 32-bit exponent range as runtime power.
+export const MAX_CONSTANT_EXPONENT = 4294967295
+
+export record SymbolType {
+  moduleIndex: int,
+  lo: int,
+  hi: int,
+  name: string,
+  typeValue: TypeValue,
+  mutable: bool,
+}
+
+export record RecordField {
+  name: string,
+  typeValue: TypeValue,
+  hasDefault: bool,
+}
+
+export record RecordDefinition {
+  moduleIndex: int,
+  name: string,
+  typeParameters: Array<string>,
+  fields: Array<RecordField>,
+}
+
+export record EnumVariant {
+  name: string,
+  payloads: Array<TypeValue>,
+}
+
+export record EnumDefinition {
+  moduleIndex: int,
+  name: string,
+  typeParameters: Array<string>,
+  variants: Array<EnumVariant>,
+}
+
+export record NewtypeDefinition {
+  moduleIndex: int,
+  name: string,
+  typeParameters: Array<string>,
+  base: TypeValue,
+}
+
+export record AliasDefinition {
+  moduleIndex: int,
+  name: string,
+  typeParameters: Array<string>,
+  body: TypeValue,
+}
+
+export record FunctionDefinition {
+  moduleIndex: int,
+  name: string,
+  lo: int,
+  hi: int,
+  typeParameters: Array<string>,
+  typeParameterOrigins: Array<string>,
+  parameterNames: Array<string>,
+  parameterTypes: Array<TypeValue>,
+  parameterDefaults: Array<bool>,
+  variadic: Array<TypeValue>,
+  result: TypeValue,
+  bounds: Array<FunctionBound>,
+}
+
+export record FunctionBound {
+  parameterName: string,
+  protocol: string,
+}
+
+export record ProtocolMethodDefinition {
+  name: string,
+  parameterNames: Array<string>,
+  typeValue: TypeValue,
+}
+
+export record ProtocolDefinition {
+  name: string,
+  methods: Array<ProtocolMethodDefinition>,
+}
+
+export record ProtocolConformance {
+  moduleIndex: int,
+  typeName: string,
+  protocol: string,
+  derived: bool,
+}
+
+export record ReceiverMethodDefinition {
+  moduleIndex: int,
+  typeName: string,
+  name: string,
+  functionIndex: int,
+  exported: bool,
+}
+
+export record TypeParameterFact {
+  moduleIndex: int,
+  owner: string,
+  name: string,
+  origin: string,
+}
+
+export record ModuleSyntax {
+  moduleIndex: int,
+  sourceOrdinal: int,
+  identity: string,
+  source: Bytes,
+  root: SyntaxNode,
+  generatedStd: bool,
+}
+
+export record LoopFrame {
+  label: string,
+  valueLoop: bool,
+  bareTarget: bool,
+  bareError: string,
+  expected: Option<TypeValue>,
+  breaks: Array<TypeValue>,
+}
+
+// Single owner of phase catalogs; service callbacks update it instead of copying caches.
+export record CheckerState {
+  resolved: ResolveResult,
+  modules: Array<ModuleSyntax>,
+  declarationIndexes: Map<string, int>,
+  valueDeclarationIndexesByModule: Map<string, Array<int>>,
+  namespaceImportIndexes: Map<string, int>,
+  referenceIndexes: Map<string, int>,
+  scopeIndexes: Map<string, int>,
+  symbolIndexes: Map<string, int>,
+  nodeIndexes: Map<string, int>,
+  callIndexes: Map<string, int>,
+  functionIndexes: Map<string, int>,
+  functionNameIndexes: Map<string, int>,
+  receiverMethodIndexes: Map<string, int>,
+  protocolIndexes: Map<string, int>,
+  conformanceIndexes: Map<string, int>,
+  conformanceTypeIndexes: Map<string, int>,
+  recordIndexes: Map<string, int>,
+  enumIndexes: Map<string, int>,
+  newtypeIndexes: Map<string, int>,
+  aliasIndexes: Map<string, int>,
+  symbols: Array<SymbolType>,
+  records: Array<RecordDefinition>,
+  enums: Array<EnumDefinition>,
+  newtypes: Array<NewtypeDefinition>,
+  aliases: Array<AliasDefinition>,
+  functions: Array<FunctionDefinition>,
+  receiverMethods: Array<ReceiverMethodDefinition>,
+  protocols: Array<ProtocolDefinition>,
+  pendingFunctions: Array<bool>,
+  functionAliases: Map<string, int>,
+  conformances: Array<ProtocolConformance>,
+  typeParameters: Array<TypeParameterFact>,
+  activeFunctions: Array<int>,
+  expectedReturns: Array<TypeValue>,
+  returnJoins: Array<Array<TypeValue>>,
+  expectedExpressions: Array<ExpectedExpressionContext>,
+  literalJoinContexts: Array<int>,
+  statementExpressionContexts: Array<int>,
+  typeCapabilitySuppressions: Array<bool>,
+  loopFrames: Array<LoopFrame>,
+  loopFloors: Array<int>,
+  pipeValues: Array<TypeValue>,
+  nodes: Array<PreviewTypedNode>,
+  calls: Array<PreviewTypedCall>,
+  captures: Array<PreviewTypedCapture>,
+  diagnostics: Array<PreviewCheckDiagnostic>,
+  inferenceSolutions: Map<string, TypeValue>,
+  nextInference: int,
+}
+
+export record ExpectedExpressionContext {
+  kind: string,
+  lo: int,
+  hi: int,
+  typeValue: TypeValue,
+}
+
+export record TypeBinding {
+  name: string,
+  typeValue: TypeValue,
+}
+
+export record TypeTarget {
+  moduleIndex: int,
+  name: string,
+}
+
+export record NamedNominalTarget {
+  semanticKind: string,
+  diagnosticKind: string,
+  typeArgumentCount: int,
+}
+
+export record PatternCoverage {
+  irrefutable: bool,
+  keys: Array<string>,
+}
+
+export record CoverageGap {
+  decidable: bool,
+  missing: Array<string>,
+}
+
+export record InferredCallArguments {
+  types: Array<TypeValue>,
+  nodes: Array<SyntaxNode>,
+}
+
+export record CallResultCandidates {
+  nominal: Option<TypeValue>,
+  protocol: Option<TypeValue>,
+}
+
+export record LeadingCallArgument {
+  node: SyntaxNode,
+  typeValue: TypeValue,
+}
+
+export record CaptureTarget {
+  declaration: PreviewResolvedDeclaration,
+  name: string,
+  typeValue: Array<PreviewTypeAtom>,
+  ambient: bool,
+}
+
+export record CallArgumentPlan {
+  slots: Array<int>,
+  leadingSlot: int,
+  resultUnknown: bool,
+}
+
+export record CallSignature {
+  parameterNames: Array<string>,
+  parameterDefaults: Array<bool>,
+  parameterCount: int,
+  variadic: bool,
+  positionalOnlyIdentity: string,
+}
+
+export record BuiltinFunction {
+  typeValue: TypeValue,
+  callSignature: CallSignature,
+}
+
+export record UserProtocolCallTarget {
+  protocolName: string,
+  method: ProtocolMethodDefinition,
+}
+
+// Selected call signature and argument plan before contextual inference completes.
+export record CallPreparation {
+  callee: SyntaxNode,
+  diagnosticNode: SyntaxNode,
+  declaredType: TypeValue,
+  contextualType: TypeValue,
+  receiverType: TypeValue,
+  optionalContainer: string,
+  referencedDefinition: Option<FunctionDefinition>,
+  userProtocolTarget: Option<UserProtocolCallTarget>,
+  argumentPlan: CallArgumentPlan,
+  bindings: Array<TypeBinding>,
+  leading: Option<LeadingCallArgument>,
+  projectedMember: string,
+}
+
+export record CompletedCall {
+  calleeType: TypeValue,
+  resultType: TypeValue,
+}
+
+export function emptyType(kind: string) -> TypeValue {
+  TypeValue {
+    kind: kind,
+    name: "",
+    value: "",
+    identity: "",
+    origin: "",
+    arguments: [],
+    members: [],
+    fieldNames: [],
+    fields: [],
+    parameters: [],
+    variadic: [],
+    result: [],
+  }
+}
+
+export function primitive(name: string) -> TypeValue {
+  TypeValue {
+    kind: "primitive",
+    name: name,
+    value: "",
+    identity: "",
+    origin: "",
+    arguments: [],
+    members: [],
+    fieldNames: [],
+    fields: [],
+    parameters: [],
+    variadic: [],
+    result: [],
+  }
+}
+
+export function literal(name: string, spelling: string) -> TypeValue {
+  TypeValue {
+    kind: "literal",
+    name: name,
+    value: spelling,
+    identity: "",
+    origin: "",
+    arguments: [],
+    members: [],
+    fieldNames: [],
+    fields: [],
+    parameters: [],
+    variadic: [],
+    result: [],
+  }
+}
+
+export function nominal(kind: string, identity: string, arguments: Array<TypeValue>) -> TypeValue {
+  TypeValue {
+    kind: kind,
+    name: "",
+    value: "",
+    identity: identity,
+    origin: "",
+    arguments: arguments,
+    members: [],
+    fieldNames: [],
+    fields: [],
+    parameters: [],
+    variadic: [],
+    result: [],
+  }
+}
+
+export function nominalInModule(
+  kind: string,
+  identity: string,
+  arguments: Array<TypeValue>,
+  moduleIdentity: string,
+) -> TypeValue {
+  TypeValue {
+    kind: kind,
+    name: "",
+    value: "",
+    identity: identity,
+    origin: moduleIdentity,
+    arguments: arguments,
+    members: [],
+    fieldNames: [],
+    fields: [],
+    parameters: [],
+    variadic: [],
+    result: [],
+  }
+}
+
+export function constructor(name: string, arguments: Array<TypeValue>) -> TypeValue {
+  TypeValue {
+    kind: "constructor",
+    name: name,
+    value: "",
+    identity: "",
+    origin: "",
+    arguments: arguments,
+    members: [],
+    fieldNames: [],
+    fields: [],
+    parameters: [],
+    variadic: [],
+    result: [],
+  }
+}
+
+export function functionType(
+  parameters: Array<TypeValue>,
+  variadic: Array<TypeValue>,
+  result: TypeValue,
+) -> TypeValue {
+  TypeValue {
+    kind: "function",
+    name: "",
+    value: "",
+    identity: "",
+    origin: "",
+    arguments: [],
+    members: [],
+    fieldNames: [],
+    fields: [],
+    parameters: parameters,
+    variadic: variadic,
+    result: [result],
+  }
+}
+
+export function inference(index: int) -> TypeValue {
+  TypeValue {
+    kind: "inference-variable",
+    name: "",
+    value: "{index}",
+    identity: "",
+    origin: "",
+    arguments: [],
+    members: [],
+    fieldNames: [],
+    fields: [],
+    parameters: [],
+    variadic: [],
+    result: [],
+  }
+}
+
+export function rigid(name: string, origin: string) -> TypeValue {
+  TypeValue {
+    kind: "rigid",
+    name: name,
+    value: "",
+    identity: "",
+    origin: origin,
+    arguments: [],
+    members: [],
+    fieldNames: [],
+    fields: [],
+    parameters: [],
+    variadic: [],
+    result: [],
+  }
+}
+
+export function structural(fieldNames: Array<string>, fields: Array<TypeValue>) -> TypeValue {
+  let mut orderedNames: Array<string> = []
+  let mut orderedFields: Array<TypeValue> = []
+  let mut sourceIndex = 0
+  for name in fieldNames {
+    let field = match fields.get(sourceIndex) {
+      case Some(found) => found
+      case None => emptyType("unknown")
+    }
+    let mut inserted = false
+    let mut index = 0
+    while index < orderedNames.length {
+      let existing = match orderedNames.get(index) {
+        case Some(found) => found
+        case None => name
+      }
+      if name < existing {
+        orderedNames.insert(index, name)
+        orderedFields.insert(index, field)
+        inserted = true
+        break
+      }
+      index += 1
+    }
+    if !inserted {
+      orderedNames.push(name)
+      orderedFields.push(field)
+    }
+    sourceIndex += 1
+  }
+  TypeValue {
+    kind: "record",
+    name: "",
+    value: "",
+    identity: "",
+    origin: "",
+    arguments: [],
+    members: [],
+    fieldNames: orderedNames,
+    fields: orderedFields,
+    parameters: [],
+    variadic: [],
+    result: [],
+  }
+}

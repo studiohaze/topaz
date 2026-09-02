@@ -1,0 +1,17 @@
+
+import util
+function main() -> int {
+    let seeds = [1, 0]
+    let f = if seeds[0] == 1 {
+        util.add
+    } else {
+        util.sub
+    }
+    let g = if seeds[1] == 1 {
+        util.add
+    } else {
+        util.sub
+    }
+    f(a: 5) * 1000 + (g(a: 5) + 100)
+}
+main()

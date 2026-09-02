@@ -1,0 +1,5 @@
+export function answer() -> int {
+  40 + 2
+}
+
+let checked = answer()

@@ -1,0 +1,16 @@
+
+function addDefault(a: int, b: int = 2) -> int {
+    a + b
+}
+function scaleDefault(a: int, b: int = 100) -> int {
+    a * b
+}
+function main() -> int {
+    let base = [addDefault]
+    let callbacks = [...base, scaleDefault]
+    let seeds = [0, 1]
+    let fromSpread = 5 |> callbacks[seeds[0]](a: _)
+    let appended = 5 |> callbacks[seeds[1]](a: _)
+    fromSpread * 1000 + appended
+}
+main()

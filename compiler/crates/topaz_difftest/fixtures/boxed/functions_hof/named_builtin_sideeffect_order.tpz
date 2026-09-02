@@ -1,0 +1,5 @@
+function a() -> string {
+  print("a")
+  "1"
+}
+toInt(text: a())

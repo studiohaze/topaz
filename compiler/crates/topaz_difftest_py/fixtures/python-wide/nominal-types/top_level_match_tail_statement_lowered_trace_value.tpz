@@ -1,0 +1,9 @@
+
+match 2 {
+    case 1 => 1
+    case 2 => loop {
+        print("match-loop")
+        break 20
+    }
+    case _ => 0
+}

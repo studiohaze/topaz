@@ -1,0 +1,960 @@
+---
+title: 'Map 사용하기'
+description: 'Map 관련 레거시·런타임 중심 예제를 보존한 가이드입니다.'
+---
+
+<Tip tone="warning" triggerLabel="레거시 가이드" title="레거시 가이드">
+**왜 레거시?** 옛 Topaz 시기의 Rust 스타일 Map 예제(:: 호출, 차용 비슷한 패턴, 표준 라이브러리 API)를 보존합니다.
+
+**대체 자료?** 정식 컬렉션 연산은 [리스트 연산](/ko/docs/reference/list-operations) · [함수형 라이브러리](/ko/docs/reference/functional-library)를 참고하세요.
+
+**상태:** 레거시 — v5.1 이전, non-canonical. 현재 문법은 레퍼런스 페이지를 사용하세요. 아래 예제는 역사적 참고용으로 수정 없이 보존된 것이며 canonical Topaz가 아닙니다.
+</Tip>
+
+이 페이지는 마이그레이션, 비교, 인터롭 맥락에서 참고할 수 있도록 예전 Map 워크플로를 보존합니다.
+
+##  Map의 기본 개념
+
+### Map이란?
+
+Map은 **키(Key)와 값(Value)의 쌍으로 데이터를 저장하는 연관 배열**입니다. 각 키는 고유하며, 키를 통해 빠르게 값을 조회할 수 있습니다.
+
+```rust
+// 기본 Map 생성과 사용
+function 기본맵예제() {
+    // 빈 맵 생성
+    let mut 점수맵: Map<string, int> = Map::new()
+    
+    // 값 삽입
+    점수맵.insert("Alice", 95)
+    점수맵.insert("Bob", 87)
+    점수맵.insert("Charlie", 92)
+    
+    // 값 조회
+    match 점수맵.get("Alice") { case Some(앨리스점수) => print!("Alice의 점수: {}", 앨리스점수), case None => {} }
+    
+    // 값 수정
+    점수맵.insert("Alice", 98)  // 기존 값 덮어쓰기
+    
+    // 모든 키-값 순회
+    for (이름, 점수) in &점수맵 {
+        print!("{}: {}", 이름, 점수)
+    }
+}
+
+// 맵 리터럴 생성
+function 맵리터럴예제() -> Map<string, int> {
+    map! {
+        "수학" => 90,
+        "과학" => 85,
+        "영어" => 93,
+        "역사" => 88
+    }
+}
+
+// 복합 데이터 타입을 값으로 사용
+struct 학생정보 {
+    나이: int,
+    학년: int,
+    전공: string
+}
+
+function 복합데이터맵() -> Map<string, 학생정보> {
+    let mut 학생맵 = Map::new()
+    
+    학생맵.insert("김철수", 학생정보 {
+        나이: 20,
+        학년: 2,
+        전공: "컴퓨터과학".to_string()
+    })
+    
+    학생맵.insert("이영희", 학생정보 {
+        나이: 19,
+        학년: 1,
+        전공: "수학".to_string()
+    })
+    
+    return 학생맵
+} test {
+    // 기본 Map 테스트
+    let mut 테스트맵: Map<string, int> = Map::new()
+    테스트맵.insert("키1", 100)
+    테스트맵.insert("키2", 200)
+    
+    assert 테스트맵.get("키1") == Some(&100)
+    assert 테스트맵.get("키3") == None
+    assert 테스트맵.len() == 2
+    
+    // 맵 리터럴 테스트
+    let 과목점수 = 맵리터럴예제()
+    assert 과목점수.get("수학") == Some(&90)
+    assert 과목점수.len() == 4
+    
+    // 복합 데이터 테스트
+    let 학생들 = 복합데이터맵()
+    match 학생들.get("김철수") { case Some(철수) => { assert 철수.나이 == 20; assert 철수.전공 == "컴퓨터과학" }, case None => {} }
+}
+
+기본맵예제()
+let 과목맵 = 맵리터럴예제()
+print!("과목 수: {}", 과목맵.len())
+
+let 학생맵 = 복합데이터맵()
+for (이름, 정보) in &학생맵 {
+    print!("{}: {}세, {}학년, {} 전공", 이름, 정보.나이, 정보.학년, 정보.전공)
+}
+```
+
+### Map의 핵심 특징
+
+1. **고유 키**: 각 키는 맵에서 유일해야 함
+2. **빠른 조회**: O(1) 평균 시간 복잡도로 값 조회
+3. **동적 크기**: 런타임에 크기 변경 가능
+4. **타입 안전성**: 키와 값의 타입이 컴파일 시 결정
+
+##  Map 기본 연산
+
+### 생성, 삽입, 조회
+
+```rust
+// 다양한 Map 생성 방법
+function 맵생성방법들() {
+    // 1. 빈 맵 생성
+    let mut 빈맵: Map<int, string> = Map::new()
+    
+    // 2. 용량 지정 생성
+    let mut 용량맵: Map<string, int> = Map::with_capacity(100)
+    
+    // 3. 기본값으로 초기화
+    let mut 기본값맵 = Map::new()
+    기본값맵.insert("기본키", "기본값")
+    
+    // 4. 다른 맵으로부터 복제
+    let 복제맵 = 기본값맵.clone()
+    
+    print!("빈맵 크기: {}", 빈맵.len())
+    print!("복제맵 크기: {}", 복제맵.len())
+}
+
+// 값 삽입과 업데이트
+function 값삽입연산() {
+    let mut 카운터맵: Map<string, int> = Map::new()
+    
+    // 새 값 삽입
+    카운터맵.insert("apple", 5)
+    카운터맵.insert("banana", 3)
+    
+    // 기존 값 업데이트
+    카운터맵.insert("apple", 8)  // 5 -> 8로 변경
+    
+    // entry API 사용 (더 효율적)
+    카운터맵.entry("orange").or_insert(0)  // 키가 없으면 0 삽입
+    카운터맵.entry("apple").and_modify(|값| *값 += 2)  // 기존 값에 2 추가
+    
+    // insert의 반환값 활용
+    match 카운터맵.insert("grape", 7) { case Some(이전값) => print!("grape의 이전 값: {}", 이전값), case None => print!("grape는 새로운 키입니다.") }
+    
+    for (과일, 개수) in &카운터맵 {
+        print!("{}: {}개", 과일, 개수)
+    }
+}
+
+// 값 조회와 존재 확인
+function 값조회연산() {
+    let 재고맵 = map! {
+        "사과" => 50,
+        "바나나" => 30,
+        "오렌지" => 25,
+        "포도" => 40
+    }
+    
+    // get으로 값 조회
+    match 재고맵.get("사과") {
+        case Some(개수) => print!("사과 재고: {}개", 개수),
+        case None => print!("사과 재고 없음")
+    }
+    
+    // contains_key로 키 존재 확인
+    if 재고맵.contains_key("딸기") {
+        print!("딸기 있음")
+    } else {
+        print!("딸기 재고 없음")
+    }
+    
+    // get_mut으로 가변 참조 얻기
+    let mut 가변재고맵 = 재고맵.clone()
+    match 가변재고맵.get_mut("바나나") { case Some(바나나재고) => { *바나나재고 -= 10; print!("바나나 판매 후 재고: {}개", *바나나재고) }, case None => {} }
+    
+    // 기본값과 함께 조회
+    let 키위재고 = 가변재고맵.get("키위").unwrap_or(&0)
+    print!("키위 재고: {}개", 키위재고)
+}
+
+// 값 제거
+function 값제거연산() {
+    let mut 임시맵 = map! {
+        "임시1" => "값1",
+        "임시2" => "값2",
+        "임시3" => "값3",
+        "보존" => "중요한값"
+    }
+    
+    print!("제거 전 크기: {}", 임시맵.len())
+    
+    // 특정 키 제거
+    match 임시맵.remove("임시1") { case Some(제거된값) => print!("제거된 값: {}", 제거된값), case None => {} }
+    
+    // 조건부 제거
+    임시맵.retain(|키, _| !키.starts_with("임시"))
+    
+    print!("제거 후 크기: {}", 임시맵.len())
+    print!("남은 키들: {:?}", 임시맵.keys().collect::<Vec<_>>())
+    
+    // 모든 항목 제거
+    임시맵.clear()
+    print!("전체 제거 후 크기: {}", 임시맵.len())
+} test {
+    // 맵 생성 테스트
+    let mut 테스트맵: Map<string, int> = Map::new()
+    assert 테스트맵.is_empty()
+    
+    // 삽입 테스트
+    테스트맵.insert("키1", 100)
+    테스트맵.insert("키2", 200)
+    assert 테스트맵.len() == 2
+    
+    // 조회 테스트
+    assert 테스트맵.get("키1") == Some(&100)
+    assert 테스트맵.contains_key("키2")
+    assert !테스트맵.contains_key("키3")
+    
+    // 업데이트 테스트
+    let 이전값 = 테스트맵.insert("키1", 150)
+    assert 이전값 == Some(100)
+    assert 테스트맵.get("키1") == Some(&150)
+    
+    // 제거 테스트
+    let 제거된값 = 테스트맵.remove("키2")
+    assert 제거된값 == Some(200)
+    assert 테스트맵.len() == 1
+}
+
+맵생성방법들()
+값삽입연산()
+값조회연산()
+값제거연산()
+```
+
+### 반복과 변환
+
+```rust
+// 맵 순회 방법들
+function 맵순회방법들() {
+    let 점수맵 = map! {
+        "수학" => 95,
+        "과학" => 88,
+        "영어" => 92,
+        "역사" => 85
+    }
+    
+    // 1. 키-값 쌍 순회
+    print!("=== 키-값 쌍 순회 ===")
+    for (과목, 점수) in &점수맵 {
+        print!("{}: {}점", 과목, 점수)
+    }
+    
+    // 2. 키만 순회
+    print!("=== 키만 순회 ===")
+    for 과목 in 점수맵.keys() {
+        print!("과목: {}", 과목)
+    }
+    
+    // 3. 값만 순회
+    print!("=== 값만 순회 ===")
+    for 점수 in 점수맵.values() {
+        print!("점수: {}점", 점수)
+    }
+    
+    // 4. 가변 값 순회 (점수 보정)
+    let mut 가변점수맵 = 점수맵.clone()
+    for (_, 점수) in &mut 가변점수맵 {
+        *점수 += 5  // 모든 점수에 5점 추가
+    }
+    
+    print!("=== 보정 후 점수 ===")
+    for (과목, 점수) in &가변점수맵 {
+        print!("{}: {}점", 과목, 점수)
+    }
+}
+
+// 맵 변환과 필터링
+function 맵변환필터링() {
+    let 원본맵 = map! {
+        "apple" => 10,
+        "banana" => 5,
+        "orange" => 15,
+        "grape" => 8,
+        "kiwi" => 12
+    }
+    
+    // 맵을 벡터로 변환
+    let 키값벡터: Vec<(string, int)> = 원본맵.iter()
+        .map(|(키, 값)| (키.clone(), *값))
+        .collect()
+    
+    print!("키-값 벡터: {:?}", 키값벡터)
+    
+    // 조건에 맞는 항목만 필터링
+    let 고가과일: Map<string, int> = 원본맵.iter()
+        .filter(|(_, &가격)| 가격 >= 10)
+        .map(|(키, 값)| (키.clone(), *값))
+        .collect()
+    
+    print!("10 이상 과일: {:?}", 고가과일)
+    
+    // 값 변환
+    let 할인가격: Map<string, int> = 원본맵.iter()
+        .map(|(키, 값)| (키.clone(), 값 * 90 / 100))  // 10% 할인
+        .collect()
+    
+    print!("할인 가격: {:?}", 할인가격)
+    
+    // 키 변환
+    let 대문자키맵: Map<string, int> = 원본맵.iter()
+        .map(|(키, 값)| (키.to_uppercase(), *값))
+        .collect()
+    
+    print!("대문자 키: {:?}", 대문자키맵)
+}
+
+// 맵 집계와 통계
+function 맵집계통계() {
+    let 판매데이터 = map! {
+        "1월" => 120,
+        "2월" => 135,
+        "3월" => 98,
+        "4월" => 156,
+        "5월" => 189,
+        "6월" => 143
+    }
+    
+    // 총 판매량
+    let 총판매량: int = 판매데이터.values().sum()
+    print!("총 판매량: {}", 총판매량)
+    
+    // 평균 판매량
+    let 평균판매량 = 총판매량 as f64 / 판매데이터.len() as f64
+    print!("평균 판매량: {:.2}", 평균판매량)
+    
+    // 최대/최소 판매량
+    match 판매데이터.values().max() { case Some(최대판매량) => print!("최대 판매량: {}", 최대판매량), case None => {} }
+    match 판매데이터.values().min() { case Some(최소판매량) => print!("최소 판매량: {}", 최소판매량), case None => {} }
+    
+    // 특정 조건 개수
+    let 목표달성월수 = 판매데이터.values()
+        .filter(|&&판매량| 판매량 >= 140)
+        .count()
+    print!("목표(140) 달성 월수: {}", 목표달성월수)
+    
+    // 최고 실적 월 찾기
+    match 판매데이터.iter().max_by_key(|(_, &판매량)| 판매량) {
+        case Some((최고월, 최고실적)) => print!("최고 실적: {}월 {}건", 최고월, 최고실적)
+        case None => {}
+    }
+} test {
+    // 순회 테스트
+    let 테스트맵 = map! {
+        "A" => 1,
+        "B" => 2,
+        "C" => 3
+    }
+    
+    let mut 키들 = Vec::new()
+    for 키 in 테스트맵.keys() {
+        키들.push(키.clone())
+    }
+    키들.sort()
+    assert 키들 == vec!["A", "B", "C"]
+    
+    // 변환 테스트
+    let 두배맵: Map<string, int> = 테스트맵.iter()
+        .map(|(키, 값)| (키.clone(), 값 * 2))
+        .collect()
+    
+    assert 두배맵.get("A") == Some(&2)
+    assert 두배맵.get("B") == Some(&4)
+    
+    // 필터링 테스트
+    let 큰값맵: Map<string, int> = 테스트맵.iter()
+        .filter(|(_, &값)| 값 > 1)
+        .map(|(키, 값)| (키.clone(), *값))
+        .collect()
+    
+    assert 큰값맵.len() == 2
+    assert !큰값맵.contains_key("A")
+}
+
+맵순회방법들()
+맵변환필터링() 
+맵집계통계()
+```
+
+##  고급 Map 활용
+
+### Entry API와 효율적인 패턴
+
+```rust
+// Entry API 활용
+function 엔트리API활용() {
+    let mut 단어개수맵: Map<string, int> = Map::new()
+    let 텍스트 = "hello world hello rust world rust programming"
+    
+    // 단어 개수 세기 (Entry API 사용)
+    for 단어 in 텍스트.split_whitespace() {
+        *단어개수맵.entry(단어.to_string()).or_insert(0) += 1
+    }
+    
+    print!("=== 단어 개수 ===")
+    for (단어, 개수) in &단어개수맵 {
+        print!("{}: {}번", 단어, 개수)
+    }
+    
+    // 복잡한 Entry 패턴
+    let mut 그룹맵: Map<string, Vec<int>> = Map::new()
+    let 데이터 = vec![
+        ("그룹A", 10), ("그룹B", 20), ("그룹A", 15), 
+        ("그룹C", 5), ("그룹B", 25), ("그룹A", 30)
+    ]
+    
+    for (그룹, 값) in 데이터 {
+        그룹맵.entry(그룹.to_string())
+            .or_insert(Vec::new())
+            .push(값)
+    }
+    
+    print!("=== 그룹별 데이터 ===")
+    for (그룹, 값들) in &그룹맵 {
+        print!("{}: {:?}", 그룹, 값들)
+    }
+}
+
+// 중첩 맵 구조
+function 중첩맵구조() {
+    // 학생 -> 과목 -> 점수
+    let mut 성적부: Map<string, Map<string, int>> = Map::new()
+    
+    // 성적 입력 함수
+    let mut 성적입력 = |학생: &str, 과목: &str, 점수: int| {
+        성적부.entry(학생.to_string())
+            .or_insert(Map::new())
+            .insert(과목.to_string(), 점수)
+    }
+    
+    // 데이터 입력
+    성적입력("김철수", "수학", 95)
+    성적입력("김철수", "과학", 88)
+    성적입력("김철수", "영어", 92)
+    성적입력("이영희", "수학", 98)
+    성적입력("이영희", "과학", 94)
+    성적입력("이영희", "영어", 89)
+    
+    // 성적 조회
+    for (학생, 과목맵) in &성적부 {
+        print!("=== {} 성적 ===", 학생)
+        let mut 총점 = 0
+        let mut 과목수 = 0
+        
+        for (과목, 점수) in 과목맵 {
+            print!("  {}: {}점", 과목, 점수)
+            총점 += 점수
+            과목수 += 1
+        }
+        
+        let 평균 = if 과목수 > 0 { 총점 as f64 / 과목수 as f64 } else { 0.0 }
+        print!("  평균: {:.1}점", 평균)
+    }
+}
+
+// 맵 머지와 결합
+function 맵머지결합() {
+    let 재고A = map! {
+        "사과" => 50,
+        "바나나" => 30,
+        "오렌지" => 20
+    }
+    
+    let 재고B = map! {
+        "바나나" => 25,  // 중복 키
+        "포도" => 40,
+        "키위" => 15
+    }
+    
+    // 1. 단순 병합 (B가 우선)
+    let mut 병합재고 = 재고A.clone()
+    for (과일, 개수) in 재고B.iter() {
+        병합재고.insert(과일.clone(), *개수)
+    }
+    
+    print!("=== 단순 병합 (B 우선) ===")
+    for (과일, 개수) in &병합재고 {
+        print!("{}: {}개", 과일, 개수)
+    }
+    
+    // 2. 값 합산 병합
+    let mut 합산재고 = 재고A.clone()
+    for (과일, 개수) in 재고B.iter() {
+        *합산재고.entry(과일.clone()).or_insert(0) += 개수
+    }
+    
+    print!("=== 값 합산 병합 ===")
+    for (과일, 개수) in &합산재고 {
+        print!("{}: {}개", 과일, 개수)
+    }
+    
+    // 3. 최대값 병합
+    let mut 최대값재고 = 재고A.clone()
+    for (과일, 개수) in 재고B.iter() {
+        최대값재고.entry(과일.clone())
+            .and_modify(|기존개수| *기존개수 = (*기존개수).max(*개수))
+            .or_insert(*개수)
+    }
+    
+    print!("=== 최대값 병합 ===")
+    for (과일, 개수) in &최대값재고 {
+        print!("{}: {}개", 과일, 개수)
+    }
+} test {
+    // Entry API 테스트
+    let mut 카운터: Map<string, int> = Map::new()
+    
+    // 새 키 삽입
+    카운터.entry("새키".to_string()).or_insert(1)
+    assert 카운터.get("새키") == Some(&1)
+    
+    // 기존 키 수정
+    *카운터.entry("새키".to_string()).or_insert(0) += 5
+    assert 카운터.get("새키") == Some(&6)
+    
+    // 중첩 맵 테스트
+    let mut 중첩맵: Map<string, Map<string, int>> = Map::new()
+    중첩맵.entry("외부키".to_string())
+        .or_insert(Map::new())
+        .insert("내부키".to_string(), 100)
+    
+    assert 중첩맵.get("외부키").unwrap().get("내부키") == Some(&100)
+}
+
+엔트리API활용()
+중첩맵구조()
+맵머지결합()
+```
+
+### 성능 최적화와 메모리 관리
+
+```rust
+// 용량 관리와 성능 최적화
+function 성능최적화() {
+    // 1. 적절한 초기 용량 설정
+    let mut 대용량맵: Map<int, string> = Map::with_capacity(10000)
+    
+    print!("초기 용량: {}", 대용량맵.capacity())
+    
+    // 대량 데이터 삽입
+    for i in 0..5000 {
+        대용량맵.insert(i, format!("값{}", i))
+    }
+    
+    print!("삽입 후 길이: {}, 용량: {}", 대용량맵.len(), 대용량맵.capacity())
+    
+    // 2. 불필요한 용량 축소
+    대용량맵.shrink_to_fit()
+    print!("축소 후 용량: {}", 대용량맵.capacity())
+    
+    // 3. 예비 공간 확보
+    대용량맵.reserve(2000)
+    print!("예비 확보 후 용량: {}", 대용량맵.capacity())
+}
+
+// 메모리 효율적인 키 타입 사용
+function 효율적키타입() {
+    // 문자열 키 vs 정수 키 성능 비교용 예제
+    
+    // 정수 키 (더 효율적)
+    let mut 정수키맵: Map<u32, string> = Map::new()
+    for i in 0..1000 {
+        정수키맵.insert(i, format!("데이터{}", i))
+    }
+    
+    // 문자열 키 (해시 비용이 더 큼)
+    let mut 문자열키맵: Map<string, string> = Map::new()
+    for i in 0..1000 {
+        문자열키맵.insert(format!("키{}", i), format!("데이터{}", i))
+    }
+    
+    print!("정수키맵 크기: {}", 정수키맵.len())
+    print!("문자열키맵 크기: {}", 문자열키맵.len())
+    
+    // 작은 문자열은 스택에 저장 (효율적)
+    let mut 고정문자열맵: Map<&'static str, int> = map! {
+        "빨강" => 1,
+        "파랑" => 2,
+        "초록" => 3,
+        "노랑" => 4
+    }
+    
+    print!("고정문자열맵: {:?}", 고정문자열맵)
+}
+
+// 커스텀 해시 함수 사용
+use std::collections::hash_map::DefaultHasher
+use std::hash::{Hash, Hasher}
+
+struct 커스텀키 {
+    id: u32,
+    name: string
+}
+
+impl Hash for 커스텀키 {
+    function hash<H: Hasher>(&self, state: &mut H) {
+        // ID만 해시에 사용 (이름은 무시)
+        self.id.hash(state)
+    }
+}
+
+impl PartialEq for 커스텀키 {
+    function eq(&self, other: &Self) -> bool {
+        self.id == other.id  // ID만으로 동일성 판단
+    }
+}
+
+impl Eq for 커스텀키 {}
+
+function 커스텀해시예제() {
+    let mut 커스텀맵: Map<커스텀키, string> = Map::new()
+    
+    let 키1 = 커스텀키 { id: 1, name: "첫번째".to_string() }
+    let 키2 = 커스텀키 { id: 1, name: "다른이름".to_string() }  // 같은 ID
+    
+    커스텀맵.insert(키1, "값1".to_string())
+    
+    // 키2는 키1과 같은 ID를 가지므로 같은 키로 취급됨
+    match 커스텀맵.get(&키2) { case Some(값) => print!("커스텀 키로 조회한 값: {}", 값), case None => {} }
+} test {
+    // 용량 관리 테스트
+    let mut 테스트맵: Map<int, string> = Map::with_capacity(5)
+    
+    assert 테스트맵.capacity() >= 5
+    assert 테스트맵.is_empty()
+    
+    // 용량 초과 시 자동 확장 테스트
+    for i in 0..<10 {
+        테스트맵.insert(i, format!("값{}", i))
+    }
+    
+    assert 테스트맵.len() == 10
+    assert 테스트맵.capacity() >= 10
+}
+
+성능최적화()
+효율적키타입()
+커스텀해시예제()
+```
+
+##  실용적인 Map 패턴
+
+### 캐시와 메모이제이션
+
+```rust
+// 간단한 캐시 구현
+struct 캐시<K, V>
+where
+    K: Hash + Eq + Clone,
+    V: Clone
+{
+    데이터: Map<K, V>,
+    최대크기: usize
+}
+
+impl<K, V> 캐시<K, V>
+where
+    K: Hash + Eq + Clone,
+    V: Clone
+{
+    function new(최대크기: usize) -> Self {
+        캐시 {
+            데이터: Map::with_capacity(최대크기),
+            최대크기
+        }
+    }
+    
+    function get(&self, 키: &K) -> Option<&V> {
+        self.데이터.get(키)
+    }
+    
+    function put(&mut self, 키: K, 값: V) {
+        if self.데이터.len() >= self.최대크기 {
+            // 간단한 LRU: 첫 번째 키 제거
+            match self.데이터.keys().next().cloned() { case Some(첫키) => { self.데이터.remove(&첫키) }, case None => {} }
+        }
+        self.데이터.insert(키, 값)
+    }
+    
+    function contains_key(&self, 키: &K) -> bool {
+        self.데이터.contains_key(키)
+    }
+    
+    function clear(&mut self) {
+        self.데이터.clear()
+    }
+}
+
+// 메모이제이션 구현
+function 메모이제이션예제() {
+    let mut 피보나치캐시: Map<u32, u64> = Map::new()
+    
+    function 피보나치(n: u32, 캐시: &mut Map<u32, u64>) -> u64 {
+        match 캐시.get(&n) { case Some(&결과) => return 결과, case None => {} }
+        
+        let 결과 = match n {
+            case 0 => 0,
+            case 1 => 1,
+            case _ => 피보나치(n - 1, 캐시) + 피보나치(n - 2, 캐시)
+        }
+        
+        캐시.insert(n, 결과)
+        결과
+    }
+    
+    // 피보나치 수열 계산
+    for i in 0..15 {
+        let 값 = 피보나치(i, &mut 피보나치캐시)
+        print!("F({}) = {}", i, 값)
+    }
+    
+    print!("캐시 크기: {}", 피보나치캐시.len())
+}
+
+// 웹 요청 캐시 시뮬레이션
+function 웹캐시시뮬레이션() {
+    let mut 응답캐시: 캐시<string, string> = 캐시::new(5)
+    
+    function 웹요청시뮬레이션(url: &str, 캐시: &mut 캐시<string, string>) -> string {
+        match 캐시.get(&url.to_string()) { case Some(캐시된응답) => { print!("캐시 히트: {}", url); return 캐시된응답.clone() }, case None => {} }
+        
+        // 실제 요청 시뮬레이션 (지연 시간 포함)
+        print!("실제 요청: {}", url)
+        let 응답 = format!("{}의 응답 데이터", url)
+        
+        캐시.put(url.to_string(), 응답.clone())
+        응답
+    }
+    
+    // 요청 시뮬레이션
+    let urls = vec![
+        "https://api.example.com/users",
+        "https://api.example.com/posts", 
+        "https://api.example.com/users",  // 캐시 히트
+        "https://api.example.com/comments",
+        "https://api.example.com/posts",  // 캐시 히트
+    ]
+    
+    for url in urls {
+        let 응답 = 웹요청시뮬레이션(url, &mut 응답캐시)
+        print!("응답: {}", 응답)
+    }
+} test {
+    // 캐시 테스트
+    let mut 테스트캐시: 캐시<string, int> = 캐시::new(3)
+    
+    테스트캐시.put("키1".to_string(), 100)
+    테스트캐시.put("키2".to_string(), 200)
+    테스트캐시.put("키3".to_string(), 300)
+    
+    assert 테스트캐시.get(&"키1".to_string()) == Some(&100)
+    assert 테스트캐시.contains_key(&"키2".to_string())
+    
+    // 용량 초과 시 LRU 동작 테스트
+    테스트캐시.put("키4".to_string(), 400)
+    
+    // 첫 번째 키가 제거되어야 함
+    assert 테스트캐시.get(&"키4".to_string()) == Some(&400)
+}
+
+메모이제이션예제()
+웹캐시시뮬레이션()
+```
+
+### 인덱싱과 그룹화
+
+```rust
+// 데이터 인덱싱
+struct 사용자 {
+    id: u32,
+    이름: string,
+    나이: u32,
+    부서: string
+}
+
+function 데이터인덱싱() {
+    let 사용자들 = vec![
+        사용자 { id: 1, 이름: "김철수".to_string(), 나이: 28, 부서: "개발팀".to_string() },
+        사용자 { id: 2, 이름: "이영희".to_string(), 나이: 32, 부서: "디자인팀".to_string() },
+        사용자 { id: 3, 이름: "박민수".to_string(), 나이: 25, 부서: "개발팀".to_string() },
+        사용자 { id: 4, 이름: "최지은".to_string(), 나이: 29, 부서: "마케팅팀".to_string() },
+    ]
+    
+    // ID로 인덱싱
+    let id인덱스: Map<u32, &사용자> = 사용자들.iter()
+        .map(|사용자| (사용자.id, 사용자))
+        .collect()
+    
+    // 이름으로 인덱싱
+    let 이름인덱스: Map<string, &사용자> = 사용자들.iter()
+        .map(|사용자| (사용자.이름.clone(), 사용자))
+        .collect()
+    
+    // 부서별 그룹화
+    let mut 부서별그룹: Map<string, Vec<&사용자>> = Map::new()
+    for 사용자 in &사용자들 {
+        부서별그룹.entry(사용자.부서.clone())
+            .or_insert(Vec::new())
+            .push(사용자)
+    }
+    
+    // 인덱스 사용 예제
+    match id인덱스.get(&2) { case Some(사용자) => print!("ID 2 사용자: {}", 사용자.이름), case None => {} }
+    match 이름인덱스.get("박민수") { case Some(사용자) => print!("박민수의 부서: {}", 사용자.부서), case None => {} }
+    
+    // 그룹화 결과 출력
+    for (부서, 구성원들) in &부서별그룹 {
+        print!("=== {} ===", 부서)
+        for 사용자 in 구성원들 {
+            print!("  {} ({}세)", 사용자.이름, 사용자.나이)
+        }
+    }
+}
+
+// 다중 인덱스 시스템
+struct 다중인덱스<T> {
+    데이터: Vec<T>
+}
+
+impl 다중인덱스<사용자> {
+    function new(데이터: Vec<사용자>) -> Self {
+        다중인덱스 { 데이터 }
+    }
+    
+    function id로찾기(&self, id: u32) -> Option<&사용자> {
+        self.데이터.iter().find(|사용자| 사용자.id == id)
+    }
+    
+    function 부서로찾기(&self, 부서: &str) -> Vec<&사용자> {
+        self.데이터.iter()
+            .filter(|사용자| 사용자.부서 == 부서)
+            .collect()
+    }
+    
+    function 나이범위로찾기(&self, 최소나이: u32, 최대나이: u32) -> Vec<&사용자> {
+        self.데이터.iter()
+            .filter(|사용자| 사용자.나이 >= 최소나이 && 사용자.나이 <= 최대나이)
+            .collect()
+    }
+    
+    function 통계(&self) -> Map<string, u32> {
+        let mut 통계맵 = Map::new()
+        
+        // 부서별 인원수
+        let mut 부서별인원: Map<string, u32> = Map::new()
+        for 사용자 in &self.데이터 {
+            *부서별인원.entry(사용자.부서.clone()).or_insert(0) += 1
+        }
+        
+        // 평균 나이
+        let 총나이: u32 = self.데이터.iter().map(|사용자| 사용자.나이).sum()
+        let 평균나이 = if !self.데이터.is_empty() { 
+            총나이 / self.데이터.len() as u32 
+        } else { 0 }
+        
+        통계맵.insert("총인원".to_string(), self.데이터.len() as u32)
+        통계맵.insert("평균나이".to_string(), 평균나이)
+        
+        for (부서, 인원) in 부서별인원 {
+            통계맵.insert(format!("{}_인원", 부서), 인원)
+        }
+        
+        통계맵
+    }
+}
+
+function 다중인덱스예제() {
+    let 사용자데이터 = vec![
+        사용자 { id: 1, 이름: "김철수".to_string(), 나이: 28, 부서: "개발팀".to_string() },
+        사용자 { id: 2, 이름: "이영희".to_string(), 나이: 32, 부서: "디자인팀".to_string() },
+        사용자 { id: 3, 이름: "박민수".to_string(), 나이: 25, 부서: "개발팀".to_string() },
+        사용자 { id: 4, 이름: "최지은".to_string(), 나이: 29, 부서: "마케팅팀".to_string() },
+    ]
+    
+    let 인덱스 = 다중인덱스::new(사용자데이터)
+    
+    // 다양한 검색
+    match 인덱스.id로찾기(3) { case Some(사용자) => print!("ID 3: {}", 사용자.이름), case None => {} }
+    
+    let 개발팀원들 = 인덱스.부서로찾기("개발팀")
+    print!("개발팀원: {:?}", 개발팀원들.iter().map(|u| &u.이름).collect::<Vec<_>>())
+    
+    let 젊은직원들 = 인덱스.나이범위로찾기(25, 30)
+    print!("25-30세: {:?}", 젊은직원들.iter().map(|u| &u.이름).collect::<Vec<_>>())
+    
+    // 통계 출력
+    let 통계 = 인덱스.통계()
+    for (항목, 값) in &통계 {
+        print!("{}: {}", 항목, 값)
+    }
+} test {
+    // 인덱싱 테스트
+    let 테스트사용자들 = vec![
+        사용자 { id: 1, 이름: "테스트1".to_string(), 나이: 25, 부서: "팀A".to_string() },
+        사용자 { id: 2, 이름: "테스트2".to_string(), 나이: 30, 부서: "팀B".to_string() },
+    ]
+    
+    let id맵: Map<u32, &사용자> = 테스트사용자들.iter()
+        .map(|u| (u.id, u))
+        .collect()
+    
+    assert id맵.get(&1).unwrap().이름 == "테스트1"
+    assert id맵.get(&2).unwrap().부서 == "팀B"
+    
+    // 다중 인덱스 테스트
+    let 인덱스 = 다중인덱스::new(테스트사용자들)
+    assert 인덱스.id로찾기(1).is_some()
+    assert 인덱스.부서로찾기("팀A").len() == 1
+    assert 인덱스.나이범위로찾기(25, 35).len() == 2
+}
+
+데이터인덱싱()
+다중인덱스예제()
+```
+
+##  Map 마스터하기
+
+Map은 토파즈에서 가장 유용한 자료구조 중 하나입니다:
+
+###  Map 사용 시기:
+- **키-값 쌍** 데이터 저장
+- **빠른 조회**가 필요한 경우
+- **데이터 인덱싱**과 **그룹화**
+- **캐시**와 **메모이제이션** 구현
+
+###  주의사항:
+- **적절한 키 타입** 선택 (해시 성능 고려)
+- **메모리 사용량** 관리 (대용량 데이터 시)
+- **동시성** 고려 (멀티스레드 환경)
+- **키의 불변성** 보장
+
+###  토파즈 Map의 장점:
+- **타입 안전성** 보장
+- **효율적인 해시** 알고리즘
+- **유연한 Entry API**
+- **메모리 안전** 관리
+
+Map과 함께 효율적인 데이터 관리를 경험하세요! 

@@ -1,0 +1,4 @@
+data/input.txt = alpha
+out/existing.txt = seed
+out/raw.txt = raw
+out/result.txt = alpha/text

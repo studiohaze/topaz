@@ -1,0 +1,5 @@
+
+function f() -> int {
+    "한,글".byteLength()
+}
+f()

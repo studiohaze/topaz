@@ -1,0 +1,2 @@
+newtype Bad = Map<int, int>
+JSON.stringify(Bad(Map.new()))

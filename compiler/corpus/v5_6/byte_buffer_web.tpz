@@ -1,0 +1,25 @@
+export function assemble() -> Bytes {
+    let mut buffer = ByteBuffer.allocate(6, 1)
+    buffer.set(0, 9)
+    buffer.set(1, 8)
+    buffer.copy(buffer, 0, 2, 4)
+    return buffer.toBytes()
+}
+
+export function largeBytes(size: int) -> Bytes {
+    let mut buffer = ByteBuffer.allocate(size)
+    buffer.fill(0, size, 165)
+    return buffer.toBytes()
+}
+
+export function echo(value: string) -> string {
+    return value
+}
+
+export function printJavaScript() -> string {
+    return "const n = 42;\n"
+}
+
+export function printTypeScript() -> string {
+    return "export const n: number = 42; \n"
+}

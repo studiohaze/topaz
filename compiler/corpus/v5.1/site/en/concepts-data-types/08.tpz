@@ -1,0 +1,14 @@
+// Type that can be one of several types
+type ID = int | string
+type Status = "pending" | "processing" | "completed" | "failed"
+
+let userID: ID = 12345
+let taskStatus: Status = "processing"
+
+// Type-specific handling with pattern matching
+function displayID(id: ID) -> string {
+    match id {
+        case numeric: int => "Numeric ID: {numeric}"
+        case text: string => "String ID: {text}"
+    }
+}

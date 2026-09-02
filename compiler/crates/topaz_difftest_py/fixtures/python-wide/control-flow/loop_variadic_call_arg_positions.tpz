@@ -1,0 +1,20 @@
+
+function sum(seed: int, ...xs: int) -> int {
+    let mut total = seed
+    for x in xs {
+        total = total + x
+    }
+    total
+}
+let result = sum(loop {
+    print("seed")
+    break 1
+}, loop {
+    print("tail-a")
+    break 2
+}, loop {
+    print("tail-b")
+    break 3
+})
+print("{result}")
+result

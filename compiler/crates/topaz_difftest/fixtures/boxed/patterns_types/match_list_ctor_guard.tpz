@@ -1,0 +1,3 @@
+let a = [Some(8)]
+match a { case [Some(x)] if x > 5 => x
+case _ => 0 }

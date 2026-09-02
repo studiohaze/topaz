@@ -1,0 +1,8 @@
+
+import model { Widget }
+function main() -> string {
+    let scale = 999
+    let w = Widget { label: "bolt" }
+    "{w.size}:{scale}"
+}
+main()

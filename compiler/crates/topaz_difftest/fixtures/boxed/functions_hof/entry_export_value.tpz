@@ -1,0 +1,4 @@
+export const K = 2
+export function f() -> int { K }
+export let v = f()
+v

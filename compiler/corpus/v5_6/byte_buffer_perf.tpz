@@ -1,0 +1,41 @@
+export function writeTenMillion() -> int {
+    let mut buffer = ByteBuffer.allocate(10000000)
+    for index in 0..9999999 {
+        buffer.set(index, index % 251)
+    }
+    return buffer.get(0) + buffer.get(9999999)
+}
+
+export function bulkFillCopy() -> int {
+    let mut buffer = ByteBuffer.allocate(1000000)
+    buffer.fill(0, 500000, 37)
+    buffer.copy(buffer, 0, 500000, 500000)
+    return buffer.get(0) + buffer.get(999999)
+}
+
+export function readTenMillion() -> int {
+    let mut buffer = ByteBuffer.allocate(10000000)
+    buffer.fill(0, 10000000, 7)
+    buffer.set(9999999, 9)
+    let mut checksum = 0
+    for index in 0..9999999 {
+        checksum = buffer.get(index)
+    }
+    return checksum
+}
+
+export function assembleSmallRaster() -> Bytes {
+    let width = 64
+    let height = 64
+    let mut pixels = ByteBuffer.allocate(width * height * 4)
+    for y in 0..63 {
+        for x in 0..63 {
+            let offset = (y * width + x) * 4
+            pixels.set(offset, x)
+            pixels.set(offset + 1, y)
+            pixels.set(offset + 2, (x + y) % 256)
+            pixels.set(offset + 3, 255)
+        }
+    }
+    return pixels.toBytes()
+}

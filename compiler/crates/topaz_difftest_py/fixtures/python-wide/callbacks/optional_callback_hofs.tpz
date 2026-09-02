@@ -1,0 +1,24 @@
+
+function inc(x: int) -> int {
+    x + 1
+}
+function maybeInc(x: int) -> Option<int> {
+    Some(x + 1)
+}
+function main() {
+    let xs: Option<Array<int>> = Some([1, 2])
+    let noneXs: Option<Array<int>> = None
+    let opt: Option<Option<int>> = Some(Some(3))
+    let res: Option<Result<int, string>> = Some(Ok(4))
+    let mapped = xs?.map(inc)
+    let skipped = noneXs?.map((x) => x / 0)
+    let flat = opt?.flatMap(maybeInc)
+    let out = res?.map(inc)
+    {
+        mapped: mapped,
+        skipped: skipped,
+        flat: flat,
+        out: out,
+    }
+}
+main()

@@ -1,0 +1,1 @@
+[ for x in [1, 2, 3] for y in [1, 2, 3] if x < y => x * 10 + y ]

@@ -1,0 +1,10 @@
+function items() -> Array<int> { print("iter")
+  [1, 2]
+}
+function keep(x: int) -> bool { print("if{x}")
+  x == 2
+}
+function produce(x: int) -> int { print("body{x}")
+  x
+}
+[ for x in items() if keep(x) => produce(x) ]

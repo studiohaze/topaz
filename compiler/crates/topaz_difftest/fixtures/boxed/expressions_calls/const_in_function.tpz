@@ -1,0 +1,3 @@
+function f() { const C = 7
+C + 1 }
+f()

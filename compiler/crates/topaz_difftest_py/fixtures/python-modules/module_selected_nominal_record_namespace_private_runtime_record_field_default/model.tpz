@@ -1,0 +1,3 @@
+
+import config as cfg
+export record User { name: string, age: int = cfg.inner.base }

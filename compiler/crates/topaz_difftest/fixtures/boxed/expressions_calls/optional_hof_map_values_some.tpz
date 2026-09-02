@@ -1,0 +1,8 @@
+let mut m = Map.new()
+m.insert("a", 1)
+m.insert("b", 2)
+let om: Option<Map<string, int>> = Some(m)
+match om?.mapValues((v) => v * 10) {
+  case Some(mm) => mm.values
+  case None => []
+}

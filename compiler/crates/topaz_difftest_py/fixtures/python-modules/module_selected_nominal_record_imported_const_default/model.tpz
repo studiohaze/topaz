@@ -1,0 +1,3 @@
+
+import config { base as importedBase }
+export record User { name: string, age: int = importedBase * 2 }

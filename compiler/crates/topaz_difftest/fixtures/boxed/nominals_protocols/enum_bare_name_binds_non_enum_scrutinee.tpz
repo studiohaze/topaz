@@ -1,0 +1,6 @@
+enum Color { Red, Blue }
+let n = match 7 {
+  case red => red + 1
+}
+print("{n}")
+0

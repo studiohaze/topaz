@@ -1,0 +1,6 @@
+function main() -> int {
+log()
+function log() -> int { 1 }
+0
+}
+main()

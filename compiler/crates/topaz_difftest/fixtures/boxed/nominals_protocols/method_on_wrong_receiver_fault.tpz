@@ -1,0 +1,7 @@
+record P { x: int }
+impl P {
+  function plus(self, n: int) -> int { self.x + n }
+}
+let y = 5
+print("{y.plus(1)}")
+0

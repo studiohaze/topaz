@@ -1,0 +1,3 @@
+export function makeBuffer() -> ByteBuffer {
+    return ByteBuffer.allocate(1)
+}

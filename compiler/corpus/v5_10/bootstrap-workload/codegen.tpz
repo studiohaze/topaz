@@ -1,0 +1,25 @@
+import order { OrderedNames }
+import syntax { Diagnostic, Syntax }
+
+function emitNode(node: Syntax) -> string {
+  if node.kind == "atom" {
+    "{node.text}@{node.lo}:{node.hi}"
+  } else {
+    "{node.text}({node.children.map(emitNode).join(",")})"
+  }
+}
+
+function emitDiagnostic(diagnostic: Diagnostic) -> string {
+  "{diagnostic.code}@{diagnostic.lo}:{diagnostic.hi}:{diagnostic.message}"
+}
+
+export function emitReport(
+  root: Syntax,
+  diagnostics: Array<Diagnostic>,
+  names: OrderedNames,
+) -> string {
+  let generated = emitNode(root)
+  let errors = diagnostics.map(emitDiagnostic).join("|")
+  let ordered = names.keys.join(",")
+  "{generated}\nkeys={ordered}\ndiagnostics={errors}"
+}

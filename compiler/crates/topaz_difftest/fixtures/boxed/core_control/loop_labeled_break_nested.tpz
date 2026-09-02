@@ -1,0 +1,6 @@
+let r = loop 'outer {
+  loop {
+    break 'outer 7
+  }
+}
+r

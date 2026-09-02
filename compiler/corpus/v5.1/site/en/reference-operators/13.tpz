@@ -1,0 +1,10 @@
+let user = { name: "Ann", age: 30 }
+let older = user{ age: 31 }
+
+function sum(...numbers: int) -> int {
+    let mut total = 0
+    for number in numbers {
+        total += number
+    }
+    total
+}

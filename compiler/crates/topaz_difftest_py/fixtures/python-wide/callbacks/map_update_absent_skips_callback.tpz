@@ -1,0 +1,8 @@
+
+function main() -> int {
+    let mut m = Map.new()
+    m.insert("a", 1)
+    m.update("z", 7, (v) => v / 0)
+    m.getOr("z", -1)
+}
+main()

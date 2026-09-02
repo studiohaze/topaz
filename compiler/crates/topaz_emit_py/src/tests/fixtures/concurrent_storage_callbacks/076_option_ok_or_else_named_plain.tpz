@@ -1,0 +1,11 @@
+
+function late() -> int {
+    6
+}
+
+let value: Option<int> = None
+let out = value.okOrElse(f: late)
+match out {
+    case Ok(_) => -1
+    case Err(code) => code
+}

@@ -1,0 +1,24 @@
+
+function add(acc: int, x: int) -> int {
+    acc + x
+}
+
+function sub(acc: int, x: int) -> int {
+    acc - x
+}
+
+function mul(acc: int, x: int) -> int {
+    acc * x
+}
+
+let mut base = []
+let callbacks = [...base, add, sub, mul]
+
+let r = concurrent {
+    slow: {
+        let xs = [1, 2, 3]
+        xs.reduce(10, callbacks[2])
+    }
+    fast: 0
+}
+r.slow + r.fast

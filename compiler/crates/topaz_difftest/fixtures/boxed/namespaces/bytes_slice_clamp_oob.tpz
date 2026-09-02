@@ -1,0 +1,1 @@
+Bytes.encodeUtf8("foobar").slice(0, 99).toHex()

@@ -1,0 +1,116 @@
+{
+  "schema": "lispex.f11-guest-kernel-dependency-allowlist/v0",
+  "status": "private-draft-source-and-transitive-closure-audited",
+  "public_contract": false,
+  "source_authority": "docs/bounded-execution/guest-kernel-roots.v0.json",
+  "cargo_manifest": {
+    "path": "interp/Cargo.toml",
+    "sha256": "efc7c15c8eef2e28e3c92c32beed4803060dc3061521f394da7644204e51e472"
+  },
+  "cargo_lock": {
+    "path": "Cargo.lock",
+    "sha256": "2f2f4852e0f2c116fc9af1a26eea5def8b3b400dd4fd1f35e31cc2e06aa08f9d"
+  },
+  "allowed_external_packages": [
+    {
+      "crate": "num_bigint",
+      "package": "num-bigint",
+      "version": "0.4.8",
+      "checksum": "c89e69e7e0f03bea5ef08013795c25018e101932225a656383bd384495ecc367"
+    },
+    {
+      "crate": "num_integer",
+      "package": "num-integer",
+      "version": "0.1.46",
+      "checksum": "7969661fd2958a5cb096e56c8e1ad0444ac2bbcd0061bd28660485a44879858f"
+    },
+    {
+      "crate": "num_rational",
+      "package": "num-rational",
+      "version": "0.4.2",
+      "checksum": "f83d14da390562dca69fc84082e73e548e1ad308d24accdedd2720017cb37824"
+    },
+    {
+      "crate": "num_traits",
+      "package": "num-traits",
+      "version": "0.2.19",
+      "checksum": "071dfc062690e90b734c0b2273ce72ad0ffa95f0c74596bc250dcfd960262841"
+    },
+    {
+      "crate": "serde",
+      "package": "serde",
+      "version": "1.0.219",
+      "checksum": "5f0e2c6ed6606019b4e29e69dbaba95b11854410e5347d525002456dbbb786b6"
+    },
+    {
+      "crate": "serde_json",
+      "package": "serde_json",
+      "version": "1.0.140",
+      "checksum": "20068b6e96dc6c9bd23e01df8827e6c7e1f2fddd43c21810382803c136b99373"
+    },
+    {
+      "crate": "sha2",
+      "package": "sha2",
+      "version": "0.10.8",
+      "checksum": "793db75ad2bcafc3ffa7c68b215fee268f537982cd901d132f89c6343f3a3dc8"
+    }
+  ],
+  "external_imports_by_source": {
+    "interp/src/bounded_execution.rs": [],
+    "interp/src/bytecode.rs": [],
+    "interp/src/bytecode_compile.rs": [],
+    "interp/src/bytecode_vm.rs": [],
+    "interp/src/canonical.rs": ["sha2"],
+    "interp/src/core.rs": [],
+    "interp/src/core_ir.rs": ["serde", "serde_json"],
+    "interp/src/core_ir_lower.rs": [],
+    "interp/src/draft_meter.rs": [],
+    "interp/src/embed_product.rs": [],
+    "interp/src/embed_value.rs": [
+      "num_bigint",
+      "num_integer",
+      "num_rational",
+      "sha2"
+    ],
+    "interp/src/error.rs": [],
+    "interp/src/eval.rs": [],
+    "interp/src/normalize.rs": [],
+    "interp/src/number.rs": [
+      "num_bigint",
+      "num_integer",
+      "num_rational",
+      "num_traits"
+    ],
+    "interp/src/reader.rs": [],
+    "interp/src/syntax.rs": ["num_bigint", "num_rational"],
+    "interp/src/value.rs": ["num_bigint", "num_rational"]
+  },
+  "forbidden_guest_source_capabilities": [
+    "filesystem",
+    "environment",
+    "clock",
+    "network",
+    "process",
+    "thread",
+    "host-randomness",
+    "ffi",
+    "unsafe",
+    "compile-time-host-input"
+  ],
+  "collection_policy": {
+    "default_hash_map_forbidden": true,
+    "default_hash_set_forbidden": true,
+    "ordered_guest_tables": ["BTreeMap", "BTreeSet"],
+    "deterministic_hash_scratch": {
+      "source": "interp/src/eval.rs",
+      "alias": "DeterministicHashSet",
+      "builder": "BuildHasherDefault<DefaultHasher>",
+      "purpose": "fallibly reserved, iteration-invisible structural-equality visited set"
+    }
+  },
+  "source_dependency_allowlist_complete": true,
+  "transitive_closure_authority": "docs/bounded-execution/transitive-unsafe-import-closure.v0.json",
+  "transitive_dependency_unsafe_audit_complete": true,
+  "import_free_wasm_artifact_audit_complete": true,
+  "implementation_ready": false
+}

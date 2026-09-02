@@ -1,0 +1,3 @@
+let newtype = 5
+let value: int = newtype
+print("{value}")

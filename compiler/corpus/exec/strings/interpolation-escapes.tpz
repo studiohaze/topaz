@@ -1,0 +1,4 @@
+let name = "topaz"
+print("hi {name}{1 + 1}")
+print("tab:\there")
+print("brace: \{x\}")

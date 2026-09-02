@@ -1,0 +1,6 @@
+
+let mut base = 36
+export function setBase(value: int) -> unit {
+    base = value
+}
+export record User { age: int = base }

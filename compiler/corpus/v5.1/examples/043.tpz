@@ -1,0 +1,2 @@
+let mut configPath: string | null = null
+configPath ??= "default.toml"

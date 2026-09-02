@@ -1,0 +1,10 @@
+enum Shape {
+    Circle(int),
+    Dot,
+}
+
+let shape: Shape = Shape.Dot
+match shape {
+    case Circle(1) => print("one")
+    case Dot => print("dot")
+}

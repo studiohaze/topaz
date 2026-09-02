@@ -1,0 +1,13 @@
+// factorial.tpz — a typed, recursive function with early return.
+// Run:   topaz run examples/factorial.tpz
+// Build: topaz build examples/factorial.tpz --out-dir out --run
+
+function factorial(n: int) -> int {
+    if n < 2 {
+        return 1
+    }
+    return n * factorial(n - 1)
+}
+
+print("5! = {factorial(5)}")
+print("10! = {factorial(10)}")

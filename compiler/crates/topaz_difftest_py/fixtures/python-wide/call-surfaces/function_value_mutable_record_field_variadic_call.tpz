@@ -1,0 +1,23 @@
+
+function sum(seed: int, ...xs: int) -> int {
+    let mut total = seed
+    for x in xs {
+        total = total + x
+    }
+    total
+}
+function scale(seed: int, ...xs: int) -> int {
+    let mut total = seed * 2
+    for x in xs {
+        total = total + x * 2
+    }
+    total
+}
+function main() -> int {
+    let mut handlers = { total: sum }
+    let before = handlers.total(1, 2, 3)
+    handlers.total = scale
+    let after = handlers.total(1, 2, 3)
+    before * 10 + after
+}
+main()

@@ -1,0 +1,18 @@
+
+import model { UserId as Uid }
+function main() -> string {
+    let id: Uid = Uid(41)
+    let direct = id.value()
+    let matched = match id {
+        case Uid(value) => value + 1
+    }
+    let typed = match id {
+        case found: Uid => found.value() + 2
+        case _ => 0
+    }
+    let ids = set { id, Uid(41), Uid(42) }
+    let mut m = Map.new()
+    m.insert(id, "hit")
+    "{id}:{direct}:{matched}:{typed}:{id == Uid(41)}:{Uid(40) < id}:{ids.length}:{m.getOr(Uid(41), "miss")}"
+}
+main()

@@ -1,0 +1,18 @@
+export record Model {
+  source: string,
+  status: string,
+}
+
+export enum Msg {
+  SourceChanged,
+  Reset,
+  OpenDocument,
+  SaveDraft,
+  ForgetDraft,
+  DownloadMarkdown,
+  LocalCompleted,
+}
+
+export function sampleSource() -> string {
+  "# Markdown Live\n\nWrite **Topaz** and see a safe typed DOM preview.\n\n- local-first\n- source-free\n\n| Surface | State |\n|---|---|\n| Web App | ready |\n\nRaw HTML stays text: <script>alert(1)</script>"
+}

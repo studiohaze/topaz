@@ -1,0 +1,6 @@
+
+function f() -> int {
+    let xs = [1, 2]
+    xs[-1]
+}
+f()

@@ -1,0 +1,8 @@
+let mut prices: Map<string, int> = Map.new()
+prices.insert("apple", 100)
+
+let apple = prices.get("apple")      // Some(100)
+let melon = prices.get("melon")      // None
+
+let scores = [80, 90]
+let outside = scores.get(-1)         // None; scores[-1] would fault

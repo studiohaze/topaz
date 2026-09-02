@@ -1,0 +1,104 @@
+// Resolution entry point for the embedded self compiler.
+// Graph discovery and scope walking are delegated to resolver leaves; this file
+// admits host facts and assembles the public resolved preview.
+
+import types {
+  PreviewGeneratedStdModule,
+  PreviewHostFact,
+  PreviewHostQuery,
+  PreviewResolvedDiagnostic,
+  ResolveResult,
+}
+import resolver.graph {
+  dependencyOrder,
+  diagnoseCycles,
+  discoverModuleGraph,
+  moduleDependencyCatalog,
+  moduleIdentity,
+  parseModule,
+  pendingResult,
+  readEntrySource,
+  validateEntryPath,
+  validateEntryPhysicalContainment,
+}
+import resolver.model_facts {
+  ResolverInputs,
+  addQuery,
+  resolverHostFacts,
+}
+import resolver.modules_tables { buildModuleTables }
+import resolver.validation_init {
+  rejectedResult,
+  resolvedResult,
+  validateImportSurfaces,
+}
+
+// Resolves an entry module from explicit host facts without performing I/O.
+export function resolvePreview(
+  entry: string,
+  root: string,
+  facts: Array<PreviewHostFact>,
+  externModules: Array<string>,
+  generatedStdModules: Array<PreviewGeneratedStdModule>,
+  maxAstNodes: int,
+  maxAstDepth: int,
+) -> Result<ResolveResult, string> {
+  let mut diagnostics: Array<PreviewResolvedDiagnostic> = []
+  if !validateEntryPath(entry, root, diagnostics) {
+    return Ok(rejectedResult([], [], diagnostics))
+  }
+  let hostFacts = resolverHostFacts(facts)
+  let inputs = ResolverInputs {
+    root: root,
+    hostFacts: hostFacts,
+    externModules: externModules,
+    generatedStdModules: generatedStdModules,
+    maxAstNodes: maxAstNodes,
+    maxAstDepth: maxAstDepth,
+  }
+  let mut queries: Array<PreviewHostQuery> = []
+  addQuery(queries, inputs.hostFacts, "physical-containment", entry)
+  addQuery(queries, inputs.hostFacts, "read-source", entry)
+  if queries.length > 0 {
+    return Ok(pendingResult(queries))
+  }
+  if !validateEntryPhysicalContainment(entry, inputs.hostFacts, diagnostics) {
+    return Ok(rejectedResult([], [], diagnostics))
+  }
+  let entrySource = match readEntrySource(entry, inputs.hostFacts, diagnostics) {
+    case Some(source) => source
+    case None => return Ok(rejectedResult([], [], diagnostics))
+  }
+
+  let entryDraft = parseModule(
+    0,
+    moduleIdentity(entry, root),
+    entry,
+    entrySource,
+    true,
+    false,
+    false,
+    maxAstNodes,
+    maxAstDepth,
+  )?
+  let graph = discoverModuleGraph(entryDraft, inputs, queries, diagnostics)?
+  if queries.length > 0 {
+    return Ok(pendingResult(queries))
+  }
+
+  let discovered = graph.modules
+  let edges = graph.edges
+  let dependencies = moduleDependencyCatalog(discovered, edges)
+  diagnoseCycles(dependencies, edges, diagnostics)
+  let ordered = if diagnostics.length == 0 {
+    dependencyOrder(discovered, dependencies)
+  } else {
+    discovered
+  }
+  if diagnostics.length > 0 {
+    return Ok(rejectedResult(ordered, dependencies.publicEdges, diagnostics))
+  }
+  let tables = buildModuleTables(ordered, diagnostics)
+  validateImportSurfaces(ordered, tables, diagnostics)
+  resolvedResult(ordered, dependencies.publicEdges, tables, diagnostics)
+}

@@ -1,0 +1,26 @@
+
+function spin(x: int) -> int {
+    let mut i = 0
+    while i < 200 {
+        i = i + 1
+    }
+    1 / 0
+}
+
+let mut callbacks = [spin]
+
+concurrent {
+    left: {
+        let xs = [1]
+        xs.map(callbacks[0])
+    }
+    right: {
+        let ys = [2]
+        ys.map(callbacks[0])
+    }
+    boom: {
+        let zs = [1]
+        zs[2]
+    }
+}
+0

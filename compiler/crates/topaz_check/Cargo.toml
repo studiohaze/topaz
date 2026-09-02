@@ -1,0 +1,20 @@
+[package]
+name = "topaz_check"
+version.workspace = true
+license.workspace = true
+edition = "2024"
+
+[dependencies]
+topaz_diag = { path = "../topaz_diag" }
+topaz_syntax = { path = "../topaz_syntax" }
+# The typed-HIR vehicle: the checker converts its rich `Type` -> `MonoTy` after a
+# clean check and produces a `TypedUnit`. Direction is `check -> hir` (allowed);
+# `hir -> check` is forbidden, so emit/difftest stay off the checker (CDR-006 §7).
+topaz_hir = { path = "../topaz_hir" }
+
+[dev-dependencies]
+topaz_parser = { path = "../topaz_parser" }
+corpus-extract = { path = "../../tools/corpus-extract" }
+
+[lints]
+workspace = true

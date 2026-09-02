@@ -1,0 +1,79 @@
+{
+  "schema": "lispex.source-frontend/v1",
+  "profile": "lispex-profile-1.5",
+  "request": {
+    "source": "raw-bytevector",
+    "logical_source_id": "path-neutral-utf8-label",
+    "source_digest": "sha256-of-exact-source-bytes",
+    "source_concatenation": false,
+    "host_utf8_decoder_calls": 0
+  },
+  "utf8": {
+    "mode": "strict",
+    "bom": "ordinary-source-scalar",
+    "invalid_sequence": "E100",
+    "spans": "one-based-line-and-unicode-scalar-column",
+    "identity_spans": "half-open-utf8-byte-range"
+  },
+  "reader": {
+    "comments": [
+      "line-semicolon",
+      "nestable-block"
+    ],
+    "datums": [
+      "boolean",
+      "integer",
+      "rational",
+      "finite-real",
+      "character",
+      "string",
+      "symbol",
+      "proper-list",
+      "dotted-list",
+      "vector",
+      "bytevector",
+      "quote-shorthand",
+      "quasiquote-shorthand",
+      "unquote-shorthand",
+      "unquote-splicing-shorthand"
+    ],
+    "empty_source": "success-zero-roots",
+    "multi_root": "evaluate-in-source-order-one-shared-global-environment",
+    "datum_comment": "forbidden-E120"
+  },
+  "source_forms": {
+    "core": [
+      "literal",
+      "variable",
+      "quote",
+      "if",
+      "lambda",
+      "begin",
+      "set!",
+      "define",
+      "let",
+      "letrec",
+      "values",
+      "application",
+      "guard"
+    ],
+    "derived": [
+      "quasiquote",
+      "let*",
+      "named-let",
+      "cond",
+      "case",
+      "and",
+      "or",
+      "when",
+      "unless",
+      "do",
+      "function-define",
+      "internal-define"
+    ],
+    "declaration_policy": "top-level-and-body-leading-internal-definitions",
+    "module_policy": "header-flattened-into-one-global-namespace",
+    "hygiene": "hidden-intrinsics-and-unforgeable-monotonic-temporaries",
+    "normalization_identity": "canonical-span-free-core-sexpr-plus-origin-map"
+  }
+}

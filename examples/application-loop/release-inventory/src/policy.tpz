@@ -1,0 +1,24 @@
+export type Policy = { requiredStatus: string, minimumScore: int }
+
+function field(obj: JSONValue, name: string) -> Result<JSONValue, string> {
+  match obj.get(name) {
+    case Some(value) => Ok(value)
+    case None => Err("missing policy.{name}")
+  }
+}
+
+export function parsePolicy(text: string) -> Result<Policy, string> {
+  let document = TOML.toJson(TOML.parse(text)?)
+  let policy = field(document, "policy")?
+  let requiredValue = field(policy, "required_status")?
+  let minimumValue = field(policy, "minimum_score")?
+  let required = requiredValue.asString() ?? ""
+  let minimum = minimumValue.asInt() ?? -1
+  if required.byteLength() == 0 {
+    return Err("policy.required_status must not be empty")
+  }
+  if minimum < 0 {
+    return Err("policy.minimum_score must be a non-negative int")
+  }
+  Ok({ requiredStatus: required, minimumScore: minimum })
+}

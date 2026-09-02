@@ -1,0 +1,9 @@
+function mkf() -> (int, int) -> int {
+  print("F")
+  (a: int, x: int) => a + x
+}
+function mki() -> int {
+  print("I")
+  100
+}
+[1, 2].reduce(f: mkf(), initial: mki())

@@ -1,0 +1,84 @@
+{
+  "schema": "topaz.compiler-support-contract/v2",
+  "statusSchema": "topaz.compiler-support/v2",
+  "compilationProductSchema": "topaz.compilation-product/v1",
+  "selfCompilationProductSchema": "topaz.self-compilation-product/v1",
+  "phaseTraceSchema": "topaz.compiler-phase-trace/v1",
+  "selectors": [
+    "rust",
+    "self"
+  ],
+  "selectionOrigins": [
+    "explicit",
+    "current-default",
+    "compatibility"
+  ],
+  "defaultCompiler": "self",
+  "defaultScope": "supported-current-mode-routes",
+  "recoveryCompiler": "rust",
+  "compatibilityCompiler": "rust",
+  "bootstrapSeedEngine": "rust-stage0",
+  "silentFallback": false,
+  "compilerStatuses": [
+    "supported",
+    "unhealthy"
+  ],
+  "routeStatuses": [
+    "supported",
+    "planned",
+    "declined",
+    "repository-only"
+  ],
+  "requiredTopLevelFields": [
+    "schema",
+    "productVersion",
+    "languageMode",
+    "selfCompilationProductSchema",
+    "defaultCompiler",
+    "defaultScope",
+    "recoveryCompiler",
+    "compatibilityCompiler",
+    "bootstrapSeedEngine",
+    "silentFallback",
+    "selectionOrigins",
+    "compilers",
+    "routes",
+    "previewProducers"
+  ],
+  "requiredCompilerFields": [
+    "selector",
+    "producer",
+    "status"
+  ],
+  "requiredSelfIdentityFieldsWhenHealthy": [
+    "producerStage",
+    "sourceSetId",
+    "programImageSha256",
+    "programImagePayloadSha256",
+    "exchangeSchema",
+    "irSchema",
+    "runtimeTemplate"
+  ],
+  "requiredRouteFields": [
+    "command",
+    "rust",
+    "self",
+    "omitted",
+    "condition"
+  ],
+  "previewProducerNamespace": [
+    "topaz-stage1",
+    "topaz-stage2"
+  ],
+  "rules": [
+    "omitted selection is self only on supported current-mode routes",
+    "declared compatibility routes resolve to rust before compiler work",
+    "self selects only the validated current-source Stage 2 C2 image",
+    "unsupported self routes fail before source, output, cache, or target work",
+    "compiler failure never invokes another compiler or reuses a previous result",
+    "managed artifact readers continue to accept predecessor provenance without selectionOrigin",
+    "support inspection reports self health without initializing a target compilation",
+    "recovery is explicit and never automatic",
+    "preview producer selection is separate from ordinary compiler selection"
+  ]
+}

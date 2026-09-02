@@ -1,0 +1,1 @@
+Cli.hasFlag(["--verbose", "--out", "file", "input"], "--verbose")

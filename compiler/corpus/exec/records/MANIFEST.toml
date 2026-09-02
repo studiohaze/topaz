@@ -1,0 +1,18 @@
+# corpus/exec/records — execution transcripts (CDR-003 §11)
+
+[totals]
+recorded = 2
+runnable = 2
+pending = 0
+
+[[fixture]]
+file = "copy-update.tpz"
+phase = "exec"
+versions = "5.2"
+result = "ok"
+
+[[fixture]]
+file = "generic-nominals.tpz"
+phase = "exec"
+versions = "5.4"
+result = "ok"

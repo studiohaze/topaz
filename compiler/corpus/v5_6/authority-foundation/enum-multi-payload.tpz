@@ -1,0 +1,6 @@
+enum Pair {
+    Values(int, string),
+}
+
+let pair: Pair = Pair.Values(7, "seven")
+print("{pair}")

@@ -1,0 +1,6 @@
+function main() -> int {
+let value = ((() => later()))()
+function later() -> int { 1 }
+value
+}
+main()

@@ -1,0 +1,5 @@
+// main.tpz
+import utils.strings
+
+let line = strings.shout(strings.greeting)
+print(line)    // "hello!"

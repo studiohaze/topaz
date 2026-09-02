@@ -1,0 +1,4 @@
+let numbers: Array<int> = [1, 2, 3]
+let maybeName: Option<string> = Some("Alice")
+let parsed: Result<User, string> = parseUser(rawJson)
+let cache: Map<string, int> = Map.new()

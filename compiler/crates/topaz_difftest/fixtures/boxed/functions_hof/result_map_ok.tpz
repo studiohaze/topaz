@@ -1,0 +1,2 @@
+let ok: Result<int, string> = Ok(5)
+ok.map((x) => x * 2)

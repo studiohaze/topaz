@@ -1,0 +1,3 @@
+let as = 1
+let r = { as: 2 }
+let v = r.as

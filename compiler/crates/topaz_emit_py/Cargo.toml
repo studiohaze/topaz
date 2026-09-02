@@ -1,0 +1,20 @@
+[package]
+name = "topaz_emit_py"
+version.workspace = true
+license.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+topaz_diag = { workspace = true }
+topaz_check = { workspace = true }
+topaz_syntax = { workspace = true }
+topaz_resolve = { workspace = true }
+topaz_value = { workspace = true }
+
+[dev-dependencies]
+topaz_interp = { workspace = true }
+
+[lints]
+workspace = true

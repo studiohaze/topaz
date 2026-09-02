@@ -1,0 +1,13 @@
+let mut later: () -> string = () => "unset"
+function scenario() -> Result<int, string> {
+  using file = open("input.txt")? {
+    later = () => match file.read() {
+      case Ok(text) => text
+      case Err(e) => e
+    }
+    return Ok(7)
+  }
+  Ok(0)
+}
+let ignored = scenario()
+later()

@@ -1,0 +1,4 @@
+let word = "topaz"
+let scalars = word.scalars()           // ["t", "o", "p", "a", "z"]
+let length = word.scalars().length     // 5
+print("Scalar count: {length}")

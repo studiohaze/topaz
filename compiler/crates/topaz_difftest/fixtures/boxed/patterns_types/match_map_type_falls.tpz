@@ -1,0 +1,6 @@
+let mut m = Map.new()
+m.insert("k", 1)
+match m {
+case x: Map<string, string> => 1
+case _ => 0
+}

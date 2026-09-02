@@ -1,0 +1,5 @@
+// Step forward
+for i in 0..10 by 2 { print("{i}") }       // 0,2,4,6,8,10
+
+// Step backward with negative stride
+for i in 10..0 by -3 { print("{i}") }      // 10,7,4,1

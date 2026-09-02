@@ -1,0 +1,3 @@
+let mut xs = [{ n: "c", k: 3 }, { n: "a", k: 1 }, { n: "b", k: 2 }]
+xs.sortBy((r) => r.k)
+xs.map((r) => r.n)

@@ -1,0 +1,58 @@
+---
+title: "Lena Code 연동"
+description: "Lena Code 변환 워크플로에서 토파즈를 입력 언어와 출력 언어로 쓰는 방법입니다."
+---
+
+<Tip
+  tone="warning"
+  content="이 페이지는 변환 흐름을 보여주기 위해 Rust, TypeScript, Topaz 예제를 함께 보여줍니다. Rust와 TypeScript 예제는 토파즈 문법이 아닙니다."
+>
+  혼합 언어 예제
+</Tip>
+
+Lena Code는 토파즈의 자매 제품입니다. Lena Code 변환 워크플로는 토파즈를 입력
+언어로도, 출력 언어로도 사용할 수 있습니다. 토파즈는 작고 검사 가능한 소스 표면과
+결정적인 실행에 집중하고, Lena Code는 언어 사이의 변환 흐름을 다룹니다.
+
+## 변환 스냅샷
+
+### Rust → TypeScript
+
+```rust
+pub fn greet(name: &str) -> String {
+    format!("Hello, {}!", name)
+}
+```
+
+```typescript
+export function greet(name: string): string {
+  return `Hello, ${name}!`;
+}
+```
+
+### Rust → 토파즈
+
+```rust
+pub fn add(a: i32, b: i32) -> i32 {
+    a + b
+}
+```
+
+```topaz
+function add(a: int, b: int) -> int {
+    a + b
+}
+```
+
+이 예시는 연동 경계의 모양을 보여줍니다. 토파즈가 대상 언어라면 출력은 정식 토파즈 표면에 머물러야 합니다. run과 build의 차분 검증은 지원되는 토파즈 프로그램을 위한 공학적 게이트입니다. 이 사이트에서 증명이라고 부르는 것은 딱 그 검증까지입니다.
+
+## 접근 방법
+
+- Lena Code 자체의 동작과 지원 언어 조합은 <a href="https://www.lenacode.com" target="_blank" rel="noopener noreferrer">lenacode.com</a>에서 확인하세요.
+- 변환으로 나온 토파즈 코드는 보통의 토파즈 코드입니다. 파싱하고 실행하고, 출력을 만드는 프로그램이라면 run 경로와 빌드 산출물의 결과를 비교합니다.
+
+## 주의 사항
+
+- 위 Rust와 TypeScript 예제는 토파즈 파서가 받아들이는 코드가 아닙니다.
+- 토파즈는 임의의 외부 언어와 자동 왕복 변환을 제공한다고 주장하지 않습니다.
+- 로직을 토파즈로 옮길 때는 Result-first 에러 처리와 패턴 매칭을 염두에 두면 좋습니다.

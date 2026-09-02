@@ -1,0 +1,565 @@
+---
+title: '제어 흐름'
+description: '토파즈의 제어 흐름 구조를 마스터하세요. 조건문, 반복문, 패턴 매칭, 가드 조건을 통해 프로그램의 실행 흐름을 효과적으로 제어하는 방법을 학습합니다.'
+covers: '§5, §6, §10'
+---
+
+> **라이브러리 이름 안내**: 표준 라이브러리 최소 표면을 벗어나는 도우미·멤버 호출(`Math.random`, `.endsWith`, `.contains`, `.all`, `데이터베이스에서사용자가져오기`, `사용자검증`, `사용자데이터처리`, `새사용자생성` 등)은 설명용 placeholder이며 canonical API가 아닙니다. `JSON.parse`는 전체 타이핑이 deferred 상태인 예약된 표준 라이브러리 이름입니다.
+
+제어 흐름은 프로그램이 **어떤 순서로 실행되는지**를 결정합니다. 토파즈는 작고 닫힌 제어 흐름 구조를 제공합니다 — 의도마다 하나의 형태입니다.
+
+##  조건문
+
+### if 문
+
+```topaz
+let 나이 = 25
+let 점수 = 85
+
+// 기본 if 문
+if 나이 >= 18 {
+    print("성인입니다")
+}
+
+// if-else 문
+if 점수 >= 90 {
+    print("A등급")
+} else {
+    print("더 노력이 필요합니다")
+}
+
+// if-else if 체인
+if 점수 >= 90 {
+    print("A등급 - 우수")
+} else if 점수 >= 80 {
+    print("B등급 - 양호")
+} else if 점수 >= 70 {
+    print("C등급 - 보통")
+} else {
+    print("재시험이 필요합니다")
+}
+
+// 복합 조건
+let 사용자명 = "김토파즈"
+let 로그인시도 = 3
+
+if 사용자명 != "" && 로그인시도 < 5 {
+    print("로그인을 시도할 수 있습니다")
+}
+```
+
+### 조건식
+
+```topaz
+// 삼항 연산자 대신 if 표현식을 사용하세요
+let 성인여부 = if 나이 >= 18 { "성인" } else { "미성년자" }
+let 통과여부 = if 점수 >= 60 { "통과" } else { "탈락" }
+
+// 중첩 조건
+let 등급 = if 점수 >= 90 { "A" }
+    else if 점수 >= 80 { "B" }
+    else if 점수 >= 70 { "C" }
+    else { "F" }
+
+// 조건부 값
+let 할인율 = if 회원등급 == "VIP" { 0.2 }
+    else if 회원등급 == "골드" { 0.1 }
+    else { 0.05 }
+
+print("나이: {나이}, 상태: {성인여부}")
+print("점수: {점수}, 등급: {등급}")
+```
+
+### 표현식으로서의 if
+
+```topaz
+// if를 표현식으로 사용
+let 메시지 = if 시간 < 12 {
+    "좋은 아침입니다!"
+} else if 시간 < 18 {
+    "좋은 오후입니다!"
+} else {
+    "좋은 저녁입니다!"
+}
+
+// 복잡한 조건부 계산
+let 배송비 = if 주문금액 >= 50000 {
+    0
+} else if 거리 <= 10 {
+    3000
+} else {
+    5000
+}
+
+print(메시지)
+print("배송비: {배송비}원")
+```
+
+##  반복문
+
+### for 루프
+
+```topaz
+// 범위 기반 for 루프
+for i in 0..5 {
+    print("반복 {i}")
+}
+
+// 포함 범위 (inclusive)
+for i in 1..10 {
+    print("숫자: {i}")
+}
+
+// 배열 반복
+let 과일들 = ["사과", "바나나", "오렌지", "포도"]
+for 과일 in 과일들 {
+    print("과일: {과일}")
+}
+
+// 단계별 반복
+for i in 0..20 by 2 {
+    print("짝수: {i}")
+}
+```
+
+### while 루프
+
+Topaz는 일반 루프를 문(statement)으로 제공합니다. `while`은 `bool` 조건이 성립하는 동안 본문을 반복하며, 조건은 매 반복 전에 검사됩니다.
+
+```topaz
+// 예산에 도달할 때까지 누적
+let mut 합계 = 0
+let mut n = 1
+
+while 합계 + n <= 100 {
+    합계 = 합계 + n
+    n = n + 1
+}
+
+print("예산 내 합계: {합계}")
+
+// 카운트다운
+let mut 카운트다운 = 3
+while 카운트다운 > 0 {
+    print("T-마이너스 {카운트다운}")
+    카운트다운 = 카운트다운 - 1
+}
+```
+
+`while`은 문이며 값을 만들지 않습니다. 루프가 결과를 내야 하면 값을 만드는 `for`나 재귀를 사용하세요.
+
+### 루프 제어
+
+`break`는 가장 안쪽의 둘러싼 루프를 빠져나가고, `continue`는 다음 반복으로 건너뜁니다. 둘 다 `for` 문과 `while` 문 안에서 동작합니다.
+
+```topaz
+let mut 예산 = 100
+
+for 비용 in [30, -1, 25, 80, 10] {
+    if 비용 < 0 { continue }      // 잘못된 항목은 건너뜀
+    if 비용 > 예산 { break }      // 처음으로 살 수 없는 항목에서 중단
+    예산 = 예산 - 비용
+    print("{비용}에 구매, 남은 예산 {예산}")
+}
+```
+
+모든 요소를 처리하는 경우에는 루프 제어보다 평범한 exhaustive 분기가 더 명확할 때가 많습니다:
+
+```topaz
+for i in 1..20 {
+    if i % 15 == 0 {
+        print("{i}: FizzBuzz")
+    } else if i % 3 == 0 {
+        print("{i}: Fizz")
+    } else if i % 5 == 0 {
+        print("{i}: Buzz")
+    } else {
+        print("{i}")
+    }
+}
+```
+
+> 레이블이 있는 루프는 Topaz v5.2에 명시되어 있지 않습니다. 값을 수집하는 표현식으로 쓰인 `for`는 자신을 대상으로 하는 `break`나 `continue`를 포함할 수 없습니다 — 그 경우 문 형태의 `for`를 사용하세요.
+
+##  패턴 매칭 (match)
+
+### 기본 match 문
+
+```topaz
+let 요일 = "월요일"
+
+match 요일 {
+    case "월요일" => print("한 주의 시작!")
+    case "금요일" => print("불금!")
+    case 오늘 if 오늘 in ["토요일", "일요일"] => print("주말!")
+    case _ => print("평범한 요일")
+}
+
+// 값을 반환하는 match
+let 주말 = ["토요일", "일요일"]
+let 근무형태 = match 요일 {
+    case 오늘 if 오늘 in 주말 => "휴일"
+    case _ => "근무일"
+}
+
+print("오늘은 {근무형태}입니다")
+```
+
+### 타입-축소 match (TypePattern)
+
+```topaz
+let rawInput = "42"
+let 값 = JSON.parse(rawInput)
+
+match 값 {
+    case 텍스트: string => print("텍스트: {텍스트}")
+    case 개수: int => print("숫자: {개수}")
+    case 플래그: bool => print("플래그: {플래그}")
+    case _ => print("지원하지 않는 값")
+}
+```
+
+### 숫자 패턴 매칭
+
+```topaz
+let 점수 = 87
+
+let 등급 = match 점수 {
+    case 90..100 => "A"
+    case 80..<90 => "B"
+    case 70..<80 => "C"
+    case 60..<70 => "D"
+    case _ => "F"
+}
+
+// 가드 조건 사용
+let 평가 = match 점수 {
+    case x if x >= 95 => "완벽한 점수!"
+    case x if x >= 90 => "우수한 성과"
+    case x if x >= 80 => "양호한 결과"
+    case x if x >= 70 => "보통 수준"
+    case x if x >= 60 => "통과"
+    case _ => "재시험 필요"
+}
+
+print("점수: {점수}, 등급: {등급}, 평가: {평가}")
+```
+
+### 레코드 패턴 매칭
+
+```topaz
+let 사용자 = {
+    이름: "김토파즈",
+    나이: 25,
+    직업: "개발자",
+    위치: "서울"
+}
+
+// 레코드 구조 분해
+match 사용자 {
+    case { 이름: "김토파즈", 나이, 직업: "개발자" } => {
+        print("토파즈 개발자님, 나이: {나이}")
+    }
+    case { 나이: age, 위치: "서울" } if age < 30 => {
+        print("서울의 젊은 사용자")
+    }
+    case { 직업: "개발자", 위치 } => {
+        print("{위치}의 개발자")
+    }
+    case _ => {
+        print("일반 사용자")
+    }
+}
+
+// 중첩된 레코드 매칭
+let 주문 = {
+    고객: { 이름: "이토파즈", VIP: true },
+    항목들: ["노트북", "마우스"],
+    총액: 1500000
+}
+
+match 주문 {
+    case { 고객: { VIP: true }, 총액: amount } if amount > 1000000 => {
+        print("VIP 고객 대형 주문: {amount}원")
+    }
+    case { 고객: { 이름 }, 항목들: items } if items.length > 1 => {
+        print("{이름}님의 복수 아이템 주문")
+    }
+    case _ => {
+        print("일반 주문")
+    }
+}
+```
+
+### 배열 패턴 매칭
+
+```topaz
+let 숫자들 = [1, 2, 3, 4, 5]
+
+match 숫자들 {
+    case [] => print("빈 배열")
+    case [첫번째] => print("요소 하나: {첫번째}")
+    case [첫번째, 두번째] => print("두 요소: {첫번째}, {두번째}")
+    case [첫번째, ..나머지] => {
+        print("첫 번째: {첫번째}, 나머지: {나머지}")
+    }
+}
+
+// 특정 패턴 매칭
+let 점수목록 = [95, 87, 92]
+
+match 점수목록 {
+    case [100, ..] => print("만점으로 시작!")
+    case 점수들 if 점수들.length > 0 && 점수들[점수들.length - 1] == 100 => print("만점으로 끝!")
+    case [a, b, c] if a > 90 && b > 90 && c > 90 => print("모든 점수가 90점 이상!")
+    case 점수들 if filter(점수들, x => x >= 80).length == 점수들.length => print("모든 점수가 80점 이상")
+    case _ => print("일반적인 점수 분포")
+}
+```
+
+### Option과 Result 패턴 매칭
+
+```topaz
+// Option 타입 매칭
+let 선택값: Option<string> = Some("토파즈")
+
+match 선택값 {
+    case Some(값) => print("값이 있음: {값}")
+    case None => print("값이 없음")
+}
+
+// Result 타입 매칭
+function 나누기(a: int, b: int) -> Result<int, string> {
+    if b == 0 {
+        return Err("0으로 나눌 수 없습니다")
+    }
+    return Ok(a / b)
+}
+
+let 분자 = 10
+let 분모 = 2
+
+match 나누기(분자, 분모) {
+    case Ok(결과) => print("나누기 결과: {결과}")
+    case Err(오류) => print("오류: {오류}")
+}
+```
+
+> 생성자를 가진 사용자 정의 sum type은 Topaz v5.2에 명시되어 있지 않습니다. 단순 tagged state에는 문자열 리터럴 union(`type 상태 = "대기" | "처리중" | "완료" | "오류"`), nullable 패턴에는 `Option<T>`, error-or-success 패턴에는 `Result<T, E>`를 사용하세요.
+
+##  가드 조건과 고급 패턴
+
+### 복합 가드 조건
+
+```topaz
+let 온도 = 25
+let 습도 = 60
+let 계절 = "여름"
+
+match { 온도: 온도, 습도: 습도, 계절: 계절 } {
+    case { 온도, 습도, 계절: "여름" } if 온도 > 30 && 습도 > 70 => print("매우 덥고 습함")
+    case { 온도, 습도, 계절: "여름" } if 온도 > 25 && 습도 < 50 => print("따뜻하고 건조함")
+    case { 온도, 계절: "겨울" } if 온도 < 0 => print("매우 추움")
+    case { 온도, 습도 } if 온도 >= 20 && 온도 <= 25 && 습도 >= 40 && 습도 <= 60 => print("쾌적한 날씨")
+    case _ => print("보통 날씨")
+}
+```
+
+### 함수형 패턴 매칭
+
+```topaz
+// 재귀적 패턴 매칭으로 리스트 처리
+function 리스트합계(목록: Array<int>) -> int {
+    match 목록 {
+        case [] => 0
+        case [첫번째, ..나머지] => 첫번째 + 리스트합계(나머지)
+    }
+}
+
+print("리스트 합계: {리스트합계([1, 2, 3, 4, 5])}")  // 15
+```
+
+> `Array<T>`에 대한 재귀는 canonical이며, Topaz는 랭크-1 제네릭 함수 선언(`function 리스트합계<T>(...)` 형태, 타입 파라미터는 호출 지점에서 추론 — 데이터 타입 페이지 참고)을 지원합니다. 사용자 정의 generic sum type(예: 이진 트리 variant)은 Topaz v5.2에 명시되어 있지 않습니다.
+
+##  고급 제어 흐름 패턴
+
+### 루프와 패턴 매칭 결합
+
+```topaz
+let 작업목록 = [
+    { 타입: "이메일", 우선순위: 1, 내용: "회의 일정 확인" },
+    { 타입: "전화", 우선순위: 3, 내용: "고객 상담" },
+    { 타입: "문서", 우선순위: 2, 내용: "보고서 작성" }
+]
+
+for 작업 in 작업목록 {
+    match 작업 {
+        case { 타입: "이메일", 우선순위: 1, 내용 } => {
+            print("긴급 이메일 처리: {내용}")
+        }
+        case { 타입: 작업타입, 우선순위: 순위, 내용 } if 순위 <= 2 => {
+            print("중요 {작업타입} 작업: {내용}")
+        }
+        case { 타입, 내용 } => {
+            print("일반 {타입} 작업: {내용}")
+        }
+    }
+}
+```
+
+### 예외 처리와 제어 흐름
+
+```topaz
+// Result-first 에러 처리
+function 안전한파일읽기(파일명: string) -> Result<string, string> {
+    if !파일명.endsWith(".txt") {
+        return Err("텍스트 파일만 지원됩니다")
+    }
+    
+    // 파일 읽기 시뮬레이션
+    if Math.random() > 0.7 {
+        return Err("파일을 찾을 수 없습니다")
+    }
+    
+    return Ok("파일 내용입니다")
+}
+
+// 에러 처리를 포함한 제어 흐름
+for 파일명 in ["data.txt", "config.json", "readme.txt"] {
+    match 안전한파일읽기(파일명) {
+        case Ok(내용) => {
+            print("성공적으로 읽음: {파일명}")
+            print("내용: {내용}")
+            // 이 파일의 성공 경로
+        }
+        case Err(오류메시지) => {
+            print("오류 ({파일명}): {오류메시지}")
+            if 오류메시지.contains("지원되지") {
+                print("지원되지 않는 파일 형식, 기록함")
+            } else {
+                print("심각한 오류 기록함")
+            }
+        }
+    }
+}
+```
+
+### 조건부 실행 체인
+
+```topaz
+// 조건부 체이닝
+function 사용자처리(사용자id: int) -> Result<string, string> {
+    let 사용자데이터 = match 데이터베이스에서사용자가져오기(사용자id) {
+        case Ok(데이터) => 데이터
+        case Err(오류) => { return Err("사용자 조회 실패: {오류}") }
+    }
+    
+    let 검증결과 = match 사용자검증(사용자데이터) {
+        case Ok(_) => ()
+        case Err(오류) => { return Err("검증 실패: {오류}") }
+    }
+    
+    let 처리결과 = match 사용자데이터처리(사용자데이터) {
+        case Ok(결과) => 결과
+        case Err(오류) => { return Err("처리 실패: {오류}") }
+    }
+    
+    return Ok("처리 완료: {처리결과}")
+}
+
+```
+
+##  최적화와 베스트 프랙티스
+
+### 1. 조건문 최적화
+
+```topaz
+// 나쁜 예: 중복된 조건
+let 점수 = 85
+if 점수 >= 90 {
+    print("A등급")
+} else {
+    if 점수 >= 80 {
+        print("B등급")
+    } else {
+        if 점수 >= 70 {
+            print("C등급")
+        } else {
+            print("F등급")
+        }
+    }
+}
+
+// 좋은 예: match 사용
+let 등급 = match 점수 {
+    case 90..100 => "A"
+    case 80..<90 => "B"
+    case 70..<80 => "C"
+    case _ => "F"
+}
+print("{등급}등급")
+```
+
+### 2. 조기 반환 패턴
+
+```topaz
+function 사용자등록(이름: string, 이메일: string, 나이: int) -> Result<string, string> {
+    // 조기 검증 및 반환
+    if 이름 == "" {
+        return Err("이름이 필요합니다")
+    }
+    
+    if !이메일.contains("@") {
+        return Err("유효한 이메일이 필요합니다")
+    }
+    
+    if 나이 < 0 || 나이 > 120 {
+        return Err("유효한 나이가 필요합니다")
+    }
+    
+    // 모든 검증이 통과된 경우에만 처리
+    let 사용자 = 새사용자생성(이름, 이메일, 나이)
+    return Ok("사용자 등록 완료: {사용자.id}")
+}
+```
+
+### 3. 패턴 매칭 활용
+
+```topaz
+// 복잡한 비즈니스 로직을 패턴으로 표현
+type 주문상태 = "생성됨" | "결제완료" | "배송중" | "배송완료" | "취소됨"
+
+function 주문처리(상태: 주문상태, 결제금액: int, VIP여부: bool) -> string {
+    match { 상태: 상태, 금액: 결제금액, vip: VIP여부 } {
+        case { 상태: "생성됨" } => "결제를 진행해주세요"
+        case { 상태: "결제완료", 금액, vip: true } if 금액 > 100000 => {
+            "VIP 고객 특급 배송 준비"
+        }
+        case { 상태: "결제완료", 금액 } if 금액 > 50000 => {
+            "일반 배송 준비"
+        }
+        case { 상태: "결제완료" } => "표준 배송 준비"
+        case { 상태: "배송중", vip: true } => "VIP 배송 추적 서비스"
+        case { 상태: "배송중" } => "배송 중"
+        case { 상태: "배송완료" } => "배송 완료"
+        case { 상태: "취소됨" } => "주문 취소됨"
+        case _ => "알 수 없는 주문 상태"
+    }
+}
+```
+
+> 이 예시처럼 `match`의 대상이 즉석에서 만든 레코드일 때는 exhaustive함을 정적으로 증명하지 못할 수 있습니다 — 런타임 miss는 폴트이므로 canonical 예시는 catch-all case를 유지합니다. 닫힌 리터럴 union 값(예: `주문상태` 자체)을 직접 match하면 exhaustive함이 정적으로 검사되므로 catch-all이 필요 없습니다.
+
+```topaz
+function 배송라벨(상태: 주문상태) -> string {
+    match 상태 {
+        case "생성됨" => "결제 대기"
+        case "결제완료" => "배송 준비 중"
+        case "배송중" => "이동 중"
+        case "배송완료" => "배송됨"
+        case "취소됨" => "취소됨"
+    }
+}
+```
+
+토파즈의 제어 흐름은 **작고 예측 가능**합니다. 조건문, 반복문, 패턴 매칭을 적절히 조합하여 **읽기 쉽고 유지보수하기 쉬운** 코드를 작성하세요!

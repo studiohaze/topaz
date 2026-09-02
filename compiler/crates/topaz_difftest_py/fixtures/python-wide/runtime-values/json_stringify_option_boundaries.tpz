@@ -1,0 +1,11 @@
+
+function f() -> Result<string, string> {
+    let one: Option<int> = Some(1)
+    let none: Option<int> = None
+    let nested: Option<Option<string>> = Some(Some("x"))
+    let a = JSON.stringify(one)?
+    let b = JSON.stringify(none)?
+    let c = JSON.stringify(nested)?
+    Ok("{a}|{b}|{c}")
+}
+f()

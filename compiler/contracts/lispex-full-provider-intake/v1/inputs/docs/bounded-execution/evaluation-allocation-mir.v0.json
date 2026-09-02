@@ -1,0 +1,678 @@
+{
+  "schema": "lispex.f11-evaluation-allocation-mir/v0",
+  "status": "private-draft-evaluation-sinks-closed",
+  "public_contract": false,
+  "exact_base": "826432aafe65700e56f41bdd727600b8e9b58a3f",
+  "source_inventory": "docs/bounded-execution/admitted-allocation-sinks.v0.json",
+  "source_inventory_rows": 19,
+  "preparation_rows_owned_by_b7_15": 1,
+  "evaluation_rows": [
+    {
+      "id": "canonical-input-validator-and-decoder",
+      "disposition": "byte-bounded-request-validator-and-metered-fallible-decoder"
+    },
+    {
+      "id": "constant-and-global-tables",
+      "disposition": "typed-setup-authority"
+    },
+    {
+      "id": "root-outcomes",
+      "disposition": "typed-root-authority"
+    },
+    {
+      "id": "operand-scope-and-projection-collections",
+      "disposition": "typed-opcode-and-resume-authorities"
+    },
+    {
+      "id": "control-handler-and-live-tag-stacks",
+      "disposition": "typed-control-handler-and-continuation-authorities"
+    },
+    {
+      "id": "environment-bindings-and-frames",
+      "disposition": "typed-environment-authority"
+    },
+    {
+      "id": "closures-and-captures",
+      "disposition": "typed-opcode-and-environment-authorities"
+    },
+    {
+      "id": "continuation-objects",
+      "disposition": "typed-continuation-authority"
+    },
+    {
+      "id": "call-and-apply-arguments",
+      "disposition": "typed-apply-and-primitive-authorities"
+    },
+    {
+      "id": "pair-and-list-values",
+      "disposition": "typed-list-and-primitive-authorities"
+    },
+    {
+      "id": "string-append-value",
+      "disposition": "typed-primitive-authority-and-fallible-observer"
+    },
+    {
+      "id": "exact-integer-values",
+      "disposition": "typed-primitive-authority-and-logical-limb-validation"
+    },
+    {
+      "id": "structural-equality-scratch",
+      "disposition": "typed-primitive-authority-and-metered-observer"
+    },
+    {
+      "id": "diagnostic-and-condition-values",
+      "disposition": "typed-condition-and-bounded-diagnostic-authorities"
+    },
+    {
+      "id": "result-stdout-and-transcript-buffers",
+      "disposition": "bounded-output-and-transcript-authorities"
+    },
+    {
+      "id": "fixed-runtime-registry-and-logical-file",
+      "disposition": "fixed-host-owned-no-guest-allocation"
+    },
+    {
+      "id": "excluded-higher-order-and-deferred-surface",
+      "disposition": "refused-before-evaluation"
+    },
+    {
+      "id": "recursive-guest-graph-cleanup",
+      "disposition": "b8-fresh-instance-discard-blocker"
+    }
+  ],
+  "mir_probes": [
+    {
+      "id": "canonical-input-decode",
+      "selector": {
+        "signature_starts_with": "decode_validated("
+      },
+      "required_patterns": [
+        "DraftEvaluationMeter::reserve_input_loop",
+        "DraftEvaluationMeter::reserve_input_value",
+        "DraftEvaluationMeter::reserve_input_payload",
+        "DraftEvaluationMeter::reserve_input_container",
+        "DraftEvaluationMeter::reserve_input_assembly",
+        "push_decode_frame",
+        "Vec::<u8>::try_reserve_exact",
+        "Vec::<u8>::extend_from_slice"
+      ],
+      "ordered_chains": [
+        [
+          "DraftEvaluationMeter::reserve_input_payload",
+          "Vec::<u8>::try_reserve_exact",
+          "Vec::<u8>::extend_from_slice"
+        ]
+      ]
+    },
+    {
+      "id": "canonical-input-validation-frame",
+      "selector": {
+        "signature_starts_with": "push_validation_frame("
+      },
+      "required_patterns": [
+        "Vec::<ValidationFrame>::try_reserve",
+        "Vec::<ValidationFrame>::push"
+      ],
+      "ordered_chains": [
+        [
+          "Vec::<ValidationFrame>::try_reserve",
+          "Vec::<ValidationFrame>::push"
+        ]
+      ]
+    },
+    {
+      "id": "canonical-input-decode-frame",
+      "selector": {
+        "signature_starts_with": "push_decode_frame("
+      },
+      "required_patterns": [
+        "DraftEvaluationMeter::reserve_input_scratch",
+        "Vec::<DecodeFrame>::try_reserve",
+        "Vec::<DecodeFrame>::push"
+      ],
+      "ordered_chains": [
+        [
+          "DraftEvaluationMeter::reserve_input_scratch",
+          "Vec::<DecodeFrame>::try_reserve",
+          "Vec::<DecodeFrame>::push"
+        ]
+      ]
+    },
+    {
+      "id": "canonical-input-value-vector",
+      "selector": {
+        "signature_starts_with": "value_vec("
+      },
+      "required_patterns": [
+        "Vec::<value::Value>::try_reserve_exact"
+      ],
+      "ordered_chains": []
+    },
+    {
+      "id": "canonical-input-record-vector",
+      "selector": {
+        "signature_starts_with": "record_vec("
+      },
+      "required_patterns": [
+        "Vec::<(Rc<str>, value::Value)>::try_reserve_exact"
+      ],
+      "ordered_chains": []
+    },
+    {
+      "id": "root-setup-and-outcomes",
+      "selector": {
+        "signature_starts_with": "run_bytecode_with_host_and_draft("
+      },
+      "required_patterns": [
+        "DraftEvaluationMeter::take_setup_permit",
+        "DraftEvaluationMeter::take_root_run_permit",
+        "VmMachine::new",
+        "Vec::<Outcome>::try_reserve_exact",
+        "RootRunAuthority::consume_root",
+        "RootRunAuthority::consume_outcome",
+        "Vec::<Outcome>::push",
+        "RootRunAuthority::finish"
+      ],
+      "ordered_chains": [
+        [
+          "DraftEvaluationMeter::take_setup_permit",
+          "VmMachine::new"
+        ],
+        [
+          "DraftEvaluationMeter::take_root_run_permit",
+          "Vec::<Outcome>::try_reserve_exact"
+        ],
+        [
+          "RootRunAuthority::consume_outcome",
+          "Vec::<Outcome>::push"
+        ]
+      ]
+    },
+    {
+      "id": "constant-and-global-tables",
+      "selector": {
+        "signature_includes": [
+          "bytecode_vm.rs",
+          ">::new(",
+          "SetupAllocationAuthority"
+        ]
+      },
+      "required_patterns": [
+        "Vec::<value::Value>::try_reserve_exact",
+        "SetupAllocationAuthority::consume_constant",
+        "Vec::<value::Value>::push",
+        "Vec::<Rc<RefCell<VmSlot>>>::try_reserve_exact",
+        "SetupAllocationAuthority::consume_global",
+        "Rc::<RefCell<VmSlot>>::new",
+        "Vec::<Rc<RefCell<VmSlot>>>::push",
+        "SetupAllocationAuthority::finish"
+      ],
+      "ordered_chains": [
+        [
+          "Vec::<value::Value>::try_reserve_exact",
+          "SetupAllocationAuthority::consume_constant",
+          "Vec::<value::Value>::push"
+        ],
+        [
+          "Vec::<Rc<RefCell<VmSlot>>>::try_reserve_exact",
+          "SetupAllocationAuthority::consume_global",
+          "Rc::<RefCell<VmSlot>>::new",
+          "Vec::<Rc<RefCell<VmSlot>>>::push"
+        ]
+      ]
+    },
+    {
+      "id": "control-stack",
+      "selector": {
+        "signature_includes": [
+          "bytecode_vm.rs",
+          ">::push_control("
+        ]
+      },
+      "required_patterns": [
+        "DraftEvaluationMeter::reserve_control_frame",
+        "Vec::<Control>::try_reserve",
+        "consume_control_authority",
+        "Vec::<Control>::push"
+      ],
+      "ordered_chains": [
+        [
+          "DraftEvaluationMeter::reserve_control_frame",
+          "Vec::<Control>::try_reserve",
+          "consume_control_authority",
+          "Vec::<Control>::push"
+        ]
+      ]
+    },
+    {
+      "id": "handler-stack",
+      "selector": {
+        "signature_includes": [
+          "bytecode_vm.rs",
+          ">::install_handler("
+        ]
+      },
+      "required_patterns": [
+        "DraftEvaluationMeter::reserve_handler",
+        "Vec::<value::Value>::try_reserve",
+        "consume_handler_authority",
+        "Vec::<value::Value>::push"
+      ],
+      "ordered_chains": [
+        [
+          "DraftEvaluationMeter::reserve_handler",
+          "Vec::<value::Value>::try_reserve",
+          "consume_handler_authority",
+          "Vec::<value::Value>::push"
+        ]
+      ]
+    },
+    {
+      "id": "continuation-tag-and-object",
+      "selector": {
+        "signature_includes": [
+          "bytecode_vm.rs",
+          ">::install_continuation(",
+          "ContinuationInstallationAuthority"
+        ]
+      },
+      "required_patterns": [
+        "consume_continuation_authority",
+        "LiveContinuationTags::push_draft",
+        "finish_continuation_authority",
+        "Rc::<Continuation>::new"
+      ],
+      "ordered_chains": [
+        [
+          "consume_continuation_authority",
+          "LiveContinuationTags::push_draft"
+        ],
+        [
+          "consume_continuation_authority",
+          "finish_continuation_authority",
+          "Rc::<Continuation>::new"
+        ]
+      ]
+    },
+    {
+      "id": "single-apply-argument",
+      "selector": {
+        "signature_includes": [
+          "bytecode_vm.rs",
+          ">::single_apply_argument("
+        ]
+      },
+      "required_patterns": [
+        "DraftEvaluationMeter::reserve_apply_arguments",
+        "Vec::<value::Value>::try_reserve_exact",
+        "consume_apply_arguments_authority",
+        "Vec::<value::Value>::push",
+        "finish_apply_arguments_authority"
+      ],
+      "ordered_chains": [
+        [
+          "DraftEvaluationMeter::reserve_apply_arguments",
+          "Vec::<value::Value>::try_reserve_exact",
+          "consume_apply_arguments_authority",
+          "Vec::<value::Value>::push",
+          "finish_apply_arguments_authority"
+        ]
+      ]
+    },
+    {
+      "id": "guest-apply-projection",
+      "selector": {
+        "signature_includes": [
+          "bytecode_vm.rs",
+          ">::begin_apply(",
+          "GuestPrimitiveAuthority"
+        ]
+      },
+      "required_patterns": [
+        "GuestPrimitiveAuthority::projection_slots",
+        "Vec::<value::Value>::try_reserve_exact",
+        "Vec::<value::Value>::push",
+        "GuestPrimitiveAuthority::consume_projection_slots"
+      ],
+      "ordered_chains": [
+        [
+          "GuestPrimitiveAuthority::projection_slots",
+          "Vec::<value::Value>::try_reserve_exact"
+        ],
+        [
+          "Vec::<value::Value>::push",
+          "GuestPrimitiveAuthority::consume_projection_slots"
+        ]
+      ]
+    },
+    {
+      "id": "environment-bindings",
+      "selector": {
+        "signature_includes": [
+          "bytecode_vm.rs",
+          ">::enter_scope("
+        ]
+      },
+      "required_patterns": [
+        "VmMachine::authorize_environment",
+        "VmBindingEntries::<value::Value>::try_with_capacity",
+        "consume_environment_initial_entries",
+        "consume_environment_cells",
+        "consume_environment_overlays",
+        "Rc::<RefCell<VmSlot>>::new",
+        "VmBindingEntries::<Rc<RefCell<VmSlot>>>::insert",
+        "finish_environment_authority"
+      ],
+      "ordered_chains": [
+        [
+          "VmMachine::authorize_environment",
+          "consume_environment_initial_entries"
+        ],
+        [
+          "consume_environment_cells",
+          "consume_environment_overlays",
+          "Rc::<RefCell<VmSlot>>::new",
+          "VmBindingEntries::<Rc<RefCell<VmSlot>>>::insert",
+          "finish_environment_authority"
+        ]
+      ]
+    },
+    {
+      "id": "guest-list-pairs",
+      "selector": {
+        "signature_includes": [
+          "bytecode_vm.rs",
+          ">::build_guest_list("
+        ]
+      },
+      "required_patterns": [
+        "DraftEvaluationMeter::reserve_guest_list",
+        "consume_guest_list_node",
+        "value::Value::cons",
+        "finish_guest_list_authority"
+      ],
+      "ordered_chains": [
+        [
+          "DraftEvaluationMeter::reserve_guest_list",
+          "consume_guest_list_node",
+          "value::Value::cons",
+          "finish_guest_list_authority"
+        ]
+      ]
+    },
+    {
+      "id": "operand-stack",
+      "selector": {
+        "signature_includes": [
+          "bytecode_vm.rs",
+          ">::push_operand(",
+          "OpcodeCollectionAuthority"
+        ]
+      },
+      "required_patterns": [
+        "OpcodeCollectionAuthority::consume_operand_slots",
+        "Vec::<Outcome>::try_reserve",
+        "Vec::<Outcome>::push"
+      ],
+      "ordered_chains": [
+        [
+          "OpcodeCollectionAuthority::consume_operand_slots",
+          "Vec::<Outcome>::try_reserve",
+          "Vec::<Outcome>::push"
+        ]
+      ]
+    },
+    {
+      "id": "resumed-operand-stack",
+      "selector": {
+        "signature_includes": [
+          "bytecode_vm.rs",
+          ">::push_resumed_operand("
+        ]
+      },
+      "required_patterns": [
+        "DraftEvaluationMeter::reserve_resume_operand",
+        "ResumeOperandAuthority::Draft",
+        "Vec::<Outcome>::try_reserve",
+        "Vec::<Outcome>::push"
+      ],
+      "ordered_chains": [
+        [
+          "DraftEvaluationMeter::reserve_resume_operand",
+          "Vec::<Outcome>::try_reserve",
+          "Vec::<Outcome>::push"
+        ]
+      ]
+    },
+    {
+      "id": "scope-restore-stack",
+      "selector": {
+        "signature_includes": [
+          "bytecode_vm.rs",
+          ">::push_scope_restore(",
+          "OpcodeCollectionAuthority"
+        ]
+      },
+      "required_patterns": [
+        "OpcodeCollectionAuthority::consume_scope_restore_slots",
+        "Vec::<VmEnv>::try_reserve",
+        "Vec::<VmEnv>::push"
+      ],
+      "ordered_chains": [
+        [
+          "OpcodeCollectionAuthority::consume_scope_restore_slots",
+          "Vec::<VmEnv>::try_reserve",
+          "Vec::<VmEnv>::push"
+        ]
+      ]
+    },
+    {
+      "id": "value-projection",
+      "selector": {
+        "signature_includes": [
+          "bytecode_vm.rs",
+          ">::pop_values(",
+          "OpcodeCollectionAuthority"
+        ]
+      },
+      "required_patterns": [
+        "OpcodeCollectionAuthority::consume_projection_slots",
+        "Vec::<value::Value>::try_reserve_exact",
+        "Vec::<value::Value>::push"
+      ],
+      "ordered_chains": [
+        [
+          "OpcodeCollectionAuthority::consume_projection_slots",
+          "Vec::<value::Value>::try_reserve_exact",
+          "Vec::<value::Value>::push"
+        ]
+      ]
+    },
+    {
+      "id": "condition-object",
+      "selector": {
+        "signature_includes": [
+          "bytecode_vm.rs",
+          ">::draft_condition_value("
+        ]
+      },
+      "required_patterns": [
+        "DraftEvaluationMeter::reserve_condition_object",
+        "consume_condition_authority",
+        "Rc::<ErrorObj>::new",
+        "finish_condition_authority"
+      ],
+      "ordered_chains": [
+        [
+          "DraftEvaluationMeter::reserve_condition_object",
+          "consume_condition_authority",
+          "Rc::<ErrorObj>::new",
+          "finish_condition_authority"
+        ]
+      ]
+    },
+    {
+      "id": "leaf-primitive-result",
+      "selector": {
+        "signature_starts_with": "invoke_leaf_primitive("
+      },
+      "required_patterns": [
+        "DraftPrimitivePermit::id",
+        "draft primitive permit identity did not match the shared handler",
+        "equal_with_observer",
+        "string_append_with_observer",
+        "validate_draft_leaf_result",
+        "draft primitive permit left an unconsumed guest-value sink"
+      ],
+      "ordered_chains": [
+        [
+          "DraftPrimitivePermit::id",
+          "validate_draft_leaf_result",
+          "draft primitive permit left an unconsumed guest-value sink"
+        ]
+      ]
+    },
+    {
+      "id": "primitive-value-sinks",
+      "selector": {
+        "signature_starts_with": "validate_draft_leaf_result("
+      },
+      "required_patterns": [
+        "DraftPrimitivePermit::consume_pair_nodes",
+        "DraftPrimitivePermit::consume_string_bytes",
+        "DraftPrimitivePermit::consume_exact_integer_result"
+      ],
+      "ordered_chains": []
+    },
+    {
+      "id": "structural-equality-scratch",
+      "selector": {
+        "signature_starts_with": "equal_with_observer("
+      },
+      "required_patterns": [
+        "EqualityObserver>::reserve_stack_entries",
+        "reserve_equality_work",
+        "EqualityObserver>::reserve_visited_entry",
+        "reserve_equality_visited",
+        "HashSet::<(usize, usize), BuildHasherDefault<DefaultHasher>>::insert"
+      ],
+      "ordered_chains": [
+        [
+          "EqualityObserver>::reserve_visited_entry",
+          "reserve_equality_visited",
+          "HashSet::<(usize, usize), BuildHasherDefault<DefaultHasher>>::insert"
+        ]
+      ]
+    },
+    {
+      "id": "string-append-buffer",
+      "selector": {
+        "signature_starts_with": "string_append_with_observer("
+      },
+      "required_patterns": [
+        "StringAppendObserver>::reserve_output",
+        "std::string::String::push_str"
+      ],
+      "ordered_chains": [
+        [
+          "StringAppendObserver>::reserve_output",
+          "std::string::String::push_str"
+        ]
+      ]
+    },
+    {
+      "id": "result-and-stdout-buffers",
+      "selector": {
+        "signature_includes": [
+          "bytecode_vm.rs",
+          ">::append_auto_print("
+        ]
+      },
+      "required_patterns": [
+        "DraftEvaluationMeter::reserve_visible_output",
+        "DraftEvaluationMeter::reserve_render_scratch",
+        "try_reserve_draft_string",
+        "std::string::String::push_str"
+      ],
+      "ordered_chains": [
+        [
+          "DraftEvaluationMeter::reserve_visible_output",
+          "DraftEvaluationMeter::reserve_render_scratch",
+          "try_reserve_draft_string",
+          "std::string::String::push_str"
+        ]
+      ]
+    },
+    {
+      "id": "transcript-event",
+      "selector": {
+        "signature_starts_with": "draft_transcript_bytes("
+      },
+      "required_patterns": [
+        "DraftEvaluationMeter::reserve_transcript_event",
+        "append_draft_transcript_chunk"
+      ],
+      "ordered_chains": [
+        [
+          "DraftEvaluationMeter::reserve_transcript_event",
+          "append_draft_transcript_chunk"
+        ]
+      ]
+    },
+    {
+      "id": "transcript-chunks",
+      "selector": {
+        "signature_starts_with": "append_draft_transcript_chunk("
+      },
+      "required_patterns": [
+        "DraftEvaluationMeter::reserve_transcript_chunk",
+        "Vec::<u8>::try_reserve",
+        "Vec::<u8>::extend_from_slice"
+      ],
+      "ordered_chains": [
+        [
+          "DraftEvaluationMeter::reserve_transcript_chunk",
+          "Vec::<u8>::try_reserve",
+          "Vec::<u8>::extend_from_slice"
+        ]
+      ]
+    }
+  ],
+  "explicit_exceptions": [
+    {
+      "id": "restored-handler-slot",
+      "disposition": "already-owned-slot-restored-with-fallible-physical-reserve-no-second-logical-charge",
+      "selector": {
+        "signature_includes": [
+          "bytecode_vm.rs",
+          ">::restore_handler("
+        ]
+      },
+      "required_patterns": [
+        "Vec::<value::Value>::try_reserve",
+        "Vec::<value::Value>::push"
+      ],
+      "forbidden_patterns": [
+        "DraftEvaluationMeter::reserve_handler"
+      ]
+    },
+    {
+      "id": "trusted-unmetered-public-route",
+      "disposition": "outside-private-draft-claim-preserved-for-existing-public-route"
+    },
+    {
+      "id": "recursive-guest-graph-cleanup",
+      "disposition": "b8-fresh-instance-discard-required"
+    }
+  ],
+  "summary": {
+    "evaluation_rows": 18,
+    "typed_or_bounded_rows": 15,
+    "fixed_or_refused_rows": 2,
+    "b8_blocking_rows": 1,
+    "mir_probes": 26,
+    "mir_allocation_sink_permits_complete": true,
+    "fresh_instance_disposal_complete": false,
+    "implementation_ready": false
+  }
+}

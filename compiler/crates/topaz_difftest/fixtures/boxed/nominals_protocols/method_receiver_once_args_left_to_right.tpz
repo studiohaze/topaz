@@ -1,0 +1,9 @@
+impl P { function sum(self, a: int, b: int) -> int { self.x + a + b + offset() } }
+record P { x: int }
+function offset() -> int { 4 }
+function receiver() -> P { print("R")
+P { x: 1 } }
+function arg(label: string, value: int) -> int { print(label)
+value }
+print("{receiver().sum(arg("A", 2), arg("B", 3))}")
+0

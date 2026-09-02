@@ -1,0 +1,2251 @@
+// Member catalogs and capability rules for nominal and builtin types.
+// Formation supplies declared shapes; expression and call inference consume the
+// resolved member and Eq, Order, JSON, iterable, and key decisions.
+
+import types { SyntaxNode }
+import checker_types { TypeValue }
+import checker.model {
+  CheckerService,
+  CheckerState,
+  FunctionDefinition,
+  TypeBinding,
+  constructor,
+  emptyType,
+  functionType,
+  inference,
+  literal,
+  nominal,
+  primitive,
+  rigid,
+  serviceBuiltinNamespaceObject,
+  structural,
+}
+import checker.type_algebra {
+  hasHole,
+  transformTypeComponents,
+  typeContains,
+  typeEqual,
+  typeListText,
+  typeText,
+  unionType,
+  widen,
+}
+import checker.syntax_index {
+  addDiagnostic,
+  child,
+  children,
+  containsString,
+  text,
+}
+import checker.nominals { substitute }
+import checker.protocols_methods {
+  conformanceTypeKey,
+  enumDefinitionForType,
+  newtypeDefinitionForType,
+  protocolConformanceIndex,
+  receiverMethodType,
+  recordDefinitionForType,
+}
+
+export function iterableElement(value: TypeValue) -> TypeValue {
+  if value.kind == "constructor" &&
+    (value.name == "Array" || value.name == "Set" || value.name == "Range") {
+    return match value.arguments.get(0) {
+      case Some(found) => found
+      case None => emptyType("unknown")
+    }
+  }
+  if value.kind == "rigid" || value.kind == "foreign" {
+    return rigid("ElemOf<{typeText(value)}>", "builtin::iterable")
+  }
+  emptyType("unknown")
+}
+
+export record ArraySpreadElement {
+  status: string,
+  element: TypeValue,
+}
+
+export function arraySpreadElement(value: TypeValue) -> ArraySpreadElement {
+  if value.kind == "constructor" && value.name == "Array" {
+    return ArraySpreadElement {
+      status: "element",
+      element: match value.arguments.get(0) {
+        case Some(found) => found
+        case None => emptyType("unknown")
+      },
+    }
+  }
+  if value.kind == "rigid" || value.kind == "foreign" {
+    return ArraySpreadElement {
+      status: "element",
+      element: rigid("ElemOf<{typeText(value)}>", "builtin::array-spread"),
+    }
+  }
+  if value.kind == "union" {
+    let mut elements: Array<TypeValue> = []
+    let mut staged = false
+    for member in value.members {
+      let spread = arraySpreadElement(member)
+      if spread.status == "invalid" {
+        return spread
+      }
+      if spread.status == "stage" {
+        staged = true
+      } else {
+        elements.push(spread.element)
+      }
+    }
+    return if staged {
+      ArraySpreadElement {
+        status: "stage",
+        element: emptyType("unknown"),
+      }
+    } else {
+      ArraySpreadElement {
+        status: "element",
+        element: unionType(elements),
+      }
+    }
+  }
+  if hasHole(value) {
+    ArraySpreadElement {
+      status: "stage",
+      element: emptyType("unknown"),
+    }
+  } else {
+    ArraySpreadElement {
+      status: "invalid",
+      element: emptyType("unknown"),
+    }
+  }
+}
+
+record KeyCapabilityFailure {
+  subject: string,
+  kind: string,
+}
+
+export function capabilityPath(seen: Array<string>, key: string) -> Array<string> {
+  let mut nested: Array<string> = []
+  for item in seen {
+    nested.push(item)
+  }
+  nested.push(key)
+  nested
+}
+
+export function nominalCapabilityKey(value: TypeValue) -> string {
+  "{value.kind}:{value.origin}:{value.identity}<{typeListText(value.arguments)}>"
+}
+
+record NominalCapabilityProjection {
+  moduleIndex: int,
+  children: Array<TypeValue>,
+}
+
+function nominalCapabilityType(value: TypeValue) -> bool {
+  value.kind == "nominal-record" || value.kind == "enum" ||
+    value.kind == "newtype"
+}
+
+function nominalCapabilityProjection(
+  state: CheckerState,
+  moduleIndex: int,
+  value: TypeValue,
+) -> NominalCapabilityProjection {
+  let mut children: Array<TypeValue> = []
+  if value.kind == "nominal-record" {
+    return match recordDefinitionForType(state, moduleIndex, value) {
+      case Some(definition) => {
+        for field in definition.fields {
+          children.push(substitute(
+            field.typeValue,
+            definition.typeParameters,
+            value.arguments,
+          ))
+        }
+        NominalCapabilityProjection {
+          moduleIndex: definition.moduleIndex,
+          children: children,
+        }
+      }
+      case None => NominalCapabilityProjection {
+        moduleIndex: moduleIndex,
+        children: children,
+      }
+    }
+  }
+  if value.kind == "enum" {
+    return match enumDefinitionForType(state, moduleIndex, value) {
+      case Some(definition) => {
+        for variant in definition.variants {
+          for payload in variant.payloads {
+            children.push(substitute(
+              payload,
+              definition.typeParameters,
+              value.arguments,
+            ))
+          }
+        }
+        NominalCapabilityProjection {
+          moduleIndex: definition.moduleIndex,
+          children: children,
+        }
+      }
+      case None => NominalCapabilityProjection {
+        moduleIndex: moduleIndex,
+        children: children,
+      }
+    }
+  }
+  match newtypeDefinitionForType(state, moduleIndex, value) {
+    case Some(definition) => {
+      children.push(substitute(
+        definition.base,
+        definition.typeParameters,
+        value.arguments,
+      ))
+      NominalCapabilityProjection {
+        moduleIndex: definition.moduleIndex,
+        children: children,
+      }
+    }
+    case None => NominalCapabilityProjection {
+      moduleIndex: moduleIndex,
+      children: children,
+    }
+  }
+}
+
+export function containsByteBuffer(
+  state: CheckerState,
+  moduleIndex: int,
+  value: TypeValue,
+  seen: Array<string>,
+) -> bool {
+  let widened = widen(value)
+  if widened.kind == "byte-buffer" {
+    return true
+  }
+  if widened.kind == "function" {
+    return false
+  }
+  if widened.kind == "constructor" || widened.kind == "foreign" {
+    for argument in widened.arguments {
+      if containsByteBuffer(state, moduleIndex, argument, seen) {
+        return true
+      }
+    }
+    return false
+  }
+  if widened.kind == "record" {
+    for field in widened.fields {
+      if containsByteBuffer(state, moduleIndex, field, seen) {
+        return true
+      }
+    }
+    return false
+  }
+  if widened.kind == "union" {
+    for member in widened.members {
+      if containsByteBuffer(state, moduleIndex, member, seen) {
+        return true
+      }
+    }
+    return false
+  }
+  if nominalCapabilityType(widened) {
+    for argument in widened.arguments {
+      if containsByteBuffer(state, moduleIndex, argument, seen) {
+        return true
+      }
+    }
+    let key = nominalCapabilityKey(widened)
+    if containsString(seen, key) {
+      return false
+    }
+    let projection = nominalCapabilityProjection(state, moduleIndex, widened)
+    let nested = capabilityPath(seen, key)
+    for child in projection.children {
+      if containsByteBuffer(
+        state,
+        projection.moduleIndex,
+        child,
+        nested,
+      ) {
+        return true
+      }
+    }
+    return false
+  }
+  false
+}
+
+export function comparableType(
+  state: CheckerState,
+  moduleIndex: int,
+  value: TypeValue,
+  seen: Array<string>,
+) -> bool {
+  let widened = widen(value)
+  if widened.kind == "template" || widened.kind == "file" ||
+    widened.kind == "json-value" || widened.kind == "toml-value" ||
+    widened.kind == "function" || widened.kind == "byte-buffer" ||
+    widened.kind == "regex" {
+    return false
+  }
+  if widened.kind == "constructor" {
+    if widened.name == "Map" || widened.name == "Set" {
+      return false
+    }
+    for argument in widened.arguments {
+      if !comparableType(state, moduleIndex, argument, seen) {
+        return false
+      }
+    }
+    return true
+  }
+  if widened.kind == "record" {
+    for field in widened.fields {
+      if !comparableType(state, moduleIndex, field, seen) {
+        return false
+      }
+    }
+    return true
+  }
+  if widened.kind == "union" {
+    for member in widened.members {
+      if !comparableType(state, moduleIndex, member, seen) {
+        return false
+      }
+    }
+    return true
+  }
+  if nominalCapabilityType(widened) {
+    let key = nominalCapabilityKey(widened)
+    if containsString(seen, key) {
+      return true
+    }
+    let projection = nominalCapabilityProjection(state, moduleIndex, widened)
+    let nested = capabilityPath(seen, key)
+    for child in projection.children {
+      if !comparableType(
+        state,
+        projection.moduleIndex,
+        child,
+        nested,
+      ) {
+        return false
+      }
+    }
+    return true
+  }
+  true
+}
+
+function capabilityAnd(left: string, right: string) -> string {
+  if left == "reject" || right == "reject" {
+    "reject"
+  } else if left == "defer" || right == "defer" {
+    "defer"
+  } else {
+    "accept"
+  }
+}
+
+export function orderCapability(
+  state: CheckerState,
+  moduleIndex: int,
+  value: TypeValue,
+  seen: Array<string>,
+) -> string {
+  let widened = widen(value)
+  if widened.kind == "primitive" {
+    return if widened.name == "int" || widened.name == "float" ||
+      widened.name == "string" {
+      "accept"
+    } else {
+      "reject"
+    }
+  }
+  if widened.kind == "literal" {
+    return if widened.name == "int" || widened.name == "float" ||
+      widened.name == "string" {
+      "accept"
+    } else {
+      "reject"
+    }
+  }
+  if widened.kind == "bytes" || widened.kind == "path" ||
+    widened.kind == "url" || widened.kind == "date" ||
+    widened.kind == "big-int" || widened.kind == "decimal" {
+    return "accept"
+  }
+  if widened.kind == "inference-variable" {
+    return "defer"
+  }
+  if nominalCapabilityType(widened) {
+    let key = nominalCapabilityKey(widened)
+    if containsString(seen, key) {
+      return "accept"
+    }
+    let mut status = "accept"
+    let projection = nominalCapabilityProjection(state, moduleIndex, widened)
+    let nested = capabilityPath(seen, key)
+    for child in projection.children {
+      status = capabilityAnd(status, orderCapability(
+        state,
+        projection.moduleIndex,
+        child,
+        nested,
+      ))
+    }
+    return status
+  }
+  "reject"
+}
+
+export function jsonCapability(
+  state: CheckerState,
+  moduleIndex: int,
+  value: TypeValue,
+  seen: Array<string>,
+  decoding: bool,
+) -> string {
+  let widened = widen(value)
+  if widened.kind == "primitive" {
+    return if widened.name == "int" || widened.name == "bool" ||
+      widened.name == "string" || widened.name == "unit" {
+      "accept"
+    } else {
+      "reject"
+    }
+  }
+  if widened.kind == "literal" {
+    return if widened.name == "float" { "reject" } else { "accept" }
+  }
+  if widened.kind == "json-value" {
+    return "accept"
+  }
+  if widened.kind == "match" {
+    return if decoding { "reject" } else { "accept" }
+  }
+  if widened.kind == "inference-variable" {
+    return "defer"
+  }
+  if widened.kind == "constructor" {
+    if widened.name == "Option" || widened.name == "Array" {
+      return match widened.arguments.get(0) {
+        case Some(argument) => jsonCapability(
+          state,
+          moduleIndex,
+          argument,
+          seen,
+          decoding,
+        )
+        case None => "reject"
+      }
+    }
+    if widened.name == "Map" {
+      let key = match widened.arguments.get(0) {
+        case Some(argument) => {
+          let shown = widen(argument)
+          if (shown.kind == "primitive" || shown.kind == "literal") &&
+            shown.name == "string" {
+            "accept"
+          } else if shown.kind == "inference-variable" {
+            "defer"
+          } else {
+            "reject"
+          }
+        }
+        case None => "reject"
+      }
+      return capabilityAnd(key, match widened.arguments.get(1) {
+        case Some(argument) => jsonCapability(
+          state,
+          moduleIndex,
+          argument,
+          seen,
+          decoding,
+        )
+        case None => "reject"
+      })
+    }
+    return "reject"
+  }
+  if widened.kind == "record" {
+    let mut status = "accept"
+    for field in widened.fields {
+      status = capabilityAnd(status, jsonCapability(
+        state,
+        moduleIndex,
+        field,
+        seen,
+        decoding,
+      ))
+    }
+    return status
+  }
+  if nominalCapabilityType(widened) {
+    let key = nominalCapabilityKey(widened)
+    if containsString(seen, key) {
+      return if decoding { "reject" } else { "accept" }
+    }
+    let mut status = "accept"
+    let projection = nominalCapabilityProjection(state, moduleIndex, widened)
+    let nested = capabilityPath(seen, key)
+    for child in projection.children {
+      status = capabilityAnd(status, jsonCapability(
+        state,
+        projection.moduleIndex,
+        child,
+        nested,
+        decoding,
+      ))
+    }
+    return status
+  }
+  "reject"
+}
+
+function nonKeyableType(
+  state: CheckerState,
+  moduleIndex: int,
+  value: TypeValue,
+  seen: Array<string>,
+) -> Option<KeyCapabilityFailure> {
+  let widened = widen(value)
+  if widened.kind == "byte-buffer" {
+    return Some(KeyCapabilityFailure {
+      subject: "ByteBuffer",
+      kind: "mutable byte buffer",
+    })
+  }
+  if widened.kind == "constructor" {
+    if widened.name == "Map" {
+      return Some(KeyCapabilityFailure {
+        subject: "`Map` value",
+        kind: "Map",
+      })
+    }
+    if widened.name == "Set" {
+      return Some(KeyCapabilityFailure {
+        subject: "`Set` value",
+        kind: "Set",
+      })
+    }
+    if widened.name == "Range" {
+      return Some(KeyCapabilityFailure {
+        subject: "`range` value",
+        kind: "range",
+      })
+    }
+    for argument in widened.arguments {
+      match nonKeyableType(state, moduleIndex, argument, seen) {
+        case Some(failure) => return Some(failure)
+        case None => ()
+      }
+    }
+    return None
+  }
+  if widened.kind == "function" {
+    return Some(KeyCapabilityFailure {
+      subject: "function value",
+      kind: "function",
+    })
+  }
+  let specialKind = match widened.kind {
+    case "template" => "template"
+    case "file" => "File"
+    case "json-value" => "JSONValue"
+    case "regex" => "Regex"
+    case "rounding-mode" => "RoundingMode"
+    case "match" => "Match"
+    case "toml-value" => "TOMLValue"
+    case _ => ""
+  }
+  if specialKind != "" {
+    return Some(KeyCapabilityFailure {
+      subject: if specialKind == "template" {
+        "template value"
+      } else {
+        "`{specialKind}` value"
+      },
+      kind: specialKind,
+    })
+  }
+  if widened.kind == "union" {
+    for member in widened.members {
+      match nonKeyableType(state, moduleIndex, member, seen) {
+        case Some(failure) => return Some(failure)
+        case None => ()
+      }
+    }
+    return None
+  }
+  if widened.kind == "record" {
+    for field in widened.fields {
+      match nonKeyableType(state, moduleIndex, field, seen) {
+        case Some(failure) => return Some(failure)
+        case None => ()
+      }
+    }
+    return None
+  }
+  if nominalCapabilityType(widened) {
+    let key = nominalCapabilityKey(widened)
+    if containsString(seen, key) {
+      return None
+    }
+    let projection = nominalCapabilityProjection(state, moduleIndex, widened)
+    let nested = capabilityPath(seen, key)
+    for child in projection.children {
+      match nonKeyableType(
+        state,
+        projection.moduleIndex,
+        child,
+        nested,
+      ) {
+        case Some(failure) => return Some(failure)
+        case None => ()
+      }
+    }
+    return None
+  }
+  None
+}
+
+export function gateCollectionKey(
+  service: CheckerService,
+  state: CheckerState,
+  moduleIndex: int,
+  node: SyntaxNode,
+  value: TypeValue,
+) -> () {
+  match nonKeyableType(state, moduleIndex, value, []) {
+    case Some(failure) => addDiagnostic(
+      state,
+      moduleIndex,
+      "TPZ5007",
+      "{failure.subject} is not a valid Map/Set key ({failure.kind} keys are not supported yet)",
+      "",
+      node,
+    )
+    case None => ()
+  }
+  ()
+}
+
+function declaredMemberType(
+  state: CheckerState,
+  moduleIndex: int,
+  object: TypeValue,
+  name: string,
+) -> Option<TypeValue> {
+  match recordDefinitionForType(state, moduleIndex, object) {
+    case Some(definition) => for field in definition.fields {
+      if field.name == name {
+        return Some(substitute(
+          field.typeValue,
+          definition.typeParameters,
+          object.arguments,
+        ))
+      }
+    }
+    case None => ()
+  }
+  match enumDefinitionForType(state, moduleIndex, object) {
+    case Some(definition) => for variant in definition.variants {
+      if variant.name == name {
+        if variant.payloads.length == 0 {
+          return Some(object)
+        }
+        let mut payloads: Array<TypeValue> = []
+        for payload in variant.payloads {
+          payloads.push(substitute(
+            payload,
+            definition.typeParameters,
+            object.arguments,
+          ))
+        }
+        return Some(functionType(payloads, [], object))
+      }
+    }
+    case None => ()
+  }
+  match newtypeDefinitionForType(state, moduleIndex, object) {
+    case Some(definition) => if name == "value" {
+      return Some(functionType([], [], substitute(
+        definition.base,
+        definition.typeParameters,
+        object.arguments,
+      )))
+    }
+    case None => ()
+  }
+  if object.kind == "record" {
+    let mut index = 0
+    for fieldName in object.fieldNames {
+      if fieldName == name {
+        return Some(match object.fields.get(index) {
+          case Some(found) => found
+          case None => emptyType("unknown")
+        })
+      }
+      index += 1
+    }
+  }
+  None
+}
+
+export function typeArgument(object: TypeValue, index: int) -> TypeValue {
+  match object.arguments.get(index) {
+    case Some(found) => found
+    case None => emptyType("unknown")
+  }
+}
+
+function optionMemberType(object: TypeValue, name: string) -> TypeValue {
+  let value = typeArgument(object, 0)
+  let output = rigid("U", "builtin::Option.{name}")
+  match name {
+    case "okOr" => functionType(
+      [output],
+      [],
+      constructor("Result", [value, output]),
+    )
+    case "okOrElse" => functionType(
+      [functionType([], [], output)],
+      [],
+      constructor("Result", [value, output]),
+    )
+    case "map" => functionType(
+      [functionType([value], [], output)],
+      [],
+      constructor("Option", [output]),
+    )
+    case "flatMap" => functionType(
+      [functionType([value], [], constructor("Option", [output]))],
+      [],
+      constructor("Option", [output]),
+    )
+    case _ => emptyType("unknown")
+  }
+}
+
+function resultMemberType(object: TypeValue, name: string) -> TypeValue {
+  let value = typeArgument(object, 0)
+  let error = typeArgument(object, 1)
+  let output = rigid("U", "builtin::Result.{name}")
+  match name {
+    case "map" => functionType(
+      [functionType([value], [], output)],
+      [],
+      constructor("Result", [output, error]),
+    )
+    case "flatMap" => functionType(
+      [functionType(
+        [value],
+        [],
+        constructor("Result", [output, error]),
+      )],
+      [],
+      constructor("Result", [output, error]),
+    )
+    case _ => emptyType("unknown")
+  }
+}
+
+function arrayMemberType(object: TypeValue, name: string) -> TypeValue {
+  let element = iterableElement(object)
+  match name {
+    case "length" => primitive("int")
+    case "get" => functionType(
+      [primitive("int")],
+      [],
+      constructor("Option", [element]),
+    )
+    case "slice" => functionType(
+      [primitive("int"), primitive("int")],
+      [],
+      object,
+    )
+    case "map" => {
+      let output = rigid("U", "builtin::Array.map")
+      functionType(
+        [functionType([element], [], output)],
+        [],
+        constructor("Array", [output]),
+      )
+    }
+    case "join" => functionType([primitive("string")], [], primitive("string"))
+    case "sorted" => functionType([], [], object)
+    case "sortedBy" => {
+      let key = rigid("K", "builtin::Array.sortedBy")
+      functionType([functionType([element], [], key)], [], object)
+    }
+    case "filter" => functionType(
+      [functionType([element], [], primitive("bool"))],
+      [],
+      object,
+    )
+    case "reduce" => {
+      let output = rigid("U", "builtin::Array.reduce")
+      functionType(
+        [output, functionType([output, element], [], output)],
+        [],
+        output,
+      )
+    }
+    case "indexOf" => functionType(
+      [element],
+      [],
+      constructor("Option", [primitive("int")]),
+    )
+    case "push" => functionType([element], [], primitive("unit"))
+    case "pop" => functionType([], [], constructor("Option", [element]))
+    case "clear" | "reverse" | "sort" =>
+      functionType([], [], primitive("unit"))
+    case "sortBy" => {
+      let key = rigid("K", "builtin::Array.sortBy")
+      functionType(
+        [functionType([element], [], key)],
+        [],
+        primitive("unit"),
+      )
+    }
+    case "retain" => functionType(
+      [functionType([element], [], primitive("bool"))],
+      [],
+      primitive("unit"),
+    )
+    case "insert" => functionType(
+      [primitive("int"), element],
+      [],
+      primitive("unit"),
+    )
+    case "removeAt" => functionType(
+      [primitive("int")],
+      [],
+      constructor("Option", [element]),
+    )
+    case _ => emptyType("unknown")
+  }
+}
+
+function setMemberType(object: TypeValue, name: string) -> TypeValue {
+  let element = iterableElement(object)
+  match name {
+    case "length" => primitive("int")
+    case "toArray" => functionType([], [], constructor("Array", [element]))
+    case "contains" => functionType([element], [], primitive("bool"))
+    case "add" => functionType([element], [], primitive("unit"))
+    case "remove" => functionType([element], [], primitive("bool"))
+    case "isEmpty" => functionType([], [], primitive("bool"))
+    case "union" | "intersection" | "difference" =>
+      functionType([object], [], object)
+    case "clear" => functionType([], [], primitive("unit"))
+    case _ => emptyType("unknown")
+  }
+}
+
+function mapMemberType(object: TypeValue, name: string) -> TypeValue {
+  let key = typeArgument(object, 0)
+  let item = typeArgument(object, 1)
+  match name {
+    case "length" => primitive("int")
+    case "keys" => constructor("Array", [key])
+    case "values" => constructor("Array", [item])
+    case "entries" => constructor("Array", [structural(
+      ["key", "value"],
+      [key, item],
+    )])
+    case "get" => functionType([key], [], constructor("Option", [item]))
+    case "getOr" => functionType([key, item], [], item)
+    case "containsKey" => functionType([key], [], primitive("bool"))
+    case "insert" => functionType([key, item], [], primitive("unit"))
+    case "remove" => functionType([key], [], constructor("Option", [item]))
+    case "isEmpty" => functionType([], [], primitive("bool"))
+    case "clear" => functionType([], [], primitive("unit"))
+    case "update" => functionType(
+      [key, item, functionType([item], [], item)],
+      [],
+      primitive("unit"),
+    )
+    case "mapValues" => {
+      let output = rigid("W", "builtin::Map.mapValues")
+      functionType(
+        [functionType([item], [], output)],
+        [],
+        constructor("Map", [key, output]),
+      )
+    }
+    case "filter" => functionType(
+      [functionType([key, item], [], primitive("bool"))],
+      [],
+      object,
+    )
+    case _ => emptyType("unknown")
+  }
+}
+
+function stringMemberType(name: string) -> TypeValue {
+  match name {
+    case "byteLength" => functionType([], [], primitive("int"))
+    case "trim" | "trimStart" | "trimEnd" =>
+      functionType([], [], primitive("string"))
+    case "contains" | "startsWith" | "endsWith" =>
+      functionType([primitive("string")], [], primitive("bool"))
+    case "replace" => functionType(
+      [primitive("string"), primitive("string")],
+      [],
+      primitive("string"),
+    )
+    case "indexOf" | "lastIndexOf" => functionType(
+      [primitive("string")],
+      [],
+      constructor("Option", [primitive("int")]),
+    )
+    case "split" => functionType(
+      [primitive("string")],
+      [],
+      constructor("Array", [primitive("string")]),
+    )
+    case "slice" => functionType(
+      [primitive("int"), primitive("int")],
+      [],
+      primitive("string"),
+    )
+    case "codePointAt" => functionType(
+      [primitive("int")],
+      [],
+      constructor("Option", [primitive("int")]),
+    )
+    case "scalars" => functionType(
+      [],
+      [],
+      constructor("Array", [primitive("string")]),
+    )
+    case _ => emptyType("unknown")
+  }
+}
+
+function bytesMemberType(name: string) -> TypeValue {
+  match name {
+    case "length" => functionType([], [], primitive("int"))
+    case "isEmpty" => functionType([], [], primitive("bool"))
+    case "get" => functionType(
+      [primitive("int")],
+      [],
+      constructor("Option", [primitive("int")]),
+    )
+    case "slice" => functionType(
+      [primitive("int"), primitive("int")],
+      [],
+      emptyType("bytes"),
+    )
+    case "decodeUtf8" => functionType(
+      [],
+      [],
+      constructor("Result", [primitive("string"), primitive("string")]),
+    )
+    case "toArray" => functionType(
+      [],
+      [],
+      constructor("Array", [primitive("int")]),
+    )
+    case "toHex" | "toBase64" => functionType([], [], primitive("string"))
+    case _ => emptyType("unknown")
+  }
+}
+
+function byteBufferMemberType(name: string) -> TypeValue {
+  match name {
+    case "length" => functionType([], [], primitive("int"))
+    case "get" => functionType([primitive("int")], [], primitive("int"))
+    case "set" => functionType(
+      [primitive("int"), primitive("int")],
+      [],
+      primitive("unit"),
+    )
+    case "fill" => functionType(
+      [primitive("int"), primitive("int"), primitive("int")],
+      [],
+      primitive("unit"),
+    )
+    case "copy" => functionType(
+      [
+        emptyType("byte-buffer"),
+        primitive("int"),
+        primitive("int"),
+        primitive("int"),
+      ],
+      [],
+      primitive("unit"),
+    )
+    case "toBytes" => functionType([], [], emptyType("bytes"))
+    case _ => emptyType("unknown")
+  }
+}
+
+function fileMemberType(name: string) -> TypeValue {
+  match name {
+    case "read" => functionType(
+      [],
+      [],
+      constructor("Result", [primitive("string"), primitive("string")]),
+    )
+    case "write" => functionType(
+      [primitive("string")],
+      [],
+      constructor("Result", [primitive("unit"), primitive("string")]),
+    )
+    case "close" => functionType([], [], primitive("unit"))
+    case _ => emptyType("unknown")
+  }
+}
+
+function pathMemberType(name: string) -> TypeValue {
+  match name {
+    case "join" | "withExtension" => functionType(
+      [primitive("string")],
+      [],
+      constructor("Result", [emptyType("path"), primitive("string")]),
+    )
+    case "parent" => functionType(
+      [],
+      [],
+      constructor("Option", [emptyType("path")]),
+    )
+    case "fileName" | "extension" => functionType(
+      [],
+      [],
+      constructor("Option", [primitive("string")]),
+    )
+    case "normalize" => functionType([], [], emptyType("path"))
+    case "toString" => functionType([], [], primitive("string"))
+    case _ => emptyType("unknown")
+  }
+}
+
+function regexMemberType(name: string) -> TypeValue {
+  match name {
+    case "isMatch" => functionType(
+      [primitive("string")],
+      [],
+      primitive("bool"),
+    )
+    case "find" => functionType(
+      [primitive("string")],
+      [],
+      constructor("Option", [emptyType("match")]),
+    )
+    case "findAll" => functionType(
+      [primitive("string")],
+      [],
+      constructor("Array", [emptyType("match")]),
+    )
+    case "split" => functionType(
+      [primitive("string")],
+      [],
+      constructor("Array", [primitive("string")]),
+    )
+    case "replaceAll" => functionType(
+      [primitive("string"), primitive("string")],
+      [],
+      primitive("string"),
+    )
+    case _ => emptyType("unknown")
+  }
+}
+
+function urlMemberType(name: string) -> TypeValue {
+  match name {
+    case "scheme" | "path" | "toString" =>
+      functionType([], [], primitive("string"))
+    case "host" | "fragment" => functionType(
+      [],
+      [],
+      constructor("Option", [primitive("string")]),
+    )
+    case "query" => functionType(
+      [],
+      [],
+      constructor(
+        "Map",
+        [primitive("string"), constructor("Array", [primitive("string")])],
+      ),
+    )
+    case _ => emptyType("unknown")
+  }
+}
+
+function dateMemberType(name: string) -> TypeValue {
+  match name {
+    case "toIso" => functionType([], [], primitive("string"))
+    case "addDays" => functionType([primitive("int")], [], emptyType("date"))
+    case "year" | "month" | "day" =>
+      functionType([], [], primitive("int"))
+    case _ => emptyType("unknown")
+  }
+}
+
+function bigIntMemberType(name: string) -> TypeValue {
+  match name {
+    case "toString" => functionType([primitive("int")], [], primitive("string"))
+    case "toInt" => functionType(
+      [],
+      [],
+      constructor("Option", [primitive("int")]),
+    )
+    case "div" | "mod" => functionType(
+      [emptyType("big-int")],
+      [],
+      constructor("Result", [emptyType("big-int"), primitive("string")]),
+    )
+    case _ => emptyType("unknown")
+  }
+}
+
+function decimalMemberType(name: string) -> TypeValue {
+  match name {
+    case "toString" => functionType([], [], primitive("string"))
+    case "scale" => functionType([], [], primitive("int"))
+    case "toInt" => functionType(
+      [],
+      [],
+      constructor("Option", [primitive("int")]),
+    )
+    case "round" => functionType(
+      [primitive("int"), emptyType("rounding-mode")],
+      [],
+      emptyType("decimal"),
+    )
+    case "div" => functionType(
+      [
+        emptyType("decimal"),
+        primitive("int"),
+        emptyType("rounding-mode"),
+      ],
+      [],
+      constructor("Result", [emptyType("decimal"), primitive("string")]),
+    )
+    case _ => emptyType("unknown")
+  }
+}
+
+function jsonValueMemberType(name: string) -> TypeValue {
+  match name {
+    case "kind" => functionType([], [], primitive("string"))
+    case "isNull" => functionType([], [], primitive("bool"))
+    case "asString" | "numberText" => functionType(
+      [],
+      [],
+      constructor("Option", [primitive("string")]),
+    )
+    case "asBool" => functionType(
+      [],
+      [],
+      constructor("Option", [primitive("bool")]),
+    )
+    case "asInt" => functionType(
+      [],
+      [],
+      constructor("Option", [primitive("int")]),
+    )
+    case "get" => functionType(
+      [primitive("string")],
+      [],
+      constructor("Option", [emptyType("json-value")]),
+    )
+    case "at" => functionType(
+      [primitive("int")],
+      [],
+      constructor("Option", [emptyType("json-value")]),
+    )
+    case "length" => functionType(
+      [],
+      [],
+      constructor("Option", [primitive("int")]),
+    )
+    case "asArray" | "values" => functionType(
+      [],
+      [],
+      constructor(
+        "Option",
+        [constructor("Array", [emptyType("json-value")])],
+      ),
+    )
+    case "keys" => functionType(
+      [],
+      [],
+      constructor(
+        "Option",
+        [constructor("Array", [primitive("string")])],
+      ),
+    )
+    case _ => emptyType("unknown")
+  }
+}
+
+function dataProjectionMemberType(object: TypeValue, name: string) -> TypeValue {
+  if object.kind == "match" {
+    return match name {
+      case "start" | "end" => primitive("int")
+      case "text" => primitive("string")
+      case "groups" => constructor(
+        "Array",
+        [constructor("Option", [primitive("string")])],
+      )
+      case "named" => constructor(
+        "Map",
+        [primitive("string"), primitive("string")],
+      )
+      case _ => emptyType("unknown")
+    }
+  }
+  match name {
+    case "tag" => primitive("string")
+    case "parts" => constructor("Array", [primitive("string")])
+    case _ => emptyType("unknown")
+  }
+}
+
+export function memberType(
+  state: CheckerState,
+  moduleIndex: int,
+  object: TypeValue,
+  name: string,
+) -> TypeValue {
+  match declaredMemberType(state, moduleIndex, object, name) {
+    case Some(found) => return found
+    case None => ()
+  }
+  if (object.kind == "primitive" || object.kind == "literal") &&
+    object.name == "int" {
+    return match name {
+      case "atLeast" | "atMost" => functionType(
+        [primitive("int")],
+        [],
+        primitive("int"),
+      )
+      case _ => emptyType("unknown")
+    }
+  }
+  if object.kind == "constructor" && object.name == "Option" {
+    return optionMemberType(object, name)
+  }
+  if object.kind == "constructor" && object.name == "Result" {
+    return resultMemberType(object, name)
+  }
+  if object.kind == "constructor" && object.name == "Array" {
+    return arrayMemberType(object, name)
+  }
+  if object.kind == "constructor" && object.name == "Set" {
+    return setMemberType(object, name)
+  }
+  if object.kind == "constructor" && object.name == "Map" {
+    return mapMemberType(object, name)
+  }
+  if (object.kind == "primitive" || object.kind == "literal") &&
+    object.name == "string" {
+    return stringMemberType(name)
+  }
+  if object.kind == "bytes" {
+    return bytesMemberType(name)
+  }
+  if object.kind == "byte-buffer" {
+    return byteBufferMemberType(name)
+  }
+  if object.kind == "file" {
+    return fileMemberType(name)
+  }
+  if object.kind == "path" {
+    return pathMemberType(name)
+  }
+  if object.kind == "regex" {
+    return regexMemberType(name)
+  }
+  if object.kind == "url" {
+    return urlMemberType(name)
+  }
+  if object.kind == "date" {
+    return dateMemberType(name)
+  }
+  if object.kind == "big-int" {
+    return bigIntMemberType(name)
+  }
+  if object.kind == "decimal" {
+    return decimalMemberType(name)
+  }
+  if object.kind == "rounding-mode" {
+    return match name {
+      case "Down" | "Up" | "TowardZero" | "AwayFromZero" |
+        "HalfEven" | "HalfUp" =>
+        emptyType("rounding-mode")
+      case _ => emptyType("unknown")
+    }
+  }
+  if object.kind == "json-value" {
+    return jsonValueMemberType(name)
+  }
+  if object.kind == "match" || object.kind == "template" {
+    return dataProjectionMemberType(object, name)
+  }
+  if object.kind == "rigid" || object.kind == "foreign" {
+    let projection = "MemberOf<{typeText(object)}, {name}>"
+    return rigid(
+      projection,
+      "projection:{projection}",
+    )
+  }
+  if object.kind == "union" {
+    let mut hasRigid = false
+    for member in object.members {
+      if member.kind == "rigid" || member.kind == "foreign" {
+        hasRigid = true
+      }
+    }
+    if hasRigid {
+      let mut projected: Array<TypeValue> = []
+      for member in object.members {
+        if member.kind != "literal" || member.name != "null" {
+          projected.push(memberType(state, moduleIndex, member, name))
+        }
+      }
+      return unionType(projected)
+    }
+  }
+  emptyType("unknown")
+}
+
+export function rigidOrUnionRigid(value: TypeValue) -> bool {
+  if value.kind == "rigid" || value.kind == "foreign" {
+    return true
+  }
+  if value.kind == "union" {
+    for member in value.members {
+      if rigidOrUnionRigid(member) {
+        return true
+      }
+    }
+  }
+  false
+}
+
+export function rigidUnionMissingConcreteMember(
+  state: CheckerState,
+  moduleIndex: int,
+  value: TypeValue,
+  memberName: string,
+) -> bool {
+  if value.kind != "union" || !rigidOrUnionRigid(value) {
+    return false
+  }
+  for arm in value.members {
+    if (arm.kind == "literal" && arm.name == "null") ||
+      arm.kind == "rigid" || arm.kind == "foreign" ||
+      arm.kind == "unknown" || arm.kind == "inference-variable" ||
+      rigidOrUnionRigid(arm) {
+      continue
+    }
+    let declared = match declaredMemberType(state, moduleIndex, arm, memberName) {
+      case Some(_) => true
+      case None => false
+    }
+    if declared { continue }
+    let receiverMethod = match receiverMethodType(
+      state,
+      moduleIndex,
+      arm,
+      memberName,
+    ) {
+      case Some(_) => true
+      case None => false
+    }
+    if receiverMethod { continue }
+    if memberType(state, moduleIndex, arm, memberName).kind == "unknown" {
+      return true
+    }
+  }
+  false
+}
+
+function collectionNamespaceMemberType(
+  namespace: string,
+  name: string,
+) -> Option<TypeValue> {
+  let bytes = emptyType("bytes")
+  let textValue = primitive("string")
+  let bytesResult = constructor("Result", [bytes, textValue])
+  if namespace == "Array" || namespace == "Set" {
+    let item = rigid("T", "builtin::{namespace}.of")
+    return match name {
+      case "of" => Some(functionType(
+        [],
+        [item],
+        constructor(namespace, [item]),
+      ))
+      case _ => None
+    }
+  }
+  if namespace == "Bytes" {
+    return match name {
+      case "empty" => Some(functionType([], [], bytes))
+      case "encodeUtf8" => Some(functionType([textValue], [], bytes))
+      case "fromArray" => Some(functionType(
+        [constructor("Array", [primitive("int")])],
+        [],
+        bytesResult,
+      ))
+      case "fromHex" | "fromBase64" => Some(functionType(
+        [textValue],
+        [],
+        bytesResult,
+      ))
+      case "concat" => Some(functionType([bytes, bytes], [], bytes))
+      case _ => None
+    }
+  }
+  if namespace == "ByteBuffer" {
+    return match name {
+      case "allocate" => Some(functionType(
+        [primitive("int"), primitive("int")],
+        [],
+        emptyType("byte-buffer"),
+      ))
+      case "fromBytes" => Some(functionType(
+        [bytes],
+        [],
+        emptyType("byte-buffer"),
+      ))
+      case _ => None
+    }
+  }
+  if namespace == "Map" {
+    let key = rigid("K", "builtin::Map.new")
+    let value = rigid("V", "builtin::Map.new")
+    return match name {
+      case "new" => Some(functionType(
+        [],
+        [],
+        constructor("Map", [key, value]),
+      ))
+      case "ofEntries" => Some(functionType(
+        [constructor("Array", [structural(
+          ["key", "value"],
+          [key, value],
+        )])],
+        [],
+        constructor("Map", [key, value]),
+      ))
+      case _ => None
+    }
+  }
+  None
+}
+
+function numericAndBinaryNamespaceMemberType(
+  namespace: string,
+  name: string,
+) -> Option<TypeValue> {
+  let bytes = emptyType("bytes")
+  let textValue = primitive("string")
+  let bytesResult = constructor("Result", [bytes, textValue])
+  if namespace == "Math" {
+    let floatValue = primitive("float")
+    return match name {
+      case "sqrt" => Some(functionType(
+        [floatValue],
+        [],
+        constructor("Result", [floatValue, textValue]),
+      ))
+      case "abs" | "floor" | "ceil" | "round" |
+        "sin" | "cos" | "tan" => Some(functionType(
+        [floatValue],
+        [],
+        floatValue,
+      ))
+      case "isNaN" | "isFinite" => Some(functionType(
+        [floatValue],
+        [],
+        primitive("bool"),
+      ))
+      case "parseFloat" => Some(functionType(
+        [textValue],
+        [],
+        constructor("Result", [floatValue, textValue]),
+      ))
+      case "min" | "max" => Some(functionType(
+        [floatValue, floatValue],
+        [],
+        floatValue,
+      ))
+      case _ => None
+    }
+  }
+  if namespace == "Codec" {
+    return match name {
+      case "zstdCompress" => Some(functionType(
+        [bytes, primitive("int")],
+        [],
+        bytesResult,
+      ))
+      case "gzipCompress" |
+        "gzipDecompress" |
+        "deflateCompress" |
+        "deflateFixedCompress" |
+        "zlibFixedCompress" |
+        "reedSolomon255223Protect" |
+        "deflateDecompress" |
+        "zstdDecompress" => Some(functionType([bytes], [], bytesResult))
+      case _ => None
+    }
+  }
+  if namespace == "Hash" {
+    return match name {
+      case "sha256" | "sha512" => Some(functionType([bytes], [], bytes))
+      case "hmacSha256" => Some(functionType([bytes, bytes], [], bytes))
+      case "crc32" => Some(functionType([bytes], [], primitive("int")))
+      case _ => None
+    }
+  }
+  None
+}
+
+function hostNamespaceMemberType(
+  namespace: string,
+  name: string,
+) -> Option<TypeValue> {
+  let bytes = emptyType("bytes")
+  let textValue = primitive("string")
+  let bytesResult = constructor("Result", [bytes, textValue])
+  if namespace == "FS" {
+    let pathValue = unionType([textValue, emptyType("path")])
+    return match name {
+      case "readText" => Some(functionType(
+        [pathValue],
+        [],
+        constructor("Result", [textValue, textValue]),
+      ))
+      case "writeText" => Some(functionType(
+        [pathValue, textValue],
+        [],
+        constructor("Result", [primitive("unit"), textValue]),
+      ))
+      case "readBytes" => Some(functionType(
+        [pathValue],
+        [],
+        bytesResult,
+      ))
+      case "writeBytes" => Some(functionType(
+        [pathValue, bytes],
+        [],
+        constructor("Result", [primitive("unit"), textValue]),
+      ))
+      case "list" => Some(functionType(
+        [pathValue],
+        [],
+        constructor("Result", [
+          constructor("Array", [structural(
+            ["kind", "name", "sizeBytes"],
+            [
+              textValue,
+              textValue,
+              constructor("Option", [primitive("int")]),
+            ],
+          )]),
+          textValue,
+        ]),
+      ))
+      case _ => None
+    }
+  }
+  if namespace == "Encoding" {
+    return match name {
+      case "utf8Encode" => Some(functionType([textValue], [], bytes))
+      case "utf8Decode" => Some(functionType(
+        [bytes],
+        [],
+        constructor("Result", [textValue, textValue]),
+      ))
+      case "hexEncode" | "base64Encode" => Some(functionType(
+        [bytes],
+        [],
+        textValue,
+      ))
+      case "hexDecode" | "base64Decode" => Some(functionType(
+        [textValue],
+        [],
+        bytesResult,
+      ))
+      case _ => None
+    }
+  }
+  if namespace == "Cli" {
+    let textArray = constructor("Array", [textValue])
+    return match name {
+      case "hasFlag" => Some(functionType(
+        [textArray, textValue],
+        [],
+        primitive("bool"),
+      ))
+      case "option" => Some(functionType(
+        [textArray, textValue],
+        [],
+        constructor("Option", [textValue]),
+      ))
+      case "options" => Some(functionType(
+        [textArray, textValue],
+        [],
+        textArray,
+      ))
+      case "positionals" => Some(functionType(
+        [textArray],
+        [],
+        textArray,
+      ))
+      case _ => None
+    }
+  }
+  if namespace == "Path" {
+    return match name {
+      case "from" | "cwdRelative" | "project" => Some(functionType(
+        [textValue],
+        [],
+        constructor("Result", [emptyType("path"), textValue]),
+      ))
+      case _ => None
+    }
+  }
+  if namespace == "Regex" {
+    return match name {
+      case "compile" => Some(functionType(
+        [textValue],
+        [],
+        constructor("Result", [emptyType("regex"), textValue]),
+      ))
+      case _ => None
+    }
+  }
+  None
+}
+
+function structuredDataNamespaceMemberType(
+  namespace: string,
+  name: string,
+) -> Option<TypeValue> {
+  let textValue = primitive("string")
+  if namespace == "CSV" {
+    let textArray = constructor("Array", [textValue])
+    let rows = constructor("Array", [textArray])
+    let records = constructor(
+      "Array",
+      [constructor("Map", [textValue, textValue])],
+    )
+    return match name {
+      case "parse" => Some(functionType(
+        [textValue],
+        [],
+        constructor("Result", [rows, textValue]),
+      ))
+      case "parseWithHeader" => Some(functionType(
+        [textValue],
+        [],
+        constructor("Result", [records, textValue]),
+      ))
+      case "stringify" => Some(functionType([rows], [], textValue))
+      case "stringifyWithHeader" => Some(functionType(
+        [records, textArray],
+        [],
+        textValue,
+      ))
+      case _ => None
+    }
+  }
+  if namespace == "TOML" {
+    return match name {
+      case "parse" => Some(functionType(
+        [textValue],
+        [],
+        constructor(
+          "Result",
+          [emptyType("toml-value"), textValue],
+        ),
+      ))
+      case "stringify" => Some(functionType(
+        [emptyType("toml-value")],
+        [],
+        constructor("Result", [textValue, textValue]),
+      ))
+      case "toJson" => Some(functionType(
+        [emptyType("toml-value")],
+        [],
+        emptyType("json-value"),
+      ))
+      case "fromJson" => Some(functionType(
+        [emptyType("json-value")],
+        [],
+        constructor(
+          "Result",
+          [emptyType("toml-value"), textValue],
+        ),
+      ))
+      case _ => None
+    }
+  }
+  if namespace == "JSON" {
+    let decoded = rigid("T", "builtin::JSON")
+    let parseError = structural(
+      ["column", "line", "message"],
+      [primitive("int"), primitive("int"), textValue],
+    )
+    return match name {
+      case "parseAs" => Some(functionType(
+        [textValue],
+        [],
+        constructor("Result", [decoded, textValue]),
+      ))
+      case "decode" => Some(functionType(
+        [emptyType("json-value")],
+        [],
+        constructor("Result", [decoded, textValue]),
+      ))
+      case "parse" => Some(functionType(
+        [textValue],
+        [],
+        constructor(
+          "Result",
+          [emptyType("json-value"), parseError],
+        ),
+      ))
+      case "stringify" => Some(functionType(
+        [rigid("T", "builtin::JSON")],
+        [],
+        constructor("Result", [textValue, textValue]),
+      ))
+      case _ => None
+    }
+  }
+  None
+}
+
+function scalarNamespaceMemberType(
+  namespace: string,
+  name: string,
+) -> Option<TypeValue> {
+  let textValue = primitive("string")
+  if namespace == "URL" {
+    return match name {
+      case "parse" => Some(functionType(
+        [textValue],
+        [],
+        constructor("Result", [emptyType("url"), textValue]),
+      ))
+      case _ => None
+    }
+  }
+  if namespace == "Date" {
+    return match name {
+      case "fromYmd" => Some(functionType(
+        [primitive("int"), primitive("int"), primitive("int")],
+        [],
+        constructor("Result", [emptyType("date"), textValue]),
+      ))
+      case "parseIso" => Some(functionType(
+        [textValue],
+        [],
+        constructor("Result", [emptyType("date"), textValue]),
+      ))
+      case _ => None
+    }
+  }
+  if namespace == "BigInt" {
+    return match name {
+      case "fromInt" => Some(functionType(
+        [primitive("int")],
+        [],
+        emptyType("big-int"),
+      ))
+      case "parse" => Some(functionType(
+        [textValue, primitive("int")],
+        [],
+        constructor("Option", [emptyType("big-int")]),
+      ))
+      case _ => None
+    }
+  }
+  if namespace == "Decimal" {
+    return match name {
+      case "fromInt" => Some(functionType(
+        [primitive("int")],
+        [],
+        emptyType("decimal"),
+      ))
+      case "parse" => Some(functionType(
+        [textValue],
+        [],
+        constructor("Option", [emptyType("decimal")]),
+      ))
+      case _ => None
+    }
+  }
+  if namespace == "RoundingMode" {
+    return match name {
+      case "Down" | "Up" | "TowardZero" | "AwayFromZero" |
+        "HalfEven" | "HalfUp" =>
+        Some(emptyType("rounding-mode"))
+      case _ => None
+    }
+  }
+  if namespace == "Test" {
+    let value = rigid("T", "builtin::Test")
+    let error = rigid("E", "builtin::Test")
+    return match name {
+      case "assert" => Some(functionType(
+        [primitive("bool"), textValue],
+        [],
+        primitive("unit"),
+      ))
+      case "assertEq" | "assertNe" => Some(functionType(
+        [value, value],
+        [],
+        primitive("unit"),
+      ))
+      case "assertContains" => Some(functionType(
+        [textValue, textValue],
+        [],
+        primitive("unit"),
+      ))
+      case "assertOk" => Some(functionType(
+        [constructor("Result", [value, error])],
+        [],
+        value,
+      ))
+      case "assertErr" => Some(functionType(
+        [constructor("Result", [value, error])],
+        [],
+        error,
+      ))
+      case "assertSome" => Some(functionType(
+        [constructor("Option", [value])],
+        [],
+        value,
+      ))
+      case "assertNone" => Some(functionType(
+        [constructor("Option", [value])],
+        [],
+        primitive("unit"),
+      ))
+      case "assertGolden" => Some(functionType(
+        [textValue, textValue],
+        [],
+        primitive("unit"),
+      ))
+      case _ => None
+    }
+  }
+  None
+}
+
+export function builtinNamespaceFamily(namespace: string) -> string {
+  match namespace {
+    case "Array" | "Set" | "Bytes" | "ByteBuffer" | "Map" =>
+      "collection"
+    case "Math" | "Codec" | "Hash" => "numeric-binary"
+    case "FS" | "Encoding" | "Cli" | "Path" | "Regex" => "host"
+    case "CSV" | "TOML" | "JSON" => "structured-data"
+    case "URL" | "Date" | "BigInt" | "Decimal" | "RoundingMode" |
+      "Test" => "scalar"
+    case "Show" | "Eq" | "Order" => "protocol"
+    case _ => ""
+  }
+}
+
+export function builtinNamespaceMemberType(
+  namespace: string,
+  name: string,
+) -> Option<TypeValue> {
+  match builtinNamespaceFamily(namespace) {
+    case "collection" => collectionNamespaceMemberType(namespace, name)
+    case "numeric-binary" => numericAndBinaryNamespaceMemberType(namespace, name)
+    case "host" => hostNamespaceMemberType(namespace, name)
+    case "structured-data" => structuredDataNamespaceMemberType(namespace, name)
+    case "scalar" => scalarNamespaceMemberType(namespace, name)
+    case _ => None
+  }
+}
+
+export function bindingIndex(bindings: Array<TypeBinding>, name: string) -> int {
+  let mut index = 0
+  for binding in bindings {
+    if binding.name == name {
+      return index
+    }
+    index += 1
+  }
+  -1
+}
+
+export function bindTypeVariable(
+  bindings: Array<TypeBinding>,
+  name: string,
+  typeValue: TypeValue,
+  widenLiteral: bool,
+) -> () {
+  let mut target = bindings
+  let index = bindingIndex(target, name)
+  if index >= 0 {
+    return ()
+  }
+  target.push(TypeBinding {
+    name: name,
+    typeValue: if widenLiteral { widen(typeValue) } else { typeValue },
+  })
+}
+
+function collectTypeArrayBindings(
+  expected: Array<TypeValue>,
+  actual: Array<TypeValue>,
+  bindings: Array<TypeBinding>,
+  widenLiteral: bool,
+) -> () {
+  let mut index = 0
+  for nested in expected {
+    match actual.get(index) {
+      case Some(found) => collectTypeBindings(
+        nested,
+        found,
+        bindings,
+        widenLiteral,
+      )
+      case None => ()
+    }
+    index += 1
+  }
+  ()
+}
+
+export function collectTypeBindings(
+  expected: TypeValue,
+  actual: TypeValue,
+  bindings: Array<TypeBinding>,
+  widenLiteral: bool,
+) -> () {
+  if expected.kind == "rigid" {
+    // Stage 0 leaves an Unknown-fed scheme slot empty. Self-host builtin
+    // generics are rigid values, so binding Unknown preserves the same
+    // unresolved result as an observable hole.
+    if typeEqual(expected, actual) || typeContains(
+      actual,
+      (component: TypeValue) => typeEqual(component, expected),
+    ) {
+      return ()
+    }
+    bindTypeVariable(bindings, expected.name, actual, widenLiteral)
+    return ()
+  }
+  if expected.kind == "union" {
+    for member in expected.members {
+      collectTypeBindings(member, actual, bindings, widenLiteral)
+    }
+    return ()
+  }
+  if expected.kind == "constructor" && actual.kind == "constructor" &&
+    expected.name == actual.name &&
+    expected.arguments.length == actual.arguments.length {
+    return collectTypeArrayBindings(
+      expected.arguments,
+      actual.arguments,
+      bindings,
+      widenLiteral,
+    )
+  }
+  if (expected.kind == "enum" || expected.kind == "nominal-record" ||
+    expected.kind == "newtype") &&
+    expected.kind == actual.kind && expected.identity == actual.identity &&
+    expected.origin == actual.origin &&
+    expected.arguments.length == actual.arguments.length {
+    return collectTypeArrayBindings(
+      expected.arguments,
+      actual.arguments,
+      bindings,
+      widenLiteral,
+    )
+  }
+  if expected.kind == "record" && actual.kind == "record" &&
+    expected.fields.length == actual.fields.length {
+    let mut index = 0
+    while index < expected.fields.length {
+      match [expected.fieldNames.get(index), actual.fieldNames.get(index)] {
+        case [Some(expectedName), Some(actualName)] => if expectedName ==
+          actualName {
+          match [expected.fields.get(index), actual.fields.get(index)] {
+            case [Some(expectedField), Some(actualField)] => collectTypeBindings(
+              expectedField,
+              actualField,
+              bindings,
+              widenLiteral,
+            )
+            case _ => ()
+          }
+        }
+        case _ => ()
+      }
+      index += 1
+    }
+    return ()
+  }
+  if expected.kind == "function" && actual.kind == "function" {
+    collectTypeArrayBindings(
+      expected.parameters,
+      actual.parameters,
+      bindings,
+      widenLiteral,
+    )
+    match [expected.variadic.get(0), actual.variadic.get(0)] {
+      case [Some(expectedVariadic), Some(actualVariadic)] => collectTypeBindings(
+        expectedVariadic,
+        actualVariadic,
+        bindings,
+        widenLiteral,
+      )
+      case _ => ()
+    }
+    match [expected.result.get(0), actual.result.get(0)] {
+      case [Some(expectedResult), Some(actualResult)] => collectTypeBindings(
+        expectedResult,
+        actualResult,
+        bindings,
+        widenLiteral,
+      )
+      case _ => ()
+    }
+  }
+  ()
+}
+
+function typeBindingComponentReplacement(
+  value: TypeValue,
+  bindings: Array<TypeBinding>,
+) -> Option<TypeValue> {
+  if value.kind != "rigid" {
+    return None
+  }
+  for binding in bindings {
+    if value.name == binding.name {
+      return Some(binding.typeValue)
+    }
+  }
+  Some(value)
+}
+
+export function applyBindings(value: TypeValue, bindings: Array<TypeBinding>) -> TypeValue {
+  transformTypeComponents(
+    value,
+    (component: TypeValue) => typeBindingComponentReplacement(
+      component,
+      bindings,
+    ),
+  )
+}
+
+function nominalDefinitionModule(
+  state: CheckerState,
+  moduleIndex: int,
+  value: TypeValue,
+) -> int {
+  match recordDefinitionForType(state, moduleIndex, value) {
+    case Some(definition) => return definition.moduleIndex
+    case None => ()
+  }
+  match enumDefinitionForType(state, moduleIndex, value) {
+    case Some(definition) => return definition.moduleIndex
+    case None => ()
+  }
+  match newtypeDefinitionForType(state, moduleIndex, value) {
+    case Some(definition) => return definition.moduleIndex
+    case None => ()
+  }
+  -1
+}
+
+export function typeConforms(
+  state: CheckerState,
+  moduleIndex: int,
+  value: TypeValue,
+  protocol: string,
+) -> bool {
+  let widened = widen(value)
+  if widened.kind == "rigid" {
+    return rigidProtocolBound(state, widened, protocol)
+  }
+  if widened.kind == "nominal-record" ||
+    widened.kind == "enum" || widened.kind == "newtype" ||
+    widened.kind == "foreign" {
+    let definitionModule = nominalDefinitionModule(
+      state,
+      moduleIndex,
+      widened,
+    )
+    if widened.kind == "foreign" {
+      return match state.conformanceTypeIndexes.get(conformanceTypeKey(
+        widened.identity,
+        protocol,
+      )) {
+        case Some(_) => true
+        case None => false
+      }
+    }
+    return protocolConformanceIndex(
+      state,
+      definitionModule,
+      widened.identity,
+      protocol,
+    ) >= 0
+  }
+  false
+}
+
+export function checkFunctionBounds(
+  state: CheckerState,
+  moduleIndex: int,
+  node: SyntaxNode,
+  definition: FunctionDefinition,
+  bindings: Array<TypeBinding>,
+) -> () {
+  for bound in definition.bounds {
+    let index = bindingIndex(bindings, bound.parameterName)
+    if index >= 0 {
+      match bindings.get(index) {
+        case Some(binding) => if !typeConforms(
+          state,
+          definition.moduleIndex,
+          binding.typeValue,
+          bound.protocol,
+        ) {
+          addDiagnostic(
+            state,
+            moduleIndex,
+            "TPZ5522",
+            "`{typeText(binding.typeValue)}` does not satisfy protocol bound `{bound.protocol}`",
+            "",
+            node,
+          )
+        }
+        case None => ()
+      }
+    }
+  }
+  ()
+}
+
+export function protocolCallResult(
+  service: CheckerService,
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  callee: SyntaxNode,
+) -> Option<TypeValue> {
+  if callee.kind != "expression/member" {
+    return None
+  }
+  let object = match child(callee, "object") {
+    case Some(found) => found
+    case None => return None
+  }
+  let field = match child(callee, "field") {
+    case Some(found) => text(source, found)
+    case None => return None
+  }
+  if !serviceBuiltinNamespaceObject(service, state, moduleIndex, source, object) {
+    return None
+  }
+  let protocol = text(source, object)
+  if protocol == "Show" && field == "show" {
+    return Some(primitive("string"))
+  }
+  if protocol == "Eq" && field == "equals" {
+    return Some(primitive("bool"))
+  }
+  if protocol == "Order" && field == "compare" {
+    return Some(primitive("int"))
+  }
+  if protocol == "JSON" && field == "stringify" {
+    return Some(constructor(
+      "Result",
+      [primitive("string"), primitive("string")],
+    ))
+  }
+  None
+}
+
+export function protocolStaticMemberType(
+  namespace: string,
+  member: string,
+) -> Option<TypeValue> {
+  let value = rigid("T", "builtin::{namespace}.{member}")
+  if namespace == "Show" && member == "show" {
+    return Some(functionType([value], [], primitive("string")))
+  }
+  if namespace == "Eq" && member == "equals" {
+    return Some(functionType(
+      [value, value],
+      [],
+      primitive("bool"),
+    ))
+  }
+  if namespace == "Order" && member == "compare" {
+    return Some(functionType(
+      [value, value],
+      [],
+      primitive("int"),
+    ))
+  }
+  None
+}
+
+export function rigidProtocolBound(
+  state: CheckerState,
+  value: TypeValue,
+  protocol: string,
+) -> bool {
+  if value.kind != "rigid" {
+    return false
+  }
+  if state.activeFunctions.length > 0 {
+    match state.activeFunctions.get(state.activeFunctions.length - 1) {
+      case Some(index) => match state.functions.get(index) {
+        case Some(definition) => for bound in definition.bounds {
+          if bound.parameterName == value.name && bound.protocol == protocol {
+            return true
+          }
+        }
+        case None => ()
+      }
+      case None => ()
+    }
+  }
+  for definition in state.functions {
+    let mut parameterIndex = 0
+    for parameterName in definition.typeParameters {
+      if parameterName == value.name {
+        match definition.typeParameterOrigins.get(parameterIndex) {
+          case Some(parameterOrigin) => if parameterOrigin == value.origin {
+            for bound in definition.bounds {
+              if bound.parameterName == value.name &&
+                bound.protocol == protocol {
+                return true
+              }
+            }
+          }
+          case None => ()
+        }
+      }
+      parameterIndex += 1
+    }
+  }
+  false
+}

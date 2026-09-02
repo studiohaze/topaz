@@ -1,0 +1,7 @@
+let base = 10
+let r = concurrent {
+  x: base + 1
+  y: base * 2
+}
+print("{r.x} {r.y}")
+0

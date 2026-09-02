@@ -1,0 +1,22 @@
+[package]
+name = "topaz_mcp_worker"
+description = "No-capability Topaz worker for the target-scoped MCP execution product"
+version.workspace = true
+license.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "topaz-mcp-worker"
+path = "src/main.rs"
+
+[dependencies]
+topaz_check = { workspace = true }
+topaz_diag = { workspace = true }
+topaz_host_none = { workspace = true }
+topaz_interp = { workspace = true }
+topaz_parser = { workspace = true }
+topaz_syntax = { workspace = true }
+
+[lints]
+workspace = true

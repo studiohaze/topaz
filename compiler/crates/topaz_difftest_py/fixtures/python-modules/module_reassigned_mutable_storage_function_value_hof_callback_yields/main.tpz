@@ -1,0 +1,21 @@
+
+import util
+let mut callbacks = util.fastCallbacks
+let mut handlers = util.fastHandlers
+callbacks = util.slowCallbacks
+handlers = util.slowHandlers
+concurrent {
+    arraySlot: {
+        let xs = [1]
+        xs.map(callbacks[1])
+    }
+    recordField: {
+        let ys = [1]
+        ys.map(handlers.primary)
+    }
+    boom: {
+        let zs = [1]
+        zs[2]
+    }
+}
+0

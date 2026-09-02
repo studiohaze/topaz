@@ -1,0 +1,10 @@
+
+function mark(label: string, xs: Array<string>) -> Array<string> {
+    print(label)
+    xs
+}
+function main() -> Option<Result<string, string>> {
+    let bytes: Option<Bytes> = Some(Bytes.encodeUtf8("x"))
+    bytes?.decodeUtf8(...mark("bytes", []))
+}
+main()

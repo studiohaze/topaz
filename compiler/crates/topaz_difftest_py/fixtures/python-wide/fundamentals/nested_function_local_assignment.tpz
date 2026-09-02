@@ -1,0 +1,10 @@
+
+function main() -> int {
+    function bump() -> int {
+        let mut x = 0
+        x = x + 1
+        x
+    }
+    bump()
+}
+main()

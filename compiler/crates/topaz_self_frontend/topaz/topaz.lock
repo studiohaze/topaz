@@ -1,0 +1,5 @@
+[[package]]
+name = "topaz_self_frontend"
+version = "0.1.0"
+source = "root"
+manifest_hash = "sha256:20308beebb0caa73cf03b8977e2fbc5185c2a7f043297f925589620121ea6396"

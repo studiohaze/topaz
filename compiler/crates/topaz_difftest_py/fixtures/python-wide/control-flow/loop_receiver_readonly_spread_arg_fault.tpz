@@ -1,0 +1,12 @@
+
+function makeArray() -> Array<int> {
+    print("receiver")
+    [10]
+}
+function main() -> Option<int> {
+    makeArray().get(...loop {
+        print("receiver-spread")
+        break [0]
+    })
+}
+main()

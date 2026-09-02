@@ -1,0 +1,20 @@
+record User {
+    name: string,
+    age: int,
+}
+
+record Admin {
+    level: int,
+}
+
+function label(value: User | Admin | null) -> string {
+    match value {
+        case User { name, age: 36 } => name
+        case User { name } => "other:{name}"
+        case Admin { level } => "admin:{level}"
+        case null => "none"
+    }
+}
+
+let user: User = User { name: "Ada", age: 36 }
+print(label(user))

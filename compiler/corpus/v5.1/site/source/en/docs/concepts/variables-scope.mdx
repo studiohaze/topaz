@@ -1,0 +1,301 @@
+---
+title: 'Variables & Scope'
+description: 'Master variable declaration, scope management, and mutability control in Topaz. Learn the differences between let, let mut, const and understand lexical scoping and closure behavior.'
+covers: '§3, §4, §5, §6, §18'
+---
+
+> **Library names note**: Helper names beyond the standard-library minimum — `userList`, etc. — are illustrative placeholders, not canonical APIs.
+
+Variables and scope are fundamental to programming. Topaz provides a **modern and safe variable system** that reduces bugs and increases code clarity. 
+
+##  Variable Declaration
+
+### let - Immutable Variables (Default)
+
+```topaz
+// All variables are immutable by default
+let name = "John Topaz"
+let age = 25
+let isActive = true
+
+// Cannot be changed once defined
+// name = "Different Name"  // Compile error!
+```
+
+In public Topaz docs, use `let mut` whenever a binding is reassigned or a collection is mutated in place. `let` is the default for stable bindings.
+
+### let mut - Mutable Variables
+
+```topaz
+// Use let mut when you need to change values
+let mut score = 100
+let mut message = "Initial message"
+
+// Value can be changed
+score = 95
+message = "Updated message"
+
+print("Current score: {score}")  // "Current score: 95"
+```
+
+### const - Compile-time Constants
+
+```topaz
+// Constants determined at compile time
+const MAX_SIZE: int = 1000
+const APP_NAME: string = "Topaz Calculator"
+const PI: float = 3.141592653589793
+
+// Top-level constants available below in this file
+const defaultConfig = {
+    language: "English",
+    theme: "dark",
+    autoSave: true
+}
+```
+
+##  Type Inference and Explicit Types
+
+```topaz
+// Type inference (recommended)
+let inferredNumber = 42           // int
+let inferredString = "Hello"      // string
+let inferredArray = [1, 2, 3]     // Array<int>
+
+// Explicit types (when needed)
+let explicitNumber: int = 42
+let explicitString: string = "Hello"
+let explicitArray: Array<int> = [1, 2, 3]
+
+// Explicit types help with complex cases
+let userData: { name: string, age: int } = {
+    name: "Developer Kim",
+    age: 30
+}
+```
+
+##  Scope Rules
+
+### Global Scope
+
+```topaz
+// File top level - global scope
+let globalVariable = "Accessible everywhere"
+const globalConstant = 100
+
+function useAnywhere() {
+    print(globalVariable)      // Accessible
+    print("{globalConstant}")  // Accessible
+}
+```
+
+### Function Scope
+
+```topaz
+function calculator(a: int, b: int) -> int {
+    // Function parameters also belong to function scope
+    let result = a + b        // Function scope
+    let mut tempValue = a * 2     // Function scope
+    
+    print("Result: {result}")
+    return result
+}
+
+// print(result)  // Error! Cannot access outside function
+```
+
+### Block Scope
+
+```topaz
+function scopeExample() {
+    let outerVariable = "outside"
+    
+    if true {
+        let innerVariable = "inside"      // Block scope
+        let mut blockMutable = 10            // Block scope
+        
+        print(outerVariable)             // Accessible (outer scope)
+        print(innerVariable)             // Accessible (same scope)
+    }
+    
+    print(outerVariable)                 // Accessible
+    // print(innerVariable)              // Error! Cannot access outside block
+}
+```
+
+### Loop Scope
+
+```topaz
+// for loop variables have loop scope
+for i in 0..5 {
+    let loopVariable = i * 2
+    print("i: {i}, value: {loopVariable}")
+}
+
+// print(i)  // Error! Cannot access outside loop
+
+```
+
+> Topaz also provides `while` statements alongside `for` (see the control-flow page); the same block-scope rules apply to their bodies.
+
+##  Variable Shadowing
+
+```topaz
+let name = "John Topaz"
+
+function shadowingExample() {
+    let name = "Developer Park"        // Shadows global name
+    print("In function: {name}")       // "In function: Developer Park"
+    
+    {
+        let name = "Designer Lee"       // Shadows function name
+        print("In block: {name}")       // "In block: Designer Lee"
+    }
+    
+    print("After block: {name}")       // "After block: Developer Park"
+}
+
+print("Global: {name}")               // "Global: John Topaz"
+shadowingExample()
+```
+
+> Shadowing is canonical across **nested** lexical scopes (as shown above). Redeclaring the same name in the **same** scope is not canonical Topaz.
+
+##  Closures and Scope
+
+```topaz
+function createCounter(initialValue: int) -> () -> int {
+    let mut count = initialValue           // Captured by closure
+    
+    return () => {
+        count += 1                     // Access outer scope variable
+        count
+    }
+}
+
+let counter1 = createCounter(0)
+let counter2 = createCounter(100)
+
+print("{counter1()}")  // 1
+print("{counter1()}")  // 2
+print("{counter2()}")  // 101
+print("{counter1()}")  // 3
+```
+
+##  Pattern Matching and Variables
+
+```topaz
+let user = {
+    name: "John Topaz",
+    age: 28,
+    job: "Developer"
+}
+
+// Destructuring creates new variables
+let { name, age } = user
+print("Name: {name}, Age: {age}")
+
+// Variable binding in match
+match user.age {
+    case age if age < 20 => print("Likely a student")
+    case age if age < 30 => print("Young professional")
+    case age => print("Experienced: {age} years old")
+}
+
+// Array pattern matching
+let scores = [95, 87, 92, 88]
+match scores {
+    case [first, second, ..rest] => {
+        print("First: {first}")
+        print("Second: {second}")
+        print("Rest: {rest}")
+    }
+    case _ => print("Need at least two scores")
+}
+```
+
+##  Advanced Scope Patterns
+
+### Block Expressions for Scope Isolation
+
+```topaz
+// Block expression for scope isolation
+let result = {
+    let tempCalculation = 10 * 20
+    let adjustment = 50
+    tempCalculation + adjustment
+}
+
+print("{result}")  // 250
+// tempCalculation, adjustment are not accessible outside the block
+```
+
+### Module Scope
+
+> Topaz v5.2 adds the module / `import` / `export` system. Multi-file organization, visibility rules, and module-scope bindings are covered in [Modules & Visibility](/en/docs/concepts/modules); the examples on this page stay within a single file.
+
+##  Best Practices
+
+### 1. Use Immutable by Default
+
+```topaz
+// Good: Use let by default
+let config = {
+    theme: "dark",
+    language: "English"
+}
+
+// Use let mut only when necessary
+let mut progressStatus = "started"
+progressStatus = "in-progress"
+progressStatus = "completed"
+```
+
+### 2. Meaningful Variable Names
+
+```topaz
+// Bad example
+let a = userList.length
+let b = a * 2
+
+// Good example  
+let totalUsers = userList.length
+let doubledCapacity = totalUsers * 2
+```
+
+### 3. Minimize Scope
+
+```topaz
+function processData(rawData: Array<int>) -> Array<int> {
+    let mut result: Array<int> = []
+    
+    for item in rawData {
+        // Variables needed only in loop should be declared in loop
+        let transformedValue = item * 2 + 1
+        let validatedValue = if transformedValue > 0 { transformedValue } else { 0 }
+        
+        result.push(validatedValue)
+    }
+    
+    return result
+}
+```
+
+##  Debugging Tips
+
+```topaz
+// Trace bindings with interpolated prints
+let globalLabel = "build-42"
+
+function printScopeInfo() {
+    let localVariable = "local"
+    
+    print("Variables in current function:")
+    print("- localVariable: {localVariable}")
+    print("- globalLabel: {globalLabel}")   // outer bindings stay reachable
+}
+```
+
+Name resolution is static: using a name that is not in scope is a compile-time error, so there is no runtime "is this variable defined?" check to write — the compiler catches it before the program runs.
+
+Topaz's variable and scope system provides both **safety** and **clarity**. With immutability as default but allowing mutability when needed, and clear scope rules, you can write predictable code. 

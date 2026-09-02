@@ -1,0 +1,6 @@
+function mk() -> (int) -> int {
+  print("M")
+  (x) => x + 1
+}
+let n: Option<int> = None
+n.map(mk())

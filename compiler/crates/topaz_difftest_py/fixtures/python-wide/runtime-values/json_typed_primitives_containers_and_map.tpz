@@ -1,0 +1,17 @@
+
+function main() -> int {
+    let number = match JSON.parseAs<int>("7") {
+        case Ok(value) => value
+        case Err(_) => 0
+    }
+    let values = match JSON.parseAs<Array<int>>("[1,2]") {
+        case Ok(value) => value
+        case Err(_) => []
+    }
+    let lookup = match JSON.parseAs<Map<string, int>>("\{\"answer\":8\}") {
+        case Ok(value) => value
+        case Err(_) => Map.new()
+    }
+    number + values[1] + lookup.getOr("answer", 0)
+}
+main()

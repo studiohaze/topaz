@@ -1,0 +1,4 @@
+let mut x = 99
+let f = () => match Some(5) { case Some(x) => x
+case None => 0 }
+f()

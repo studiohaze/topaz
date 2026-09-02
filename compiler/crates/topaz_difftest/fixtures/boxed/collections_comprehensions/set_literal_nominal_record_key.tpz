@@ -1,0 +1,2 @@
+record User { id: int }
+set { User { id: 1 }, User { id: 1 }, User { id: 2 } }.toArray()

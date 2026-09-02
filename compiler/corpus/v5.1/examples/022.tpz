@@ -1,0 +1,7 @@
+function describe(values: Array<int>) -> string {
+    match values {
+        case [] => "empty"
+        case [only] => "one: {only}"
+        case [head, ..tail] => "head: {head}, rest: {tail.length}"
+    }
+}

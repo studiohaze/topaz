@@ -1,0 +1,21 @@
+let numbers = [1, 2, 3, 4, 5]
+
+match numbers {
+    case [] => print("Empty array")
+    case [first] => print("Single element: {first}")
+    case [first, second] => print("Two elements: {first}, {second}")
+    case [first, ..rest] => {
+        print("First: {first}, Rest: {rest}")
+    }
+}
+
+// Specific pattern matching
+let scoreList = [95, 87, 92]
+
+match scoreList {
+    case [100, ..] => print("Starts with perfect score!")
+    case scores if scores.length > 0 && scores[scores.length - 1] == 100 => print("Ends with perfect score!")
+    case [a, b, c] if a > 90 && b > 90 && c > 90 => print("All scores above 90!")
+    case scores if filter(scores, x => x >= 80).length == scores.length => print("All scores above 80")
+    case _ => print("Regular score distribution")
+}

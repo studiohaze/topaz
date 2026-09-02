@@ -1,0 +1,28 @@
+
+function optIntText(value: Option<int>) -> string {
+    match value {
+        case Some(n) => "{n}"
+        case None => "none"
+    }
+}
+function main() -> string {
+    let text = "  banana  "
+    let opt: Option<string> = Some("  hi  ")
+    let none: Option<string> = None
+    let piped = "na" |> "banana".lastIndexOf()
+    let trimmed = opt?.trim() ?? "none"
+    let skipped = none?.replace("x", "y") ?? "none"
+    let a = text.trim()
+    let b = text.trimStart()
+    let c = text.trimEnd()
+    let d = text.startsWith(prefix: "  b")
+    let e = text.endsWith("  ")
+    let f = text.contains("nan")
+    let g = optIntText(text.indexOf("na"))
+    let h = optIntText(text.lastIndexOf("na"))
+    let i = text.slice(2, 8)
+    let j = text.replace("na", "NA")
+    let k = optIntText("가나다".lastIndexOf(""))
+    "{a}/{b}/{c}/{d}/{e}/{f}/{g}/{h}/{i}/{j}/{piped}/{trimmed}/{skipped}/{k}"
+}
+main()

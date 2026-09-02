@@ -1,0 +1,3 @@
+match URL.parse("https://example.com/a") { case Ok(u) => { let f = u.toString
+f() }
+case Err(e) => e }

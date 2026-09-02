@@ -1,0 +1,12 @@
+match open("input.txt") {
+case Ok(file) => {
+let writeFile = file.write
+let readFile = file.read
+let closeFile = file.close
+writeFile(s: "changed")
+let content = readFile()
+closeFile()
+content
+}
+case Err(e) => Err(e)
+}

@@ -1,0 +1,4 @@
+let a = [1]
+function get() { a }
+get().push(2)
+a

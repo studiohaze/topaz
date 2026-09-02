@@ -1,0 +1,13 @@
+function processData(rawData: Array<int>) -> Array<int> {
+    let mut result: Array<int> = []
+    
+    for item in rawData {
+        // Variables needed only in loop should be declared in loop
+        let transformedValue = item * 2 + 1
+        let validatedValue = if transformedValue > 0 { transformedValue } else { 0 }
+        
+        result.push(validatedValue)
+    }
+    
+    return result
+}

@@ -1,0 +1,9 @@
+function logWithPrefix(prefix: string, ...items: string) -> () {
+    for item in items {
+        print("{prefix}: {item}")
+    }
+}
+
+let lines = Array.of("a", "b")
+logWithPrefix("debug", ...lines)
+logWithPrefix("debug", ...lines, "tail")

@@ -1,0 +1,1080 @@
+// Structural type equality, assignability, joins, and partial-type solving.
+// The operations are independent of syntax traversal; checker leaves pass only
+// TypeValue data across this boundary.
+
+import types { PreviewTypeAtom }
+import checker_types { TypeValue }
+import checker.model {
+  CheckerState,
+  TypeBinding,
+  constructor,
+  emptyType,
+  inference,
+  literal,
+  nominal,
+  primitive,
+  rigid,
+}
+
+export function typeText(value: TypeValue) -> string {
+  match value.kind {
+    case "primitive" => if value.name == "unit" { "()" } else { value.name }
+    case "literal" => match value.name {
+      case "string" => "\"{value.value}\""
+      case "null" => "null"
+      case _ => value.value
+    }
+    case "constructor" => if value.name == "Range" {
+      "range"
+    } else {
+      "{value.name}<{typeListText(value.arguments)}>"
+    }
+    case "function" => {
+      let mut parameters = value.parameters
+      let mut textValue = typeListText(parameters)
+      match value.variadic.get(0) {
+        case Some(item) => {
+          if textValue != "" {
+            textValue = "{textValue}, "
+          }
+          textValue = "{textValue}...{typeText(item)}"
+        }
+        case None => ()
+      }
+      let resultValue = match value.result.get(0) {
+        case Some(item) => item
+        case None => emptyType("unknown")
+      }
+      "({textValue}) -> {typeText(resultValue)}"
+    }
+    case "union" => stringJoinTypes(value.members, " | ")
+    case "record" => {
+      let mut fields: Array<string> = []
+      let mut index = 0
+      for field in value.fields {
+        let name = match value.fieldNames.get(index) {
+          case Some(found) => found
+          case None => ""
+        }
+        fields.push("{name}: {typeText(field)}")
+        index += 1
+      }
+      "\{ " + stringJoin(fields, ", ") + " \}"
+    }
+    case "enum" | "nominal-record" | "newtype" | "foreign" => if value.arguments.length == 0 {
+      value.identity
+    } else {
+      "{value.identity}<{typeListText(value.arguments)}>"
+    }
+    case "rigid" => value.name
+    case "template" => "template"
+    case "file" => "File"
+    case "json-value" => "JSONValue"
+    case "bytes" => "Bytes"
+    case "byte-buffer" => "ByteBuffer"
+    case "path" => "Path"
+    case "regex" => "Regex"
+    case "match" => "Match"
+    case "toml-value" => "TOMLValue"
+    case "url" => "URL"
+    case "date" => "Date"
+    case "big-int" => "BigInt"
+    case "decimal" => "Decimal"
+    case "rounding-mode" => "RoundingMode"
+    case "inference-variable" => "?{value.value}"
+    case _ => "?"
+  }
+}
+
+export function typeListText(values: Array<TypeValue>) -> string {
+  stringJoinTypes(values, ", ")
+}
+
+function stringJoinTypes(values: Array<TypeValue>, separator: string) -> string {
+  let mut output = ""
+  let mut index = 0
+  for value in values {
+    if index > 0 {
+      output = "{output}{separator}"
+    }
+    output = "{output}{typeText(value)}"
+    index += 1
+  }
+  output
+}
+
+export function stringJoin(values: Array<string>, separator: string) -> string {
+  let mut output = ""
+  let mut index = 0
+  for value in values {
+    if index > 0 {
+      output = "{output}{separator}"
+    }
+    output = "{output}{value}"
+    index += 1
+  }
+  output
+}
+
+function typeArraysEqual(left: Array<TypeValue>, right: Array<TypeValue>) -> bool {
+  if left.length != right.length {
+    return false
+  }
+  let mut index = 0
+  while index < left.length {
+    match [left.get(index), right.get(index)] {
+      case [Some(a), Some(b)] => if !typeEqual(a, b) { return false }
+      case _ => return false
+    }
+    index += 1
+  }
+  true
+}
+
+function stringArraysEqual(left: Array<string>, right: Array<string>) -> bool {
+  if left.length != right.length {
+    return false
+  }
+  let mut index = 0
+  while index < left.length {
+    match [left.get(index), right.get(index)] {
+      case [Some(a), Some(b)] => if a != b { return false }
+      case _ => return false
+    }
+    index += 1
+  }
+  true
+}
+
+export function typeEqual(left: TypeValue, right: TypeValue) -> bool {
+  left.kind == right.kind &&
+    left.name == right.name &&
+    left.value == right.value &&
+    left.identity == right.identity &&
+    left.origin == right.origin &&
+    typeArraysEqual(left.arguments, right.arguments) &&
+    typeArraysEqual(left.members, right.members) &&
+    stringArraysEqual(left.fieldNames, right.fieldNames) &&
+    typeArraysEqual(left.fields, right.fields) &&
+    typeArraysEqual(left.parameters, right.parameters) &&
+    typeArraysEqual(left.variadic, right.variadic) &&
+    typeArraysEqual(left.result, right.result)
+}
+
+export function typeContains(
+  value: TypeValue,
+  predicate: (TypeValue) -> bool,
+) -> bool {
+  if predicate(value) {
+    return true
+  }
+  for item in value.arguments {
+    if typeContains(item, predicate) { return true }
+  }
+  for item in value.members {
+    if typeContains(item, predicate) { return true }
+  }
+  for field in value.fields {
+    if typeContains(field, predicate) { return true }
+  }
+  for item in value.parameters {
+    if typeContains(item, predicate) { return true }
+  }
+  for item in value.variadic {
+    if typeContains(item, predicate) { return true }
+  }
+  for item in value.result {
+    if typeContains(item, predicate) { return true }
+  }
+  false
+}
+
+function holeTypeComponent(value: TypeValue) -> bool {
+  value.kind == "unknown" || value.kind == "inference-variable"
+}
+
+export function hasHole(value: TypeValue) -> bool {
+  typeContains(value, holeTypeComponent)
+}
+
+function covariantArgumentsAssignable(
+  expected: Array<TypeValue>,
+  actual: Array<TypeValue>,
+) -> bool {
+  if expected.length != actual.length {
+    return false
+  }
+  let mut index = 0
+  while index < expected.length {
+    match [expected.get(index), actual.get(index)] {
+      case [Some(expectedValue), Some(actualValue)] => if !assignable(
+        expectedValue,
+        actualValue,
+      ) {
+        return false
+      }
+      case _ => return false
+    }
+    index += 1
+  }
+  true
+}
+
+function functionAssignable(expected: TypeValue, actual: TypeValue) -> bool {
+  if expected.parameters.length != actual.parameters.length ||
+    expected.variadic.length != actual.variadic.length {
+    return false
+  }
+  let mut index = 0
+  while index < expected.parameters.length {
+    match [expected.parameters.get(index), actual.parameters.get(index)] {
+      case [Some(expectedParameter), Some(actualParameter)] => if !assignable(
+        actualParameter,
+        expectedParameter,
+      ) {
+        return false
+      }
+      case _ => return false
+    }
+    index += 1
+  }
+  if expected.variadic.length == 1 {
+    match [expected.variadic.get(0), actual.variadic.get(0)] {
+      case [Some(expectedVariadic), Some(actualVariadic)] => if !assignable(
+        actualVariadic,
+        expectedVariadic,
+      ) {
+        return false
+      }
+      case _ => return false
+    }
+  }
+  match [expected.result.get(0), actual.result.get(0)] {
+    case [Some(expectedResult), Some(actualResult)] => assignable(
+      expectedResult,
+      actualResult,
+    )
+    case _ => false
+  }
+}
+
+export function assignable(expected: TypeValue, actual: TypeValue) -> bool {
+  if hasHole(expected) || hasHole(actual) {
+    return true
+  }
+  if actual.kind == "union" {
+    for member in actual.members {
+      if !assignable(expected, member) {
+        return false
+      }
+    }
+    return true
+  }
+  let widened = widen(actual)
+  if expected.kind == "primitive" && widened.kind == "primitive" {
+    return expected.name == widened.name
+  }
+  if typeEqual(expected, actual) || typeEqual(expected, widened) {
+    return true
+  }
+  if expected.kind == "constructor" && actual.kind == "constructor" &&
+    expected.name == actual.name &&
+    expected.arguments.length == actual.arguments.length {
+    if expected.name == "Option" || expected.name == "Result" {
+      return covariantArgumentsAssignable(expected.arguments, actual.arguments)
+    }
+    return typeArraysEqual(expected.arguments, actual.arguments)
+  }
+  if expected.kind == "function" && actual.kind == "function" {
+    return functionAssignable(expected, actual)
+  }
+  if expected.kind == "record" && actual.kind == "record" &&
+    expected.fieldNames.length == actual.fieldNames.length {
+    let mut index = 0
+    while index < expected.fieldNames.length {
+      match [expected.fieldNames.get(index), actual.fieldNames.get(index)] {
+        case [Some(expectedName), Some(actualName)] => if expectedName !=
+          actualName { return false }
+        case _ => return false
+      }
+      match [expected.fields.get(index), actual.fields.get(index)] {
+        case [Some(expectedField), Some(actualField)] => if !assignable(
+          expectedField,
+          actualField,
+        ) { return false }
+        case _ => return false
+      }
+      index += 1
+    }
+    return true
+  }
+  if expected.kind == "union" {
+    for member in expected.members {
+      if assignable(member, actual) {
+        return true
+      }
+    }
+  }
+  false
+}
+
+function flattenTypeInto(
+  output: Array<PreviewTypeAtom>,
+  value: TypeValue,
+  parent: int,
+  field: string,
+  index: int,
+  edgeName: string,
+) -> () {
+  let mut target = output
+  let ordinal = target.length
+  target.push(PreviewTypeAtom {
+    parent: parent,
+    field: field,
+    index: index,
+    edgeName: edgeName,
+    kind: value.kind,
+    name: value.name,
+    value: value.value,
+    identity: value.identity,
+    origin: value.origin,
+  })
+  let mut childIndex = 0
+  for item in value.arguments {
+    flattenTypeInto(target, item, ordinal, "arguments", childIndex, "")
+    childIndex += 1
+  }
+  childIndex = 0
+  for item in value.members {
+    flattenTypeInto(target, item, ordinal, "members", childIndex, "")
+    childIndex += 1
+  }
+  childIndex = 0
+  for item in value.fields {
+    let fieldName = match value.fieldNames.get(childIndex) {
+      case Some(found) => found
+      case None => ""
+    }
+    flattenTypeInto(target, item, ordinal, "fields", childIndex, fieldName)
+    childIndex += 1
+  }
+  childIndex = 0
+  for item in value.parameters {
+    flattenTypeInto(target, item, ordinal, "parameters", childIndex, "")
+    childIndex += 1
+  }
+  childIndex = 0
+  for item in value.variadic {
+    flattenTypeInto(target, item, ordinal, "variadic", childIndex, "")
+    childIndex += 1
+  }
+  childIndex = 0
+  for item in value.result {
+    flattenTypeInto(target, item, ordinal, "result", childIndex, "")
+    childIndex += 1
+  }
+  ()
+}
+
+export function flattenType(value: TypeValue) -> Array<PreviewTypeAtom> {
+  let mut output: Array<PreviewTypeAtom> = []
+  flattenTypeInto(output, value, -1, "root", 0, "")
+  output
+}
+
+export function flattenedHasHole(value: Array<PreviewTypeAtom>) -> bool {
+  for atom in value {
+    if atom.kind == "unknown" || atom.kind == "inference-variable" {
+      return true
+    }
+  }
+  false
+}
+
+export function resolvedFlatType(
+  value: Array<PreviewTypeAtom>,
+  solutions: Map<string, TypeValue>,
+) -> Array<PreviewTypeAtom> {
+  let mut output: Array<PreviewTypeAtom> = []
+  let mut remappedIndexes: Array<int> = []
+  for atom in value {
+    let remappedParent = if atom.parent < 0 {
+      -1
+    } else {
+      match remappedIndexes.get(atom.parent) {
+        case Some(found) => found
+        case None => -1
+      }
+    }
+    let replacement = if atom.kind == "inference-variable" {
+      solutions.get("inference:{atom.value}")
+    } else {
+      None
+    }
+    match replacement {
+      case Some(solution) => {
+        let flattened = flattenType(solution)
+        let replacementRoot = output.length
+        for replacementAtom in flattened {
+          if replacementAtom.parent < 0 {
+            output.push(PreviewTypeAtom {
+              ...replacementAtom,
+              parent: remappedParent,
+              field: atom.field,
+              index: atom.index,
+              edgeName: atom.edgeName,
+            })
+          } else {
+            output.push(PreviewTypeAtom {
+              ...replacementAtom,
+              parent: replacementRoot + replacementAtom.parent,
+            })
+          }
+        }
+        remappedIndexes.push(replacementRoot)
+      }
+      case None => {
+        remappedIndexes.push(output.length)
+        output.push(PreviewTypeAtom { ...atom, parent: remappedParent })
+      }
+    }
+  }
+  output
+}
+
+export function widen(value: TypeValue) -> TypeValue {
+  if value.kind != "literal" {
+    return value
+  }
+  match value.name {
+    case "int" => primitive("int")
+    case "float" => primitive("float")
+    case "string" => primitive("string")
+    case "bool" => primitive("bool")
+    case _ => value
+  }
+}
+
+function compareText(left: string, right: string) -> int {
+  if left < right {
+    -1
+  } else if right < left {
+    1
+  } else {
+    0
+  }
+}
+
+function compareInt(left: int, right: int) -> int {
+  if left < right {
+    -1
+  } else if right < left {
+    1
+  } else {
+    0
+  }
+}
+
+function typeKindOrder(kind: string) -> int {
+  match kind {
+    case "primitive" => 0
+    case "literal" => 1
+    case "union" => 2
+    case "record" => 3
+    case "constructor" => 4
+    case "function" => 5
+    case "foreign" => 6
+    case "rigid" => 7
+    case "template" => 8
+    case "file" => 9
+    case "json-value" => 10
+    case "bytes" => 11
+    case "byte-buffer" => 12
+    case "path" => 13
+    case "regex" => 14
+    case "match" => 15
+    case "toml-value" => 16
+    case "url" => 17
+    case "date" => 18
+    case "big-int" => 19
+    case "decimal" => 20
+    case "rounding-mode" => 21
+    case "enum" => 22
+    case "nominal-record" => 23
+    case "newtype" => 24
+    case "unknown" => 25
+    case "inference-variable" => 26
+    case _ => 27
+  }
+}
+
+function primitiveOrder(name: string) -> int {
+  match name {
+    case "int" => 0
+    case "float" => 1
+    case "string" => 2
+    case "bool" => 3
+    case "unit" => 4
+    case _ => 5
+  }
+}
+
+function literalOrder(name: string) -> int {
+  match name {
+    case "string" => 0
+    case "int" => 1
+    case "float" => 2
+    case "bool" => 3
+    case "null" => 4
+    case _ => 5
+  }
+}
+
+function constructorOrder(name: string) -> int {
+  match name {
+    case "Array" => 0
+    case "Map" => 1
+    case "Set" => 2
+    case "Option" => 3
+    case "Result" => 4
+    case "Range" => 5
+    case _ => 6
+  }
+}
+
+function parsedTypeInt(value: string) -> int {
+  match toInt(value) {
+    case Some(found) => found
+    case None => 0
+  }
+}
+
+function compareTypeLists(
+  left: Array<TypeValue>,
+  right: Array<TypeValue>,
+) -> int {
+  let mut index = 0
+  while index < left.length && index < right.length {
+    let leftValue = match left.get(index) {
+      case Some(found) => found
+      case None => emptyType("unknown")
+    }
+    let rightValue = match right.get(index) {
+      case Some(found) => found
+      case None => emptyType("unknown")
+    }
+    let compared = compareTypeValues(leftValue, rightValue)
+    if compared != 0 {
+      return compared
+    }
+    index += 1
+  }
+  compareInt(left.length, right.length)
+}
+
+function compareRecordTypes(left: TypeValue, right: TypeValue) -> int {
+  let mut index = 0
+  while index < left.fieldNames.length && index < right.fieldNames.length {
+    let leftName = match left.fieldNames.get(index) {
+      case Some(found) => found
+      case None => ""
+    }
+    let rightName = match right.fieldNames.get(index) {
+      case Some(found) => found
+      case None => ""
+    }
+    let nameCompared = compareText(leftName, rightName)
+    if nameCompared != 0 {
+      return nameCompared
+    }
+    let leftType = match left.fields.get(index) {
+      case Some(found) => found
+      case None => emptyType("unknown")
+    }
+    let rightType = match right.fields.get(index) {
+      case Some(found) => found
+      case None => emptyType("unknown")
+    }
+    let typeCompared = compareTypeValues(leftType, rightType)
+    if typeCompared != 0 {
+      return typeCompared
+    }
+    index += 1
+  }
+  compareInt(left.fieldNames.length, right.fieldNames.length)
+}
+
+function compareTypeValues(left: TypeValue, right: TypeValue) -> int {
+  let kindCompared = compareInt(
+    typeKindOrder(left.kind),
+    typeKindOrder(right.kind),
+  )
+  if kindCompared != 0 {
+    return kindCompared
+  }
+  match left.kind {
+    case "primitive" => compareInt(
+      primitiveOrder(left.name),
+      primitiveOrder(right.name),
+    )
+    case "literal" => {
+      let literalCompared = compareInt(
+        literalOrder(left.name),
+        literalOrder(right.name),
+      )
+      if literalCompared != 0 {
+        return literalCompared
+      }
+      if left.name == "int" {
+        compareInt(parsedTypeInt(left.value), parsedTypeInt(right.value))
+      } else {
+        compareText(left.value, right.value)
+      }
+    }
+    case "union" => compareTypeLists(left.members, right.members)
+    case "record" => compareRecordTypes(left, right)
+    case "constructor" => {
+      let constructorCompared = compareInt(
+        constructorOrder(left.name),
+        constructorOrder(right.name),
+      )
+      if constructorCompared != 0 {
+        return constructorCompared
+      }
+      compareTypeLists(left.arguments, right.arguments)
+    }
+    case "function" => {
+      let parametersCompared = compareTypeLists(
+        left.parameters,
+        right.parameters,
+      )
+      if parametersCompared != 0 {
+        return parametersCompared
+      }
+      let variadicCompared = compareTypeLists(left.variadic, right.variadic)
+      if variadicCompared != 0 {
+        return variadicCompared
+      }
+      compareTypeLists(left.result, right.result)
+    }
+    case "foreign" | "enum" | "nominal-record" | "newtype" => {
+      let identityCompared = compareText(left.identity, right.identity)
+      if identityCompared != 0 {
+        return identityCompared
+      }
+      let originCompared = compareText(left.origin, right.origin)
+      if originCompared != 0 {
+        return originCompared
+      }
+      compareTypeLists(left.arguments, right.arguments)
+    }
+    case "rigid" => {
+      let nameCompared = compareText(left.name, right.name)
+      if nameCompared != 0 {
+        return nameCompared
+      }
+      compareText(left.origin, right.origin)
+    }
+    case "inference-variable" => compareInt(
+      parsedTypeInt(left.value),
+      parsedTypeInt(right.value),
+    )
+    case _ => 0
+  }
+}
+
+export function unionType(values: Array<TypeValue>) -> TypeValue {
+  let mut flat: Array<TypeValue> = []
+  for value in values {
+    if value.kind == "union" {
+      for member in value.members {
+        flat.push(member)
+      }
+    } else {
+      flat.push(value)
+    }
+  }
+  let mut ordered: Array<TypeValue> = []
+  for value in flat {
+    let mut duplicate = false
+    for existing in ordered {
+      if typeEqual(existing, value) {
+        duplicate = true
+      }
+    }
+    if !duplicate {
+      let mut inserted = false
+      let mut index = 0
+      while index < ordered.length {
+        let existing = match ordered.get(index) {
+          case Some(item) => item
+          case None => value
+        }
+        if compareTypeValues(value, existing) < 0 {
+          ordered.insert(index, value)
+          inserted = true
+          break
+        }
+        index += 1
+      }
+      if !inserted {
+        ordered.push(value)
+      }
+    }
+  }
+  match ordered.get(0) {
+    case Some(first) => if ordered.length == 1 {
+      first
+    } else {
+      TypeValue {
+        kind: "union",
+        name: "",
+        value: "",
+        identity: "",
+        origin: "",
+        arguments: [],
+        members: ordered,
+        fieldNames: [],
+        fields: [],
+        parameters: [],
+        variadic: [],
+        result: [],
+      }
+    }
+    case None => emptyType("unknown")
+  }
+}
+
+export function widenedUnion(values: Array<TypeValue>) -> TypeValue {
+  let mut widened: Array<TypeValue> = []
+  for value in values {
+    widened.push(widen(value))
+  }
+  unionType(widened)
+}
+
+function projectionOrigin(origin: string) -> bool {
+  origin.startsWith("projection:") ||
+    origin == "builtin::record-pattern" ||
+    origin == "builtin::constructor-pattern" ||
+    origin == "builtin::list-pattern" ||
+    origin == "builtin::iterable" ||
+    origin == "builtin::array-spread"
+}
+
+function projectionTypeComponent(value: TypeValue) -> bool {
+  value.kind == "rigid" && projectionOrigin(value.origin)
+}
+
+export function projectionType(value: TypeValue) -> bool {
+  typeContains(value, projectionTypeComponent)
+}
+
+export function transformTypeComponents(
+  value: TypeValue,
+  replacement: (TypeValue) -> Option<TypeValue>,
+) -> TypeValue {
+  match replacement(value) {
+    case Some(transformed) => return transformed
+    case None => ()
+  }
+  let mut transformed: Array<TypeValue> = []
+  for item in value.arguments {
+    transformed.push(transformTypeComponents(item, replacement))
+  }
+  let transformedArguments = transformed
+  transformed = []
+  for item in value.members {
+    transformed.push(transformTypeComponents(item, replacement))
+  }
+  let transformedMembers = transformed
+  transformed = []
+  for item in value.fields {
+    transformed.push(transformTypeComponents(item, replacement))
+  }
+  let transformedFields = transformed
+  transformed = []
+  for item in value.parameters {
+    transformed.push(transformTypeComponents(item, replacement))
+  }
+  let transformedParameters = transformed
+  transformed = []
+  for item in value.variadic {
+    transformed.push(transformTypeComponents(item, replacement))
+  }
+  let transformedVariadic = transformed
+  transformed = []
+  for item in value.result {
+    transformed.push(transformTypeComponents(item, replacement))
+  }
+  TypeValue {
+    kind: value.kind,
+    name: value.name,
+    value: value.value,
+    identity: value.identity,
+    origin: value.origin,
+    arguments: transformedArguments,
+    members: transformedMembers,
+    fieldNames: value.fieldNames,
+    fields: transformedFields,
+    parameters: transformedParameters,
+    variadic: transformedVariadic,
+    result: transformed,
+  }
+}
+
+function stripProjectionTypeComponent(value: TypeValue) -> Option<TypeValue> {
+  if value.kind == "rigid" && projectionOrigin(value.origin) {
+    Some(emptyType("unknown"))
+  } else {
+    None
+  }
+}
+
+export function stripProjectionTypes(value: TypeValue) -> TypeValue {
+  transformTypeComponents(value, stripProjectionTypeComponent)
+}
+
+function partialHoleKey(value: TypeValue) -> string {
+  if value.kind == "inference-variable" {
+    return "inference:{value.value}"
+  }
+  if value.kind == "rigid" && value.origin.startsWith("builtin::") &&
+    !projectionOrigin(value.origin) {
+    return "rigid:{value.origin}:{value.name}"
+  }
+  ""
+}
+
+function trueUnknownTypeComponent(value: TypeValue) -> bool {
+  value.kind == "unknown"
+}
+
+function hasTrueUnknown(value: TypeValue) -> bool {
+  typeContains(value, trueUnknownTypeComponent)
+}
+
+function partialHoleTypeComponent(value: TypeValue) -> bool {
+  partialHoleKey(value) != ""
+}
+
+export function hasPartialHole(value: TypeValue) -> bool {
+  typeContains(value, partialHoleTypeComponent)
+}
+
+function partialBindingIndex(bindings: Array<TypeBinding>, key: string) -> int {
+  let mut index = 0
+  for binding in bindings {
+    if binding.name == key {
+      return index
+    }
+    index += 1
+  }
+  -1
+}
+
+function bindPartialType(
+  bindings: Array<TypeBinding>,
+  key: string,
+  candidate: TypeValue,
+) -> () {
+  let candidateKey = partialHoleKey(candidate)
+  if candidateKey == key {
+    return ()
+  }
+  let mut target = bindings
+  let index = partialBindingIndex(target, key)
+  if index >= 0 {
+    match target.get(index) {
+      case Some(existing) => unifyPartialTypes(
+        existing.typeValue,
+        candidate,
+        target,
+      )
+      case None => ()
+    }
+  } else {
+    target.push(TypeBinding { name: key, typeValue: candidate })
+  }
+  ()
+}
+
+function unifyPartialLists(
+  left: Array<TypeValue>,
+  right: Array<TypeValue>,
+  bindings: Array<TypeBinding>,
+) -> () {
+  if left.length != right.length {
+    return ()
+  }
+  let mut index = 0
+  while index < left.length {
+    match [left.get(index), right.get(index)] {
+      case [Some(a), Some(b)] => unifyPartialTypes(a, b, bindings)
+      case _ => ()
+    }
+    index += 1
+  }
+  ()
+}
+
+function unifyPartialTypes(
+  left: TypeValue,
+  right: TypeValue,
+  bindings: Array<TypeBinding>,
+) -> () {
+  let leftKey = partialHoleKey(left)
+  let rightKey = partialHoleKey(right)
+  if leftKey != "" && rightKey != "" {
+    if leftKey == rightKey {
+      return ()
+    }
+    if leftKey < rightKey {
+      let mut target = bindings
+      if partialBindingIndex(target, rightKey) < 0 {
+        target.push(TypeBinding { name: rightKey, typeValue: left })
+      }
+    } else {
+      let mut target = bindings
+      if partialBindingIndex(target, leftKey) < 0 {
+        target.push(TypeBinding { name: leftKey, typeValue: right })
+      }
+    }
+    return ()
+  }
+  if leftKey != "" {
+    bindPartialType(bindings, leftKey, right)
+    return ()
+  }
+  if rightKey != "" {
+    bindPartialType(bindings, rightKey, left)
+    return ()
+  }
+  if left.kind != right.kind || left.name != right.name ||
+    left.identity != right.identity {
+    return ()
+  }
+  unifyPartialLists(left.arguments, right.arguments, bindings)
+  unifyPartialLists(left.members, right.members, bindings)
+  unifyPartialLists(left.fields, right.fields, bindings)
+  unifyPartialLists(left.parameters, right.parameters, bindings)
+  unifyPartialLists(left.variadic, right.variadic, bindings)
+  unifyPartialLists(left.result, right.result, bindings)
+  ()
+}
+
+function partialTypeComponentReplacement(
+  value: TypeValue,
+  bindings: Array<TypeBinding>,
+) -> Option<TypeValue> {
+  let key = partialHoleKey(value)
+  if key == "" {
+    return None
+  }
+  let index = partialBindingIndex(bindings, key)
+  if index >= 0 {
+    return match bindings.get(index) {
+      case Some(found) => Some(substitutePartialTypes(found.typeValue, bindings))
+      case None => Some(value)
+    }
+  }
+  Some(value)
+}
+
+function substitutePartialTypes(
+  value: TypeValue,
+  bindings: Array<TypeBinding>,
+) -> TypeValue {
+  transformTypeComponents(
+    value,
+    (component: TypeValue) => partialTypeComponentReplacement(
+      component,
+      bindings,
+    ),
+  )
+}
+
+function flattenJoinTypes(values: Array<TypeValue>) -> Array<TypeValue> {
+  let mut flat: Array<TypeValue> = []
+  for value in values {
+    if value.kind == "union" {
+      for member in value.members {
+        flat.push(member)
+      }
+    } else {
+      flat.push(value)
+    }
+  }
+  flat
+}
+
+function retainInferenceSolutions(
+  state: CheckerState,
+  bindings: Array<TypeBinding>,
+) -> () {
+  let mut solutions = state.inferenceSolutions
+  for binding in bindings {
+    if binding.name.startsWith("inference:") {
+      let completed = substitutePartialTypes(binding.typeValue, bindings)
+      if !hasPartialHole(completed) {
+        solutions.insert(binding.name, completed)
+      }
+    }
+  }
+  ()
+}
+
+export function joinedTypes(
+  state: CheckerState,
+  values: Array<TypeValue>,
+  widenResult: bool,
+) -> TypeValue {
+  let flat = flattenJoinTypes(values)
+  for value in flat {
+    if hasTrueUnknown(value) {
+      return emptyType("unknown")
+    }
+  }
+  let mut bindings: Array<TypeBinding> = []
+  let mut leftIndex = 0
+  while leftIndex < flat.length {
+    let mut rightIndex = 0
+    while rightIndex < flat.length {
+      if leftIndex != rightIndex {
+        match [flat.get(leftIndex), flat.get(rightIndex)] {
+          case [Some(left), Some(right)] =>
+            unifyPartialTypes(left, right, bindings)
+          case _ => ()
+        }
+      }
+      rightIndex += 1
+    }
+    leftIndex += 1
+  }
+  let mut solved: Array<TypeValue> = []
+  for value in flat {
+    let completed = substitutePartialTypes(value, bindings)
+    if hasPartialHole(completed) {
+      return emptyType("unknown")
+    }
+    solved.push(completed)
+  }
+  retainInferenceSolutions(state, bindings)
+  if widenResult { widenedUnion(solved) } else { unionType(solved) }
+}
+
+export function solvePartialTypeAgainst(
+  state: CheckerState,
+  partial: TypeValue,
+  concrete: TypeValue,
+) -> TypeValue {
+  let mut bindings: Array<TypeBinding> = []
+  unifyPartialTypes(partial, concrete, bindings)
+  let completed = substitutePartialTypes(partial, bindings)
+  if hasPartialHole(completed) {
+    partial
+  } else {
+    retainInferenceSolutions(state, bindings)
+    completed
+  }
+}

@@ -1,0 +1,7 @@
+
+function main() -> Array<int> {
+    let mut xs = [1, 2]
+    xs.insert(3, 9)
+    xs
+}
+main()

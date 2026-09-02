@@ -1,0 +1,13 @@
+{
+  "schema": "topaz.lispex-application-quotas/v1",
+  "concurrent_evaluations": 2,
+  "queued_evaluations": 2,
+  "total_evaluations": 64,
+  "aggregate_input_bytes": 262144,
+  "aggregate_result_bytes": 262144,
+  "aggregate_output_bytes": 262144,
+  "aggregate_transcript_bytes": 262144,
+  "aggregate_safety_fuel": 64000000000,
+  "prepared_bytes": 3000000,
+  "wall_millis": 100
+}

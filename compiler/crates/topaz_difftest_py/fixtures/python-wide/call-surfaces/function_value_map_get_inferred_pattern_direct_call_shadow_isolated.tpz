@@ -1,0 +1,20 @@
+
+function fallback(a: int) -> int {
+    a + 1
+}
+function add(a: int, b: int = 2, c: int = 4) -> int {
+    a * 100 + b * 10 + c
+}
+function main() -> int {
+    let cb = fallback
+    let callbacks = map { "plus": add }
+    let inside = match callbacks.get("plus") {
+        case Some(cb) => {
+            let observed = cb(c: 5, a: 1)
+            observed
+        }
+        case None => 0
+    }
+    inside + cb(4)
+}
+main()

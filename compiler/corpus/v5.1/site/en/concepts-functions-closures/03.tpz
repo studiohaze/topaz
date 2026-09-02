@@ -1,0 +1,30 @@
+// Variadic parameters
+function sum(...numbers: int) -> int {
+    let mut total = 0
+    for number in numbers {
+        total += number
+    }
+    return total
+}
+
+let total1 = sum(1, 2, 3, 4, 5)        // 15
+let total2 = sum(10, 20)               // 30
+
+// Combining a fixed parameter with a variadic tail
+function calculateStats(label: string, ...values: float) -> string {
+    let count = values.length
+    let mut total = 0.0
+    for value in values {
+        total += value
+    }
+    return "{label}: count={count}, total={total}"
+}
+
+print(calculateStats("Test Scores", 85.5, 92.0, 78.5, 89.0))
+
+// Spread an array into the variadic tail
+let scores = [85.5, 92.0, 78.5, 89.0]
+print(calculateStats("Test Scores", ...scores))
+
+// Function types spell a variadic tail the same way
+let statsFunction: (string, ...float) -> string = calculateStats

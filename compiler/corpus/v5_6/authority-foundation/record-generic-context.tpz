@@ -1,0 +1,30 @@
+record Box<T> {
+    value: T | null = null,
+}
+
+record Outer {
+    box: Box<int>,
+}
+
+function take(box: Box<int>) -> int {
+    1
+}
+
+function make() -> Box<int> {
+    Box {}
+}
+
+function choose(flag: bool) -> Box<int> {
+    match flag {
+        case true => Box {}
+        case false => Box {}
+    }
+}
+
+let direct: Box<int> = Box {}
+let nested: Outer = Outer { box: Box {} }
+let array: Array<Box<int>> = [Box {}]
+let matched: Box<int> = choose(true)
+let called = take(Box {})
+let returned: Box<int> = make()
+print("{direct}:{nested}:{array}:{matched}:{called}:{returned}")

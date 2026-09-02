@@ -1,0 +1,16 @@
+let name = "John Topaz"
+
+function shadowingExample() {
+    let name = "Developer Park"        // Shadows global name
+    print("In function: {name}")       // "In function: Developer Park"
+    
+    {
+        let name = "Designer Lee"       // Shadows function name
+        print("In block: {name}")       // "In block: Designer Lee"
+    }
+    
+    print("After block: {name}")       // "After block: Developer Park"
+}
+
+print("Global: {name}")               // "Global: John Topaz"
+shadowingExample()

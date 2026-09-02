@@ -1,0 +1,6 @@
+function f() {
+  defer print("a")
+  defer print("b")
+  print("body")
+}
+f()

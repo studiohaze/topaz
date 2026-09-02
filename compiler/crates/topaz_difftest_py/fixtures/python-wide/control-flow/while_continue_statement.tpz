@@ -1,0 +1,14 @@
+
+function f() -> int {
+    let mut x = 0
+    let mut total = 0
+    while x < 5 {
+        x = x + 1
+        if x == 3 {
+            continue
+        }
+        total = total + x
+    }
+    total
+}
+f()

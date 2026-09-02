@@ -1,0 +1,7 @@
+
+import util
+function main() -> int {
+    let mut f = util.add
+    f(a: 5) + f(10, b: 3)
+}
+main()

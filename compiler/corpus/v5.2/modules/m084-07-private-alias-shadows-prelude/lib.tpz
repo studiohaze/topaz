@@ -1,0 +1,2 @@
+type Option = { value: int }
+export function wrap(x: int) -> Option { { value: x } }

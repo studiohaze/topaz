@@ -1,0 +1,4 @@
+function first<T>(xs: Array<T>) -> T {
+  return xs[0]
+}
+first<int>([1, 2, 3])

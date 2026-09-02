@@ -1,0 +1,4 @@
+open(path: string) -> Result<File, string>
+file.read() -> Result<string, string>
+file.write(s: string) -> Result<(), string>
+file.close() -> ()

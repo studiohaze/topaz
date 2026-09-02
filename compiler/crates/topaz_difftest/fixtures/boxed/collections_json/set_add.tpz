@@ -1,0 +1,3 @@
+let mut s = Set.of(1)
+s.add(2)
+s.remove(2)

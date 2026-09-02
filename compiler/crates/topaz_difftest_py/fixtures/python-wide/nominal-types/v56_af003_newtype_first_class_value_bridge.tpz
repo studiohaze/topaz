@@ -1,0 +1,8 @@
+
+newtype UserId = int
+function main() -> int {
+    let id: UserId = UserId(7)
+    let get: () -> int = id.value
+    get()
+}
+main()

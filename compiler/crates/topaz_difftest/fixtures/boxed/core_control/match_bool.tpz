@@ -1,0 +1,2 @@
+match true { case false => 0
+case true => 1 }

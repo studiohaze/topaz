@@ -1,0 +1,5 @@
+record P derives Order { a: int, b: int }
+let x = P { a: 1, b: 2 }
+let y = P { a: 1, b: 9 }
+print("{Order.compare(x, y)}/{Order.compare(y, x)}/{Order.compare(x, x)}")
+0

@@ -1,0 +1,12 @@
+// Range iteration
+for i in 1..10 {
+    print("Number: {i}")
+}
+
+// Array iteration
+for item in ["apple", "banana", "cherry"] {
+    print("Fruit: {item}")
+}
+
+// for returns values too!
+let squares = for x in 1..5 { x * x }  // [1, 4, 9, 16, 25]

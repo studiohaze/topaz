@@ -1,0 +1,3 @@
+let a = [1, 9]
+match a { case [1, y] => y
+case _ => 0 }

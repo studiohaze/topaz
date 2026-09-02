@@ -1,0 +1,293 @@
+import stage1_types {
+  STAGE1_IR_SCHEMA,
+  Stage1Module,
+  Stage1Operation,
+  Stage1Provenance,
+  Stage1Response,
+  decodeStage1Response,
+}
+
+record EmitPayload derives JSON {
+  schema: string,
+  irSchema: string,
+  runtimeTemplate: string,
+  sourceSetId: string,
+  loweredModules: Array<Stage1Module>,
+  loweredOperations: Array<Stage1Operation>,
+}
+
+const COMPILER_RUNTIME_REGISTRY_SCHEMA =
+  "topaz.compiler.fixed-point-runtime-templates/v1"
+const COMPILER_RUNTIME_TEMPLATE = "compiler-ir-table/v2"
+const COMPILER_PAYLOAD_SCHEMA =
+  "topaz.compiler.fixed-point-ir-payload/v1"
+// Closed folding bounds operands and traversal so preview generation stays finite and portable.
+const CLOSED_INT_OPERAND_LIMIT = 1000000000
+const CLOSED_INT_PRODUCT_OPERAND_LIMIT = 1000000
+const CLOSED_INT_DEPTH_LIMIT = 256
+const ENTRY_PREVIEW_OPERATION_LIMIT = 4096
+
+function rustRaw(value: string) -> string {
+  let mut hashes = ""
+  while value.contains("\"{hashes}") {
+    hashes = "{hashes}#"
+  }
+  "r{hashes}\"{value}\"{hashes}"
+}
+
+function rustStringConstant(name: string, value: string) -> string {
+  "pub const {name}: &str = {rustRaw(value)};\n"
+}
+
+record EmitterOperationCatalog {
+  values: Array<Stage1Operation>,
+  positions: Map<string, int>,
+  runtimeLeaves: Array<string>,
+}
+
+function emitterOperationCatalog(
+  operations: Array<Stage1Operation>,
+) -> EmitterOperationCatalog {
+  let mut positions: Map<string, int> = Map.new()
+  let mut leaves: Set<string> = set {}
+  let mut index = 0
+  for operation in operations {
+    if !positions.containsKey(operation.id) {
+      positions.insert(operation.id, index)
+    }
+    if operation.runtimeLeaf != "" {
+      leaves.add(operation.runtimeLeaf)
+    }
+    index += 1
+  }
+  let mut orderedLeaves = leaves.toArray()
+  orderedLeaves.sort()
+  EmitterOperationCatalog {
+    values: operations,
+    positions: positions,
+    runtimeLeaves: orderedLeaves,
+  }
+}
+
+function operation(
+  context: EmitterOperationCatalog,
+  wanted: string,
+) -> Option<Stage1Operation> {
+  match context.positions.get(wanted) {
+    case Some(index) => Some(context.values[index])
+    case None => None
+  }
+}
+
+function evaluateOperand(
+  context: EmitterOperationCatalog,
+  found: Stage1Operation,
+  index: int,
+  depth: int,
+) -> Option<int> {
+  match found.operands.get(index) {
+    case Some(id) => evaluateClosedInt(context, id, depth + 1)
+    case None => None
+  }
+}
+
+function evaluateUnaryClosedInt(
+  context: EmitterOperationCatalog,
+  found: Stage1Operation,
+  depth: int,
+) -> Option<int> {
+  if found.operands.length != 1 {
+    return None
+  }
+  match evaluateOperand(context, found, 0, depth) {
+    case Some(number) => if found.detail == "neg" &&
+      number >= -CLOSED_INT_OPERAND_LIMIT && number <= CLOSED_INT_OPERAND_LIMIT {
+      Some(-number)
+    } else if found.detail == "pos" {
+      Some(number)
+    } else {
+      None
+    }
+    case None => None
+  }
+}
+
+function evaluateBinaryClosedInt(
+  context: EmitterOperationCatalog,
+  found: Stage1Operation,
+  depth: int,
+) -> Option<int> {
+  if found.operands.length != 2 {
+    return None
+  }
+  match [
+    evaluateOperand(context, found, 0, depth),
+    evaluateOperand(context, found, 1, depth),
+  ] {
+    case [Some(lhs), Some(rhs)] => match found.detail {
+      case "add" => if lhs >= -CLOSED_INT_OPERAND_LIMIT && lhs <= CLOSED_INT_OPERAND_LIMIT &&
+        rhs >= -CLOSED_INT_OPERAND_LIMIT && rhs <= CLOSED_INT_OPERAND_LIMIT {
+        Some(lhs + rhs)
+      } else {
+        None
+      }
+      case "sub" => if lhs >= -CLOSED_INT_OPERAND_LIMIT && lhs <= CLOSED_INT_OPERAND_LIMIT &&
+        rhs >= -CLOSED_INT_OPERAND_LIMIT && rhs <= CLOSED_INT_OPERAND_LIMIT {
+        Some(lhs - rhs)
+      } else {
+        None
+      }
+      case "mul" => if lhs >= -CLOSED_INT_PRODUCT_OPERAND_LIMIT &&
+        lhs <= CLOSED_INT_PRODUCT_OPERAND_LIMIT &&
+        rhs >= -CLOSED_INT_PRODUCT_OPERAND_LIMIT &&
+        rhs <= CLOSED_INT_PRODUCT_OPERAND_LIMIT {
+        Some(lhs * rhs)
+      } else {
+        None
+      }
+      case _ => None
+    }
+    case _ => None
+  }
+}
+
+function evaluateSequenceClosedInt(
+  context: EmitterOperationCatalog,
+  found: Stage1Operation,
+  depth: int,
+) -> Option<int> {
+  let mut result: Option<int> = None
+  for id in found.operands {
+    match evaluateClosedInt(context, id, depth + 1) {
+      case Some(value) => { result = Some(value) }
+      case None => ()
+    }
+  }
+  result
+}
+
+function evaluateClosedInt(
+  context: EmitterOperationCatalog,
+  wanted: string,
+  depth: int,
+) -> Option<int> {
+  if depth > CLOSED_INT_DEPTH_LIMIT {
+    return None
+  }
+  match operation(context, wanted) {
+    case None => None
+    case Some(found) => {
+      if found.kind == "expression/integer" {
+        return toInt(found.detail)
+      }
+      if found.kind == "expression/unary" {
+        return evaluateUnaryClosedInt(context, found, depth)
+      }
+      if found.kind == "expression/binary" {
+        return evaluateBinaryClosedInt(context, found, depth)
+      }
+      if found.kind == "let" ||
+        found.kind == "constant" ||
+        found.kind == "expression/parenthesized" ||
+        found.kind == "expression/block" ||
+        found.kind == "module" {
+        return evaluateSequenceClosedInt(context, found, depth)
+      }
+      None
+    }
+  }
+}
+
+function entryPreview(
+  modules: Array<Stage1Module>,
+  catalog: EmitterOperationCatalog,
+) -> Option<int> {
+  if catalog.values.length > ENTRY_PREVIEW_OPERATION_LIMIT {
+    return None
+  }
+  for module in modules {
+    if module.entry {
+      for id in module.operationIds {
+        match operation(catalog, id) {
+          case Some(found) => if found.kind == "module" {
+            return evaluateClosedInt(catalog, id, 0)
+          }
+          case None => ()
+        }
+      }
+    }
+  }
+  None
+}
+
+function renderRuntimeLeaves(leaves: Array<string>) -> string {
+  let mut rendered: Array<string> = []
+  for leaf in leaves {
+    rendered.push("{rustRaw(leaf)},")
+  }
+  "&[{rendered.join("")}]"
+}
+
+function render(response: Stage1Response) -> Result<string, string> {
+  let ir = JSON.stringify(EmitPayload {
+    schema: COMPILER_PAYLOAD_SCHEMA,
+    irSchema: STAGE1_IR_SCHEMA,
+    runtimeTemplate: COMPILER_RUNTIME_TEMPLATE,
+    sourceSetId: response.provenance.sourceSetId,
+    loweredModules: response.loweredModules,
+    loweredOperations: response.loweredOperations,
+  })?
+  let catalog = emitterOperationCatalog(response.loweredOperations)
+  let preview = match entryPreview(response.loweredModules, catalog) {
+    case Some(value) => "Some({value}i64)"
+    case None => "None"
+  }
+  let leaves = renderRuntimeLeaves(catalog.runtimeLeaves)
+  Ok(
+    "// @generated by the Topaz compiler kernel; do not edit.\n" +
+    rustStringConstant(
+      "TOPAZ_COMPILER_RUNTIME_REGISTRY_SCHEMA",
+      COMPILER_RUNTIME_REGISTRY_SCHEMA,
+    ) +
+    rustStringConstant(
+      "TOPAZ_COMPILER_RUNTIME_TEMPLATE",
+      COMPILER_RUNTIME_TEMPLATE,
+    ) +
+    rustStringConstant("TOPAZ_COMPILER_IR_SCHEMA", STAGE1_IR_SCHEMA) +
+    rustStringConstant(
+      "TOPAZ_COMPILER_IR_PAYLOAD_SCHEMA",
+      COMPILER_PAYLOAD_SCHEMA,
+    ) +
+    rustStringConstant(
+      "TOPAZ_COMPILER_SOURCE_SET",
+      response.provenance.sourceSetId,
+    ) +
+    rustStringConstant("TOPAZ_COMPILER_IR_JSON", ir) +
+    "pub const TOPAZ_COMPILER_RUNTIME_LEAVES: &[&str] = {leaves};\n" +
+    "pub fn compiler_preview_i64() -> Option<i64> \{ {preview} \}\n",
+  )
+}
+
+export function emitStep(
+  loweredBytes: Bytes,
+  maxGeneratedRustBytes: int,
+) -> Result<Bytes, string> {
+  let lowered = decodeStage1Response(loweredBytes.decodeUtf8()?)?
+  if lowered.status != "completed" {
+    return Ok(loweredBytes)
+  }
+  if lowered.generatedRust != "" {
+    return Err("Stage 1 emitter received pre-existing generated Rust")
+  }
+  let generated = render(lowered)?
+  if generated.byteLength() > maxGeneratedRustBytes {
+    return Err(
+      "Stage 1 generated Rust exceeds {maxGeneratedRustBytes} bytes",
+    )
+  }
+  let response = Stage1Response {
+    ...lowered,
+    generatedRust: generated,
+  }
+  Ok(Bytes.encodeUtf8(JSON.stringify(response)?))
+}

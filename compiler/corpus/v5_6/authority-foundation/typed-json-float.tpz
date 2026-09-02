@@ -1,0 +1,1 @@
+JSON.parseAs<float>("1.0")

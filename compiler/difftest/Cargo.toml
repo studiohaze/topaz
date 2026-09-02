@@ -1,0 +1,43 @@
+[workspace]
+resolver = "3"
+members = [
+    "../crates/topaz_difftest",
+    "../crates/topaz_difftest_native",
+    "../crates/topaz_difftest_py",
+]
+
+[workspace.package]
+version = "5.17.0"
+license = "Apache-2.0"
+authors = ["Studio Haze Inc."]
+repository = "https://github.com/studiohaze/topaz"
+edition = "2024"
+rust-version = "1.96.0"
+
+[workspace.dependencies]
+topaz_diag = { path = "../crates/topaz_diag" }
+topaz_syntax = { path = "../crates/topaz_syntax" }
+topaz_parser = { path = "../crates/topaz_parser" }
+topaz_resolve = { path = "../crates/topaz_resolve" }
+topaz_value = { path = "../crates/topaz_value" }
+topaz_check = { path = "../crates/topaz_check" }
+topaz_hir = { path = "../crates/topaz_hir" }
+topaz_lower = { path = "../crates/topaz_lower" }
+topaz_interp = { path = "../crates/topaz_interp" }
+topaz_rt = { path = "../crates/topaz_rt" }
+topaz_emit = { path = "../crates/topaz_emit" }
+topaz_emit_py = { path = "../crates/topaz_emit_py" }
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+all = "warn"
+
+[profile.dev]
+debug = 0
+incremental = false
+
+[profile.test]
+debug = 0
+incremental = false

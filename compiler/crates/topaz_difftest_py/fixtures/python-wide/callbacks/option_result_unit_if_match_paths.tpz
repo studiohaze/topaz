@@ -1,0 +1,17 @@
+
+function direct(flag: bool) {
+    if flag { () }
+}
+function lowered(flag: bool) {
+    if flag { loop { break } }
+}
+function throughMatch(value: Option<int>) {
+    match value {
+        case Some(_) => return
+        case None => ()
+    }
+}
+function main() -> string {
+    "{direct(true)}|{direct(false)}|{lowered(true)}|{lowered(false)}|{throughMatch(Some(1))}|{throughMatch(None)}"
+}
+main()

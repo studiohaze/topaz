@@ -1,0 +1,7 @@
+function pick(value: Option<int>) -> int {
+    match value {
+        case Some(x: 1) | Some(x: 2) | Some(x: int) => x
+        case None => 0
+    }
+}
+print("{pick(Some(2))}")

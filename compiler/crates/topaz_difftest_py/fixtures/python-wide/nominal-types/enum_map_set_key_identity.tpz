@@ -1,0 +1,5 @@
+
+enum Color derives Eq, Order, Show { Red, Blue }
+let colors = set { Color.Red, Color.Red, Color.Blue }
+let labels = map { Color.Blue: "hit" }
+"{colors.length}:{labels.getOr(Color.Blue, "miss")}:{labels.getOr(Color.Red, "miss")}"

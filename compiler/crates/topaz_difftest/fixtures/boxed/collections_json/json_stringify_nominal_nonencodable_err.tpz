@@ -1,0 +1,2 @@
+record Callback { f: (int) -> int, name: string }
+JSON.stringify(Callback { f: (x) => x + 1, name: "k" })

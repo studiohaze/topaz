@@ -1,0 +1,8 @@
+
+function main() {
+    let r: Option<{ n: int }> = Some({ n: 7 })
+    let none: Option<{ n: int }> = None
+    let nested: Option<{ inner: Option<{ n: int }> }> = Some({ inner: Some({ n: 5 }) })
+    { a: r?.n, b: none?.n, c: nested?.inner?.n }
+}
+main()

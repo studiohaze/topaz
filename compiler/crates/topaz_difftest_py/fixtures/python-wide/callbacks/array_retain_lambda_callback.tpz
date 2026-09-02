@@ -1,0 +1,7 @@
+
+function main() -> int {
+    let mut xs = [1, 2, 3, 4]
+    xs.retain((x) => x % 2 == 0)
+    xs[0] + xs.length
+}
+main()

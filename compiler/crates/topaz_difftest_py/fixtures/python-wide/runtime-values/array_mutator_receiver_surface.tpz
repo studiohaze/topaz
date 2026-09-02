@@ -1,0 +1,25 @@
+
+function optIntText(value: Option<int>) -> string {
+    match value {
+        case Some(n) => "{n}"
+        case None => "none"
+    }
+}
+function main() -> string {
+    let mut xs = [1, 2, 3]
+    let alias = xs
+    let pushed = xs.push(4)
+    let popped = optIntText(xs.pop())
+    xs.insert(1, 9)
+    let removed = optIntText(xs.removeAt(2))
+    let missing = optIntText(xs.removeAt(99))
+    let negative = optIntText(xs.removeAt(-1))
+    xs.reverse()
+    let afterReverse = alias.join(",")
+    let cleared = xs.clear()
+    let afterClear = alias.join(",")
+    let mut ys = [3, 1, 2]
+    let sortedUnit = ys.sort()
+    "{pushed}:{popped}:{removed}:{missing}:{negative}:{afterReverse}:{cleared}:{afterClear}:{ys.join(",")}:{sortedUnit}"
+}
+main()

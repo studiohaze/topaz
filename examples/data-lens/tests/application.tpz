@@ -1,0 +1,83 @@
+import data_lens_core { DataRow, Summary }
+import src.main { initialModel, transitionAppModel, transitionModel }
+import src.model { Model, Msg }
+import std.dom { BrowserEvent, LocalDataEvent, LocalDataResult, LocalStateEvent, LocalStateResult, TextDocument, WebAppEvent }
+
+let initial = initialModel()
+assert(initial.summary.totalRows == 3, "initial CSV sample")
+assert(initial.summary.totalValue == 41, "initial aggregate")
+
+let queryEvent = BrowserEvent {
+  kind: "input",
+  targetId: Some("query"),
+  value: Some("language"),
+  checked: None,
+  key: None,
+}
+let filtered = transitionModel(initial, Msg.QueryChanged, queryEvent)
+assert(filtered.rows.length == 1, "query transition")
+assert(filtered.rows[0].name == "Topaz core", "query result")
+
+let toggleEvent = BrowserEvent {
+  kind: "change",
+  targetId: Some("active-only"),
+  value: None,
+  checked: Some(true),
+  key: None,
+}
+let active = transitionModel(initial, Msg.ActiveChanged, toggleEvent)
+assert(active.summary.activeRows == 2, "checkbox transition")
+
+let loadEvent = BrowserEvent {
+  kind: "click",
+  targetId: Some("load-json"),
+  value: None,
+  checked: None,
+  key: None,
+}
+let json = transitionModel(initial, Msg.LoadJson, loadEvent)
+assert(json.summary.totalRows == 2, "JSON sample transition")
+
+let open = transitionAppModel(initial, Msg.OpenDocument, WebAppEvent.Browser(loadEvent))
+assert(open.status == "Choose a CSV or JSON document", "open request state")
+
+let opened = transitionAppModel(
+  initial,
+  Msg.LocalCompleted,
+  WebAppEvent.LocalData(LocalDataEvent {
+    requestId: "data-lens-open",
+    result: LocalDataResult.TextOpened(TextDocument {
+      name: "opened.json",
+      mediaType: "application/json",
+      sizeBytes: 67,
+      text: "[\{\"name\":\"Opened\",\"category\":\"file\",\"value\":7,\"active\":true\}]",
+    }),
+  }),
+)
+assert(opened.summary.totalRows == 1, "opened document parsed")
+assert(opened.status == "Lens applied to 1 rows", "opened document settled")
+
+let download = transitionAppModel(opened, Msg.DownloadResults, WebAppEvent.Browser(loadEvent))
+assert(download.status == "Preparing download", "download request state")
+
+let restored = transitionAppModel(
+  initial,
+  Msg.LocalCompleted,
+  WebAppEvent.LocalState(LocalStateEvent {
+    requestId: "data-lens-session-load",
+    result: LocalStateResult.Loaded("session", Some("\{\"activeOnly\":true,\"query\":\"city\",\"sortMode\":\"value\"\}")),
+  }),
+)
+assert(restored.query == "city", "session query restored")
+assert(restored.activeOnly, "session active filter restored")
+assert(restored.status == "Session restored", "session status restored")
+
+let saved = transitionAppModel(
+  restored,
+  Msg.LocalCompleted,
+  WebAppEvent.LocalState(LocalStateEvent {
+    requestId: "data-lens-session-save",
+    result: LocalStateResult.Saved("session"),
+  }),
+)
+assert(saved.status == "Session saved", "session saved status")

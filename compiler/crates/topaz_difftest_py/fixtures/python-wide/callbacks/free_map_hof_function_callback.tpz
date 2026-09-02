@@ -1,0 +1,9 @@
+
+function double(x: int) -> int {
+    x * 2
+}
+function main() -> int {
+    let xs = map([3], double)
+    xs[0]
+}
+main()
