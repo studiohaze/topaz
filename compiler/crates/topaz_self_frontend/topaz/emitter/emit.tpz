@@ -1,0 +1,2486 @@
+import std.json as jsonBoundary
+
+import emitter.rust_text { rustStr }
+import emitter.type_test { typeTest, childTypes, subtree, substitute, nominalIdentity }
+import checker.members_capabilities { removedStandardStatic }
+import emitter.builtins { BuiltinSpec, staticSpec, staticBuiltin, freeBuiltin, freeSpec, lispexIntrinsic }
+import emitter.ir { typeDeclaration,
+  Table,
+  opAt,
+  capturesOf,
+  fieldOf,
+  labelName,
+  children,
+  child,
+  optionalChild,
+  refusal,
+  spanOf,
+  declarationSpan,
+  rustName,
+}
+import emitter.repr { reprOf, reprAt, slotRepr, rustType, isCopyRepr, boxed, coerce, bare, sharedInit, sharedRead, sharedWrite, parameterGuard, variadicRepr }
+import stage1_types { Stage1Operation }
+import types { PreviewTypeAtom }
+
+// A name visible to the code being emitted.
+//   local     -> a Rust local `rust` of representation `repr`
+//   shared    -> a typed or boxed cell retained by closures and deferred actions
+//   localfn   -> a missing-aware local function cell, filled at its declaration
+//   global    -> a module-level cell `g.<rust>` (typed `Cell` or boxed `TopCell`)
+//   fn        -> a module-level function; `rust` keys `Ctx.fns`
+//   namespace -> an imported module; `rust` is its identity
+export record Bind {
+  name: string,
+  kind: string,
+  rust: string,
+  repr: string,
+  mutable: bool,
+}
+
+export record FnInfo {
+  id: string,
+  name: string,
+  body: string,
+  adapter: string,
+  cell: string,
+  paramNames: Array<string>,
+  paramReprs: Array<string>,
+  paramSpans: Array<string>,
+  defaultIds: Array<string>,
+  variadic: bool,
+  retRepr: string,
+}
+
+export record ModInfo {
+  identity: string,
+  cell: string,
+  binds: Array<Bind>,
+  exports: Array<string>,
+  generatedStd: bool,
+}
+
+export record Ctx {
+  table: Table,
+  scope: Array<Bind>,
+  fns: Map<string, FnInfo>,
+  mods: Map<string, ModInfo>,
+  cellDecls: Array<string>,
+  items: Array<string>,
+  fnRet: string,
+  inConst: bool,
+  atModuleTop: bool,
+  loops: Array<LoopFrame>,
+  defers: Array<string>,
+}
+
+export record LoopFrame {
+  id: string,
+  label: string,
+  repr: string,
+  cleanup: int,
+}
+
+export record Code {
+  rs: string,
+  repr: string,
+}
+
+// --- scope ---------------------------------------------------------------
+
+export function has(list: Array<string>, value: string) -> bool {
+  for item in list {
+    if item == value {
+      return true
+    }
+  }
+  false
+}
+
+export function pushBind(ctx: Ctx, bind: Bind) -> () {
+  let mut scope = ctx.scope
+  scope.push(bind)
+}
+
+export function restoreScope(ctx: Ctx, mark: int) -> () {
+  let mut scope = ctx.scope
+  while scope.length > mark {
+    let _ = scope.pop()
+  }
+  ()
+}
+
+export function lookup(ctx: Ctx, name: string) -> Option<Bind> {
+  let mut position = ctx.scope.length - 1
+  while position >= 0 {
+    let candidate = ctx.scope[position]
+    if candidate.name == name {
+      return Some(candidate)
+    }
+    position -= 1
+  }
+  None
+}
+
+// A fresh module-level cell `_c<n>` of the given representation.
+export function newCell(ctx: Ctx, repr: string) -> string {
+  let name = "_c{ctx.cellDecls.length}"
+  let mut decls = ctx.cellDecls
+  if isCopyRepr(repr) {
+    decls.push("{name}: std::cell::Cell<Option<{rustType(repr)}>>|std::cell::Cell::new(None)")
+  } else {
+    decls.push("{name}: TopCell|top_cell()")
+  }
+  name
+}
+
+function fnInfo(ctx: Ctx, key: string, op: Stage1Operation) -> Result<FnInfo, string> {
+  match ctx.fns.get(key) {
+    case Some(info) => Ok(info)
+    case None => Err(refusal("ir function {key}", op))
+  }
+}
+
+function modInfo(ctx: Ctx, identity: string, op: Stage1Operation) -> Result<ModInfo, string> {
+  match ctx.mods.get(identity) {
+    case Some(info) => Ok(info)
+    case None => Err(refusal("module {identity}", op))
+  }
+}
+
+export function modBind(info: ModInfo, name: string) -> Option<Bind> {
+  for bind in info.binds {
+    if bind.name == name {
+      return Some(bind)
+    }
+  }
+  None
+}
+
+// --- reads and writes of bindings ----------------------------------------
+
+export function readBind(ctx: Ctx, bind: Bind, span: string, op: Stage1Operation) -> Result<Code, string> {
+  match bind.kind {
+    case "localfn" => Ok(Code { rs: "top_cell_get(&{bind.rust}, {rustStr(bind.name)}, {span})?", repr: "value" })
+    case "shared" => Ok(Code { rs: sharedRead(bind.rust, bind.repr), repr: bind.repr })
+    case "local" => if isCopyRepr(bind.repr) {
+      Ok(Code { rs: bind.rust, repr: bind.repr })
+    } else {
+      Ok(Code { rs: "{bind.rust}.clone()", repr: bind.repr })
+    }
+    case "global" => if isCopyRepr(bind.repr) {
+      Ok(Code {
+        rs: "__cell_get(&g.{bind.rust}, {rustStr(bind.name)}, {span})?",
+        repr: bind.repr,
+      })
+    } else {
+      Ok(Code {
+        rs: "top_cell_get(&g.{bind.rust}, {rustStr(bind.name)}, {span})?",
+        repr: "value",
+      })
+    }
+    case "fn" => {
+      let info = fnInfo(ctx, bind.rust, op)?
+      Ok(Code {
+        rs: "top_cell_get(&g.{info.cell}, {rustStr(bind.name)}, {span})?",
+        repr: "value",
+      })
+    }
+    case "namespace" => {
+      let info = modInfo(ctx, bind.rust, op)?
+      Ok(Code {
+        rs: "top_cell_get(&g.{info.cell}, {rustStr(bind.name)}, {span})?",
+        repr: "value",
+      })
+    }
+    case _ => Err(refusal("binding {bind.kind}", op))
+  }
+}
+
+export function writeBind(bind: Bind, code: string, op: Stage1Operation) -> Result<string, string> {
+  match bind.kind {
+    case "shared" => Ok(sharedWrite(bind.rust, code, bind.repr))
+    case "local" => Ok("{bind.rust} = {bare(code)};")
+    case "global" => if isCopyRepr(bind.repr) {
+      Ok("g.{bind.rust}.set(Some({bare(code)}));")
+    } else {
+      Ok("top_cell_set(&g.{bind.rust}, {bare(code)});")
+    }
+    case _ => Err(refusal("assignment to {bind.kind} binding", op))
+  }
+}
+
+// The code in the operation's own representation when it carries a type.
+function finish(code: Code, op: Stage1Operation) -> Result<Code, string> {
+  let target = reprOf(op.semanticTypeAtoms)
+  if target == "none" || target == code.repr || code.repr == "never" {
+    Ok(code)
+  } else {
+    Ok(Code { rs: into(code, target, op)?, repr: target })
+  }
+}
+
+// The code converted to `target` (explicit box/unbox boundary).
+export function into(code: Code, target: string, op: Stage1Operation) -> Result<string, string> {
+  if code.repr == "never" {
+    return Ok(code.rs)
+  }
+  match coerce(code.rs, code.repr, target, spanOf(op)) {
+    case Ok(converted) => Ok(converted)
+    case Err(message) => Err("{message} at {op.module}:{op.lo}-{op.hi}")
+  }
+}
+
+function boxCode(code: Code) -> string {
+  if code.repr == "never" || code.repr == "none" {
+    bare(code.rs)
+  } else {
+    bare(boxed(code.rs, code.repr))
+  }
+}
+
+// --- expressions ----------------------------------------------------------
+
+export function emitExpr(ctx: Ctx, op: Stage1Operation) -> Result<Code, string> {
+  match op.kind {
+    case "expression/integer" => match op.detail.toInt() {
+      case Some(value) => finish(Code { rs: "{value}i64", repr: "i64" }, op)
+      case None => Err(refusal("literal integer {op.detail}", op))
+    }
+    case "expression/float" => finish(Code { rs: floatLiteral(ctx,op)?, repr: "f64" }, op)
+    case "expression/length" => {
+      let parts=op.detail.split(":")
+      if parts.length != 2 || !has(["Pt","Mm","Cm","In","Em"],parts[0]) {return Err(refusal("invalid checked Length payload",op))}
+      let ticks=match parts[1].toInt() {case Some(v)=>v;case None=>return Err(refusal("invalid checked Length ticks",op))}
+      finish(Code {rs:"length_value(Length \{ unit: LengthUnit::{parts[0]}, ticks: {ticks}i64 \})",repr:"value"},op)
+    }
+    case "expression/boolean" => if op.detail == "true" || op.detail == "false" {
+      finish(Code { rs: op.detail, repr: "bool" }, op)
+    } else {
+      Err(refusal("literal boolean {op.detail}", op))
+    }
+    case "expression/unit" => finish(Code { rs: "()", repr: "unit" }, op)
+    case "expression/null" => finish(Code { rs: "Value::Null", repr: "value" }, op)
+    case "expression/string" => finish(emitString(ctx, op)?, op)
+    case "expression/identifier" => emitIdentifier(ctx, op)
+    case "expression/placeholder" => match lookup(ctx, "_") {
+      case Some(bind) => readBind(ctx, bind, spanOf(op), op)
+      case None => Err(refusal("unbound pipe placeholder", op))
+    }
+    case "expression/parenthesized" => finish(emitExpr(ctx, child(ctx.table, op, "operand")?)?, op)
+    case "expression/binary" => finish(emitBinary(ctx, op)?, op)
+    case "expression/unary" => finish(emitUnary(ctx, op)?, op)
+    case "expression/array" => finish(emitArray(ctx, op)?, op)
+    case "expression/map" => finish(emitMap(ctx, op)?, op)
+    case "expression/set" => {
+      let mut values: Array<string> = []
+      for element in children(ctx.table, op, "elements")? {
+        values.push(boxCode(emitExpr(ctx, element)?))
+      }
+      finish(Code { rs: "builtin_set_of(vec![{values.join(", ")}], {spanOf(op)})?", repr: "value" }, op)
+    }
+    case "expression/record-literal" => finish(emitRecord(ctx, op)?, op)
+    case "expression/record-update" => finish(emitRecordUpdate(ctx, op)?, op)
+    case "expression/member" => finish(emitMember(ctx, op)?, op)
+    case "expression/index" => finish(emitIndex(ctx, op)?, op)
+    case "expression/optional-member" => finish(emitOptionalMember(ctx, op)?, op)
+    case "expression/call" => finish(emitCall(ctx, op)?, op)
+    case "expression/pipeline" => finish(emitPipe(ctx, op)?, op)
+    case "expression/concurrent" => finish(emitConcurrent(ctx, op)?, op)
+    case "expression/lambda" => finish(emitLambda(ctx, op)?, op)
+    case "expression/compose" => {
+      let lhs = boxCode(emitExpr(ctx, child(ctx.table, op, "left")?)?)
+      let rhs = boxCode(emitExpr(ctx, child(ctx.table, op, "right")?)?)
+      finish(Code { rs: "Value::Composed(Rc::new(({lhs}, {rhs})))", repr: "value" }, op)
+    }
+    case "expression/if" => emitIf(ctx, op)
+    case "expression/match" => emitMatch(ctx, op)
+    case "expression/loop" => emitLoop(ctx, op)
+    case "expression/for" => emitFor(ctx, op, true)
+    case "expression/range" => emitRange(ctx, op)
+    case "expression/comprehension" => emitComprehension(ctx, op)
+    case "expression/result-propagation" => finish(emitTry(ctx, op)?, op)
+    case "expression/block" => finish(emitBlock(ctx, op)?, op)
+    case "expression/block-expression" => finish(emitBlock(ctx, op)?, op)
+    case _ => Err(refusal("kind {op.kind}", op))
+  }
+}
+
+function floatLiteral(ctx:Ctx,op: Stage1Operation) -> Result<string, string> {
+  if op.literalEncoding != "checked-values/v1" { return Err(refusal("float literal encoding", op)) }
+  let bits = op.detail
+  if bits.encodeUtf8().length() != 16 { return Err(refusal("checked float bits", op)) }
+  for scalar in bits.scalars() {
+    if !"0123456789abcdef".contains(scalar) { return Err(refusal("checked float bits", op)) }
+  }
+  Ok("f64::from_bits(0x{bits}u64)")
+}
+
+function emitIdentifier(ctx: Ctx, op: Stage1Operation) -> Result<Code, string> {
+  if op.referenceIdentity.startsWith("builtin::") {
+    if op.referenceIdentity == "builtin::None" {
+      return finish(Code { rs: "Value::None", repr: "value" }, op)
+    }
+    let tag = if ctx.table.languageMode == "topaz-5.21" && (op.detail == "toFloat" || op.detail == "toInt" || op.detail == "toIntRadix" || op.detail == "fromCodePoint" || op.detail == "map" || op.detail == "filter" || op.detail == "reduce" || op.detail == "print" || op.detail == "input" || op.detail == "open" || op.detail == "assert") { "" } else { freeBuiltin(op.detail) }
+    if tag != "" { return finish(builtinCode(tag), op) }
+    let intrinsic = generatedIntrinsic(ctx, op)
+    if intrinsic != "" { return finish(builtinCode(intrinsic), op) }
+    return Err(refusal("builtin value {op.detail}", op))
+  }
+  match lookup(ctx, op.detail) {
+    case Some(bind) => finish(readBind(ctx, bind, spanOf(op), op)?, op)
+    case None => Err(refusal("unresolved identifier {op.detail}", op))
+  }
+}
+
+function emitString(ctx: Ctx, op: Stage1Operation) -> Result<Code, string> {
+  let pieces = op.detail.split("|")
+  let tag = if pieces.length == 2 {
+    pieces[0]
+  } else {
+    ""
+  }
+  let mut texts: Array<string> = []
+  let mut current = ""
+  let mut values: Array<string> = []
+  let mut steps: Array<string> = []
+  let mut position = 0
+  for id in op.operands {
+    let part = opAt(ctx.table, id)?
+    let field = fieldOf(op.operandLabels[position])
+    if field == "parts" && part.kind == "expression/string-text" {
+      if part.literalEncoding != "checked-values/v1" { return Err(refusal("string literal encoding", part)) }
+      let text = part.detail
+      current = current + text
+      steps.push("__s.push_str({rustStr(text)});")
+    } else if field == "value" {
+      let value = boxCode(emitExpr(ctx, part)?)
+      texts.push(current)
+      current = ""
+      values.push(value)
+      steps.push("__s.push_str(&render(&({value})));")
+    } else {
+      return Err(refusal("shape string part {field}", op))
+    }
+    position += 1
+  }
+  texts.push(current)
+  if tag != "" {
+    let mut parts: Array<string> = []
+    for text in texts {
+      parts.push("{rustStr(text)}.to_string()")
+    }
+    return Ok(Code {
+      rs: "make_template({rustStr(tag)}.to_string(), vec![{parts.join(", ")}], vec![{values.join(", ")}])",
+      repr: "value",
+    })
+  }
+  if values.length == 0 {
+    Ok(Code { rs: "Value::str({rustStr(texts.join(""))})", repr: "value" })
+  } else {
+    Ok(Code {
+      rs: "\{ let mut __s = String::new(); {steps.join(" ")} Value::str(__s) \}",
+      repr: "value",
+    })
+  }
+}
+
+function binaryName(detail: string) -> string {
+  match detail {
+    case "add" => "Add"
+    case "subtract" => "Sub"
+    case "multiply" => "Mul"
+    case "divide" => "Div"
+    case "remainder" => "Rem"
+    case "power" => "Pow"
+    case "less-than" => "Lt"
+    case "less-or-equal" => "Le"
+    case "greater-than" => "Gt"
+    case "greater-or-equal" => "Ge"
+    case "equal" => "Eq"
+    case "not-equal" => "Ne"
+    case "in" => "In"
+    case "and" => "And"
+    case "or" => "Or"
+    case "coalesce" => "Coalesce"
+    case _ => ""
+  }
+}
+
+function intLeaf(detail: string) -> string {
+  match detail {
+    case "add" => "int_add"
+    case "subtract" => "int_sub"
+    case "multiply" => "int_mul"
+    case "divide" => "int_div"
+    case "remainder" => "int_rem"
+    case "power" => "int_pow"
+    case _ => ""
+  }
+}
+
+function isOrdering(detail: string) -> bool {
+  detail == "less-than" || detail == "less-or-equal" || detail == "greater-than" ||
+    detail == "greater-or-equal"
+}
+
+// A faulting leaf; inside a top-level `const` the fault is reframed as the
+// constant-expression error the interpreter's const pass reports.
+function checked(ctx: Ctx, leaf: string, span: string) -> string {
+  if ctx.inConst {
+    "__cg({leaf}, {span})?"
+  } else {
+    "{leaf}?"
+  }
+}
+
+// The arithmetic/comparison core shared by binary expressions and compound
+// assignment. Typed rows of the representation table use the checked scalar
+// leaves of `topaz_value`; every other pairing goes through the boxed leaf.
+function arithmetic(
+  ctx: Ctx,
+  detail: string,
+  left: Code,
+  right: Code,
+  span: string,
+  op: Stage1Operation,
+) -> Result<Code, string> {
+  let name = binaryName(detail)
+  if name == "" || name == "And" || name == "Or" || name == "Coalesce" {
+    return Err(refusal("operator {detail}", op))
+  }
+  if left.repr == "i64" && right.repr == "i64" {
+    let leaf = intLeaf(detail)
+    if leaf != "" {
+      return Ok(Code { rs: checked(ctx, "{leaf}({left.rs}, {right.rs}, {span})", span), repr: "i64" })
+    }
+    if isOrdering(detail) {
+      return Ok(Code { rs: "int_cmp(BinaryOp::{name}, {left.rs}, {right.rs})", repr: "bool" })
+    }
+  }
+  if left.repr == "f64" && right.repr == "f64" {
+    if detail == "add" || detail == "subtract" || detail == "multiply" || detail == "divide" ||
+      detail == "power" {
+      return Ok(Code { rs: "float_arith(BinaryOp::{name}, {left.rs}, {right.rs})", repr: "f64" })
+    }
+    if isOrdering(detail) {
+      return Ok(Code { rs: "float_cmp(BinaryOp::{name}, {left.rs}, {right.rs})", repr: "bool" })
+    }
+  }
+  if left.repr == right.repr && (left.repr == "i64" || left.repr == "f64" || left.repr == "bool") {
+    if detail == "equal" {
+      return Ok(Code { rs: "(({left.rs}) == ({right.rs}))", repr: "bool" })
+    }
+    if detail == "not-equal" {
+      return Ok(Code { rs: "(({left.rs}) != ({right.rs}))", repr: "bool" })
+    }
+  }
+  Ok(Code {
+    rs: checked(ctx, "binary_value(BinaryOp::{name}, {boxCode(left)}, {boxCode(right)}, {span})", span),
+    repr: "value",
+  })
+}
+
+function emitBinary(ctx: Ctx, op: Stage1Operation) -> Result<Code, string> {
+  let left = emitExpr(ctx, child(ctx.table, op, "left")?)?
+  let right = emitExpr(ctx, child(ctx.table, op, "right")?)?
+  let span = spanOf(op)
+  if op.detail == "and" || op.detail == "or" {
+    if left.repr == "bool" && right.repr == "bool" {
+      if op.detail == "and" {
+        return Ok(Code { rs: "(if {bare(left.rs)} \{ {bare(right.rs)} \} else \{ false \})", repr: "bool" })
+      }
+      return Ok(Code { rs: "(if {bare(left.rs)} \{ true \} else \{ {bare(right.rs)} \})", repr: "bool" })
+    }
+  }
+  if op.detail == "and" || op.detail == "or" || op.detail == "coalesce" {
+    let name = binaryName(op.detail)
+    return Ok(Code {
+      rs: "(match short_circuit_lhs({boxCode(left)}, BinaryOp::{name}, {span})? \{ Some(__v) => __v, None => {boxCode(right)} \})",
+      repr: "value",
+    })
+  }
+  arithmetic(ctx, op.detail, left, right, span, op)
+}
+
+function emitUnary(ctx: Ctx, op: Stage1Operation) -> Result<Code, string> {
+  let operand = emitExpr(ctx, child(ctx.table, op, "operand")?)?
+  let span = spanOf(op)
+  match op.detail {
+    case "minus" => if operand.repr == "i64" {
+      Ok(Code { rs: checked(ctx, "int_neg({operand.rs}, {span})", span), repr: "i64" })
+    } else if operand.repr == "f64" {
+      Ok(Code { rs: "(-{operand.rs})", repr: "f64" })
+    } else {
+      Ok(Code {
+        rs: checked(ctx, "unary_value(UnaryOp::Minus, {boxCode(operand)}, {span})", span),
+        repr: "value",
+      })
+    }
+    case "not" => if operand.repr == "bool" {
+      Ok(Code { rs: "(!{operand.rs})", repr: "bool" })
+    } else {
+      Ok(Code {
+        rs: checked(ctx, "unary_value(UnaryOp::Not, {boxCode(operand)}, {span})", span),
+        repr: "value",
+      })
+    }
+    case "plus" => if operand.repr == "i64" || operand.repr == "f64" {
+      Ok(operand)
+    } else {
+      Ok(Code {
+        rs: checked(ctx, "unary_value(UnaryOp::Plus, {boxCode(operand)}, {span})", span),
+        repr: "value",
+      })
+    }
+    case _ => Err(refusal("operator unary {op.detail}", op))
+  }
+}
+
+function emitArray(ctx: Ctx, op: Stage1Operation) -> Result<Code, string> {
+  let mut values: Array<string> = []
+  let mut steps: Array<string> = []
+  let mut spread = false
+  let mut position = 0
+  for id in op.operands {
+    let element = opAt(ctx.table, id)?
+    let label = op.operandLabels[position]
+    let value = boxCode(emitExpr(ctx, element)?)
+    if label.contains("/spread[") {
+      spread = true
+      steps.push("array_spread_extend(&mut __acc, {value}, {spanOf(op)})?;")
+    } else if fieldOf(label) == "elements" {
+      values.push(value)
+      steps.push("__acc.push({value});")
+    } else {
+      return Err(refusal("shape array element {label}", op))
+    }
+    position += 1
+  }
+  if spread {
+    Ok(Code {
+      rs: "\{ let mut __acc = Vec::new(); {steps.join(" ")} Value::array(__acc) \}",
+      repr: "value",
+    })
+  } else {
+    Ok(Code { rs: "Value::array(vec![{values.join(", ")}])", repr: "value" })
+  }
+}
+
+function emitMap(ctx: Ctx, op: Stage1Operation) -> Result<Code, string> {
+  let mut pairs: Array<string> = []
+  let mut key = ""
+  let mut position = 0
+  for id in op.operands {
+    let part = opAt(ctx.table, id)?
+    let field = fieldOf(op.operandLabels[position])
+    let value = boxCode(emitExpr(ctx, part)?)
+    if field == "key" {
+      key = value
+    } else if field == "value" {
+      pairs.push("({key}, {value})")
+    } else {
+      return Err(refusal("shape map entry {field}", op))
+    }
+    position += 1
+  }
+  Ok(Code { rs: "builtin_map_of(vec![{pairs.join(", ")}], {spanOf(op)})?", repr: "value" })
+}
+
+function nominalHead(ctx: Ctx, op: Stage1Operation) -> Result<Option<Stage1Operation>, string> {
+  if op.kind == "expression/member" {
+    let object = child(ctx.table, op, "object")?
+    let namespace = match namespaceOf(ctx, object) {
+      case Some(found) => found
+      case None => return Ok(None)
+    }
+    for declaration in ctx.table.ops {
+      if declaration.module != namespace.rust || declaration.typeDefinition.length == 0 {
+        continue
+      }
+      if !has(["record", "enum", "newtype"], declaration.kind) ||
+        declaration.typeDefinition[0].name != op.detail || declaration.parentId == "" {
+        continue
+      }
+      let parent = opAt(ctx.table, declaration.parentId)?
+      if parent.kind == "export" { return Ok(Some(declaration)) }
+    }
+    return Ok(None)
+  }
+  if op.kind != "expression/identifier" { return Ok(None) }
+  match lookup(ctx, op.detail) {
+    case Some(_) => return Ok(None)
+    case None => ()
+  }
+  typeDeclaration(ctx.table, op.id, op.detail)
+}
+
+function methodIdentity(ctx: Ctx, decl: Stage1Operation) -> string {
+  for op in ctx.table.ops {
+    if op.module == decl.module && op.kind == "implementation" && op.detail == decl.typeDefinition[0].name {
+      return "Some({rustStr(decl.typeDefinition[0].identity)})"
+    }
+  }
+  "None::<&str>"
+}
+
+function emitEnum(ctx: Ctx, op: Stage1Operation, decl: Stage1Operation, name: string, args: Array<Stage1Operation>) -> Result<Code, string> {
+  let root = decl.typeDefinition[0]
+  for index in childTypes(decl.typeDefinition, 0) {
+    let variant = decl.typeDefinition[index]
+    if variant.field != "variants" || variant.name != name { continue }
+    if childTypes(decl.typeDefinition, index).length != args.length { return Err(refusal("enum payload arity", op)) }
+    let mut values: Array<string> = []
+    for arg in args { values.push(boxCode(emitExpr(ctx, arg)?)) }
+    let method = methodIdentity(ctx, decl)
+    return Ok(Code { rs: "Value::Enum \{ enum_id: Rc::from({rustStr(root.name)}), declaration_identity: Some(Rc::from({rustStr(root.identity)})), method_identity: ({method}).map(Rc::from), variant: Rc::from({rustStr(name)}), variant_index: {variant.index}, payloads: Rc::from(vec![{values.join(", ")}]) \}", repr: "value" })
+  }
+  Err(refusal("enum variant {name}", op))
+}
+
+// Defaults belong to their declaration environment, even when the construction
+// occurs in a function that shadows a module binding.
+function defaultContext(ctx: Ctx, decl: Stage1Operation) -> Ctx {
+  let mut parent = decl.parentId
+  let mut moduleLevel = false
+  for op in ctx.table.ops {
+    if op.id == parent && op.kind == "export" { parent = op.parentId }
+  }
+  for op in ctx.table.ops {
+    if op.id == parent && op.parentId == "" { moduleLevel = true }
+  }
+  if !moduleLevel { return ctx }
+  match ctx.mods.get(decl.module) {
+    case Some(info) => Ctx { ...ctx, scope: info.binds }
+    case None => ctx
+  }
+}
+
+function recordDefault(ctx: Ctx, decl: Stage1Operation, ordinal: int) -> Result<Option<Stage1Operation>, string> {
+  let mut index = 0
+  for label in decl.operandLabels {
+    if fieldOf(label) == "default" && label.contains("/fields:{ordinal}/") {
+      return Ok(Some(opAt(ctx.table, decl.operands[index])?))
+    }
+    index += 1
+  }
+  Ok(None)
+}
+
+function emitRecordUpdate(ctx: Ctx, op: Stage1Operation) -> Result<Code, string> {
+  let base = child(ctx.table, op, "base")?
+  let declaration = nominalHead(ctx, base)?
+  let mut lines: Array<string> = []
+  let mut names: Array<string> = []
+  let mut fields: Array<string> = []
+  let mut spread = false
+  match declaration {
+    case Some(decl) => if decl.kind == "record" {
+      match optionalChild(ctx.table, op, "spread")? {
+        case Some(seed) => {
+          let mut required: Array<string> = []
+          for atom in decl.typeDefinition { if atom.parent == 0 && atom.field == "fields" { required.push(rustStr(atom.edgeName)) } }
+          let root = decl.typeDefinition[0]
+          lines.push("let __seed = nominal_spread_base_required({boxCode(emitExpr(ctx, seed)?)}, {rustStr(root.name)}, Some({rustStr(root.identity)}), &[{required.join(", ")}], {spanOf(op)})?;")
+          spread = true
+        }
+        case None => ()
+      }
+    }
+    case None => lines.push("let __base = record_update_base({boxCode(emitExpr(ctx, base)?)}, {spanOf(op)})?;")
+  }
+  let mut index = 0
+  for label in op.operandLabels {
+    if fieldOf(label) == "value" && label.startsWith("field-initializer[") {
+      let name = labelName(label)
+      let slot = "__field{names.length}"
+      lines.push("let {slot} = {boxCode(emitExpr(ctx, opAt(ctx.table, op.operands[index])?)?)};")
+      names.push(name)
+      fields.push(slot)
+    }
+    index += 1
+  }
+  let mut pairs: Array<string> = []
+  match declaration {
+    case Some(decl) => {
+      let root = decl.typeDefinition[0]
+      for atom in decl.typeDefinition {
+        if atom.parent != 0 || atom.field != "fields" { continue }
+        let mut value = ""
+        let mut slot = 0
+        for name in names {
+          if name == atom.edgeName { value = "{fields[slot]}.clone()" }
+          slot += 1
+        }
+        if value == "" && spread {
+          value = "nominal_record_field_required(&__seed, {rustStr(root.name)}, {rustStr(atom.edgeName)}, {spanOf(op)})?"
+        }
+        if value == "" {
+          match recordDefault(ctx, decl, atom.index)? {
+            case Some(default) => {
+              value = "__default{atom.index}"
+              lines.push("let {value} = {boxCode(emitExpr(defaultContext(ctx, decl), default)?) };")
+            }
+            case None => return Err(refusal("missing record field {root.name}.{atom.edgeName}", op))
+          }
+        }
+        pairs.push("(Rc::from({rustStr(atom.edgeName)}), {value})")
+      }
+      lines.push("Value::nominal_record_with_identities({rustStr(root.name)}, {rustStr(root.identity)}, {methodIdentity(ctx, decl)}, vec![{pairs.join(", ")}])")
+    }
+    case None => {
+      let mut slot = 0
+      for name in names { pairs.push("({rustStr(name)}.to_string(), {fields[slot]})"); slot += 1 }
+      lines.push("record_update_merge(__base, vec![{pairs.join(", ")}], {spanOf(op)})?")
+    }
+  }
+  Ok(Code { rs: "\{ {lines.join(" ")} \}", repr: "value" })
+}
+
+function jsonSchema(ctx: Ctx, origin: Stage1Operation, atoms: Array<PreviewTypeAtom>, index: int, active: Array<string>) -> Result<string, string> {
+  let atom = atoms[index]
+  let subs = childTypes(atoms, index)
+  if atom.kind == "primitive" {
+    let name = match atom.name {
+      case "int" => "Int"
+      case "string" => "Str"
+      case "bool" => "Bool"
+      case "unit" => "Unit"
+      case "null" => "Null"
+      case _ => return Err(refusal("JSON schema {atom.name}", origin))
+    }
+    return Ok("Schema::{name}")
+  }
+  if atom.kind == "json-value" { return Ok("Schema::Json") }
+  if atom.kind == "constructor" && has(["Array", "Option", "Map"], atom.name) {
+    let slot = if atom.name == "Map" { 1 } else { 0 }
+    if subs.length <= slot { return Err(refusal("JSON schema argument", origin)) }
+    return Ok("Schema::{atom.name}(Rc::new({jsonSchema(ctx, origin, atoms, subs[slot], active)?}))")
+  }
+  if atom.kind == "record" {
+    let mut fields: Array<string> = []
+    for sub in subs { fields.push("(Rc::from({rustStr(atoms[sub].edgeName)}), {jsonSchema(ctx, origin, atoms, sub, active)?}, None)") }
+    return Ok("Schema::StructRecord \{ fields: Rc::from(vec![{fields.join(", ")}]) \}")
+  }
+  if has(["enum", "newtype", "nominal-record"], atom.kind) {
+    let identity = nominalIdentity(atom)
+    let schemaKey = jsonBoundary.stringify(subtree(atoms, index))?
+    if has(active, schemaKey) { return Err(refusal("recursive JSON schema {identity}", origin)) }
+    let mut next: Array<string> = []
+    for key in active { next.push(key) }
+    next.push(schemaKey)
+    let declaration = match ctx.table.nominals.get(identity) {
+      case Some(found) => found
+      case None => return Err(refusal("JSON nominal {identity}", origin))
+    }
+    let mut params: Map<string, Array<PreviewTypeAtom>> = map {}
+    let mut ordinal = 0
+    for param in declaration {
+      if param.parent == 0 && param.field == "typeParameters" {
+        if ordinal >= subs.length { return Err(refusal("JSON nominal arity", origin)) }
+        params.insert(param.name, subtree(atoms, subs[ordinal]))
+        ordinal += 1
+      }
+    }
+    let definition = substitute(declaration, params)
+    let mut fields: Array<string> = []
+    for sub in childTypes(definition, 0) {
+      let member = definition[sub]
+      if member.field == "base" {
+        return Ok("Schema::Newtype \{ newtype_id: Rc::from({rustStr(declaration[0].name)}), declaration_identity: Some(Rc::from({rustStr(identity)})), base: Rc::new({jsonSchema(ctx, origin, definition, sub, next)?}) \}")
+      }
+      if member.field == "fields" {
+        let mut default = "None"
+        for decl in ctx.table.ops {
+          if decl.typeDefinition.length > 0 && decl.typeDefinition[0].identity == identity {
+            match recordDefault(ctx, decl, member.index)? {
+              case Some(value) => if schemaConstant(ctx, value)? { default = "Some({boxCode(emitExpr(defaultContext(ctx, decl), value)?)})" }
+              case None => ()
+            }
+          }
+        }
+        fields.push("(Rc::from({rustStr(member.edgeName)}), {jsonSchema(ctx, origin, definition, sub, next)?}, {default})")
+      }
+      if member.field == "variants" {
+        let mut payloads: Array<string> = []
+        for payload in childTypes(definition, sub) { payloads.push(jsonSchema(ctx, origin, definition, payload, next)?) }
+        fields.push("(Rc::from({rustStr(member.name)}), {member.index}u32, Rc::from(vec![{payloads.join(", ")}]))")
+      }
+    }
+    if atom.kind == "enum" {
+      return Ok("Schema::Enum \{ enum_id: Rc::from({rustStr(declaration[0].name)}), declaration_identity: Some(Rc::from({rustStr(identity)})), variants: Rc::from(vec![{fields.join(", ")}]) \}")
+    }
+    return Ok("Schema::Record \{ record_id: Rc::from({rustStr(declaration[0].name)}), declaration_identity: Some(Rc::from({rustStr(identity)})), fields: Rc::from(vec![{fields.join(", ")}]) \}")
+  }
+  Err(refusal("JSON schema {atom.kind}/{atom.name}", origin))
+}
+
+function schemaConstant(ctx: Ctx, op: Stage1Operation) -> Result<bool, string> {
+  if !has(["expression/integer", "expression/length", "expression/float", "expression/boolean", "expression/unit", "expression/null", "expression/string", "expression/string-text", "expression/unary", "expression/binary", "expression/parenthesized"], op.kind) { return Ok(false) }
+  for id in op.operands { if !schemaConstant(ctx, opAt(ctx.table, id)?)? { return Ok(false) } }
+  Ok(true)
+}
+
+function emitRecord(ctx: Ctx, op: Stage1Operation) -> Result<Code, string> {
+  let mut pairs: Array<string> = []
+  let mut position = 0
+  for id in op.operands {
+    let label = op.operandLabels[position]
+    let name = labelName(label)
+    if fieldOf(label) != "value" || !label.startsWith("field-initializer[") || name == "" {
+      return Err(refusal("shape record field {label}", op))
+    }
+    let value = boxCode(emitExpr(ctx, opAt(ctx.table, id)?)?)
+    pairs.push("({rustStr(name)}.to_string(), {value})")
+    position += 1
+  }
+  Ok(Code { rs: "Value::record([{pairs.join(", ")}])", repr: "value" })
+}
+
+// The namespace binding an operation names, if it is an identifier bound to
+// an imported module.
+function namespaceOf(ctx: Ctx, op: Stage1Operation) -> Option<Bind> {
+  if op.kind != "expression/identifier" {
+    return None
+  }
+  match lookup(ctx, op.detail) {
+    case Some(bind) => if bind.kind == "namespace" {
+      Some(bind)
+    } else {
+      None
+    }
+    case None => None
+  }
+}
+
+// A runtime operation named by a generated std.lispex module, or "" when the
+// reference is not one (the Rust emitter's `lispex_intrinsic_kind`).
+function generatedIntrinsic(ctx: Ctx, op: Stage1Operation) -> string {
+  match ctx.mods.get(op.module) {
+    case Some(info) => if info.generatedStd { lispexIntrinsic(op.module, op.detail) } else { "" }
+    case None => ""
+  }
+}
+
+function builtinCode(tag: string) -> Code {
+  Code { rs: "Value::Builtin \{ kind: Builtin::{tag}, recv: None \}", repr: "value" }
+}
+
+function emitIndex(ctx: Ctx, op: Stage1Operation) -> Result<Code, string> {
+  let object = boxCode(emitExpr(ctx, child(ctx.table, op, "object")?)?)
+  let index = boxCode(emitExpr(ctx, child(ctx.table, op, "index")?)?)
+  Ok(Code { rs: "index_value({object}, {index}, {spanOf(op)})?", repr: "value" })
+}
+
+function memberBody(ctx: Ctx, op: Stage1Operation, object: Stage1Operation, span: string) -> Result<string, string> {
+  let field = rustStr(op.detail)
+  // Field acquisition precedes method binding. The shared catalog owns which
+  // receivers admit a method and whether acquiring it requires a mutable root.
+  let mut cursor = object
+  while cursor.kind == "expression/member" || cursor.kind == "expression/index" || cursor.kind == "expression/optional-member" {
+    cursor = child(ctx.table, cursor, "object")?
+  }
+  let mut mutable = true
+  if cursor.kind == "expression/identifier" {
+    match lookup(ctx, cursor.detail) {
+      case Some(bind) => { mutable = bind.mutable }
+      case None => ()
+    }
+  }
+  let guard = if mutable { "" } else {
+    "if receiver_builtin(&__recv, {field}).map(|entry| entry.mutates).unwrap_or(false) \{ return Err(fault(codes::GUARD_IMMUTABLE, {rustStr("`{cursor.detail}` is not `let mut`; in-place collection mutation requires a mutable binding (§9)")}, {span})); \}"
+  }
+  Ok("match member_value(&__recv, {field}, {span})? \{ Some(__field) => __field, None => \{ {guard} bind_receiver_builtin(__recv, {field}, {span})? \} \}")
+}
+
+function emitMember(ctx: Ctx, op: Stage1Operation) -> Result<Code, string> {
+  let object = child(ctx.table, op, "object")?
+  match nominalHead(ctx, object)? {
+    case Some(decl) => if decl.kind == "enum" { return emitEnum(ctx, op, decl, op.detail, []) }
+    case None => ()
+  }
+  if object.referenceIdentity.startsWith("builtin::") {
+    if object.detail == "RoundingMode" {
+      for variant in ["Down", "Up", "TowardZero", "AwayFromZero", "HalfUp", "HalfEven"] {
+        if op.detail == variant { return Ok(Code { rs: "rounding_mode_value(RoundingMode::{variant})", repr: "value" }) }
+      }
+    }
+    let tag = if ctx.table.languageMode == "topaz-5.21" && removedStandardStatic(object.detail, op.detail) { "" } else { staticBuiltin(object.detail, op.detail) }
+    if tag != "" { return Ok(builtinCode(tag)) }
+    return Err(refusal("type-directed member {object.detail}.{op.detail}", op))
+  }
+  let value = boxCode(emitExpr(ctx, object)?)
+  match namespaceOf(ctx, object) {
+    case Some(namespace) => return Ok(Code { rs: "member_value_required(&({value}), {rustStr(op.detail)}, {spanOf(op)})?", repr: "value" })
+    case None => ()
+  }
+  let body = memberBody(ctx, op, object, spanOf(op))?
+  Ok(Code { rs: "\{ let __recv = {value}; {body} \}", repr: "value" })
+}
+
+function optionalBody(value: string, body: string) -> string {
+  "\{ let __object = {value}; match __object \{ Value::None => Value::None, Value::Null => Value::Null, Value::Some(__inner) => \{ let __recv = (*__inner).clone(); wrap_optional({body}) \}, __recv => \{ {body} \} \} \}"
+}
+
+function emitOptionalMember(ctx: Ctx, op: Stage1Operation) -> Result<Code, string> {
+  let object = child(ctx.table, op, "object")?
+  let value = boxCode(emitExpr(ctx, object)?)
+  Ok(Code { rs: optionalBody(value, memberBody(ctx, op, object, spanOf(op))?), repr: "value" })
+}
+
+// The plan retains argument order. Named and spread AST wrappers are encoded
+// in operand labels, so their leaves are not ordinary `arguments` children.
+function callArguments(ctx: Ctx, op: Stage1Operation) -> Result<Array<Stage1Operation>, string> {
+  let mut found: Array<Stage1Operation> = []
+  let mut position = 0
+  for id in op.operands {
+    let label = op.operandLabels[position]
+    if label.startsWith("arguments:") || label.contains("/arguments:") {
+      found.push(opAt(ctx.table, id)?)
+    }
+    position += 1
+  }
+  if found.length != op.callArguments.length { return Err(refusal("shape call arguments", op)) }
+  Ok(found)
+}
+
+function valueCall(ctx: Ctx, op: Stage1Operation, callee: string, args: Array<Stage1Operation>) -> Result<string, string> {
+  valueCallPrefix(ctx, op, callee, args, [])
+}
+
+function valueCallPrefix(ctx: Ctx, op: Stage1Operation, callee: string, args: Array<Stage1Operation>, prefix: Array<string>) -> Result<string, string> {
+  let mut steps: Array<string> = ["let __callee = {callee};"]
+  let mut positional: Array<string> = prefix
+  let mut named: Array<string> = []
+  let mut hasSpread = false
+  for row in op.callArguments { if row.startsWith("spread|") { hasSpread = true } }
+  if hasSpread { steps.push("let mut __tail = Vec::new();") }
+  let mut spreadSpan = spanOf(op)
+  let mut spread = false
+  let mut sawNamed = false
+  let mut position = 0
+  for arg in args {
+    let row = op.callArguments[position].split("|")
+    let value = boxCode(emitExpr(ctx, arg)?)
+    steps.push("let __a{position} = {value};")
+    if row[0] == "named" {
+      named.push("({rustStr(row[1])}.to_string(), __a{position})")
+      sawNamed = true
+    } else if sawNamed && row[0] == "positional" {
+      steps.push("return Err(fault(codes::GUARD_ARITY, \"positional arguments must precede named arguments (§5)\", {spanOf(op)}));")
+    } else if row[0] == "spread" {
+      if !spread { spreadSpan = spanOf(arg) }
+      spread = true
+      steps.push("call_spread_extend(&mut __tail, __a{position}, {spanOf(arg)})?;")
+    } else if spread {
+      steps.push("__tail.push(__a{position});")
+    } else {
+      positional.push("__a{position}")
+    }
+    position += 1
+  }
+  let span = spanOf(op)
+  let call = if spread {
+    "call_value_spread_named(SpreadNamedCall::new(__callee, vec![{positional.join(", ")}], Value::array(__tail), vec![{named.join(", ")}], {span}, {spreadSpan}), cx.clone()).await?"
+  } else if named.length > 0 {
+    "call_value_named(__callee, vec![{positional.join(", ")}], vec![{named.join(", ")}], cx.clone(), {span}).await?"
+  } else {
+    "call_value(__callee, vec![{positional.join(", ")}], cx.clone(), {span}).await?"
+  }
+  Ok("\{ {steps.join(" ")} {call} \}")
+}
+
+function emitStaticCall(ctx: Ctx, op: Stage1Operation, spec: BuiltinSpec, args: Array<Stage1Operation>) -> Result<Code, string> {
+  let mut steps: Array<string> = []
+  let mut slots: Array<string> = []
+  let mut index = 0
+  while index < spec.params.length { slots.push(""); index += 1 }
+  let mut next = 0
+  let mut named = false
+  let mut fallback = false
+  let variadic = spec.style.startsWith("variadic")
+  let mut values: Array<string> = []
+  index = 0
+  for arg in args {
+    let row = op.callArguments[index].split("|")
+    let code = boxCode(emitExpr(ctx, arg)?)
+    if variadic {
+      if row[0] == "named" { fallback = true }
+      if row[0] == "spread" {
+        steps.push("call_spread_extend(&mut __values, {code}, {spanOf(arg)})?;")
+      } else { steps.push("__values.push({code});") }
+    } else {
+      steps.push("let __a{index} = {code};")
+      let mut slot = next
+      if row[0] == "named" {
+        named = true
+        slot = -1
+        let mut position = 0
+        for name in spec.params {
+          if name == row[1] { slot = position }
+          position += 1
+        }
+      } else if row[0] == "spread" { fallback = true } else {
+        if named { fallback = true }
+        next += 1
+      }
+      if slot < 0 || slot >= slots.length { fallback = true } else if slots[slot] != "" { fallback = true } else { slots[slot] = "__a{index}" }
+    }
+    index += 1
+  }
+  if !variadic {
+    index = 0
+    for slot in slots {
+      if slot != "" { values.push(slot) } else if spec.defaults[index] != "" { values.push(spec.defaults[index]) } else { fallback = true }
+      index += 1
+    }
+  }
+  if fallback { return Ok(Code { rs: valueCall(ctx, op, builtinCode(spec.tag).rs, args)?, repr: "value" }) }
+  if variadic {
+    let prefix = if steps.length == 0 { "let __values = Vec::new();" } else { "let mut __values = Vec::new();" }
+    steps.insert(0, prefix)
+    values.push("__values")
+  }
+  if spec.style == "optional-second" { values[1] = "Some({values[1]})" }
+  if spec.style == "host" || spec.style == "host-raw" { values.insert(0, "&*cx.host()") }
+  let fallible = !spec.style.endsWith("raw") && spec.style != "variadic"
+  if fallible { values.push(spanOf(op)) }
+  let suffix = if fallible { "?" } else { "" }
+  Ok(Code { rs: "\{ {steps.join(" ")} {spec.leaf}({values.join(", ")}){suffix} \}", repr: "value" })
+}
+
+function emitCall(ctx: Ctx, op: Stage1Operation) -> Result<Code, string> {
+  let callee = child(ctx.table, op, "callee")?
+  let args = callArguments(ctx, op)?
+  emitCallWith(ctx, op, callee, args)
+}
+
+function emitCallWith(ctx: Ctx, op: Stage1Operation, callee: Stage1Operation, args: Array<Stage1Operation>) -> Result<Code, string> {
+  if op.callTarget == "builtin::JsonParseAs" || op.callTarget == "builtin::JsonDecode" {
+    if op.callTypeArguments.length != 1 { return Err(refusal("typed JSON arguments", op)) }
+    let schema = jsonSchema(ctx, op, op.callTypeArguments[0], 0, [])?
+    let callable = boxCode(emitExpr(ctx, callee)?)
+    let span = spanOf(op)
+    if op.callTarget == "builtin::JsonParseAs" {
+      if args.length != 1 { return Err(refusal("std.json.parseAs arity", op)) }
+      let argument = boxCode(emitExpr(ctx, args[0])?)
+      return Ok(Code { rs: "\{ let __callee = {callable}; let __text = {argument}; match __callee \{ Value::Builtin \{ kind: Builtin::JsonParseAs, recv: None \} => builtin_json_parse_as(__text, &({schema}), {span})?, __other => call_value(__other, vec![__text], cx.clone(), {span}).await? \} \}", repr: "value" })
+    }
+    if args.length != 0 { return Err(refusal("JSONValue.decode arity", op)) }
+    Ok(Code { rs: "\{ let __callee = {callable}; match __callee \{ Value::Builtin \{ kind: Builtin::JsonDecode, recv: Some(__value) \} => builtin_json_decode((*__value).clone(), &({schema}), {span})?, __other => call_value(__other, vec![], cx.clone(), {span}).await? \} \}", repr: "value" })
+  } else { emitOrdinaryCallWith(ctx, op, callee, args) }
+}
+
+function emitOrdinaryCallWith(ctx: Ctx, op: Stage1Operation, callee: Stage1Operation, args: Array<Stage1Operation>) -> Result<Code, string> {
+  match nominalHead(ctx, callee)? {
+    case Some(decl) => if decl.kind == "newtype" {
+      if args.length != 1 { return Err(refusal("newtype arity", op)) }
+      let root = decl.typeDefinition[0]
+      return Ok(Code { rs: "Value::newtype_with_identities({rustStr(root.name)}, {rustStr(root.identity)}, {methodIdentity(ctx, decl)}, {boxCode(emitExpr(ctx, args[0])?)})", repr: "value" })
+    }
+    case None => ()
+  }
+  if callee.kind == "expression/identifier" {
+    if callee.referenceIdentity.startsWith("builtin::") {
+      if ctx.table.languageMode == "topaz-5.21" && (callee.detail == "toFloat" || callee.detail == "toInt" || callee.detail == "toIntRadix" || callee.detail == "fromCodePoint" || callee.detail == "map" || callee.detail == "filter" || callee.detail == "reduce" || callee.detail == "print" || callee.detail == "input" || callee.detail == "open" || callee.detail == "assert") { return Err(refusal("removed numeric free builtin", op)) }
+      match freeSpec(callee.detail) {
+        case Some(spec) => return emitStaticCall(ctx, op, spec, args)
+        case None => ()
+      }
+      let intrinsic = generatedIntrinsic(ctx, callee)
+      if intrinsic != "" { return Ok(Code { rs: valueCall(ctx, op, builtinCode(intrinsic).rs, args)?, repr: "value" }) }
+      if callee.detail == "Some" || callee.detail == "Ok" || callee.detail == "Err" {
+        if args.length != 1 { return Err(refusal("builtin {callee.detail}/{args.length}", op)) }
+        return Ok(Code { rs: "Value::{callee.detail}(Rc::new({boxCode(emitExpr(ctx, args[0])?)}))", repr: "value" })
+      }
+    } else {
+      match lookup(ctx, callee.detail) {
+        case Some(bind) => if bind.kind == "fn" {
+          return emitDirectCall(ctx, op, fnInfo(ctx, bind.rust, op)?, callee.detail, spanOf(callee), args)
+        }
+        case None => return Err(refusal("unresolved identifier {callee.detail}", callee))
+      }
+    }
+  } else if callee.kind == "expression/member" {
+    let object = child(ctx.table, callee, "object")?
+    match nominalHead(ctx, object)? {
+      case Some(decl) => if decl.kind == "enum" { return emitEnum(ctx, op, decl, callee.detail, args) }
+      case None => ()
+    }
+    if object.detail == "JSON" && has(["parseAs", "decode"], callee.detail) && object.referenceIdentity.startsWith("builtin::") {
+      if args.length != 1 || op.callTypeArguments.length != 1 { return Err(refusal("typed JSON arguments", op)) }
+      let schema = jsonSchema(ctx, op, op.callTypeArguments[0], 0, [])?
+      let leaf = if callee.detail == "parseAs" { "builtin_json_parse_as" } else { "builtin_json_decode" }
+      return Ok(Code { rs: "{leaf}({boxCode(emitExpr(ctx, args[0])?)}, &({schema}), {spanOf(op)})?", repr: "value" })
+    }
+    let mut protocol = has(["Show", "Eq", "Order"], object.detail) && object.referenceIdentity.startsWith("builtin::")
+    for decl in ctx.table.ops {
+      if decl.kind == "protocol" && decl.module == op.module && decl.detail == object.detail { protocol = true }
+    }
+    if protocol {
+      let mut values: Array<string> = []
+      for arg in args { values.push(boxCode(emitExpr(ctx, arg)?)) }
+      let module = rustStr(op.module)
+      let name = rustStr(object.detail)
+      let method = rustStr(callee.detail)
+      return Ok(Code { rs: "\{ let __args = vec![{values.join(", ")}]; let __method = __args.first().and_then(|v| v.nominal_id()).and_then(|id| g.protocols.borrow().get(&({module}.to_string(), {name}.to_string(), id.to_string(), {method}.to_string())).cloned()); match __method \{ Some(f) => call_value(f, __args, cx.clone(), {spanOf(op)}).await?, None => builtin_protocol_dispatch({name}, {method}, __args, {spanOf(op)})? \} \}", repr: "value" })
+    }
+    if op.callTarget.startsWith("builtin::") {
+      let namespace = op.callTarget.split("::")[1]
+      if ctx.table.languageMode == "topaz-5.21" && removedStandardStatic(namespace, op.callMethod) { return Err(refusal("use numeric receiver methods", op)) }
+      match staticSpec(namespace, op.callMethod) {
+        case Some(spec) => return emitStaticCall(ctx, op, spec, args)
+        case None => {
+          // These language protocols dispatch on the argument value. Nominal
+          // declarations and their method registrations are a later surface.
+          if (namespace == "Show" && op.callMethod == "show") ||
+            (namespace == "Eq" && op.callMethod == "equals") ||
+            (namespace == "Order" && op.callMethod == "compare") {
+            let mut values: Array<string> = []
+            for arg in args { values.push(boxCode(emitExpr(ctx, arg)?)) }
+            return Ok(Code { rs: "builtin_protocol_dispatch({rustStr(namespace)}, {rustStr(op.callMethod)}, vec![{values.join(", ")}], {spanOf(op)})?", repr: "value" })
+          }
+          return Err(refusal("type-directed member {namespace}.{op.callMethod}", op))
+        }
+      }
+    }
+    match namespaceOf(ctx, object) {
+      case Some(namespace) => {
+        let target = modInfo(ctx, namespace.rust, op)?
+        match modBind(target, callee.detail) {
+          case Some(bind) => if bind.kind == "fn" {
+            return emitDirectCall(ctx, op, fnInfo(ctx, bind.rust, op)?, callee.detail, spanOf(callee), args)
+          }
+          case None => ()
+        }
+      }
+      case None => ()
+    }
+  }
+  if op.callOptional {
+    let object = child(ctx.table, callee, "object")?
+    let value = boxCode(emitExpr(ctx, object)?)
+    let body = valueCall(ctx, op, memberBody(ctx, callee, object, spanOf(op))?, args)?
+    return Ok(Code { rs: optionalBody(value, body), repr: "value" })
+  }
+  if callee.kind == "expression/member" && hasReceiverMethod(ctx, callee.detail) {
+    let object = child(ctx.table, callee, "object")?
+    let recv = boxCode(emitExpr(ctx, object)?)
+    let direct = valueCallPrefix(ctx, op, "__method", args, ["__recv"])?
+    let fallback = valueCall(ctx, op, memberBody(ctx, callee, object, spanOf(callee))?, args)?
+    return Ok(Code { rs: "\{ let __recv = {recv}; let __method = __recv.method_dispatch_id().and_then(|id| g.methods.borrow().get(&(id.to_string(), {rustStr(callee.detail)}.to_string())).cloned()); match __method \{ Some(__method) => {direct}, None => {fallback} \} \}", repr: "value" })
+  }
+  Ok(Code { rs: valueCall(ctx, op, boxCode(emitExpr(ctx, callee)?), args)?, repr: "value" })
+}
+
+function hasReceiverMethod(ctx: Ctx, name: string) -> bool {
+  for impl in ctx.table.ops {
+    if impl.kind != "implementation" || impl.detail.contains("<") { continue }
+    for id in impl.operands {
+      match opAt(ctx.table, id) {
+        case Ok(method) => if method.kind == "function" && method.bindingName == name { return true }
+        case Err(_) => ()
+      }
+    }
+  }
+  false
+}
+
+export function emitImplementation(ctx: Ctx, impl: Stage1Operation) -> Result<string, string> {
+  let mut lines: Array<string> = []
+  for id in impl.operands {
+    let method = opAt(ctx.table, id)?
+    if method.kind != "function" { continue }
+    let closure = emitClosure(ctx, method, paramsOf(ctx, method, method.declaredTypeAtoms)?, child(ctx.table, method, "body")?)?
+    let parts = impl.detail.split("<")
+    let key = if parts.length == 2 {
+      let target = parts[1].replace(">", "")
+      "g.protocols.borrow_mut().insert(({rustStr(impl.module)}.to_string(), {rustStr(parts[0])}.to_string(), {rustStr(target)}.to_string(), {rustStr(method.bindingName)}.to_string()), __method);"
+    } else {
+      "g.methods.borrow_mut().insert(({rustStr("{impl.module}::{impl.detail}")}.to_string(), {rustStr(method.bindingName)}.to_string()), __method);"
+    }
+    lines.push("\{ let __method = {closure}; {key} \}")
+  }
+  Ok(lines.join(" "))
+}
+
+// Evaluate each argument in source order, then bind it to its typed slot.
+// Only dynamic callable values use the boxed callable ABI.
+function emitDirectCall(ctx: Ctx, op: Stage1Operation, info: FnInfo, name: string, calleeSpan: string, args: Array<Stage1Operation>) -> Result<Code, string> {
+  let fixed = info.paramNames.length - if info.variadic { 1 } else { 0 }
+  let mut slots: Array<int> = []
+  let mut position = 0
+  while position < fixed { slots.push(-1); position += 1 }
+  let mut surplus: Array<int> = []
+  let mut next = 0
+  let mut sawNamed = false
+  let mut sawSpread = false
+  let mut fallback = false
+  position = 0
+  for arg in args {
+    let row = op.callArguments[position].split("|")
+    if row[0] == "named" {
+      sawNamed = true
+      let mut slot = -1
+      let mut index = 0
+      while index < fixed {
+        if info.paramNames[index] == row[1] { slot = index }
+        index += 1
+      }
+      if slot < 0 { fallback = true } else if slots[slot] >= 0 { fallback = true } else { slots[slot] = position }
+    } else if row[0] == "spread" {
+      if !info.variadic { fallback = true }
+      let mut index = next
+      while index < fixed {
+        if info.defaultIds[index] == "" { fallback = true }
+        index += 1
+      }
+      sawSpread = true
+      surplus.push(position)
+    } else {
+      if sawNamed { fallback = true }
+      if next < fixed && !sawSpread {
+        if slots[next] >= 0 { fallback = true }
+        slots[next] = position
+        next += 1
+      } else if info.variadic { surplus.push(position) } else { fallback = true }
+    }
+    position += 1
+  }
+  position = 0
+  while position < fixed {
+    if slots[position] < 0 && info.defaultIds[position] == "" { fallback = true }
+    position += 1
+  }
+  if fallback {
+    return Ok(Code { rs: valueCall(ctx, op, "top_cell_get(&g.{info.cell}, {rustStr(name)}, {calleeSpan})?", args)?, repr: "value" })
+  }
+  let mut steps: Array<string> = ["let _ = top_cell_get(&g.{info.cell}, {rustStr(name)}, {calleeSpan})?;"]
+  let mut codes: Array<Code> = []
+  position = 0
+  for arg in args {
+    let code = emitExpr(ctx, arg)?
+    if op.callArguments[position].startsWith("spread|") {
+      steps.push("let mut __a{position} = Vec::new(); call_spread_extend(&mut __a{position}, {boxCode(code)}, {spanOf(arg)})?;")
+      codes.push(Code { rs: "__a{position}", repr: "spread-values" })
+    } else {
+      steps.push("let __a{position} = {bare(code.rs)};")
+      codes.push(Code { rs: "__a{position}", repr: code.repr })
+    }
+    position += 1
+  }
+  let declaration = opAt(ctx.table, info.id)?
+  let defining = modInfo(ctx, declaration.module, declaration)?
+  let mut scope: Array<Bind> = []
+  for binding in defining.binds { scope.push(binding) }
+  let defaultsCtx = Ctx { ...ctx, scope: scope, inConst: false, atModuleTop: false }
+  let mut passed: Array<string> = ["cx.clone()", "g.clone()"]
+  position = 0
+  while position < fixed {
+    let source = slots[position]
+    if source >= 0 {
+      steps.push("let __p{position} = {into(codes[source], info.paramReprs[position], args[source])?};")
+    } else {
+      let defaultOp = opAt(ctx.table, info.defaultIds[position])?
+      steps.push("let __p{position} = {into(emitExpr(defaultsCtx, defaultOp)?, info.paramReprs[position], defaultOp)?};")
+    }
+    passed.push("__p{position}")
+    position += 1
+  }
+  if info.variadic {
+    let element = info.paramReprs[fixed].slice(4, info.paramReprs[fixed].scalars().length)
+    let mut tail: Array<string> = []
+    for source in surplus {
+      if op.callArguments[source].startsWith("spread|") {
+        tail.push("for __v in {codes[source].rs} \{ __rest.push({argumentGuard("__v", element, info.paramSpans[fixed])}); \}")
+      } else { tail.push("__rest.push({into(codes[source], element, args[source])?});") }
+    }
+    if tail.length == 0 { steps.push("let __rest: Vec<{rustType(element)}> = Vec::new();") } else {
+      steps.push("let mut __rest: Vec<{rustType(element)}> = Vec::new(); {tail.join(" ")}")
+    }
+    passed.push("__rest")
+  }
+  steps.push("let _gd = __native_enter_call(&cx, {spanOf(op)})?;")
+  Ok(Code { rs: "\{ {steps.join(" ")} Box::pin({info.body}({passed.join(", ")})).await? \}", repr: info.retRepr })
+}
+
+function emitIf(ctx: Ctx, op: Stage1Operation) -> Result<Code, string> {
+  let condition = emitExpr(ctx, child(ctx.table, op, "condition")?)?
+  let test = if condition.repr == "bool" {
+    condition.rs
+  } else {
+    "condition_bool(&({boxCode(condition)}), \"if\", {spanOf(op)})?"
+  }
+  let thenCode = emitExpr(ctx, child(ctx.table, op, "then")?)?
+  match optionalChild(ctx.table, op, "else")? {
+    case Some(elseOp) => {
+      let elseCode = emitExpr(ctx, elseOp)?
+      let target = reprOf(op.semanticTypeAtoms)
+      let result = if target != "none" {
+        target
+      } else if thenCode.repr == elseCode.repr {
+        thenCode.repr
+      } else {
+        "value"
+      }
+      Ok(Code {
+        rs: "(if {bare(test)} \{ {bare(into(thenCode, result, op)?)} \} else \{ {bare(into(elseCode, result, op)?)} \})",
+        repr: result,
+      })
+    }
+    case None => Ok(Code {
+      rs: "\{ if {bare(test)} \{ let _ = {bare(thenCode.rs)}; \} \}",
+      repr: "unit",
+    })
+  }
+}
+
+export function emitBlock(outerCtx: Ctx, op: Stage1Operation) -> Result<Code, string> {
+  // A nested block is a child scope even at module top level.
+  let ctx = Ctx { ...outerCtx, atModuleTop: false }
+  let mark = ctx.scope.length
+  let mut parts: Array<string> = []
+  // Names exist throughout the block, but their values are initialized only
+  // when execution reaches each declaration (including recursive calls).
+  for item in children(ctx.table, op, "statements")? {
+    if item.kind == "function" {
+      let rust = rustName(item.bindingName)
+      let seed = match lookup(ctx, item.bindingName) {
+        case Some(bind) => "top_cell_set(&__seed, {boxCode(readBind(ctx, bind, declarationSpan(item), item)?)});"
+        case None => ""
+      }
+      parts.push("let {rust} = \{ let __seed = top_cell(); {seed} __seed \};")
+      pushBind(ctx, Bind { name: item.bindingName, kind: "localfn", rust: rust, repr: "value", mutable: false })
+    }
+  }
+  let mut ownsCleanup = false
+  for item in children(ctx.table, op, "statements")? {
+    if item.kind == "defer" {
+      ownsCleanup = true
+    }
+  }
+  let stack = "__defers_{op.lo}_{op.hi}"
+  if ownsCleanup {
+    parts.push("let {stack} = defer_stack();")
+    let mut stacks = ctx.defers
+    stacks.push(stack)
+  }
+  let mut tail: Option<Code> = None
+  let mut lastReturns = false
+  let mut position = 0
+  for id in op.operands {
+    let item = opAt(ctx.table, id)?
+    let field = fieldOf(op.operandLabels[position])
+    if field == "tail" || (field == "block" && op.operands.length == 1) {
+      tail = Some(emitExpr(ctx, item)?)
+    } else if field == "statements" {
+      parts.push(emitStatement(ctx, item)?)
+      lastReturns = item.kind == "return" || item.kind == "break" || item.kind == "continue"
+    } else {
+      restoreScope(ctx, mark)
+      return Err(refusal("shape block operand {field}", op))
+    }
+    position += 1
+  }
+  restoreScope(ctx, mark)
+  if ownsCleanup {
+    let mut stacks = ctx.defers
+    let _ = stacks.pop()
+    match tail {
+      case Some(code) => {
+        parts.push("let __block_value = {bare(code.rs)};")
+        parts.push("run_defers(&{stack}, &cx).await;")
+        tail = Some(Code { rs: "__block_value", repr: code.repr })
+      }
+      case None => if !lastReturns {
+        parts.push("run_defers(&{stack}, &cx).await;")
+      }
+    }
+  }
+  match tail {
+    case Some(code) => if parts.length == 0 {
+      Ok(code)
+    } else {
+      Ok(Code { rs: "\{ {parts.join(" ")} {bare(code.rs)} \}", repr: code.repr })
+    }
+    case None => if lastReturns {
+      Ok(Code { rs: "\{ {parts.join(" ")} \}", repr: "never" })
+    } else {
+      Ok(Code { rs: "\{ {parts.join(" ")} \}", repr: "unit" })
+    }
+  }
+}
+
+// The lead is evaluated once, before the callee/receiver and written arguments.
+// Reuse the checked call's typed slots and dynamic callable boundary.
+function emitPipe(ctx: Ctx, op: Stage1Operation) -> Result<Code, string> {
+  let left = child(ctx.table, op, "left")?
+  let lead = emitExpr(ctx, left)?
+  let stage = optionalChild(ctx.table, op, "right")?
+  match stage {
+    case None => {
+      if op.detail == "" { return Err(refusal("ir pipe field name", op)) }
+      let member = Stage1Operation { ...op, kind: "expression/member" }
+      return Ok(Code { rs: "\{ let __recv = {boxCode(lead)}; {memberBody(ctx, member, left, spanOf(op))?} \}", repr: "value" })
+    }
+    case Some(right) => {
+      let mark = ctx.scope.length
+      let rust = "__pipe_{op.lo}_{op.hi}"
+      pushBind(ctx, Bind { name: "_", kind: "local", rust: rust, repr: lead.repr, mutable: false })
+      let result = emitPipeStage(ctx, op, right, left)
+      restoreScope(ctx, mark)
+      let code = result?
+      Ok(Code { rs: "\{ let {rust} = {bare(lead.rs)}; {bare(code.rs)} \}", repr: code.repr })
+    }
+  }
+}
+
+function emitPipeStage(ctx: Ctx, op: Stage1Operation, stage: Stage1Operation, left: Stage1Operation) -> Result<Code, string> {
+  let lead = Stage1Operation { ...left, kind: "expression/placeholder", operands: [], operandLabels: [] }
+  let mut args: Array<Stage1Operation> = []
+  let mut rows: Array<string> = []
+  for row in op.callArguments {
+    if row.startsWith("inserted-lead|") {
+      args.push(lead)
+      rows.push("positional||-1|{left.lo}|{left.hi}")
+    } else { rows.push(row) }
+  }
+  let callee = if stage.kind == "expression/call" {
+    let mut position = 0
+    for id in stage.operands {
+      let label = stage.operandLabels[position]
+      if label.startsWith("arguments:") || label.contains("/arguments:") {
+        args.push(opAt(ctx.table, id)?)
+      }
+      position += 1
+    }
+    child(ctx.table, stage, "callee")?
+  } else {
+    if args.length == 0 {
+      args.push(lead)
+      rows.push("positional||-1|{left.lo}|{left.hi}")
+    }
+    stage
+  }
+  if args.length != rows.length { return Err(refusal("ir pipe arguments", op)) }
+  let call = Stage1Operation {
+    ...if stage.kind == "expression/call" { stage } else { op },
+    callTarget: op.callTarget,
+    callMethod: op.callStageMethod,
+    callOptional: op.callOptional,
+    callArguments: rows,
+  }
+  emitCallWith(ctx, call, callee, args)
+}
+
+// The reference's zero-deadline fast paths depend on syntactic instantness,
+// not on how quickly an arbitrary future happens to complete.
+function instantConcurrent(ctx: Ctx, op: Stage1Operation) -> Result<bool, string> {
+  if has(["expression/integer", "expression/length", "expression/float", "expression/boolean", "expression/null", "expression/unit", "expression/identifier", "expression/string-text"], op.kind) { return Ok(true) }
+  if op.kind.startsWith("pattern/") || op.kind.startsWith("type/") { return Ok(true) }
+  if !has(["expression/parenthesized", "expression/unary", "expression/binary", "expression/compose", "expression/range", "expression/array", "expression/set", "expression/map", "expression/record-literal", "expression/record-update", "expression/string", "expression/block", "expression/block-expression", "expression/if", "expression/match", "expression/member", "expression/optional-member", "expression/index", "let", "constant", "expression-statement", "match-case"], op.kind) { return Ok(false) }
+  for id in op.operands {
+    if !instantConcurrent(ctx, opAt(ctx.table, id)?)? { return Ok(false) }
+  }
+  Ok(true)
+}
+
+function hasConcurrentExit(ctx: Ctx, op: Stage1Operation, tryOnly: bool) -> Result<bool, string> {
+  if op.kind == "expression/lambda" || op.kind == "function" { return Ok(false) }
+  if op.kind == "expression/result-propagation" || (!tryOnly && op.kind == "return") { return Ok(true) }
+  if !tryOnly {
+    for label in op.operandLabels { if label.startsWith("match-case-return[") { return Ok(true) } }
+  }
+  for id in op.operands {
+    if hasConcurrentExit(ctx, opAt(ctx.table, id)?, tryOnly)? { return Ok(true) }
+  }
+  Ok(false)
+}
+
+// Each future owns its environment and cleanup stack. It starts at ambient
+// call depth; depth_scoped isolates arms without adding a synthetic call.
+function concurrentFuture(ctx: Ctx, owner: Stage1Operation, body: Stage1Operation) -> Result<string, string> {
+  let mut captures: Array<string> = ["let cx = cx.clone();", "let g = g.clone();"]
+  if containsPlaceholder(ctx, body)? {
+    match lookup(ctx, "_") {
+      case Some(bind) => captures.push("let {bind.rust} = {bind.rust}.clone();")
+      case None => ()
+    }
+  }
+  let mut seen: Array<string> = []
+  for capture in capturesOf(ctx.table, owner) {
+    if capture.lo >= body.lo && capture.hi <= body.hi && !has(seen, capture.bindingName) {
+      seen.push(capture.bindingName)
+      match lookup(ctx, capture.bindingName) {
+        case Some(bind) => if bind.kind == "local" || bind.kind == "shared" || bind.kind == "localfn" {
+          captures.push("let {bind.rust} = {bind.rust}.clone();")
+        }
+        case None => match typeDeclaration(ctx.table, capture.id, capture.bindingName)? {
+          case Some(_) => ()
+          case None => return Err(refusal("unresolved capture {capture.bindingName}", capture))
+        }
+      }
+    }
+  }
+  let inner = Ctx { ...ctx, fnRet: "value", inConst: false, atModuleTop: false, loops: [], defers: [] }
+  let value = emitExpr(inner, body)?
+  let result = if value.repr == "never" { value.rs } else { "Ok({boxCode(value)})" }
+  Ok("\{ {captures.join(" ")} Box::pin(async move \{ {result} \}) as CallFuture \}")
+}
+
+function emitConcurrent(ctx: Ctx, op: Stage1Operation) -> Result<Code, string> {
+  let timeout = optionalChild(ctx.table, op, "timeout")?
+  let otherwise = optionalChild(ctx.table, op, "else")?
+  let mut arms: Array<Stage1Operation> = []
+  let mut names: Array<string> = []
+  let mut allInstant = true
+  let mut position = 0
+  for id in op.operands {
+    let label = op.operandLabels[position]
+    if label.startsWith("concurrent-arm[") {
+      let arm = opAt(ctx.table, id)?
+      arms.push(arm)
+      names.push(labelName(label))
+      if !instantConcurrent(ctx, arm)? { allInstant = false }
+    }
+    position += 1
+  }
+  let mut duration = ""
+  let mut zero = false
+  match timeout {
+    case Some(value) => {
+      if value.kind != "expression/duration" { return Err(refusal("concurrent timeout duration", value)) }
+      if value.literalEncoding != "checked-values/v1" { return Err(refusal("duration literal encoding", value)) }
+      duration = value.detail
+      zero = duration == "0"
+      match otherwise {
+        case None => return Err(refusal("concurrent timeout without else", op))
+        case Some(block) => {
+          if hasConcurrentExit(ctx, block, false)? && !allInstant {
+            return Err(refusal("`return`/`?` in a concurrent else", op))
+          }
+          if zero && allInstant && arms.length > 1 { return emitExpr(ctx, block) }
+          if zero && allInstant && arms.length == 1 && !hasConcurrentExit(ctx, block, true)? {
+            if hasConcurrentExit(ctx, arms[0], false)? { return Err(refusal("`return`/`?` in a concurrent arm", op)) }
+            let arm = boxCode(emitExpr(ctx, arms[0])?)
+            let fallback = boxCode(emitExpr(ctx, block)?)
+            return Ok(Code { rs: "\{ match (async \{ Ok::<Value, RtError>({arm}) \}).await \{ Ok(__v) => Value::record([({rustStr(names[0])}.to_string(), __v)]), Err(_) => {fallback}, \} \}", repr: "value" })
+          }
+        }
+      }
+    }
+    case None => match otherwise {
+      case Some(block) => return Err(refusal("concurrent else without timeout", op))
+      case None => ()
+    }
+  }
+  let mut entries: Array<string> = []
+  position = 0
+  for arm in arms {
+    if hasConcurrentExit(ctx, arm, false)? { return Err(refusal("`return`/`?` in a concurrent arm", op)) }
+    entries.push("({rustStr(names[position])}.to_string(), depth_scoped({concurrentFuture(ctx, op, arm)?}, cx.clone()))")
+    position += 1
+  }
+  let code = match otherwise {
+    case None => "concurrent_join(vec![{entries.join(", ")}]).await?"
+    case Some(block) => "concurrent_join_timeout(cx.clone(), {duration}u64, vec![{entries.join(", ")}], {concurrentFuture(ctx, op, block)?}).await?"
+  }
+  Ok(Code { rs: code, repr: "value" })
+}
+
+// --- callables --------------------------------------------------------------
+
+// Parameter names, representations and guard spans of a function or lambda.
+export record Params {
+  names: Array<string>,
+  reprs: Array<string>,
+  spans: Array<string>,
+  defaultIds: Array<string>,
+  variadic: bool,
+}
+
+export function paramsOf(ctx: Ctx, op: Stage1Operation, signature: Array<PreviewTypeAtom>) -> Result<Params, string> {
+  let mut names: Array<string> = []
+  let mut reprs: Array<string> = []
+  let mut spans: Array<string> = []
+  let mut defaults: Array<string> = []
+  let mut variadic = false
+  let mut index = 0
+  for parameter in children(ctx.table, op, "parameters")? {
+    let isRest = parameter.kind == "binding/variadic-parameter"
+    if parameter.kind != "binding/parameter" && !isRest { return Err(refusal("parameter {parameter.kind}", parameter)) }
+    let declared = reprOf(parameter.declaredTypeAtoms)
+    let slot = if declared != "none" { declared } else { slotRepr(signature, "parameters", index) }
+    if slot == "none" { return Err(refusal("parameter type", parameter)) }
+    names.push(parameter.bindingName)
+    reprs.push(if isRest { variadicRepr(slot) } else { slot })
+    spans.push(spanOf(parameter))
+    let mut defaultId = ""
+    let mut position = 0
+    for id in op.operands {
+      if op.operandLabels[position].contains("/parameters:{index}/default:") { defaultId = id }
+      position += 1
+    }
+    defaults.push(defaultId)
+    if isRest { variadic = true }
+    index += 1
+  }
+  Ok(Params { names: names, reprs: reprs, spans: spans, defaultIds: defaults, variadic: variadic })
+}
+
+export function defaultValues(ctx: Ctx, ids: Array<string>, variadic: bool) -> Result<string, string> {
+  let mut values: Array<string> = []
+  let limit = ids.length - if variadic { 1 } else { 0 }
+  let mut index = 0
+  while index < limit {
+    if ids[index] == "" {
+      values.push("None")
+    } else {
+      let value = boxCode(emitExpr(ctx, opAt(ctx.table, ids[index])?)?)
+      values.push("Some(\{ let __default_g = g.clone(); EmittedDefault::Thunk(Rc::new(move |cx: RtCx| -> CallFuture \{ let g = __default_g.clone(); Box::pin(async move \{ let _ = (&cx, &g); Ok({value}) \}) \})) \})")
+    }
+    index += 1
+  }
+  Ok("vec![{values.join(", ")}]")
+}
+
+export function restArgument(repr: string, span: string) -> string {
+  let element = repr.slice(4, repr.scalars().length)
+  "__args.map(|__v| -> Result<{rustType(element)}, RtError> \{ Ok({parameterGuard("__v", element, span)}) \}).collect::<Result<Vec<_>, RtError>>()?"
+}
+
+// The guarded unbox of one boxed argument into a typed parameter slot. The
+// message and fault code are the interpreter's parameter guard.
+export function argumentGuard(value: string, repr: string, span: string) -> string {
+  parameterGuard(value, repr, span)
+}
+
+// A boxed closure value: captured locals are cloned into the closure, module
+// state is reached through `g`, parameters are unboxed at the boundary and
+// the result is boxed.
+function emitClosure(
+  ctx: Ctx,
+  op: Stage1Operation,
+  params: Params,
+  body: Stage1Operation,
+) -> Result<string, string> {
+  let mut outer: Array<string> = ["let __cap_g = g.clone();"]
+  let mut inner: Array<string> = ["let g = __cap_g.clone();"]
+  let mut seen: Array<string> = []
+  // `_` is a lexical value in a pipe argument, including an escaping lambda.
+  // It has no source declaration identity in the checked capture table.
+  if containsPlaceholder(ctx, body)? {
+    match lookup(ctx, "_") {
+      case Some(bind) => {
+        outer.push("let __cap{bind.rust} = {bind.rust}.clone();")
+        inner.push("let {bind.rust} = __cap{bind.rust}.clone();")
+      }
+      case None => ()
+    }
+  }
+  for capture in capturesOf(ctx.table, op) {
+    if !has(seen, capture.bindingName) {
+      seen.push(capture.bindingName)
+      match lookup(ctx, capture.bindingName) {
+        case Some(bind) => if bind.kind == "local" || bind.kind == "shared" || bind.kind == "localfn" {
+          if bind.mutable && bind.kind != "shared" {
+            return Err(refusal("capture of mutable local {bind.name}", capture))
+          }
+          outer.push("let __cap{bind.rust} = {bind.rust}.clone();")
+          inner.push("let {bind.rust} = __cap{bind.rust}.clone();")
+        }
+        case None => match typeDeclaration(ctx.table, capture.id, capture.bindingName)? {
+          case Some(_) => ()
+          case None => return Err(refusal("unresolved capture {capture.bindingName}", capture))
+        }
+      }
+    }
+  }
+  let defaults = defaultValues(ctx, params.defaultIds, params.variadic)?
+  let mark = ctx.scope.length
+  let lambdaCtx = Ctx { ...ctx, fnRet: if op.kind == "defer" { "" } else { "value" }, inConst: false, atModuleTop: false, loops: [], defers: [] }
+  let mut prologue: Array<string> = ["let _ = &cx;", "let _ = &g;"]
+  if params.names.length > 0 {
+    prologue.push("let mut __args = args.into_iter();")
+  } else {
+    prologue.push("let _ = args;")
+  }
+  let mut quoted: Array<string> = []
+  let mut position = 0
+  for name in params.names {
+    let rust = rustName(name)
+    let isRest = params.variadic && position == params.names.length - 1
+    let value = if isRest { "Value::array(__args.collect())" } else { "__args.next().expect(\"arity checked at the call site\")" }
+    let repr = if isRest { "value" } else { params.reprs[position] }
+    prologue.push("let {rust} = {argumentGuard(value, repr, params.spans[position])};")
+    if !isRest { quoted.push(rustStr(name)) }
+    pushBind(ctx, Bind { name: name, kind: "local", rust: rust, repr: repr, mutable: false })
+    position += 1
+  }
+  let result = emitExpr(lambdaCtx, body)
+  restoreScope(ctx, mark)
+  let bodyResult = result?
+  let bodyCode = if bodyResult.repr == "never" {
+    bodyResult.rs
+  } else {
+    "Ok({bare(boxCode(bodyResult))})"
+  }
+  Ok(
+    "\{ {outer.join(" ")} Value::Closure(Rc::new(EmittedClosure \{ call: move |cx: RtCx, args: Vec<Value>| -> CallFuture \{ {inner.join(" ")} Box::pin(async move \{ {prologue.join(" ")} {bodyCode} \}) \}, params: &[{quoted.join(", ")}], defaults: {defaults}, variadic: {params.variadic} \})) \}",
+  )
+}
+
+function emitLambda(ctx: Ctx, op: Stage1Operation) -> Result<Code, string> {
+  let params = paramsOf(ctx, op, op.semanticTypeAtoms)?
+  let body = child(ctx.table, op, "body")?
+  Ok(Code { rs: emitClosure(ctx, op, params, body)?, repr: "value" })
+}
+
+function containsPlaceholder(ctx: Ctx, op: Stage1Operation) -> Result<bool, string> {
+  if op.kind == "expression/placeholder" { return Ok(true) }
+  for id in op.operands {
+    if containsPlaceholder(ctx, opAt(ctx.table, id)?)? { return Ok(true) }
+  }
+  Ok(false)
+}
+
+// Control transfers drain the crossed lexical scopes after evaluating their
+// value. Runtime faults skip cleanup, as in the reference backend.
+function drain(ctx: Ctx, from: int) -> string {
+  let mut result = ""
+  let mut index = ctx.defers.length - 1
+  while index >= from {
+    result = result + "run_defers(&{ctx.defers[index]}, &cx).await; "
+    index -= 1
+  }
+  result
+}
+
+function condition(ctx: Ctx, op: Stage1Operation, owner: Stage1Operation, kind: string) -> Result<string, string> {
+  let value = emitExpr(ctx, op)?
+  if value.repr == "bool" {
+    Ok(bare(value.rs))
+  } else {
+    Ok("condition_bool(&({boxCode(value)}), {rustStr(kind)}, {spanOf(owner)})?")
+  }
+}
+
+function emitWhile(ctx: Ctx, op: Stage1Operation) -> Result<string, string> {
+  let test = condition(ctx, child(ctx.table, op, "condition")?, op, "while")?
+  let label = "'__loop_{op.lo}_{op.hi}"
+  let mut loops = ctx.loops
+  loops.push(LoopFrame { id: op.id, label: label, repr: "", cleanup: ctx.defers.length })
+  let body = emitExpr(ctx, child(ctx.table, op, "body")?)
+  let _ = loops.pop()
+  let code = body?
+  Ok("{label}: while {test} \{ checkpoint().await; let _ = {bare(code.rs)}; \}")
+}
+
+function emitLoop(ctx: Ctx, op: Stage1Operation) -> Result<Code, string> {
+  let target = reprOf(op.semanticTypeAtoms)
+  let repr = if target == "none" { "value" } else { target }
+  let label = "'__loop_{op.lo}_{op.hi}"
+  let mut loops = ctx.loops
+  loops.push(LoopFrame { id: op.id, label: label, repr: repr, cleanup: ctx.defers.length })
+  let body = emitExpr(ctx, child(ctx.table, op, "body")?)
+  let _ = loops.pop()
+  let code = body?
+  Ok(Code { rs: "({label}: loop \{ checkpoint().await; let _ = {bare(code.rs)}; \})", repr: repr })
+}
+
+function emitLoopControl(ctx: Ctx, op: Stage1Operation) -> Result<string, string> {
+  let mut index = ctx.loops.length - 1
+  while index >= 0 {
+    let frame = ctx.loops[index]
+    if op.controlTarget == frame.id {
+      let cleanup = drain(ctx, frame.cleanup)
+      if op.kind == "continue" {
+        return Ok("{cleanup}continue {frame.label};")
+      }
+      let value = match optionalChild(ctx.table, op, "value")? {
+        case Some(found) => emitExpr(ctx, found)?
+        case None => Code { rs: "()", repr: "unit" }
+      }
+      if frame.repr == "" {
+        return Ok("let _ = {value.rs}; {cleanup}break {frame.label};")
+      }
+      return Ok("let __break_value = {bare(into(value, frame.repr, op)?)}; {cleanup}break {frame.label} __break_value;")
+    }
+    index -= 1
+  }
+  Err(refusal("ir loop target {op.controlTarget}", op))
+}
+
+function emitRange(ctx: Ctx, op: Stage1Operation) -> Result<Code, string> {
+  let lo = emitExpr(ctx, child(ctx.table, op, "low")?)?
+  let hi = emitExpr(ctx, child(ctx.table, op, "high")?)?
+  let step = match optionalChild(ctx.table, op, "step")? {
+    case Some(value) => emitExpr(ctx, value)?
+    case None => Code { rs: "1i64", repr: "i64" }
+  }
+  if lo.repr == "i64" && hi.repr == "i64" && step.repr == "i64" {
+    return Ok(Code {
+      rs: "\{ let __lo: i64 = {bare(lo.rs)}; let __hi: i64 = {bare(hi.rs)}; let __step: i64 = {bare(step.rs)}; if __step == 0 \{ return Err(fault(codes::FAULT_RANGE_STEP, \"range step must not be zero (§10)\", {spanOf(op)})); \} (__lo, __hi, {op.detail}, __step) \}",
+      repr: "range",
+    })
+  }
+  finish(Code { rs: "make_range({boxCode(lo)}, {boxCode(hi)}, {op.detail}, Some({boxCode(step)}), {spanOf(op)})?", repr: "value" }, op)
+}
+
+record Iteration {
+  setup: string,
+  values: string,
+  repr: string,
+}
+
+// Statically integer ranges use checked i64 counters. Collection iteration
+// takes the same snapshot as `for_items`, preserving mutation semantics.
+function iteration(ctx: Ctx, op: Stage1Operation, owner: Stage1Operation) -> Result<Iteration, string> {
+  let value = emitExpr(ctx, op)?
+  if value.repr == "range" {
+    return Ok(Iteration {
+      setup: "let (__lo, __hi, __inclusive, __step) = {bare(value.rs)}; if __step == 0 \{ return Err(fault(codes::FAULT_RANGE_STEP, \"range step must not be zero (§10)\", {spanOf(owner)})); \}",
+      values: "std::iter::successors(Some(__lo), move |v| v.checked_add(__step)).take_while(move |v| if __step > 0 \{ if __inclusive \{ *v <= __hi \} else \{ *v < __hi \} \} else if __inclusive \{ *v >= __hi \} else \{ *v > __hi \})",
+      repr: "i64",
+    })
+  }
+  Ok(Iteration { setup: "", values: "for_items(&({boxCode(value)}), {spanOf(owner)})?", repr: "value" })
+}
+
+function iterationBinding(ctx: Ctx, pattern: Stage1Operation, repr: string, owner: Stage1Operation) -> Result<string, string> {
+  if pattern.kind == "pattern/wildcard" {
+    return Ok("let _ = __item;")
+  }
+  if pattern.kind != "pattern/binding" {
+    return emitPatternLet(ctx, owner, pattern, Code { rs: "__item", repr: repr }, true)
+  }
+  let name = rustName(pattern.bindingName)
+  let declared = reprOf(pattern.semanticTypeAtoms)
+  let target = if declared == "none" { repr } else { declared }
+  let read = into(Code { rs: "__item", repr: repr }, target, pattern)?
+  pushBind(ctx, Bind { name: pattern.bindingName, kind: "local", rust: name, repr: target, mutable: false })
+  Ok("let {name}: {rustType(target)} = {bare(read)};")
+}
+
+function emitFor(ctx: Ctx, op: Stage1Operation, collect: bool) -> Result<Code, string> {
+  let iter = iteration(ctx, child(ctx.table, op, "iterator")?, op)?
+  let mark = ctx.scope.length
+  let binding = iterationBinding(ctx, child(ctx.table, op, "pattern")?, iter.repr, op)?
+  let label = "'__loop_{op.lo}_{op.hi}"
+  let mut loops = ctx.loops
+  if !collect {
+    loops.push(LoopFrame { id: op.id, label: label, repr: "", cleanup: ctx.defers.length })
+  }
+  let body = emitExpr(ctx, child(ctx.table, op, "body")?)
+  if !collect {
+    let _ = loops.pop()
+  }
+  restoreScope(ctx, mark)
+  let code = body?
+  if collect {
+    Ok(Code { rs: "\{ {iter.setup} let mut __acc: Vec<Value> = Vec::new(); for __item in {iter.values} \{ {binding} __acc.push({boxCode(code)}); \} Value::array(__acc) \}", repr: "value" })
+  } else {
+    Ok(Code { rs: "\{ {iter.setup} {label}: for __item in {iter.values} \{ {binding} let _ = {bare(code.rs)}; \} \}", repr: "unit" })
+  }
+}
+
+function comprehensionClauses(ctx: Ctx, op: Stage1Operation, position: int) -> Result<string, string> {
+  if position >= op.operands.length {
+    if op.detail == "map" {
+      let key = boxCode(emitExpr(ctx, child(ctx.table, op, "bodyKey")?)?)
+      let value = boxCode(emitExpr(ctx, child(ctx.table, op, "bodyValue")?)?)
+      return Ok("__acc.push(({key}, {value}));")
+    }
+    return Ok("__acc.push({boxCode(emitExpr(ctx, child(ctx.table, op, "body")?)?)});")
+  }
+  let field = fieldOf(op.operandLabels[position])
+  let current = opAt(ctx.table, op.operands[position])?
+  if field == "iterator" {
+    let iter = iteration(ctx, current, op)?
+    let pattern = opAt(ctx.table, op.operands[position + 1])?
+    let mark = ctx.scope.length
+    let binding = iterationBinding(ctx, pattern, iter.repr, op)?
+    let inner = comprehensionClauses(ctx, op, position + 2)
+    restoreScope(ctx, mark)
+    return Ok("\{ {iter.setup} for __item in {iter.values} \{ {binding} {inner?} \} \}")
+  }
+  if field == "condition" {
+    let test = condition(ctx, current, op, "if")?
+    return Ok("if {test} \{ {comprehensionClauses(ctx, op, position + 1)?} \}")
+  }
+  comprehensionClauses(ctx, op, position + 1)
+}
+
+function emitComprehension(ctx: Ctx, op: Stage1Operation) -> Result<Code, string> {
+  let inner = comprehensionClauses(ctx, op, 0)?
+  let result = match op.detail {
+    case "array" => "Value::array(__acc)"
+    case "set" => "builtin_set_of(__acc, {spanOf(op)})?"
+    case "map" => "builtin_map_of(__acc, {spanOf(op)})?"
+    case _ => return Err(refusal("ir collection {op.detail}", op))
+  }
+  Ok(Code { rs: "\{ let mut __acc = Vec::new(); {inner} {result} \}", repr: "value" })
+}
+
+function emitTry(ctx: Ctx, op: Stage1Operation) -> Result<Code, string> {
+  let value = boxCode(emitExpr(ctx, child(ctx.table, op, "operand")?)?)
+  if ctx.fnRet == "" {
+    return Err(refusal("return outside a function", op))
+  }
+  let early = into(Code { rs: "__early", repr: "value" }, ctx.fnRet, op)?
+  Ok(Code { rs: "match try_value({value}, {spanOf(op)})? \{ Ok(__value) => __value, Err(__early) => \{ {drain(ctx, 0)}return Ok({early}); \} \}", repr: "value" })
+}
+
+function emitDefer(ctx: Ctx, op: Stage1Operation) -> Result<string, string> {
+  if ctx.defers.length == 0 {
+    return Err(refusal("defer outside a function body", op))
+  }
+  let body = child(ctx.table, op, "value")?
+  let action = emitClosure(ctx, op, Params { names: [], reprs: [], spans: [], defaultIds: [], variadic: false }, body)?
+  Ok("defer_push(&{ctx.defers[ctx.defers.length - 1]}, {action});")
+}
+
+function emitUsing(ctx: Ctx, op: Stage1Operation) -> Result<string, string> {
+  let value = boxCode(emitExpr(ctx, child(ctx.table, op, "value")?)?)
+  let name = rustName(op.bindingName)
+  let stack = "__using_{op.lo}_{op.hi}"
+  let span = spanOf(op)
+  let mark = ctx.scope.length
+  pushBind(ctx, Bind { name: op.bindingName, kind: "local", rust: name, repr: "value", mutable: false })
+  let mut stacks = ctx.defers
+  stacks.push(stack)
+  let body = emitExpr(ctx, child(ctx.table, op, "body")?)
+  let _ = stacks.pop()
+  restoreScope(ctx, mark)
+  let code = body?
+  let close = "\{ let __resource = {name}.clone(); Value::Closure(Rc::new(EmittedClosure \{ call: move |cx: RtCx, _args: Vec<Value>| -> CallFuture \{ let __resource = __resource.clone(); Box::pin(async move \{ call_resource_method(&*cx.host(), __resource, \"close\", vec![], {span}, {span}) \}) \}, params: &[], defaults: Vec::new(), variadic: false \})) \}"
+  Ok("\{ let {stack} = defer_stack(); let {name} = {value}; if {name}.kind() != \"File\" \{ return Err(fault(codes::GUARD_TYPE, format!(\"`using` expects a `File`, found `\{\}`\", {name}.kind()), {span})); \} defer_push(&{stack}, {close}); let __using_value = {bare(code.rs)}; run_defers(&{stack}, &cx).await; let _ = __using_value; \}")
+}
+
+// --- statements -----------------------------------------------------------
+
+export function emitStatement(ctx: Ctx, op: Stage1Operation) -> Result<string, string> {
+  match op.kind {
+    case "let" => emitLet(ctx, op)
+    case "constant" => emitConstant(ctx, op)
+    case "assignment" => emitAssignment(ctx, op)
+    case "expression/block" => {
+      let expression = child(ctx.table, op, "value")?
+      let value = if expression.kind == "expression/for" {
+        emitFor(ctx, expression, false)?
+      } else {
+        emitExpr(ctx, expression)?
+      }
+      Ok("let _ = {value.rs};")
+    }
+    case "while" => emitWhile(ctx, op)
+    case "break" => emitLoopControl(ctx, op)
+    case "continue" => emitLoopControl(ctx, op)
+    case "defer" => emitDefer(ctx, op)
+    case "using" => emitUsing(ctx, op)
+    case "return" => {
+      if ctx.fnRet == "" {
+        return Err(refusal("return outside a function", op))
+      }
+      match optionalChild(ctx.table, op, "value")? {
+        case Some(value) => Ok("let __return_value = {bare(into(emitExpr(ctx, value)?, ctx.fnRet, value)?)}; {drain(ctx, 0)}return Ok(__return_value);")
+        case None => Ok("{drain(ctx, 0)}return Ok({into(Code { rs: "()", repr: "unit" }, ctx.fnRet, op)?});")
+      }
+    }
+    case "function" => emitLocalFunction(ctx, op)
+    case "type-alias" => Ok("")
+    case "record" => Ok("")
+    case "enum" => Ok("")
+    case "newtype" => Ok("")
+    case "protocol" => Ok("")
+    case "implementation" => emitImplementation(ctx, op)
+    case _ => Err(refusal("kind {op.kind}", op))
+  }
+}
+
+// Pattern checks return owned bindings before the arm guard/body is evaluated,
+// so a list's temporary borrow never survives into user code.
+record PatternPlan {
+  conditions: Array<string>,
+  reads: Array<string>,
+  bindings: Array<Stage1Operation>,
+  reprs: Array<string>,
+}
+
+function emptyPattern() -> PatternPlan {
+  PatternPlan { conditions: [], reads: [], bindings: [], reprs: [] }
+}
+
+function addPattern(plan: PatternPlan, nested: PatternPlan) -> () {
+  let mut conditions = plan.conditions
+  let mut reads = plan.reads
+  let mut bindings = plan.bindings
+  let mut reprs = plan.reprs
+  for item in nested.conditions { conditions.push(item) }
+  for item in nested.reads { reads.push(item) }
+  for item in nested.bindings { bindings.push(item) }
+  for item in nested.reprs { reprs.push(item) }
+  ()
+}
+
+function patternCondition(plan: PatternPlan) -> string {
+  if plan.conditions.length == 0 { "true" } else { plan.conditions.join(" && ") }
+}
+
+function tupleOf(items: Array<string>) -> string {
+  if items.length == 0 { "()" } else { "({items.join(", ")},)" }
+}
+
+function extraction(plan: PatternPlan) -> string {
+  "if {patternCondition(plan)} \{ Some({tupleOf(plan.reads)}) \} else \{ None \}"
+}
+
+function patternNominals(pattern: Stage1Operation, kind: string) -> Array<string> {
+  let mut identities: Array<string> = []
+  for atom in pattern.semanticTypeAtoms {
+    if atom.kind == kind && (atom.parent == -1 ||
+      (atom.parent == 0 && pattern.semanticTypeAtoms[0].kind == "union")) {
+      let identity = if atom.identity.contains("::") || atom.origin == "" {
+        atom.identity
+      } else { "{atom.origin}::{atom.identity}" }
+      if !has(identities, identity) { identities.push(identity) }
+    }
+  }
+  identities
+}
+
+
+function planPattern(ctx: Ctx, pattern: Stage1Operation, value: Code, span: string) -> Result<PatternPlan, string> {
+  let plan = emptyPattern()
+  let mut conditions = plan.conditions
+  let mut reads = plan.reads
+  let mut bindings = plan.bindings
+  let mut reprs = plan.reprs
+  let access = value.rs
+  let stem = "__p{pattern.lo}_{pattern.hi}"
+  if pattern.kind == "pattern/wildcard" { return Ok(plan) }
+  if pattern.kind == "pattern/binding" || pattern.kind == "pattern/typed-binding" {
+    if pattern.kind == "pattern/typed-binding" {
+      conditions.push("({typeTest(ctx.table, pattern.id, pattern.semanticTypeAtoms, 0, access, value.repr)?})")
+    }
+    let repr = bindingRepr(pattern, value)
+    reads.push(into(Code { rs: if isCopyRepr(value.repr) { access } else { "({access}).clone()" }, repr: value.repr }, repr, pattern)?)
+    bindings.push(pattern)
+    reprs.push(repr)
+    return Ok(plan)
+  }
+  if pattern.kind == "pattern/literal" {
+    let literal = emitExpr(ctx, child(ctx.table, pattern, "value")?)?
+    let test = if isCopyRepr(value.repr) && value.repr == literal.repr {
+      "({access}) == ({literal.rs})"
+    } else {
+      "values_equal(&({boxCode(literal)}), &({boxCode(value)})).map_err(|e| cmp_guard(e, {span}))?"
+    }
+    conditions.push(test)
+    return Ok(plan)
+  }
+  if pattern.kind == "pattern/range" {
+    let low = emitExpr(ctx, child(ctx.table, pattern, "low")?)?
+    let high = emitExpr(ctx, child(ctx.table, pattern, "high")?)?
+    let cmp = if pattern.detail == "true" { "<=" } else { "<" }
+    if value.repr == "i64" {
+      conditions.push("({access}) >= ({low.rs}) && ({access}) {cmp} ({high.rs})")
+    } else {
+      conditions.push("matches!(&({boxCode(value)}), Value::Int(__n) if *__n >= ({low.rs}) && *__n {cmp} ({high.rs}))")
+    }
+    return Ok(plan)
+  }
+  if pattern.kind == "pattern/alternatives" {
+    let mut chain: Array<string> = []
+    let mut alternatives: Array<PatternPlan> = []
+    let mut canonical: Array<Stage1Operation> = []
+    let mut targets: Array<string> = []
+    for id in pattern.operands {
+      let sub = planPattern(ctx, opAt(ctx.table, id)?, value, span)?
+      if alternatives.length == 0 {
+        canonical = sub.bindings
+        for repr in sub.reprs { targets.push(repr) }
+      }
+      alternatives.push(sub)
+      let mut position = 0
+      for binding in canonical {
+        let mut index = 0
+        for other in sub.bindings {
+          if other.bindingName == binding.bindingName && targets[position] != sub.reprs[index] {
+            targets[position] = "value"
+          }
+          index += 1
+        }
+        position += 1
+      }
+    }
+    for sub in alternatives {
+      let mut ordered: Array<string> = []
+      let mut position = 0
+      for binding in canonical {
+        let mut found = false
+        let mut index = 0
+        for other in sub.bindings {
+          if other.bindingName == binding.bindingName {
+            ordered.push(into(Code { rs: sub.reads[index], repr: sub.reprs[index] }, targets[position], other)?)
+            found = true
+          }
+          index += 1
+        }
+        if !found { return Err(refusal("alternative binding {binding.bindingName}", pattern)) }
+        position += 1
+      }
+      chain.push("if {patternCondition(sub)} \{ Some({tupleOf(ordered)}) \} else ")
+    }
+    let mut temps: Array<string> = []
+    let mut position = 0
+    for binding in canonical {
+      let temp = "{stem}_{position}"
+      temps.push(temp)
+      reads.push(temp)
+      bindings.push(binding)
+      reprs.push(targets[position])
+      position += 1
+    }
+    conditions.push("let Some({tupleOf(temps)}) = \{ {chain.join("")} \{ None \} \}")
+    return Ok(plan)
+  }
+  if pattern.kind == "pattern/constructor" {
+    let name = pattern.detail
+    let enums = patternNominals(pattern, "enum")
+    let newtypes = patternNominals(pattern, "newtype")
+    if name == "None" {
+      conditions.push("matches!(&({boxCode(value)}), Value::None)")
+      return Ok(plan)
+    }
+    if (name == "Some" || name == "Ok" || name == "Err") && pattern.operands.length == 1 {
+      conditions.push("let Value::{name}({stem}) = &({boxCode(value)})")
+      addPattern(plan, planPattern(ctx, opAt(ctx.table, pattern.operands[0])?, Code { rs: "(**{stem})", repr: "value" }, span)?)
+      return Ok(plan)
+    }
+    let mut owners: Array<string> = []
+    if enums.length > 0 {
+      for identity in enums { owners.push(rustStr(identity)) }
+      conditions.push("let Value::Enum \{ enum_id: {stem}_id, declaration_identity: {stem}_decl, variant: {stem}_tag, payloads: {stem}_args, .. \} = &({boxCode(value)})")
+      conditions.push("[{owners.join(", ")}].contains(&nominal_declaration_identity({stem}_id.as_ref(), {stem}_decl.as_deref())) && {stem}_tag.as_ref() == {rustStr(name)}")
+      let arity = pattern.operands.length
+      conditions.push("\{ if {stem}_args.len() != {arity} \{ return Err(fault(codes::GUARD_ARITY, format!(\"enum variant `{name}` pattern takes \{\} subpattern\{\}\", {stem}_args.len(), if {stem}_args.len() == 1 \{ \"\" \} else \{ \"s\" \}), {span})); \} true \}")
+      let mut index = 0
+      for id in pattern.operands {
+        addPattern(plan, planPattern(ctx, opAt(ctx.table, id)?, Code { rs: "{stem}_args[{index}]", repr: "value" }, span)?)
+        index += 1
+      }
+      return Ok(plan)
+    }
+    if newtypes.length > 0 && pattern.operands.length == 1 {
+      let declaration = match typeDeclaration(ctx.table, pattern.id, name)? {
+        case Some(found) => found
+        case None => return Err(refusal("newtype declaration {name}", pattern))
+      }
+      owners.push(rustStr(declaration.typeDefinition[0].identity))
+      conditions.push("let Value::Newtype \{ newtype_id: {stem}_id, declaration_identity: {stem}_decl, inner: {stem}_inner, .. \} = &({boxCode(value)})")
+      conditions.push("[{owners.join(", ")}].contains(&nominal_declaration_identity({stem}_id.as_ref(), {stem}_decl.as_deref()))")
+      addPattern(plan, planPattern(ctx, opAt(ctx.table, pattern.operands[0])?, Code { rs: "(**{stem}_inner)", repr: "value" }, span)?)
+      return Ok(plan)
+    }
+    return Err(refusal("constructor {name}", pattern))
+  }
+  if pattern.kind == "pattern/record" || pattern.kind == "pattern/nominal-record" {
+    let nominal = pattern.kind == "pattern/nominal-record"
+      if nominal {
+        let mut tests: Array<string> = []
+        let declaredIdentity = match typeDeclaration(ctx.table, pattern.id, pattern.detail)? {
+          case Some(decl) => decl.typeDefinition[0].identity
+          case None => pattern.referenceIdentity
+        }
+        for identity in patternNominals(pattern, "nominal-record") {
+          if declaredIdentity == "" || identity == declaredIdentity {
+          tests.push("{stem}.is_nominal_record_declaration({rustStr(identity)})")
+        }
+      }
+      if tests.length == 0 { return Err(refusal("nominal record identity", pattern)) }
+      conditions.push("let {stem} = &({boxCode(value)})")
+      conditions.push("({tests.join(" || ")})")
+    } else {
+      conditions.push("let Value::Record({stem}) = &({boxCode(value)})")
+    }
+    let mut position = 0
+    for id in pattern.operands {
+      let label = pattern.operandLabels[position]
+      let temp = "{stem}_{position}"
+      let method = if nominal { "nominal_field" } else { "get" }
+      conditions.push("let Some({temp}) = {stem}.{method}({rustStr(labelName(label))})")
+      addPattern(plan, planPattern(ctx, opAt(ctx.table, id)?, Code { rs: "(*{temp})", repr: "value" }, span)?)
+      position += 1
+    }
+    return Ok(plan)
+  }
+  if pattern.kind == "pattern/list" {
+    conditions.push("let Value::Array({stem}) = &({boxCode(value)})")
+    let mut shape: Array<string> = []
+    let mut position = 0
+    for label in pattern.operandLabels {
+      let temp = "{stem}_{position}"
+      shape.push(if label.startsWith("list-pattern/rest[") { "{temp} @ .." } else { temp })
+      position += 1
+    }
+    conditions.push("let [{shape.join(", ")}] = &{stem}.borrow()[..]")
+    position = 0
+    for id in pattern.operands {
+      let temp = "{stem}_{position}"
+      let read = if pattern.operandLabels[position].startsWith("list-pattern/rest[") { "Value::array({temp}.to_vec())" } else { "(*{temp})" }
+      addPattern(plan, planPattern(ctx, opAt(ctx.table, id)?, Code { rs: read, repr: "value" }, span)?)
+      position += 1
+    }
+    return Ok(plan)
+  }
+  Err(refusal("kind {pattern.kind}", pattern))
+}
+
+function installPattern(ctx: Ctx, plan: PatternPlan, temporary: string, op: Stage1Operation, moduleTop: bool) -> Result<string, string> {
+  let mut statements: Array<string> = []
+  let mut position = 0
+  for pattern in plan.bindings {
+    let repr = plan.reprs[position]
+    let read = "{temporary}.{position}"
+    if moduleTop {
+      let bind = match lookup(ctx, pattern.bindingName) {
+        case Some(found) => found
+        case None => return Err(refusal("module binding {pattern.bindingName}", pattern))
+      }
+      statements.push(writeBind(bind, into(Code { rs: read, repr: repr }, bind.repr, op)?, op)?)
+    } else {
+      let rust = rustName(pattern.bindingName)
+      let shared = pattern.bindingMutable && ctx.table.capturedBindings.containsKey(pattern.declarationIdentity)
+      let mutable = if pattern.bindingMutable { "mut " } else { "" }
+      if shared { statements.push("let {rust} = {sharedInit(read, repr)};") }
+      else { statements.push("let {mutable}{rust}: {rustType(repr)} = {read};") }
+      pushBind(ctx, Bind { name: pattern.bindingName, kind: if shared { "shared" } else { "local" }, rust: rust, repr: repr, mutable: pattern.bindingMutable })
+    }
+    position += 1
+  }
+  Ok(statements.join(" "))
+}
+
+function emitPatternLet(ctx: Ctx, op: Stage1Operation, pattern: Stage1Operation, value: Code, loopBinding: bool) -> Result<string, string> {
+  let plan = planPattern(ctx, pattern, Code { rs: "__scrut", repr: value.repr }, spanOf(op))?
+  let install = installPattern(ctx, plan, "__bindings", op, !loopBinding && ctx.atModuleTop)?
+  let message = if loopBinding { "`for` pattern did not match an element" } else { "`let` pattern did not match the value (§4)" }
+  Ok("let __bindings = \{ let __scrut = {bare(value.rs)}; match \{ {extraction(plan)} \} \{ Some(__bindings) => __bindings, None => return Err(fault(codes::GUARD_TYPE, {rustStr(message)}, {spanOf(op)})) \} \}; {install}")
+}
+
+function emitMatch(ctx: Ctx, op: Stage1Operation) -> Result<Code, string> {
+  let scrut = emitExpr(ctx, child(ctx.table, op, "scrutinee")?)?
+  let declared = reprOf(op.semanticTypeAtoms)
+  let repr = if declared == "none" { "value" } else { declared }
+  let label = "'__match_{op.lo}_{op.hi}"
+  let mut arms: Array<string> = []
+  let mut position = 0
+  while position < op.operands.length {
+    let pattern = opAt(ctx.table, op.operands[position])?
+    if fieldOf(op.operandLabels[position]) != "pattern" { position += 1; continue }
+    let plan = planPattern(ctx, pattern, Code { rs: "__scrut", repr: scrut.repr }, spanOf(op))?
+    let mark = ctx.scope.length
+    let install = installPattern(ctx, plan, "__bindings", op, false)?
+    position += 1
+    let mut guard = "true"
+    if fieldOf(op.operandLabels[position]) == "guard" {
+      let guardOp = opAt(ctx.table, op.operands[position])?
+      let code = emitExpr(ctx, guardOp)?
+      guard = if code.repr == "bool" { code.rs } else { "case_guard_bool(&({boxCode(code)}), {spanOf(op)})?" }
+      position += 1
+    }
+    let bodyOp = opAt(ctx.table, op.operands[position])?
+    let returns = op.operandLabels[position].contains("match-case-return")
+    if returns && ctx.fnRet == "" { return Err(refusal("return outside a function", bodyOp)) }
+    let body = into(emitExpr(ctx, bodyOp)?, if returns { ctx.fnRet } else { repr }, bodyOp)?
+    let result = if returns {
+      "let __return_value = {bare(body)}; {drain(ctx, 0)}return Ok(__return_value);"
+    } else { "break {label} {bare(body)};" }
+    restoreScope(ctx, mark)
+    arms.push("if let Some(__bindings) = \{ {extraction(plan)} \} \{ {install} if {guard} \{ {result} \} \}")
+    position += 1
+    if plan.conditions.length == 0 && guard == "true" { break }
+  }
+  Ok(Code { rs: "{label}: \{ let __scrut = {bare(scrut.rs)}; {arms.join(" ")} return Err(fault(codes::FAULT_MATCH_MISS, \"no `case` matched and no catch-all exists (§5)\", {spanOf(op)})); \}", repr: repr })
+}
+
+function bindingRepr(pattern: Stage1Operation, value: Code) -> string {
+  let declared = reprOf(pattern.semanticTypeAtoms)
+  if declared == "none" {
+    value.repr
+  } else {
+    declared
+  }
+}
+
+function emitLet(ctx: Ctx, op: Stage1Operation) -> Result<string, string> {
+  let valueOp = child(ctx.table, op, "value")?
+  let pattern = child(ctx.table, op, "pattern")?
+  let value = emitExpr(ctx, valueOp)?
+  if pattern.kind == "pattern/wildcard" {
+    return Ok("let _ = {value.rs};")
+  }
+  if pattern.kind != "pattern/binding" {
+    return emitPatternLet(ctx, op, pattern, value, false)
+  }
+  if ctx.atModuleTop {
+    match lookup(ctx, pattern.bindingName) {
+      case Some(bind) => if bind.kind == "global" {
+        return writeBind(bind, into(value, bind.repr, valueOp)?, op)
+      }
+      case None => ()
+    }
+    return Err(refusal("module binding {pattern.bindingName}", pattern))
+  }
+  let repr = bindingRepr(pattern, value)
+  let code = into(value, repr, valueOp)?
+  let rust = rustName(pattern.bindingName)
+  if pattern.bindingMutable && ctx.table.capturedBindings.containsKey(pattern.declarationIdentity) {
+    pushBind(ctx, Bind { name: pattern.bindingName, kind: "shared", rust: rust, repr: repr, mutable: true })
+    return Ok("let {rust} = {sharedInit(code, repr)};")
+  }
+  let mutable = if pattern.bindingMutable {
+    "mut "
+  } else {
+    ""
+  }
+  pushBind(ctx, Bind {
+    name: pattern.bindingName,
+    kind: "local",
+    rust: rust,
+    repr: repr,
+    mutable: pattern.bindingMutable,
+  })
+  Ok("let {mutable}{rust}: {rustType(repr)} = {bare(code)};")
+}
+
+function emitConstant(ctx: Ctx, op: Stage1Operation) -> Result<string, string> {
+  let valueOp = child(ctx.table, op, "value")?
+  let value = emitExpr(ctx, valueOp)?
+  if ctx.atModuleTop {
+    match lookup(ctx, op.bindingName) {
+      case Some(bind) => if bind.kind == "global" {
+        return writeBind(bind, into(value, bind.repr, valueOp)?, op)
+      }
+      case None => ()
+    }
+    return Err(refusal("module binding {op.bindingName}", op))
+  }
+  let declared = reprOf(op.declaredTypeAtoms)
+  let repr = if declared == "none" {
+    value.repr
+  } else {
+    declared
+  }
+  let rust = rustName(op.bindingName)
+  pushBind(ctx, Bind { name: op.bindingName, kind: "local", rust: rust, repr: repr, mutable: false })
+  Ok("let {rust}: {rustType(repr)} = {bare(into(value, repr, valueOp)?)};")
+}
+
+// Collection slots mutate their shared store. Record paths rebuild the value
+// at the root or indexed slot; compound reads precede the right-hand side.
+function emitPathAssignment(ctx: Ctx, op: Stage1Operation, target: Stage1Operation) -> Result<string, string> {
+  let mut root = target
+  while root.kind == "expression/member" || root.kind == "expression/index" {
+    root = child(ctx.table, root, "object")?
+  }
+  let span = spanOf(op)
+  if root.kind == "expression/identifier" {
+    let binding = match lookup(ctx, root.detail) {
+      case Some(found) => found
+      case None => return Err(refusal("unresolved identifier {root.detail}", root))
+    }
+    if !binding.mutable {
+      return Ok("return Err(fault(codes::GUARD_IMMUTABLE, {rustStr("`{root.detail}` is not `let mut` and cannot be assigned")}, {span}));")
+    }
+  }
+  let mut cursor = target
+  let mut fields: Array<string> = []
+  while cursor.kind == "expression/member" {
+    fields.insert(0, rustStr(cursor.detail))
+    cursor = child(ctx.table, cursor, "object")?
+  }
+  let path = "&[{fields.join(", ")}]"
+  let value = boxCode(emitExpr(ctx, child(ctx.table, op, "value")?)?)
+  let mut anchor = ""
+  let mut before = ""
+  let mut read = ""
+  let mut write = ""
+  if cursor.kind == "expression/index" {
+    let object = boxCode(emitExpr(ctx, child(ctx.table, cursor, "object")?)?)
+    let index = boxCode(emitExpr(ctx, child(ctx.table, cursor, "index")?)?)
+    anchor = "let __base = {object}; let __index = {index};"
+    before = "let (__store, __index) = index_slot(&__base, &__index, {span})?;"
+    read = "__store.borrow()[__index].clone()"
+    write = "__store.borrow_mut()[__index] = __value;"
+    if fields.length > 0 {
+      before = "index_slot(&__base, &__index, {span})?;"
+      read = "\{ let (__store, __k) = index_slot(&__base, &__index, {span})?; let __record = __store.borrow()[__k].clone(); walk_fields_value(&__record, {path}, {span})? \}"
+      write = "let (__store, __k) = index_slot(&__base, &__index, {span})?; let __record = __store.borrow()[__k].clone(); let __updated = update_fields_value(&__record, {path}, __value, {span})?; __store.borrow_mut()[__k] = __updated;"
+    }
+  } else if cursor.kind == "expression/identifier" && fields.length > 0 {
+    let binding = match lookup(ctx, root.detail) {
+      case Some(found) => found
+      case None => return Err(refusal("unresolved identifier {root.detail}", root))
+    }
+    let current = boxCode(readBind(ctx, binding, spanOf(root), root)?)
+    read = "walk_fields_value(&({current}), {path}, {span})?"
+    let updated = "update_fields_value(&({current}), {path}, __value, {span})?"
+    write = writeBind(binding, updated, op)?
+  } else { return Err(refusal("assignment target {target.kind}", target)) }
+  let body = if op.detail == "assign" {
+    "{before} let __value = {value}; {write}"
+  } else if op.detail == "coalesce" {
+    "{before} let __old = {read}; if matches!(__old, Value::Null | Value::None) \{ let __value = {value}; {write} \}"
+  } else {
+    let combined = arithmetic(ctx, op.detail, Code { rs: "__old", repr: "value" }, Code { rs: "__rhs", repr: "value" }, span, op)?
+    "{before} let __old = {read}; let __rhs = {value}; let __value = {boxCode(combined)}; {write}"
+  }
+  Ok("\{ {anchor} {body} \}")
+}
+
+function emitAssignment(ctx: Ctx, op: Stage1Operation) -> Result<string, string> {
+  let target = child(ctx.table, op, "target")?
+  if target.kind != "expression/identifier" {
+    return emitPathAssignment(ctx, op, target)
+  }
+  let bind = match lookup(ctx, target.detail) {
+    case Some(found) => found
+    case None => return Err(refusal("unresolved identifier {target.detail}", target))
+  }
+  let valueOp = child(ctx.table, op, "value")?
+  if op.detail == "assign" {
+    let value = emitExpr(ctx, valueOp)?
+    return writeBind(bind, into(value, bind.repr, valueOp)?, op)
+  }
+  let current = readBind(ctx, bind, spanOf(target), target)?
+  if op.detail == "coalesce" {
+    if bind.repr != "value" {
+      return Err(refusal("coalescing assignment on {bind.repr}", op))
+    }
+    let value = emitExpr(ctx, valueOp)?
+    let write = writeBind(bind, into(value, "value", valueOp)?, op)?
+    return Ok("if matches!(&{current.rs}, Value::Null | Value::None) \{ {write} \}")
+  }
+  // Compound: read the target, evaluate the right side, then the leaf.
+  let value = emitExpr(ctx, valueOp)?
+  let combined = arithmetic(
+    ctx,
+    op.detail,
+    Code { rs: "__lhs", repr: current.repr },
+    Code { rs: "__rhs", repr: value.repr },
+    spanOf(op),
+    op,
+  )?
+  let write = writeBind(bind, into(combined, bind.repr, op)?, op)?
+  Ok("\{ let __lhs = {current.rs}; let __rhs = {value.rs}; {write} \}")
+}
+
+// A function declared inside a block binds a closure value at its position.
+function emitLocalFunction(ctx: Ctx, op: Stage1Operation) -> Result<string, string> {
+  let params = paramsOf(ctx, op, op.declaredTypeAtoms)?
+  let body = child(ctx.table, op, "body")?
+  let closure = emitClosure(ctx, op, params, body)?
+  let rust = rustName(op.bindingName)
+  Ok("top_cell_set(&{rust}, {closure});")
+}

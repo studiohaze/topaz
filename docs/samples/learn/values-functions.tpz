@@ -1,0 +1,14 @@
+import std.io
+
+function minutesLeft(total: int, spent: int) -> int {
+    total - spent
+}
+
+let topic = "Topaz basics"
+let total: int = 45
+let spent = 20
+let mut sessions = 0
+sessions = sessions + 1
+
+io.writeLine("{topic}: {minutesLeft(total, spent)} minutes left")
+io.writeLine("sessions: {sessions}")

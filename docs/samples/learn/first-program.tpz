@@ -1,0 +1,5 @@
+import std.io
+
+let topic = "Topaz basics"
+let minutes: int = 25
+io.writeLine("{topic}: {minutes} minutes")

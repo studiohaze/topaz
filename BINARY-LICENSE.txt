@@ -1,0 +1,30 @@
+Topaz executable license, releases from 5.21.0
+Copyright 2025-2026 Studio Haze Inc.
+
+1. Grant. Studio Haze Inc. grants every recipient a worldwide, perpetual,
+non-exclusive, royalty-free license to download, install, run and copy official
+Topaz executables on any number of computers, for personal, educational and
+commercial purposes, including automated builds and hosted services. Recipients
+may redistribute unmodified executables with these terms and all accompanying
+copyright, license and third-party notices. No fee or source publication is
+required for normal use or for distributing programs created with Topaz.
+
+2. Scope. This grant covers company-owned binary material supplied under these
+terms. It grants no license to unpublished company-owned implementation source.
+Apache-2.0 components, material previously published under Apache-2.0, and
+third-party components retain their own licenses, including modification and
+redistribution rights. These terms do not restrict rights granted under those
+licenses or applicable law. Required notices must accompany redistributed copies.
+No ownership of user source, data or generated applications is claimed.
+Generated application code and included runtimes carry their own output notices.
+
+3. Marks. No trademark license is granted. Modified distributions must not be
+represented as official Studio Haze releases.
+
+4. Warranty and liability. THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY
+OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING MERCHANTABILITY, FITNESS FOR A
+PARTICULAR PURPOSE AND NONINFRINGEMENT. TO THE EXTENT PERMITTED BY LAW,
+STUDIO HAZE INC. SHALL NOT BE LIABLE FOR DAMAGES ARISING FROM THE SOFTWARE
+OR ITS USE, WHETHER IN CONTRACT, TORT OR OTHERWISE.
+
+These terms do not replace the licenses of any previously published release.

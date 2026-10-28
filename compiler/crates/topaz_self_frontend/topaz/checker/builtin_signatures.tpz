@@ -1,0 +1,563 @@
+// Pure parameter/default metadata shared by direct and bound builtin calls.
+import checker_types { TypeValue }
+import checker.model { CallSignature, lengthUnit }
+
+export function stringElementType(value: TypeValue) -> bool {
+  if value.kind == "primitive" || value.kind == "literal" { return value.name == "string" }
+  if value.kind != "union" || value.members.length == 0 { return false }
+  for member in value.members { if !stringElementType(member) { return false } }
+  true
+}
+
+export function builtinNamespaceFamily(namespace: string) -> string {
+  match namespace {
+    case "Array" | "Set" | "Bytes" | "ByteBuffer" | "Map" =>
+      "collection"
+    case "Math" | "Codec" | "Hash" => "numeric-binary"
+    case "FS" | "Encoding" | "Cli" | "Path" | "Regex" => "host"
+    case "CSV" | "TOML" | "JSON" => "structured-data"
+    case "URL" | "Date" | "BigInt" | "Decimal" | "RoundingMode" |
+      "Test" => "scalar"
+    case "Show" | "Eq" | "Order" => "protocol"
+    case _ => ""
+  }
+}
+
+export function requiredCallSignature(
+  parameterNames: Array<string>,
+  variadic: bool,
+) -> CallSignature {
+  let mut defaults: Array<bool> = []
+  for _ in parameterNames {
+    defaults.push(false)
+  }
+  CallSignature {
+    parameterNames: parameterNames,
+    parameterDefaults: defaults,
+    parameterCount: parameterNames.length,
+    variadic: variadic,
+    positionalOnlyIdentity: "",
+  }
+}
+
+export function defaultedCallSignature(
+  parameterNames: Array<string>,
+  parameterDefaults: Array<bool>,
+) -> CallSignature {
+  CallSignature {
+    parameterNames: parameterNames,
+    parameterDefaults: parameterDefaults,
+    parameterCount: parameterNames.length,
+    variadic: false,
+    positionalOnlyIdentity: "",
+  }
+}
+
+export function positionalOnlyCallSignature(
+  identity: string,
+  parameterNames: Array<string>,
+) -> CallSignature {
+  CallSignature {
+    ...requiredCallSignature(parameterNames, false),
+    positionalOnlyIdentity: identity,
+  }
+}
+
+function collectionStaticCallSignature(
+  namespace: string,
+  name: string,
+) -> Option<CallSignature> {
+  if (namespace == "Array" || namespace == "Set") && name == "of" {
+    return Some(requiredCallSignature([], true))
+  }
+  if namespace == "Map" {
+    return match name {
+      case "new" => Some(requiredCallSignature([], false))
+      case "ofEntries" => Some(requiredCallSignature(["entries"], false))
+      case _ => None
+    }
+  }
+  if namespace == "Bytes" {
+    return match name {
+      case "empty" => Some(requiredCallSignature([], false))
+      case "encodeUtf8" | "fromHex" | "fromBase64" =>
+        Some(requiredCallSignature(["s"], false))
+      case "fromArray" => Some(requiredCallSignature(["values"], false))
+      case "concat" => Some(requiredCallSignature(["a", "b"], false))
+      case _ => None
+    }
+  }
+  if namespace == "ByteBuffer" {
+    return match name {
+      case "allocate" => Some(defaultedCallSignature(
+        ["length", "value"],
+        [false, true],
+      ))
+      case "fromBytes" => Some(requiredCallSignature(["value"], false))
+      case _ => None
+    }
+  }
+  None
+}
+
+function numericBinaryStaticCallSignature(
+  namespace: string,
+  name: string,
+) -> Option<CallSignature> {
+  if namespace == "Math" {
+    return match name {
+      case "sqrt" | "abs" | "floor" | "ceil" | "round" |
+        "sin" | "cos" | "tan" | "isNaN" | "isFinite" =>
+        Some(requiredCallSignature(["x"], false))
+      case "parseFloat" => Some(requiredCallSignature(["s"], false))
+      case "min" | "max" => Some(requiredCallSignature(["a", "b"], false))
+      case _ => None
+    }
+  }
+  if namespace == "Codec" {
+    return match name {
+      case "zstdCompress" => Some(defaultedCallSignature(
+        ["bytes", "level"],
+        [false, true],
+      ))
+      case "gzipCompress" | "gzipDecompress" | "deflateCompress" |
+        "deflateFixedCompress" | "zlibFixedCompress" |
+        "reedSolomon255223Protect" | "deflateDecompress" |
+        "zstdDecompress" => Some(requiredCallSignature(["bytes"], false))
+      case _ => None
+    }
+  }
+  if namespace == "Hash" {
+    return match name {
+      case "sha256" | "sha512" | "crc32" =>
+        Some(requiredCallSignature(["data"], false))
+      case "hmacSha256" => Some(requiredCallSignature(
+        ["key", "message"],
+        false,
+      ))
+      case _ => None
+    }
+  }
+  None
+}
+
+function hostStaticCallSignature(
+  namespace: string,
+  name: string,
+) -> Option<CallSignature> {
+  if namespace == "FS" {
+    return match name {
+      case "readText" | "readBytes" | "list" =>
+        Some(requiredCallSignature(["path"], false))
+      case "writeText" => Some(requiredCallSignature(
+        ["path", "text"],
+        false,
+      ))
+      case "writeBytes" => Some(requiredCallSignature(
+        ["path", "bytes"],
+        false,
+      ))
+      case _ => None
+    }
+  }
+  if namespace == "Encoding" {
+    return match name {
+      case "utf8Encode" | "hexDecode" | "base64Decode" =>
+        Some(requiredCallSignature(["text"], false))
+      case "utf8Decode" | "hexEncode" | "base64Encode" =>
+        Some(requiredCallSignature(["bytes"], false))
+      case _ => None
+    }
+  }
+  if namespace == "Cli" {
+    return match name {
+      case "hasFlag" | "option" | "options" =>
+        Some(requiredCallSignature(["args", "name"], false))
+      case "positionals" => Some(requiredCallSignature(["args"], false))
+      case _ => None
+    }
+  }
+  if namespace == "Path" &&
+    (name == "from" || name == "cwdRelative" || name == "project") {
+    return Some(requiredCallSignature(["text"], false))
+  }
+  if namespace == "Regex" && name == "compile" {
+    return Some(requiredCallSignature(["pattern"], false))
+  }
+  None
+}
+
+function structuredDataStaticCallSignature(
+  namespace: string,
+  name: string,
+) -> Option<CallSignature> {
+  if namespace == "CSV" {
+    return match name {
+      case "parse" | "parseWithHeader" =>
+        Some(requiredCallSignature(["text"], false))
+      case "stringify" => Some(requiredCallSignature(["rows"], false))
+      case "stringifyWithHeader" => Some(requiredCallSignature(
+        ["rows", "columns"],
+        false,
+      ))
+      case _ => None
+    }
+  }
+  if namespace == "TOML" {
+    return match name {
+      case "parse" => Some(requiredCallSignature(["text"], false))
+      case "stringify" | "toJson" | "fromJson" =>
+        Some(requiredCallSignature(["value"], false))
+      case _ => None
+    }
+  }
+  if namespace == "JSON" {
+    return match name {
+      case "parseAs" | "parse" =>
+        Some(requiredCallSignature(["text"], false))
+      case "decode" | "stringify" =>
+        Some(requiredCallSignature(["value"], false))
+      case _ => None
+    }
+  }
+  None
+}
+
+function scalarTestStaticCallSignature(
+  namespace: string,
+  name: string,
+) -> Option<CallSignature> {
+  if namespace == "URL" && name == "parse" {
+    return Some(requiredCallSignature(["text"], false))
+  }
+  if namespace == "Date" {
+    return match name {
+      case "fromYmd" => Some(requiredCallSignature(
+        ["year", "month", "day"],
+        false,
+      ))
+      case "parseIso" => Some(requiredCallSignature(["text"], false))
+      case _ => None
+    }
+  }
+  if namespace == "BigInt" {
+    return match name {
+      case "fromInt" => Some(requiredCallSignature(["n"], false))
+      case "parse" => Some(requiredCallSignature(["text", "radix"], false))
+      case _ => None
+    }
+  }
+  if namespace == "Decimal" {
+    return match name {
+      case "fromInt" => Some(requiredCallSignature(["n"], false))
+      case "parse" => Some(requiredCallSignature(["text"], false))
+      case _ => None
+    }
+  }
+  if namespace == "Test" {
+    return match name {
+      case "assert" => Some(defaultedCallSignature(
+        ["condition", "message"],
+        [false, true],
+      ))
+      case "assertEq" | "assertNe" => Some(requiredCallSignature(
+        ["actual", "expected"],
+        false,
+      ))
+      case "assertContains" => Some(requiredCallSignature(
+        ["text", "needle"],
+        false,
+      ))
+      case "assertOk" | "assertErr" | "assertSome" | "assertNone" =>
+        Some(requiredCallSignature(["value"], false))
+      case "assertGolden" => Some(requiredCallSignature(
+        ["path", "actual"],
+        false,
+      ))
+      case _ => None
+    }
+  }
+  None
+}
+
+function containerReceiverCallSignature(
+  receiver: TypeValue,
+  name: string,
+) -> Option<CallSignature> {
+  if receiver.kind != "constructor" {
+    return None
+  }
+  if receiver.name == "Option" {
+    return match name {
+      case "okOr" => Some(requiredCallSignature(["error"], false))
+      case "okOrElse" | "map" | "flatMap" =>
+        Some(requiredCallSignature(["f"], false))
+      case _ => None
+    }
+  }
+  if receiver.name == "Result" {
+    return match name {
+      case "map" | "flatMap" => Some(requiredCallSignature(["f"], false))
+      case _ => None
+    }
+  }
+  if receiver.name == "Array" {
+    return match name {
+      case "get" => Some(requiredCallSignature(["i"], false))
+      case "slice" => Some(requiredCallSignature(["start", "end"], false))
+      case "map" | "sortedBy" | "filter" | "sortBy" | "retain" =>
+        Some(requiredCallSignature(["f"], false))
+      case "join" => Some(requiredCallSignature(["sep"], false))
+      case "reduce" => Some(requiredCallSignature(["initial", "f"], false))
+      case "indexOf" | "push" => Some(requiredCallSignature(["x"], false))
+      case "insert" => Some(requiredCallSignature(
+        ["index", "value"],
+        false,
+      ))
+      case "removeAt" => Some(requiredCallSignature(["index"], false))
+      case "sorted" | "pop" | "clear" | "reverse" | "sort" =>
+        Some(requiredCallSignature([], false))
+      case _ => None
+    }
+  }
+  if receiver.name == "Map" {
+    return match name {
+      case "insert" => Some(requiredCallSignature(["k", "v"], false))
+      case "get" | "remove" | "containsKey" =>
+        Some(requiredCallSignature(["k"], false))
+      case "getOr" => Some(requiredCallSignature(["k", "default"], false))
+      case "isEmpty" | "clear" => Some(requiredCallSignature([], false))
+      case "update" => Some(requiredCallSignature(
+        ["k", "initial", "f"],
+        false,
+      ))
+      case "mapValues" | "filter" =>
+        Some(requiredCallSignature(["f"], false))
+      case _ => None
+    }
+  }
+  if receiver.name == "Set" {
+    return match name {
+      case "add" | "remove" | "contains" =>
+        Some(requiredCallSignature(["x"], false))
+      case "union" | "intersection" | "difference" =>
+        Some(requiredCallSignature(["other"], false))
+      case "isEmpty" | "toArray" | "clear" =>
+        Some(requiredCallSignature([], false))
+      case _ => None
+    }
+  }
+  None
+}
+
+function scalarReceiverCallSignature(
+  receiver: TypeValue,
+  name: string,
+) -> Option<CallSignature> {
+  if (receiver.kind == "primitive" || receiver.kind == "literal") &&
+    receiver.name == "int" {
+    return match name {
+      case "atLeast" => Some(requiredCallSignature(["min"], false))
+      case "atMost" => Some(requiredCallSignature(["max"], false))
+      case _ => None
+    }
+  }
+  if (receiver.kind == "primitive" || receiver.kind == "literal") &&
+    receiver.name == "string" {
+    return match name {
+      case "startsWith" => Some(requiredCallSignature(["prefix"], false))
+      case "endsWith" => Some(requiredCallSignature(["suffix"], false))
+      case "contains" | "indexOf" | "lastIndexOf" =>
+        Some(requiredCallSignature(["sub"], false))
+      case "codePointAt" => Some(requiredCallSignature(["i"], false))
+      case "split" => Some(requiredCallSignature(["sep"], false))
+      case "slice" => Some(requiredCallSignature(["start", "end"], false))
+      case "replace" => Some(requiredCallSignature(["old", "new"], false))
+      case "scalars" | "trim" | "trimStart" | "trimEnd" | "byteLength" =>
+        Some(requiredCallSignature([], false))
+      case _ => None
+    }
+  }
+  None
+}
+
+function runtimeReceiverCallSignature(
+  receiver: TypeValue,
+  name: string,
+) -> Option<CallSignature> {
+  if receiver.kind == "file" {
+    return match name {
+      case "write" => Some(requiredCallSignature(["s"], false))
+      case "read" | "close" => Some(requiredCallSignature([], false))
+      case _ => None
+    }
+  }
+  if receiver.kind == "json-value" {
+    return match name {
+      case "get" => Some(requiredCallSignature(["key"], false))
+      case "at" => Some(requiredCallSignature(["index"], false))
+      case "kind" | "isNull" | "asString" | "asBool" | "asInt" |
+        "numberText" | "length" | "asArray" | "keys" | "values" =>
+        Some(requiredCallSignature([], false))
+      case _ => None
+    }
+  }
+  if receiver.kind == "bytes" {
+    return match name {
+      case "get" => Some(requiredCallSignature(["index"], false))
+      case "slice" => Some(requiredCallSignature(["start", "end"], false))
+      case "decodeUtf8" | "toHex" | "toBase64" | "length" |
+        "isEmpty" | "toArray" => Some(requiredCallSignature([], false))
+      case _ => None
+    }
+  }
+  if receiver.kind == "byte-buffer" {
+    return match name {
+      case "get" => Some(requiredCallSignature(["index"], false))
+      case "set" => Some(requiredCallSignature(["index", "value"], false))
+      case "fill" => Some(requiredCallSignature(
+        ["start", "length", "value"],
+        false,
+      ))
+      case "copy" => Some(requiredCallSignature(
+        ["source", "sourceStart", "targetStart", "length"],
+        false,
+      ))
+      case "length" | "toBytes" => Some(requiredCallSignature([], false))
+      case _ => None
+    }
+  }
+  if receiver.kind == "path" {
+    return match name {
+      case "join" => Some(requiredCallSignature(["child"], false))
+      case "withExtension" => Some(requiredCallSignature(["ext"], false))
+      case "parent" | "fileName" | "extension" | "normalize" | "toString" =>
+        Some(requiredCallSignature([], false))
+      case _ => None
+    }
+  }
+  if receiver.kind == "regex" {
+    return match name {
+      case "isMatch" | "find" | "findAll" | "split" =>
+        Some(requiredCallSignature(["text"], false))
+      case "replaceAll" => Some(requiredCallSignature(
+        ["text", "replacement"],
+        false,
+      ))
+      case _ => None
+    }
+  }
+  if receiver.kind == "url" {
+    return match name {
+      case "scheme" | "path" | "toString" | "host" | "fragment" | "query" =>
+        Some(requiredCallSignature([], false))
+      case _ => None
+    }
+  }
+  if receiver.kind == "date" {
+    return match name {
+      case "addDays" => Some(requiredCallSignature(["days"], false))
+      case "toIso" | "year" | "month" | "day" =>
+        Some(requiredCallSignature([], false))
+      case _ => None
+    }
+  }
+  if receiver.kind == "big-int" {
+    return match name {
+      case "toString" => Some(requiredCallSignature(["radix"], false))
+      case "div" | "mod" => Some(requiredCallSignature(["other"], false))
+      case "toInt" => Some(requiredCallSignature([], false))
+      case _ => None
+    }
+  }
+  if receiver.kind == "decimal" {
+    return match name {
+      case "round" => Some(defaultedCallSignature(
+        ["scale", "mode"],
+        [false, true],
+      ))
+      case "div" => Some(defaultedCallSignature(
+        ["other", "scale", "mode"],
+        [false, false, true],
+      ))
+      case "toString" | "scale" | "toInt" =>
+        Some(requiredCallSignature([], false))
+      case _ => None
+    }
+  }
+  None
+}
+
+export function builtinReceiverCallSignature(
+  receiver: TypeValue,
+  name: string,
+  languageMode: string = "topaz-5.20",
+) -> Option<CallSignature> {
+  if languageMode == "topaz-5.21" {
+    if receiver.name == "int" {
+      if name == "and" || name == "or" || name == "xor" { return Some(requiredCallSignature(["other"], false)) }
+      if name == "shift" { return Some(requiredCallSignature(["count"], false)) }
+      if name == "toBigInt" || name == "toDecimal" { return Some(requiredCallSignature([], false)) }
+    }
+    if receiver.name == "string" && name == "encodeUtf8" { return Some(requiredCallSignature([], false)) }
+    if receiver.kind == "constructor" && (receiver.name == "Set" || receiver.name == "Range") {
+      if name == "map" || name == "filter" { return Some(requiredCallSignature(["f"], false)) }
+      if name == "reduce" { return Some(requiredCallSignature(["initial", "f"], false)) }
+    }
+    if receiver.kind == "constructor" && receiver.name == "Result" {
+      if name == "mapErr" { return Some(requiredCallSignature(["f"], false)) }
+      if name == "unwrapOr" { return Some(requiredCallSignature(["default"], false)) }
+    }
+    if receiver.kind == "constructor" && receiver.name == "Array" && receiver.arguments.length == 1 && stringElementType(receiver.arguments[0]) {
+      if name == "hasFlag" || name == "option" || name == "options" { return Some(requiredCallSignature(["name"], false)) }
+      if name == "positionals" { return Some(requiredCallSignature([], false)) }
+    }
+    if receiver.kind == "bytes" {
+      if name == "concat" { return Some(requiredCallSignature(["b"], false)) }
+      if name == "hmacSha256" { return Some(requiredCallSignature(["message"], false)) }
+      if name == "zstdCompress" { return Some(defaultedCallSignature(["level"], [true])) }
+      if name == "sha256" || name == "sha512" || name == "crc32" || name == "gzipCompress" || name == "gzipDecompress" || name == "deflateCompress" || name == "deflateFixedCompress" || name == "zlibFixedCompress" || name == "reedSolomon255223Protect" || name == "deflateDecompress" || name == "zstdDecompress" { return Some(requiredCallSignature([], false)) }
+    }
+    if (receiver.kind == "json-value" && name == "decode") || (receiver.kind == "toml-value" && name == "toJson") { return Some(requiredCallSignature([], false)) }
+    if lengthUnit(receiver) != "" {return if name == "resolve" {Some(requiredCallSignature(["fontSize"],false))} else {Some(requiredCallSignature([],false))}}
+    if receiver.name == "float" {
+      if name == "atMost" || name == "atLeast" { return Some(requiredCallSignature(["b"], false)) }
+      if name == "trunc" || name == "floor" || name == "ceil" || name == "round" || name == "sqrt" || name == "abs" || name == "sin" || name == "cos" || name == "tan" || name == "isNaN" || name == "isFinite" { return Some(requiredCallSignature([], false)) }
+    }
+    if receiver.name == "int" && (name == "toFloat" || name == "toCodePoint") { return Some(requiredCallSignature([], false)) }
+    if receiver.name == "string" {
+      if name == "parseFloat" || name == "toInt" { return Some(requiredCallSignature([], false)) }
+      if name == "toIntRadix" { return Some(requiredCallSignature(["radix"], false)) }
+    }
+  }
+  if receiver.kind == "union" {
+    for member in receiver.members {
+      match builtinReceiverCallSignature(member, name, languageMode) {
+        case Some(found) => return Some(found)
+        case None => ()
+      }
+    }
+    return None
+  }
+  match containerReceiverCallSignature(receiver, name) {
+    case Some(found) => return Some(found)
+    case None => ()
+  }
+  match scalarReceiverCallSignature(receiver, name) {
+    case Some(found) => return Some(found)
+    case None => ()
+  }
+  runtimeReceiverCallSignature(receiver, name)
+}
+
+
+export function staticBuiltinDataCallSignature(namespace: string, name: string) -> Option<CallSignature> {
+  match builtinNamespaceFamily(namespace) {
+    case "collection" => collectionStaticCallSignature(namespace, name)
+    case "numeric-binary" => numericBinaryStaticCallSignature(namespace, name)
+    case "host" => hostStaticCallSignature(namespace, name)
+    case "structured-data" => structuredDataStaticCallSignature(namespace, name)
+    case "scalar" => scalarTestStaticCallSignature(namespace, name)
+    case _ => None
+  }
+}

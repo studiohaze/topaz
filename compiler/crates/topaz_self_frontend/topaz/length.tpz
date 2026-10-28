@@ -1,0 +1,123 @@
+import literal { validDecimalLiteral }
+import types { SyntaxNode }
+// R17 compiler numeric owner. Exact integers/rationals use the existing BigInt
+// runtime. This is shared by K literal formation, constant folding and emission.
+export record LengthGrid { unit: string, ticks: int }
+const OVERFLOW = "Length result is not representable"
+const ZERO = "Length division by zero"
+export function unitName(suffix: string) -> string {
+  match suffix { case "pt" => "Pt"; case "mm" => "Mm"; case "cm" => "Cm"; case "in" => "In"; case "em" => "Em"; case _ => "" }
+}
+function bi(n: int) -> BigInt { n.toBigInt() }
+function abs(n: BigInt) -> BigInt { if n < bi(0) { -n } else { n } }
+function powerTwo(n: int) -> BigInt {
+  let mut value = bi(1)
+  let mut i = 0
+  while i < n { value = value * bi(2); i += 1 }
+  value
+}
+export function roundFraction(n: BigInt, d: BigInt) -> Result<int, string> {
+  if d == bi(0) { return Err(ZERO) }
+  let negative = (n < bi(0)) != (d < bi(0))
+  let numerator = abs(n)
+  let denominator = abs(d)
+  let mut q = numerator.div(denominator)?
+  let r = numerator.mod(denominator)?
+  if r * bi(2) > denominator || (r * bi(2) == denominator && q.mod(bi(2))? != bi(0)) { q = q + bi(1) }
+  let signed = if negative { -q } else { q }
+  match signed.toInt() { case Some(value) => Ok(value); case None => Err(OVERFLOW) }
+}
+function digit(b: int) -> bool { b >= 48 && b <= 57 }
+export function validLiteral(spelling: string) -> bool {
+  let bytes = spelling.encodeUtf8()
+  if bytes.length() < 3 { return false }
+  let suffix = match bytes.slice(bytes.length()-2, bytes.length()).decodeUtf8() { case Ok(s) => s; case Err(_) => return false }
+  if unitName(suffix) == "" { return false }
+  let number = match bytes.slice(0,bytes.length()-2).decodeUtf8() { case Ok(s) => s; case Err(_) => return false }
+  validDecimalLiteral(number)
+}
+
+export function decodeLength(spelling: string, negative: bool) -> Result<LengthGrid, string> {
+  if !validLiteral(spelling) { return Err("malformed Length literal") }
+  let size = spelling.encodeUtf8().length()
+  let number = spelling.slice(0, size - 2).replace("_", "")
+  let unit = unitName(spelling.slice(size - 2, size))
+  let mut magnitude = bi(0)
+  let mut denominator = bi(1)
+  let mut fraction = false
+  for b in number.encodeUtf8().toArray() {
+    if b == 46 { fraction = true } else {
+      magnitude = magnitude * bi(10) + bi(b - 48)
+      if fraction { denominator = denominator * bi(10) }
+    }
+  }
+  let multiplier = match unit { case "In" => 4718592; case "Mm" => 23592960; case "Cm" => 235929600; case _ => 65536 }
+  if unit == "Mm" || unit == "Cm" { denominator = denominator * bi(127) }
+  let signed = if negative { -magnitude } else { magnitude }
+  Ok(LengthGrid { unit: unit, ticks: roundFraction(signed * bi(multiplier), denominator)? })
+}
+export function lengthFloatMultiply(ticks: int, scalar: float) -> Result<int, string> {
+  if !scalar.isFinite() { return Err(OVERFLOW) }
+  if scalar == 0.0 || ticks == 0 { return Ok(0) }
+  let mut value = scalar.abs()
+  let mut exponent = 0
+  // Powers of two are exact, including the subnormal-to-normal transition.
+  while value < 1.0 { value = value * 2.0; exponent -= 1 }
+  while value >= 2.0 { value = value / 2.0; exponent += 1 }
+  let mantissa = value * 4503599627370496.0
+  let high = (mantissa / 4294967296.0).floor().toFloat()
+  let low = mantissa - high * 4294967296.0
+  let highInt = match "{high}".replace(".0", "").toInt() { case Some(n) => n; case None => return Err(OVERFLOW) }
+  let lowInt = match "{low}".replace(".0", "").toInt() { case Some(n) => n; case None => return Err(OVERFLOW) }
+  let significand = bi(highInt) * bi(4294967296) + bi(lowInt)
+  let mut numerator = bi(ticks) * significand
+  if scalar < 0.0 { numerator = -numerator }
+  let shift = exponent - 52
+  if shift >= 0 { roundFraction(numerator * powerTwo(shift), bi(1)) } else { roundFraction(numerator, powerTwo(-shift)) }
+}
+export function lengthRatio(left: int, right: int) -> Result<float, string> {
+  if right == 0 { return Err(ZERO) }
+  if left == 0 { return Ok(if right < 0 { -0.0 } else { 0.0 }) }
+  let mut n = abs(bi(left))
+  let mut d = abs(bi(right))
+  let mut exponent = 0
+  while n < d { n = n * bi(2); exponent -= 1 }
+  while n >= d * bi(2) { d = d * bi(2); exponent += 1 }
+  let significand = roundFraction(n * powerTwo(52), d)?
+  let mut result = significand.toFloat()
+  let shift = exponent - 52
+  let mut i = 0
+  while i < shift { result = result * 2.0; i += 1 }
+  while i > shift { result = result / 2.0; i -= 1 }
+  Ok(if (left < 0) != (right < 0) { -result } else { result })
+}
+export function lengthResolve(ticks: int, font: int) -> Result<int, string> {
+  if font <= 0 { return Err("Length.resolve font size must be positive") }
+  roundFraction(bi(ticks) * bi(font), bi(65536))
+}
+export function fromMilliPoints(value: int) -> Result<int, string> { roundFraction(bi(value) * bi(65536), bi(1000)) }
+export function toMilliPoints(value: int) -> Result<int, string> { roundFraction(bi(value) * bi(1000), bi(65536)) }
+
+export record LengthLiteralInput { spelling: string, negative: bool }
+function operandOf(node: SyntaxNode) -> Option<SyntaxNode> {
+  for value in node.children { if value.field == "operand" { return Some(value) } }
+  None
+}
+function operatorOf(node: SyntaxNode) -> string {
+  for value in node.attributes { if value.name == "operator" { return value.value } }
+  ""
+}
+export function signedLengthInput(node: SyntaxNode, source: Bytes) -> Option<LengthLiteralInput> {
+  let mut value = node
+  while value.kind == "expression/parenthesized" {
+    value = match operandOf(value) {case Some(v)=>v;case None=>return None}
+  }
+  let negative = value.kind == "expression/unary" && operatorOf(value) == "minus"
+  if negative {
+    value = match operandOf(value) {case Some(v)=>v;case None=>return None}
+    while value.kind == "expression/parenthesized" { value = match operandOf(value) {case Some(v)=>v;case None=>return None} }
+  }
+  if value.kind != "expression/length" { return None }
+  let spelling = match source.slice(value.lo,value.hi).decodeUtf8() {case Ok(v)=>v;case Err(_)=>return None}
+  Some(LengthLiteralInput {spelling:spelling,negative:negative})
+}

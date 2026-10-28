@@ -1,0 +1,26 @@
+Topaz component licensing (releases from 5.21.0)
+Copyright 2025-2026 Studio Haze Inc.
+
+LICENSE contains the Apache License, Version 2.0 text. Its grant applies to
+company-authorized public source components identified by SOURCE-COMPONENTS.json
+in each published source snapshot: the Topaz-authored compiler, public standard
+library and tools, specifications, conformance inputs and examples. The exact
+revision and per-file license/origin inventory accompany each snapshot.
+
+New company-owned Rust reference implementation originals are not included in
+new public source snapshots. This does not relicense previously published code.
+The Apache grants on v5.20.4 and earlier published Apache material remain in
+force, including recipients' rights to copy, modify and redistribute that code.
+A private path, file extension, or later modification does not by itself
+establish exclusive ownership or extinguish any earlier grant.
+
+Official executables from 5.21.0 carry BINARY-LICENSE.txt for company-owned
+binary material. Apache-licensed code and third-party components retain their
+respective licenses and required notices. The npm installer wrapper retains
+Apache-2.0; its separately downloaded executable has component-specific terms.
+Generated application output retains GENERATED-OUTPUT-NOTICE.txt and its runtime
+and third-party licenses. This policy grants no rights in third-party material
+beyond those granted by its copyright holders.
+
+The complete v5.20.4 archive is the Last Public Rust Reference Compiler Release /
+Historical Source Snapshot. Its published bytes, licenses and notices are unchanged.

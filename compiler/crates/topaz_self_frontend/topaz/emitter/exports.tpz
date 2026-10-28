@@ -1,0 +1,122 @@
+import emitter.ir { Table, children, child, fieldOf, opAt, refusal }
+import stage1_types { Stage1Operation }
+
+// Target-neutral export facts of the entry module, projected from the IR.
+// This is the Topaz form of the export half of the Rust shell's adapter-fact
+// projection: value exports of the entry module sorted by name, with the
+// declared parameter names and defaults of exported functions. An export
+// that is not a function declaration carries no parameter names.
+export record ExportFact {
+  name: string,
+  namesKnown: bool,
+  parameterNames: Array<string>,
+  parameterDefaults: Array<bool>,
+}
+
+function signatureParameterCount(declaration: Stage1Operation) -> int {
+  let mut count = 0
+  for atom in declaration.declaredTypeAtoms {
+    if atom.parent == 0 && atom.field == "parameters" {
+      count += 1
+    }
+  }
+  count
+}
+
+function functionFact(table: Table, declaration: Stage1Operation) -> Result<ExportFact, string> {
+  let mut names: Array<string> = []
+  let mut defaults: Array<bool> = []
+  for parameter in children(table, declaration, "parameters")? {
+    names.push(parameter.bindingName)
+    defaults.push(false)
+  }
+  // A default expression hangs off the function with the parameter's path.
+  let mut position = 0
+  for label in declaration.operandLabels {
+    if fieldOf(label) == "default" {
+      let mut index = 0
+      while index < names.length {
+        if label.contains("/parameters:{index}/") {
+          defaults[index] = true
+        }
+        index += 1
+      }
+    }
+    position += 1
+  }
+  if declaration.declaredTypeAtoms.length == 0 || declaration.declaredTypeAtoms[0].kind != "function" {
+    return Err(refusal("export {declaration.bindingName} is declared as a function but has a non-function type", declaration))
+  }
+  if signatureParameterCount(declaration) != names.length {
+    return Err(refusal("export {declaration.bindingName} parameter facts disagree with its checked type", declaration))
+  }
+  Ok(ExportFact {
+    name: declaration.bindingName,
+    namesKnown: true,
+    parameterNames: names,
+    parameterDefaults: defaults,
+  })
+}
+
+function insertSorted(facts: Array<ExportFact>, fact: ExportFact) -> Array<ExportFact> {
+  let mut out: Array<ExportFact> = []
+  let mut placed = false
+  for existing in facts {
+    if !placed && fact.name < existing.name {
+      out.push(fact)
+      placed = true
+    }
+    out.push(existing)
+  }
+  if !placed {
+    out.push(fact)
+  }
+  out
+}
+
+export function projectExports(table: Table, entryRoot: Stage1Operation) -> Result<Array<ExportFact>, string> {
+  let mut facts: Array<ExportFact> = []
+  for id in entryRoot.operands {
+    let item = opAt(table, id)?
+    if item.kind != "export" {
+      continue
+    }
+    let declaration = child(table, item, "item")?
+    let fact = match declaration.kind {
+      case "function" => Some(functionFact(table, declaration)?)
+      case "let" => {
+        let pattern = child(table, declaration, "pattern")?
+        Some(ExportFact {
+          name: pattern.bindingName,
+          namesKnown: false,
+          parameterNames: [],
+          parameterDefaults: [],
+        })
+      }
+      case "constant" => Some(ExportFact {
+        name: declaration.bindingName,
+        namesKnown: false,
+        parameterNames: [],
+        parameterDefaults: [],
+      })
+      case _ => None
+    }
+    match fact {
+      case Some(found) => {
+        facts = insertSorted(facts, found)
+      }
+      case None => ()
+    }
+  }
+  Ok(facts)
+}
+
+// The one entry-point judgement: `export function main` in the entry module.
+export function hasExplicitMain(facts: Array<ExportFact>) -> bool {
+  for fact in facts {
+    if fact.namesKnown && fact.name == "main" {
+      return true
+    }
+  }
+  false
+}

@@ -1,0 +1,969 @@
+{
+  "schema": "topaz.public-source-components/v1",
+  "effectiveFrom": "v5.21.0",
+  "authority": "Owner implementation instruction 2026-10-23; company-authorized Topaz source scopes. Existing published grants remain effective.",
+  "retentionFrom": "v5.20.4",
+  "historicalReference": {
+    "version": "v5.20.4",
+    "archive": "topaz-stage0-source-v5.20.4.tar.gz",
+    "sha256": "09e3bbe880cb3e8d05984576cb768e090f2f38ec96d866a62db96cf0a37a6b8b"
+  },
+  "components": [
+    {
+      "id": "topaz-self-host",
+      "sources": [
+        "compiler/crates/topaz_self_frontend/topaz/**"
+      ],
+      "extensions": [
+        ".tpz",
+        ".toml"
+      ],
+      "license": "Apache-2.0"
+    },
+    {
+      "id": "topaz-standard-library-tools",
+      "sources": [
+        "compiler/crates/topaz_rt/std/**",
+        "compiler/tools/**",
+        "compiler/contracts/lispex-application/v1/std.lispex.tpz"
+      ],
+      "extensions": [
+        ".tpz"
+      ],
+      "license": "Apache-2.0"
+    },
+    {
+      "id": "topaz-spec-conformance-examples",
+      "sources": [
+        "compiler/spec/**",
+        "compiler/corpus/**",
+        "compiler/fixtures/**",
+        "examples/**",
+        "docs/samples/**",
+        "docs/topaz-v5.19/*.md"
+      ],
+      "extensions": [
+        ".tpz",
+        ".toml",
+        ".md",
+        ".json",
+        ".stdout",
+        ".stderr",
+        ".mdx",
+        ".lock",
+        ".lspx",
+        ".txt",
+        ".TPZ",
+        ".files",
+        ".files-in",
+        ".defer",
+        ".args",
+        ".stdin",
+        ".jsonl"
+      ],
+      "license": "Apache-2.0"
+    },
+    {
+      "id": "topaz-conformance-fixtures",
+      "sources": [
+        "compiler/crates/topaz_difftest/fixtures/**",
+        "compiler/crates/topaz_cli/tests/fixtures/**",
+        "compiler/crates/topaz_self_frontend/tests/fixtures/**"
+      ],
+      "extensions": [
+        ".tpz",
+        ".toml",
+        ".stdout",
+        ".stderr"
+      ],
+      "license": "Apache-2.0"
+    },
+    {
+      "id": "topaz-benchmark-application-authoring-inputs",
+      "sources": [
+        "compiler/scripts/bench/fixtures/**",
+        "compiler/court/installed-application/**",
+        "compiler/docs/evolution/agent-authoring-pilot/references/topaz/**",
+        "compiler/docs/evolution/agent-authoring-pilot/seeds/topaz/**",
+        "compiler/docs/evolution/agent-authoring-pilot/s4-inputs/h1-variant-seeds/topaz/**"
+      ],
+      "extensions": [
+        ".tpz"
+      ],
+      "license": "Apache-2.0"
+    },
+    {
+      "id": "topaz-conformance-entry-metadata",
+      "sources": [
+        "compiler/corpus/**/ENTRY",
+        "compiler/corpus/**/ROOT"
+      ],
+      "extensions": [
+        ""
+      ],
+      "license": "Apache-2.0"
+    },
+    {
+      "id": "topaz-example-support",
+      "sources": [
+        "examples/**"
+      ],
+      "extensions": [
+        ".csv",
+        ".sh",
+        ".py"
+      ],
+      "license": "Apache-2.0"
+    },
+    {
+      "id": "topaz-locked-rule-fixtures",
+      "sources": [
+        "compiler/corpus/lispex-decision-application/bounded-application-v1/.topaz/lispex/rules/*.lpxembed",
+        "docs/samples/guides/lispex-application/.topaz/lispex/rules/*.lpxfull"
+      ],
+      "extensions": [
+        ".lpxembed",
+        ".lpxfull"
+      ],
+      "license": "Apache-2.0"
+    }
+  ],
+  "files": [
+    {
+      "source": "compiler/docs/evolution/V5.6-STDLIB-RUNTIME-INVENTORY.json",
+      "id": "spec-linked-stdlib-inventory",
+      "license": "Apache-2.0"
+    },
+    {
+      "source": "compiler/corpus/v5_4/extern/extern-replay-package/artifacts/host-math.wasm",
+      "id": "extern-replay-fixture-data",
+      "license": "Apache-2.0"
+    },
+    {
+      "source": "LICENSE",
+      "destination": "LICENSE",
+      "id": "public-license",
+      "license": "Apache-2.0"
+    },
+    {
+      "source": "LICENSE-COMPONENTS.txt",
+      "destination": "LICENSE-COMPONENTS.txt",
+      "id": "component-scope",
+      "license": "Apache-2.0"
+    },
+    {
+      "source": "BINARY-LICENSE.txt",
+      "destination": "BINARY-LICENSE.txt",
+      "id": "binary-terms",
+      "license": "LicenseRef-Topaz-Binary"
+    },
+    {
+      "source": "NOTICE",
+      "destination": "NOTICE",
+      "id": "notices",
+      "license": "Apache-2.0"
+    },
+    {
+      "source": "THIRD-PARTY-NOTICES.md",
+      "destination": "THIRD-PARTY-NOTICES.md",
+      "id": "third-party-notices",
+      "license": "Apache-2.0"
+    },
+    {
+      "source": "compiler/contracts/public-source-policy/v1/components.json",
+      "destination": "SOURCE-COMPONENTS.json",
+      "id": "component-map",
+      "license": "Apache-2.0"
+    },
+    {
+      "source": "compiler/contracts/public-source-policy/v1/README.md",
+      "destination": "README.md",
+      "id": "public-readme",
+      "license": "Apache-2.0"
+    },
+    {
+      "source": "compiler/licenses/THIRD-PARTY.md",
+      "destination": "THIRD-PARTY-LICENSES.txt",
+      "id": "third-party-license-texts",
+      "license": "LicenseRef-Third-Party-Notices"
+    }
+  ],
+  "provenance": [
+    {
+      "id": "unicode-derived-tables",
+      "source": "compiler/crates/topaz_self_frontend/topaz/unicode_tables.tpz",
+      "origin": "third-party",
+      "sha256": "16293a12c70d71705abbf76523c0667497c52a4f30360a794e2e80995aceae3c",
+      "license": "Apache-2.0 AND Unicode-3.0",
+      "evidence": "Generated table header identifies pinned UCD 16.0.0 under compiler/tools/unicode-gen/data; Unicode License v3 is reproduced in NOTICE. Company generator code and Unicode data rights coexist."
+    }
+  ],
+  "provenanceAdmission": "Rust is admitted by exact path, SHA-256, origin (public-generated, third-party, previously-published), license and evidence. No implicit generated/runtime Rust admission.",
+  "excludedComponents": [
+    {
+      "sources": [
+        "compiler/lit/**"
+      ],
+      "reason": "Retired LIT implementation, H0 rehearsal and frozen installed copies are historical related-surface evidence, not current public compiler/application inputs. Existing published history and grants remain.",
+      "evidence": "compiler/lit/README.md; current integration program LIL/LIT retirement and version policy"
+    },
+    {
+      "sources": [
+        "compiler/lispex-topaz-vm/**"
+      ],
+      "reason": "Separate branch-local F5 provider/reference package; current application source uses std.lispex and the embedded evaluator, not this provider. Not represented as current release runtime. Existing published grants remain.",
+      "evidence": "compiler/lispex-topaz-vm/README.md; compiler/crates/topaz_lispex_product/src/lib.rs"
+    }
+  ],
+  "privateOriginals": {
+    "paths": [
+      "compiler/crates/**",
+      "compiler/tools/**"
+    ],
+    "meaning": "New company-owned Rust originals are not disclosed. Previously Apache-licensed originals and third-party rights are not revoked or reclassified."
+  },
+  "snapshot": {
+    "version": "v5.21.0",
+    "compilerSourceRevision": "fb4c370b18d7c076eceb822261e14affd8869811",
+    "documentationSourceRevision": "3d11471d1036b1af4ab89ef286beecfe8e09f938",
+    "sourceFiles": [
+      {
+        "source": "BINARY-LICENSE.txt",
+        "destination": "BINARY-LICENSE.txt",
+        "mode": "100644",
+        "bytes": 1800,
+        "sha256": "1169c56ad2593a28746702ad75e1fe243379f1b25dc5e3006312edb2220f71ae",
+        "component": "binary-terms",
+        "origin": "authorized-public-source",
+        "license": "LicenseRef-Topaz-Binary",
+        "sourceRevision": "fb4c370b18d7c076eceb822261e14affd8869811"
+      },
+      {
+        "source": "LICENSE",
+        "destination": "LICENSE",
+        "mode": "100644",
+        "bytes": 9116,
+        "sha256": "7a1b2d2865fe1ca0a4ffe11a0ee99026c0ae634b6e9c56dca15056a85a0290c3",
+        "component": "public-license",
+        "origin": "authorized-public-source",
+        "license": "Apache-2.0",
+        "sourceRevision": "fb4c370b18d7c076eceb822261e14affd8869811"
+      },
+      {
+        "source": "LICENSE-COMPONENTS.txt",
+        "destination": "LICENSE-COMPONENTS.txt",
+        "mode": "100644",
+        "bytes": 1611,
+        "sha256": "3e96d7cc9a8764b7ba78a7fbecf6a776d2ea7d3fdd41da7d33f3c4be1485bbbc",
+        "component": "component-scope",
+        "origin": "authorized-public-source",
+        "license": "Apache-2.0",
+        "sourceRevision": "fb4c370b18d7c076eceb822261e14affd8869811"
+      },
+      {
+        "source": "compiler/contracts/lispex-application/v1/std.lispex.tpz",
+        "destination": "compiler/contracts/lispex-application/v1/std.lispex.tpz",
+        "mode": "100644",
+        "bytes": 4472,
+        "sha256": "c8b3a162f69b116bb0742e535e427f919b0651b8487cd9c4f57d699fc05a9eae",
+        "component": "topaz-standard-library-tools",
+        "origin": "authorized-public-source",
+        "license": "Apache-2.0",
+        "sourceRevision": "fb4c370b18d7c076eceb822261e14affd8869811"
+      },
+      {
+        "source": "compiler/crates/topaz_self_frontend/topaz/checker.tpz",
+        "destination": "compiler/crates/topaz_self_frontend/topaz/checker.tpz",
+        "mode": "100644",
+        "bytes": 10171,
+        "sha256": "e39ee31cd9d75f98f8000f3b58cb80d7659f63c3f1e56f49f56752facbc8b959",
+        "component": "topaz-self-host",
+        "origin": "authorized-public-source",
+        "license": "Apache-2.0",
+        "sourceRevision": "fb4c370b18d7c076eceb822261e14affd8869811"
+      },
+      {
+        "source": "compiler/crates/topaz_self_frontend/topaz/checker/bodies_captures.tpz",
+        "destination": "compiler/crates/topaz_self_frontend/topaz/checker/bodies_captures.tpz",
+        "mode": "100644",
+        "bytes": 32799,
+        "sha256": "b348cdc1f801c68e6f50a91b2dfe672e359090658ac9c665802d2e093351cf98",
+        "component": "topaz-self-host",
+        "origin": "authorized-public-source",
+        "license": "Apache-2.0",
+        "sourceRevision": "fb4c370b18d7c076eceb822261e14affd8869811"
+      },
+      {
+        "source": "compiler/crates/topaz_self_frontend/topaz/checker/builtin_signatures.tpz",
+        "destination": "compiler/crates/topaz_self_frontend/topaz/checker/builtin_signatures.tpz",
+        "mode": "100644",
+        "bytes": 19672,
+        "sha256": "d39c56a894a273ca893f9d44a1b49524479515010e8298f01ea597887982d8ad",
+        "component": "topaz-self-host",
+        "origin": "authorized-public-source",
+        "license": "Apache-2.0",
+        "sourceRevision": "fb4c370b18d7c076eceb822261e14affd8869811"
+      },
+      {
+        "source": "compiler/crates/topaz_self_frontend/topaz/checker/call_complete.tpz",
+        "destination": "compiler/crates/topaz_self_frontend/topaz/checker/call_complete.tpz",
+        "mode": "100644",
+        "bytes": 59927,
+        "sha256": "6897a754962851fd1fd5c5655c03e2e89657431c125f60008b283e635409d1af",
+        "component": "topaz-self-host",
+        "origin": "authorized-public-source",
+        "license": "Apache-2.0",
+        "sourceRevision": "fb4c370b18d7c076eceb822261e14affd8869811"
+      },
+      {
+        "source": "compiler/crates/topaz_self_frontend/topaz/checker/call_facts.tpz",
+        "destination": "compiler/crates/topaz_self_frontend/topaz/checker/call_facts.tpz",
+        "mode": "100644",
+        "bytes": 61100,
+        "sha256": "23e815d42e6d8a570faeab0b89ca21cf68d144cb4a7463ec02d8cc967c8256ab",
+        "component": "topaz-self-host",
+        "origin": "authorized-public-source",
+        "license": "Apache-2.0",
+        "sourceRevision": "fb4c370b18d7c076eceb822261e14affd8869811"
+      },
+      {
+        "source": "compiler/crates/topaz_self_frontend/topaz/checker/call_plan.tpz",
+        "destination": "compiler/crates/topaz_self_frontend/topaz/checker/call_plan.tpz",
+        "mode": "100644",
+        "bytes": 31147,
+        "sha256": "182c9ffaebd1d63208a3a82e8d1d208029076991f64546f203b141286548af9a",
+        "component": "topaz-self-host",
+        "origin": "authorized-public-source",
+        "license": "Apache-2.0",
+        "sourceRevision": "fb4c370b18d7c076eceb822261e14affd8869811"
+      },
+      {
+        "source": "compiler/crates/topaz_self_frontend/topaz/checker/diagnostics_derives.tpz",
+        "destination": "compiler/crates/topaz_self_frontend/topaz/checker/diagnostics_derives.tpz",
+        "mode": "100644",
+        "bytes": 10200,
+        "sha256": "17945ea7bf5de9f1f8544ddcce963d16e98f5ddc181ea600168d97009c83ad8e",
+        "component": "topaz-self-host",
+        "origin": "authorized-public-source",
+        "license": "Apache-2.0",
+        "sourceRevision": "fb4c370b18d7c076eceb822261e14affd8869811"
+      },
+      {
+        "source": "compiler/crates/topaz_self_frontend/topaz/checker/expression_control.tpz",
+        "destination": "compiler/crates/topaz_self_frontend/topaz/checker/expression_control.tpz",
+        "mode": "100644",
+        "bytes": 49653,
+        "sha256": "57121d2c9b1ee2a3cdbf091fca437a45c6508aa02a54cdbbbcb432a26fb020dd",
+        "component": "topaz-self-host",
+        "origin": "authorized-public-source",
+        "license": "Apache-2.0",
+        "sourceRevision": "fb4c370b18d7c076eceb822261e14affd8869811"
+      },
+      {
+        "source": "compiler/crates/topaz_self_frontend/topaz/checker/expression_core.tpz",
+        "destination": "compiler/crates/topaz_self_frontend/topaz/checker/expression_core.tpz",
+        "mode": "100644",
+        "bytes": 62608,
+        "sha256": "e1b896b21317af553a9b406285783f0fd2b1f8ea82beffaebd1ca658909a6e22",
+        "component": "topaz-self-host",
+        "origin": "authorized-public-source",
+        "license": "Apache-2.0",
+        "sourceRevision": "fb4c370b18d7c076eceb822261e14affd8869811"
+      },
+      {
+        "source": "compiler/crates/topaz_self_frontend/topaz/checker/members_capabilities.tpz",
+        "destination": "compiler/crates/topaz_self_frontend/topaz/checker/members_capabilities.tpz",
+        "mode": "100644",
+        "bytes": 68666,
+        "sha256": "f84038b3e8161b108cf418f6ae1965350cc8676b6792a488ef1902143a03c518",
+        "component": "topaz-self-host",
+        "origin": "authorized-public-source",
+        "license": "Apache-2.0",
+        "sourceRevision": "fb4c370b18d7c076eceb822261e14affd8869811"
+      },
+      {
+        "source": "compiler/crates/topaz_self_frontend/topaz/checker/model.tpz",
+        "destination": "compiler/crates/topaz_self_frontend/topaz/checker/model.tpz",
+        "mode": "100644",
+        "bytes": 16694,
+        "sha256": "82c47a23296656fba5242dc4c4010b8c883fc406953c95188ee7c5370a117dab",
+        "component": "topaz-self-host",
+        "origin": "authorized-public-source",
+        "license": "Apache-2.0",
+        "sourceRevision": "fb4c370b18d7c076eceb822261e14affd8869811"
+      },
+      {
+        "source": "compiler/crates/topaz_self_frontend/topaz/checker/nominals.tpz",
+        "destination": "compiler/crates/topaz_self_frontend/topaz/checker/nominals.tpz",
+        "mode": "100644",
+        "bytes": 34798,
+        "sha256": "c0893102880f7597e6e27d77456435e23caea27fb800b21b68f4137f01a1cae7",
+        "component": "topaz-self-host",
+        "origin": "authorized-public-source",
+        "license": "Apache-2.0",
+        "sourceRevision": "fb4c370b18d7c076eceb822261e14affd8869811"
+      },
+      {
+        "source": "compiler/crates/topaz_self_frontend/topaz/checker/patterns.tpz",
+        "destination": "compiler/crates/topaz_self_frontend/topaz/checker/patterns.tpz",
+        "mode": "100644",
+        "bytes": 47023,
+        "sha256": "cb0e92d481ad5490a1b3dc9a8456ba6e67764abbe24516b943173b34fc0bc614",
+        "component": "topaz-self-host",
+        "origin": "authorized-public-source",
+        "license": "Apache-2.0",
+        "sourceRevision": "fb4c370b18d7c076eceb822261e14affd8869811"
+      },
+      {
+        "source": "compiler/crates/topaz_self_frontend/topaz/checker/protocols_methods.tpz",
+        "destination": "compiler/crates/topaz_self_frontend/topaz/checker/protocols_methods.tpz",
+        "mode": "100644",
+        "bytes": 43868,
+        "sha256": "7786cf11b77feea419d3b324080efce5887a385d44f903d119731f5e6d95f4d1",
+        "component": "topaz-self-host",
+        "origin": "authorized-public-source",
+        "license": "Apache-2.0",
+        "sourceRevision": "fb4c370b18d7c076eceb822261e14affd8869811"
+      },
+      {
+        "source": "compiler/crates/topaz_self_frontend/topaz/checker/statements.tpz",
+        "destination": "compiler/crates/topaz_self_frontend/topaz/checker/statements.tpz",
+        "mode": "100644",
+        "bytes": 64773,
+        "sha256": "b7ccab7bc1fe4f4d19d935df51e01f20ef9c9446617f772613c755d21320f46e",
+        "component": "topaz-self-host",
+        "origin": "authorized-public-source",
+        "license": "Apache-2.0",
+        "sourceRevision": "fb4c370b18d7c076eceb822261e14affd8869811"
+      },
+      {
+        "source": "compiler/crates/topaz_self_frontend/topaz/checker/syntax_index.tpz",
+        "destination": "compiler/crates/topaz_self_frontend/topaz/checker/syntax_index.tpz",
+        "mode": "100644",
+        "bytes": 25908,
+        "sha256": "d035c48f643e8c4a21ddc3194a9b5418a2642e30c6e9766a144e41fa8fb84984",
+        "component": "topaz-self-host",
+        "origin": "authorized-public-source",
+        "license": "Apache-2.0",
+        "sourceRevision": "fb4c370b18d7c076eceb822261e14affd8869811"
+      },
+      {
+        "source": "compiler/crates/topaz_self_frontend/topaz/checker/type_algebra.tpz",
+        "destination": "compiler/crates/topaz_self_frontend/topaz/checker/type_algebra.tpz",
+        "mode": "100644",
+        "bytes": 32065,
+        "sha256": "934d8b2f031b5dd1bdd84082f33481994ddc924ee79783255cb43959c4f37aff",
+        "component": "topaz-self-host",
+        "origin": "authorized-public-source",
+        "license": "Apache-2.0",
+        "sourceRevision": "fb4c370b18d7c076eceb822261e14affd8869811"
+      },
+      {
+        "source": "compiler/crates/topaz_self_frontend/topaz/checker_types.tpz",
+        "destination": "compiler/crates/topaz_self_frontend/topaz/checker_types.tpz",
+        "mode": "100644",
+        "bytes": 322,
+        "sha256": "6e710e4116cd6b71342d0444d587f335c4c720d4649ab66444eeeb1be34fc171",
+        "component": "topaz-self-host",
+        "origin": "authorized-public-source",
+        "license": "Apache-2.0",
+        "sourceRevision": "fb4c370b18d7c076eceb822261e14affd8869811"
+      },
+      {
+        "source": "compiler/crates/topaz_self_frontend/topaz/common/standard_migration.tpz",
+        "destination": "compiler/crates/topaz_self_frontend/topaz/common/standard_migration.tpz",
+        "mode": "100644",
+        "bytes": 5164,
+        "sha256": "727fda6521bb765dd9e94eb50bc297ea554583c068b0f4d0e0681860f9d07440",
+        "component": "topaz-self-host",
+        "origin": "authorized-public-source",
+        "license": "Apache-2.0",
+        "sourceRevision": "fb4c370b18d7c076eceb822261e14affd8869811"
+      },
+      {
+        "source": "compiler/crates/topaz_self_frontend/topaz/emitter.tpz",
+        "destination": "compiler/crates/topaz_self_frontend/topaz/emitter.tpz",
+        "mode": "100644",
+        "bytes": 8428,
+        "sha256": "37d2e97132610e92b0f6777b5d88dad151dbf1549265f7f73a7da40bcd636525",
+        "component": "topaz-self-host",
+        "origin": "authorized-public-source",
+        "license": "Apache-2.0",
+        "sourceRevision": "fb4c370b18d7c076eceb822261e14affd8869811"
+      },
+      {
+        "source": "compiler/crates/topaz_self_frontend/topaz/emitter/builtins.tpz",
+        "destination": "compiler/crates/topaz_self_frontend/topaz/emitter/builtins.tpz",
+        "mode": "100644",
+        "bytes": 18214,
+        "sha256": "e6f29e6cb9822a80359c8abf482a89a2c4f701ee023581813af5431c8e2ed377",
+        "component": "topaz-self-host",
+        "origin": "authorized-public-source",
+        "license": "Apache-2.0",
+        "sourceRevision": "fb4c370b18d7c076eceb822261e14affd8869811"
+      },
+      {
+        "source": "compiler/crates/topaz_self_frontend/topaz/emitter/emit.tpz",
+        "destination": "compiler/crates/topaz_self_frontend/topaz/emitter/emit.tpz",
+        "mode": "100644",
+        "bytes": 105979,
+        "sha256": "c2b9fb52e1267277782f26cf570668b2d892dab8a08fbbc65e2696ffd3fddd8b",
+        "component": "topaz-self-host",
+        "origin": "authorized-public-source",
+        "license": "Apache-2.0",
+        "sourceRevision": "fb4c370b18d7c076eceb822261e14affd8869811"
+      },
+      {
+        "source": "compiler/crates/topaz_self_frontend/topaz/emitter/exports.tpz",
+        "destination": "compiler/crates/topaz_self_frontend/topaz/emitter/exports.tpz",
+        "mode": "100644",
+        "bytes": 3721,
+        "sha256": "4ad549adba331dd178aa05570a129c07c7e010be3f64c505afc32eceed1865fd",
+        "component": "topaz-self-host",
+        "origin": "authorized-public-source",
+        "license": "Apache-2.0",
+        "sourceRevision": "fb4c370b18d7c076eceb822261e14affd8869811"
+      },
+      {
+        "source": "compiler/crates/topaz_self_frontend/topaz/emitter/ir.tpz",
+        "destination": "compiler/crates/topaz_self_frontend/topaz/emitter/ir.tpz",
+        "mode": "100644",
+        "bytes": 6565,
+        "sha256": "4616927187fa0e388f65bdab359e907166631c042f3dfe18bc5793c4f5dad754",
+        "component": "topaz-self-host",
+        "origin": "authorized-public-source",
+        "license": "Apache-2.0",
+        "sourceRevision": "fb4c370b18d7c076eceb822261e14affd8869811"
+      },
+      {
+        "source": "compiler/crates/topaz_self_frontend/topaz/emitter/module.tpz",
+        "destination": "compiler/crates/topaz_self_frontend/topaz/emitter/module.tpz",
+        "mode": "100644",
+        "bytes": 24146,
+        "sha256": "9fd0de926c17afdfb42dedccef2103fdb905292a9545c8d1e9327bada229d859",
+        "component": "topaz-self-host",
+        "origin": "authorized-public-source",
+        "license": "Apache-2.0",
+        "sourceRevision": "fb4c370b18d7c076eceb822261e14affd8869811"
+      },
+      {
+        "source": "compiler/crates/topaz_self_frontend/topaz/emitter/repr.tpz",
+        "destination": "compiler/crates/topaz_self_frontend/topaz/emitter/repr.tpz",
+        "mode": "100644",
+        "bytes": 7389,
+        "sha256": "634fff7a669bfb6896ce65b4024835f980589347bdf7a62faec43aa1abdad195",
+        "component": "topaz-self-host",
+        "origin": "authorized-public-source",
+        "license": "Apache-2.0",
+        "sourceRevision": "fb4c370b18d7c076eceb822261e14affd8869811"
+      },
+      {
+        "source": "compiler/crates/topaz_self_frontend/topaz/emitter/rust_text.tpz",
+        "destination": "compiler/crates/topaz_self_frontend/topaz/emitter/rust_text.tpz",
+        "mode": "100644",
+        "bytes": 865,
+        "sha256": "e9a9321e837a86b517b5fac136fd51712bd1a303b75a76714467744598b1867e",
+        "component": "topaz-self-host",
+        "origin": "authorized-public-source",
+        "license": "Apache-2.0",
+        "sourceRevision": "fb4c370b18d7c076eceb822261e14affd8869811"
+      },
+      {
+        "source": "compiler/crates/topaz_self_frontend/topaz/emitter/type_test.tpz",
+        "destination": "compiler/crates/topaz_self_frontend/topaz/emitter/type_test.tpz",
+        "mode": "100644",
+        "bytes": 14324,
+        "sha256": "d2d1f4cfefa0e2723152ca36c23fbcaab49cd23f2a3aaf5d14eae808860b0de0",
+        "component": "topaz-self-host",
+        "origin": "authorized-public-source",
+        "license": "Apache-2.0",
+        "sourceRevision": "fb4c370b18d7c076eceb822261e14affd8869811"
+      },
+      {
+        "source": "compiler/crates/topaz_self_frontend/topaz/layout.tpz",
+        "destination": "compiler/crates/topaz_self_frontend/topaz/layout.tpz",
+        "mode": "100644",
+        "bytes": 13597,
+        "sha256": "845743615e1d0629310897b57310c6a63bab7051bfaca2a9b5d250d5608a2339",
+        "component": "topaz-self-host",
+        "origin": "authorized-public-source",
+        "license": "Apache-2.0",
+        "sourceRevision": "fb4c370b18d7c076eceb822261e14affd8869811"
+      },
+      {
+        "source": "compiler/crates/topaz_self_frontend/topaz/length.tpz",
+        "destination": "compiler/crates/topaz_self_frontend/topaz/length.tpz",
+        "mode": "100644",
+        "bytes": 6185,
+        "sha256": "ae2e8615580c8f7512327e369e6a56575c4ad6ec0adcf30fa0fc577cb8c4a34a",
+        "component": "topaz-self-host",
+        "origin": "authorized-public-source",
+        "license": "Apache-2.0",
+        "sourceRevision": "fb4c370b18d7c076eceb822261e14affd8869811"
+      },
+      {
+        "source": "compiler/crates/topaz_self_frontend/topaz/literal.tpz",
+        "destination": "compiler/crates/topaz_self_frontend/topaz/literal.tpz",
+        "mode": "100644",
+        "bytes": 13291,
+        "sha256": "b3e52c414ce3c677c2103835fef948d29f25623ea2d7af912b8e44abe5f473a8",
+        "component": "topaz-self-host",
+        "origin": "authorized-public-source",
+        "license": "Apache-2.0",
+        "sourceRevision": "fb4c370b18d7c076eceb822261e14affd8869811"
+      },
+      {
+        "source": "compiler/crates/topaz_self_frontend/topaz/lowering.tpz",
+        "destination": "compiler/crates/topaz_self_frontend/topaz/lowering.tpz",
+        "mode": "100644",
+        "bytes": 91084,
+        "sha256": "577c8963ccbc07b38e5835e624cf0776798c8c41e6fa04a444c0ed4840628b8c",
+        "component": "topaz-self-host",
+        "origin": "authorized-public-source",
+        "license": "Apache-2.0",
+        "sourceRevision": "fb4c370b18d7c076eceb822261e14affd8869811"
+      },
+      {
+        "source": "compiler/crates/topaz_self_frontend/topaz/parser.tpz",
+        "destination": "compiler/crates/topaz_self_frontend/topaz/parser.tpz",
+        "mode": "100644",
+        "bytes": 2780,
+        "sha256": "948cd9458ba95d13fe967109a2b4f0a1836e2e9ccf625b20674568a13d0ef491",
+        "component": "topaz-self-host",
+        "origin": "authorized-public-source",
+        "license": "Apache-2.0",
+        "sourceRevision": "fb4c370b18d7c076eceb822261e14affd8869811"
+      },
+      {
+        "source": "compiler/crates/topaz_self_frontend/topaz/parser/core.tpz",
+        "destination": "compiler/crates/topaz_self_frontend/topaz/parser/core.tpz",
+        "mode": "100644",
+        "bytes": 11833,
+        "sha256": "83426c4e5670527cd4d0b1600159b34b6dd0991887080a164bb5e793059769d6",
+        "component": "topaz-self-host",
+        "origin": "authorized-public-source",
+        "license": "Apache-2.0",
+        "sourceRevision": "fb4c370b18d7c076eceb822261e14affd8869811"
+      },
+      {
+        "source": "compiler/crates/topaz_self_frontend/topaz/parser/declarations_modules.tpz",
+        "destination": "compiler/crates/topaz_self_frontend/topaz/parser/declarations_modules.tpz",
+        "mode": "100644",
+        "bytes": 37341,
+        "sha256": "153d92263f81f4699363d44e8dc10f41e5dbf5ae04548a60f8eed644a126dd56",
+        "component": "topaz-self-host",
+        "origin": "authorized-public-source",
+        "license": "Apache-2.0",
+        "sourceRevision": "fb4c370b18d7c076eceb822261e14affd8869811"
+      },
+      {
+        "source": "compiler/crates/topaz_self_frontend/topaz/parser/expressions.tpz",
+        "destination": "compiler/crates/topaz_self_frontend/topaz/parser/expressions.tpz",
+        "mode": "100644",
+        "bytes": 44406,
+        "sha256": "1c6d84f2b9361c3fd8d12dd8f173005be70d5b0bea264b910f5c47c35e7e7660",
+        "component": "topaz-self-host",
+        "origin": "authorized-public-source",
+        "license": "Apache-2.0",
+        "sourceRevision": "fb4c370b18d7c076eceb822261e14affd8869811"
+      },
+      {
+        "source": "compiler/crates/topaz_self_frontend/topaz/parser/types_patterns.tpz",
+        "destination": "compiler/crates/topaz_self_frontend/topaz/parser/types_patterns.tpz",
+        "mode": "100644",
+        "bytes": 16732,
+        "sha256": "5e836a97ae90bc3ad8b2256809ab7b530a7eaf027d168f6eae763bf6644ca047",
+        "component": "topaz-self-host",
+        "origin": "authorized-public-source",
+        "license": "Apache-2.0",
+        "sourceRevision": "fb4c370b18d7c076eceb822261e14affd8869811"
+      },
+      {
+        "source": "compiler/crates/topaz_self_frontend/topaz/profile.tpz",
+        "destination": "compiler/crates/topaz_self_frontend/topaz/profile.tpz",
+        "mode": "100644",
+        "bytes": 25220,
+        "sha256": "85a89e0c514a3d19a8eed35ba84b44c49e6632da9f573480fa0ab0d1de21eaa2",
+        "component": "topaz-self-host",
+        "origin": "authorized-public-source",
+        "license": "Apache-2.0",
+        "sourceRevision": "fb4c370b18d7c076eceb822261e14affd8869811"
+      },
+      {
+        "source": "compiler/crates/topaz_self_frontend/topaz/raw.tpz",
+        "destination": "compiler/crates/topaz_self_frontend/topaz/raw.tpz",
+        "mode": "100644",
+        "bytes": 22318,
+        "sha256": "70e0df5df63c3639269249ee08312633813ca7dc3a71bbb9bd6294afe1ce4cb7",
+        "component": "topaz-self-host",
+        "origin": "authorized-public-source",
+        "license": "Apache-2.0",
+        "sourceRevision": "fb4c370b18d7c076eceb822261e14affd8869811"
+      },
+      {
+        "source": "compiler/crates/topaz_self_frontend/topaz/resolver.tpz",
+        "destination": "compiler/crates/topaz_self_frontend/topaz/resolver.tpz",
+        "mode": "100644",
+        "bytes": 3863,
+        "sha256": "183dfd85626272277b3ed20c251940cbb0d45dc27277919a0717106667d69ca5",
+        "component": "topaz-self-host",
+        "origin": "authorized-public-source",
+        "license": "Apache-2.0",
+        "sourceRevision": "fb4c370b18d7c076eceb822261e14affd8869811"
+      },
+      {
+        "source": "compiler/crates/topaz_self_frontend/topaz/resolver/graph.tpz",
+        "destination": "compiler/crates/topaz_self_frontend/topaz/resolver/graph.tpz",
+        "mode": "100644",
+        "bytes": 24958,
+        "sha256": "4c8c43e9336c2c298bf57693a38634368e000cd17d3d65f6842373fbbe54ebc3",
+        "component": "topaz-self-host",
+        "origin": "authorized-public-source",
+        "license": "Apache-2.0",
+        "sourceRevision": "fb4c370b18d7c076eceb822261e14affd8869811"
+      },
+      {
+        "source": "compiler/crates/topaz_self_frontend/topaz/resolver/model_facts.tpz",
+        "destination": "compiler/crates/topaz_self_frontend/topaz/resolver/model_facts.tpz",
+        "mode": "100644",
+        "bytes": 10804,
+        "sha256": "8aefd2eac6b4d40c8fd3b6cd6ba90181b59807d61dac6af85afb617564a9b222",
+        "component": "topaz-self-host",
+        "origin": "authorized-public-source",
+        "license": "Apache-2.0",
+        "sourceRevision": "fb4c370b18d7c076eceb822261e14affd8869811"
+      },
+      {
+        "source": "compiler/crates/topaz_self_frontend/topaz/resolver/modules_tables.tpz",
+        "destination": "compiler/crates/topaz_self_frontend/topaz/resolver/modules_tables.tpz",
+        "mode": "100644",
+        "bytes": 12461,
+        "sha256": "220ebdf4288adbe9ed0670c47898b552664161f6a72576cd5e9ad03d5aa4b0fe",
+        "component": "topaz-self-host",
+        "origin": "authorized-public-source",
+        "license": "Apache-2.0",
+        "sourceRevision": "fb4c370b18d7c076eceb822261e14affd8869811"
+      },
+      {
+        "source": "compiler/crates/topaz_self_frontend/topaz/resolver/scopes_walk.tpz",
+        "destination": "compiler/crates/topaz_self_frontend/topaz/resolver/scopes_walk.tpz",
+        "mode": "100644",
+        "bytes": 29293,
+        "sha256": "5e6eeee4827759251b15328266e072097f70bd0403ce6758c5ea00b8f86d975a",
+        "component": "topaz-self-host",
+        "origin": "authorized-public-source",
+        "license": "Apache-2.0",
+        "sourceRevision": "fb4c370b18d7c076eceb822261e14affd8869811"
+      },
+      {
+        "source": "compiler/crates/topaz_self_frontend/topaz/resolver/validation_init.tpz",
+        "destination": "compiler/crates/topaz_self_frontend/topaz/resolver/validation_init.tpz",
+        "mode": "100644",
+        "bytes": 23320,
+        "sha256": "05bccf54250f6586d5aad861cc9c1b16271bf130a760b95f4b08bb25d2ec545f",
+        "component": "topaz-self-host",
+        "origin": "authorized-public-source",
+        "license": "Apache-2.0",
+        "sourceRevision": "fb4c370b18d7c076eceb822261e14affd8869811"
+      },
+      {
+        "source": "compiler/crates/topaz_self_frontend/topaz/src/main.tpz",
+        "destination": "compiler/crates/topaz_self_frontend/topaz/src/main.tpz",
+        "mode": "100644",
+        "bytes": 16891,
+        "sha256": "ef16cb39e9956e7e3aaed8023f9a45388c49a17bd9336a6e6f29dfa5aeb63bd3",
+        "component": "topaz-self-host",
+        "origin": "authorized-public-source",
+        "license": "Apache-2.0",
+        "sourceRevision": "fb4c370b18d7c076eceb822261e14affd8869811"
+      },
+      {
+        "source": "compiler/crates/topaz_self_frontend/topaz/stage1_types.tpz",
+        "destination": "compiler/crates/topaz_self_frontend/topaz/stage1_types.tpz",
+        "mode": "100644",
+        "bytes": 4881,
+        "sha256": "c4b100cd939e5d0390a752da49ce5777e66111ceb55f72472309d1a0793ad497",
+        "component": "topaz-self-host",
+        "origin": "authorized-public-source",
+        "license": "Apache-2.0",
+        "sourceRevision": "fb4c370b18d7c076eceb822261e14affd8869811"
+      },
+      {
+        "source": "compiler/crates/topaz_self_frontend/topaz/topaz.toml",
+        "destination": "compiler/crates/topaz_self_frontend/topaz/topaz.toml",
+        "mode": "100644",
+        "bytes": 175,
+        "sha256": "576731b89f257d2cbae01922338f09176851d7c4a7f8f61266b8baa2322171ff",
+        "component": "topaz-self-host",
+        "origin": "authorized-public-source",
+        "license": "Apache-2.0",
+        "sourceRevision": "fb4c370b18d7c076eceb822261e14affd8869811"
+      },
+      {
+        "source": "compiler/crates/topaz_self_frontend/topaz/types.tpz",
+        "destination": "compiler/crates/topaz_self_frontend/topaz/types.tpz",
+        "mode": "100644",
+        "bytes": 7849,
+        "sha256": "689612b142727dbbfe6f14adb2c6cb4892d197d893d2fca5cfc7aeaf2370fdc7",
+        "component": "topaz-self-host",
+        "origin": "authorized-public-source",
+        "license": "Apache-2.0",
+        "sourceRevision": "fb4c370b18d7c076eceb822261e14affd8869811"
+      },
+      {
+        "source": "compiler/crates/topaz_self_frontend/topaz/unicode.tpz",
+        "destination": "compiler/crates/topaz_self_frontend/topaz/unicode.tpz",
+        "mode": "100644",
+        "bytes": 9697,
+        "sha256": "df85836258be748486d23e556bba2cfe91411e7f8fe7d819843fb5a933a37881",
+        "component": "topaz-self-host",
+        "origin": "authorized-public-source",
+        "license": "Apache-2.0",
+        "sourceRevision": "fb4c370b18d7c076eceb822261e14affd8869811"
+      },
+      {
+        "source": "compiler/crates/topaz_self_frontend/topaz/unicode_tables.tpz",
+        "destination": "compiler/crates/topaz_self_frontend/topaz/unicode_tables.tpz",
+        "mode": "100644",
+        "bytes": 133510,
+        "sha256": "16293a12c70d71705abbf76523c0667497c52a4f30360a794e2e80995aceae3c",
+        "component": "unicode-derived-tables",
+        "origin": "third-party",
+        "license": "Apache-2.0 AND Unicode-3.0",
+        "sourceRevision": "fb4c370b18d7c076eceb822261e14affd8869811"
+      },
+      {
+        "source": "docs/samples/learn/first-program.tpz",
+        "destination": "docs/samples/learn/first-program.tpz",
+        "sourceRevision": "3d11471d1036b1af4ab89ef286beecfe8e09f938",
+        "bytes": 107,
+        "sha256": "47549f7e805451eac0521faf57cc5d0810b33daace71181caadfe36d89e28c6d",
+        "component": "topaz-spec-conformance-examples",
+        "license": "Apache-2.0",
+        "origin": "authorized-public-source"
+      },
+      {
+        "source": "docs/samples/learn/first-program.stdout",
+        "destination": "docs/samples/learn/first-program.stdout",
+        "sourceRevision": "3d11471d1036b1af4ab89ef286beecfe8e09f938",
+        "bytes": 25,
+        "sha256": "08f393c1f6470cbc16e8dec3fa8f827afe56387597279ed5c5c25e91745f0d0e",
+        "component": "topaz-spec-conformance-examples",
+        "license": "Apache-2.0",
+        "origin": "authorized-public-source"
+      },
+      {
+        "source": "docs/samples/learn/values-functions.tpz",
+        "destination": "docs/samples/learn/values-functions.tpz",
+        "sourceRevision": "3d11471d1036b1af4ab89ef286beecfe8e09f938",
+        "bytes": 301,
+        "sha256": "d35d8aa709fe51829b68d6b2ba5cc49ec93d58ec0ba9e6f9d880f07f60cf1ad8",
+        "component": "topaz-spec-conformance-examples",
+        "license": "Apache-2.0",
+        "origin": "authorized-public-source"
+      },
+      {
+        "source": "docs/samples/learn/values-functions.stdout",
+        "destination": "docs/samples/learn/values-functions.stdout",
+        "sourceRevision": "3d11471d1036b1af4ab89ef286beecfe8e09f938",
+        "bytes": 42,
+        "sha256": "5ac554d0f09f42fda0ade1288ba100e4e03c350e692eb2310aa0a0b6bae00c39",
+        "component": "topaz-spec-conformance-examples",
+        "license": "Apache-2.0",
+        "origin": "authorized-public-source"
+      },
+      {
+        "source": "docs/samples/learn/data-control.tpz",
+        "destination": "docs/samples/learn/data-control.tpz",
+        "sourceRevision": "3d11471d1036b1af4ab89ef286beecfe8e09f938",
+        "bytes": 683,
+        "sha256": "01b9da602fca93a57cbd406381fb32c6fb634813e87a7a3921fbb7bcec2f125c",
+        "component": "topaz-spec-conformance-examples",
+        "license": "Apache-2.0",
+        "origin": "authorized-public-source"
+      },
+      {
+        "source": "docs/samples/learn/data-control.stdout",
+        "destination": "docs/samples/learn/data-control.stdout",
+        "sourceRevision": "3d11471d1036b1af4ab89ef286beecfe8e09f938",
+        "bytes": 73,
+        "sha256": "bd67b39b3e582e3c11830bfd3b3e0db297ede5c1a102b19186ee6b54c1fc40b4",
+        "component": "topaz-spec-conformance-examples",
+        "license": "Apache-2.0",
+        "origin": "authorized-public-source"
+      },
+      {
+        "source": "docs/samples/language/pipelines-placeholders.tpz",
+        "destination": "docs/samples/language/pipelines-placeholders.tpz",
+        "sourceRevision": "3d11471d1036b1af4ab89ef286beecfe8e09f938",
+        "bytes": 348,
+        "sha256": "2ed11578149b788f47b5d8eac5bf7917efa0fdd8e5631d102ac000e69da60b07",
+        "component": "topaz-spec-conformance-examples",
+        "license": "Apache-2.0",
+        "origin": "authorized-public-source"
+      },
+      {
+        "source": "docs/samples/language/pipelines-placeholders.stdout",
+        "destination": "docs/samples/language/pipelines-placeholders.stdout",
+        "sourceRevision": "3d11471d1036b1af4ab89ef286beecfe8e09f938",
+        "bytes": 8,
+        "sha256": "689ff9dbca672ad853bff158ca4be91bb056c3d1f23733b20baeab47b68893ad",
+        "component": "topaz-spec-conformance-examples",
+        "license": "Apache-2.0",
+        "origin": "authorized-public-source"
+      }
+    ],
+    "generatedFiles": [
+      {
+        "destination": "README.md",
+        "license": "Apache-2.0",
+        "origin": "authorized-public-source"
+      },
+      {
+        "destination": "examples/README.md",
+        "license": "Apache-2.0",
+        "origin": "authorized-public-source"
+      },
+      {
+        "destination": ".gitattributes",
+        "license": "Apache-2.0",
+        "origin": "authorized-public-source"
+      },
+      {
+        "destination": "SOURCE-COMPONENTS.json",
+        "license": "Apache-2.0",
+        "origin": "authorized-public-source"
+      },
+      {
+        "destination": "THIRD-PARTY-NOTICES.md",
+        "license": "Apache-2.0",
+        "origin": "authorized-public-source",
+        "derivedFrom": {
+          "source": "THIRD-PARTY-NOTICES.md",
+          "sourceRevision": "fb4c370b18d7c076eceb822261e14affd8869811",
+          "change": "snapshot scope and paths; original license terms and package inventory preserved"
+        }
+      },
+      {
+        "destination": "NOTICE",
+        "license": "Apache-2.0",
+        "origin": "authorized-public-source",
+        "derivedFrom": {
+          "source": "NOTICE",
+          "sourceRevision": "fb4c370b18d7c076eceb822261e14affd8869811",
+          "change": "snapshot scope and paths; original license terms and package inventory preserved"
+        }
+      },
+      {
+        "destination": "THIRD-PARTY-LICENSES.txt",
+        "license": "LicenseRef-Third-Party-Notices",
+        "origin": "authorized-public-source",
+        "derivedFrom": {
+          "source": "compiler/licenses/THIRD-PARTY.md",
+          "sourceRevision": "fb4c370b18d7c076eceb822261e14affd8869811",
+          "change": "snapshot scope and paths; original license terms and package inventory preserved"
+        }
+      }
+    ]
+  }
+}

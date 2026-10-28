@@ -1,0 +1,20 @@
+import std.io
+
+function add(value: int, amount: int) -> int {
+    value + amount
+}
+
+function multiply(left: int, right: int) -> int {
+    left * right
+}
+
+function equal(left: int, right: int) -> bool {
+    left == right
+}
+
+let result = 5
+    |> add(2)
+    |> multiply(_, 3)
+let repeated = result |> equal(_, _)
+
+io.writeLine("{result} {repeated}")

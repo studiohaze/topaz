@@ -1,0 +1,385 @@
+// Public type-checking facade for the embedded self compiler.
+// Checker leaves own formation and inference; this file wires their services,
+// runs the phases in order, and exposes only check to the package entry.
+
+import types {
+  CheckResult,
+  PreviewTypedCall,
+  PreviewTypedCapture,
+  PreviewTypedNode,
+  ResolveResult,
+  SyntaxNode,
+}
+import checker_types { TypeValue }
+import checker.model {
+  CheckerRequest,
+  CheckerResponse,
+  CheckerService,
+  CheckerState,
+  ModuleSyntax,
+  constructor,
+  emptyType,
+  functionType,
+  primitive,
+}
+import checker.type_algebra {
+  flattenedHasHole,
+  resolvedFlatType,
+  stringJoin,
+  typeEqual,
+  typeText,
+}
+import checker.syntax_index {
+  addDiagnostic,
+  child,
+  children,
+  moduleSyntax,
+  spanKey,
+  text,
+  unwrapExport,
+}
+import checker.nominals {
+  collectProtocols,
+  fillNominals,
+  predeclareNominals,
+}
+import checker.protocols_methods {
+  collectProtocolImpls,
+  collectReceiverImpls,
+  functionDeclaration,
+  predeclareFunctions,
+}
+import checker.members_capabilities { gateCollectionKey }
+import checker.diagnostics_derives { checkDerives }
+import checker.call_facts {
+  builtinNamespaceObject,
+  diagnoseUnboundReferences,
+}
+import checker.expression_control { inferExpression }
+import checker.statements {
+  checkBlock,
+  checkBlockExpected,
+}
+import checker.bodies_captures {
+  checkFunctionBodies,
+  checkFunctionDeclaration,
+  checkerIndexes,
+  deriveCaptures,
+  diagnoseLispexRuleFactoryEscapes,
+  initialCheckerState,
+}
+
+function dispatchCheckerService(
+  state: CheckerState,
+  request: CheckerRequest,
+) -> CheckerResponse {
+  match request.kind {
+    case "check-function" => {
+      match state.modules.get(request.moduleIndex) {
+        case Some(module) => checkFunctionDeclaration(
+          dispatchCheckerService,
+          state,
+          module,
+          request.node,
+        )
+        case None => ()
+      }
+      CheckerResponse { typeValue: emptyType("unknown"), boolValue: false }
+    }
+    case "infer-expression" => CheckerResponse {
+      typeValue: inferExpression(
+        dispatchCheckerService,
+        state,
+        request.moduleIndex,
+        request.source,
+        request.node,
+      ),
+      boolValue: false,
+    }
+    case "builtin-namespace-object" => CheckerResponse {
+      typeValue: emptyType("unknown"),
+      boolValue: builtinNamespaceObject(
+        dispatchCheckerService,
+        state,
+        request.moduleIndex,
+        request.source,
+        request.node,
+      ),
+    }
+    case "check-block" => CheckerResponse {
+      typeValue: checkBlock(
+        dispatchCheckerService,
+        state,
+        request.moduleIndex,
+        request.source,
+        request.node,
+      ),
+      boolValue: false,
+    }
+    case "check-block-expected" => CheckerResponse {
+      typeValue: checkBlockExpected(
+        dispatchCheckerService,
+        state,
+        request.moduleIndex,
+        request.source,
+        request.node,
+        request.typeValue,
+      ),
+      boolValue: false,
+    }
+    case "gate-collection-key" => {
+      gateCollectionKey(
+        dispatchCheckerService,
+        state,
+        request.moduleIndex,
+        request.node,
+        request.typeValue,
+      )
+      CheckerResponse { typeValue: emptyType("unknown"), boolValue: false }
+    }
+    case _ => CheckerResponse { typeValue: emptyType("unknown"), boolValue: false }
+  }
+}
+
+function checkerService() -> CheckerService {
+  dispatchCheckerService
+}
+
+function runCheckerPhases(service: CheckerService, state: CheckerState) -> () {
+  predeclareNominals(state)
+  fillNominals(service, state)
+  collectProtocols(service, state)
+  collectReceiverImpls(service, state)
+  collectProtocolImpls(service, state)
+  checkDerives(state)
+  predeclareFunctions(service, state)
+  diagnoseUnboundReferences(state)
+  checkFunctionBodies(service, state)
+  diagnoseEntryPointSignatures(state)
+  diagnoseLispexRuleFactoryEscapes(state)
+  deriveCaptures(state)
+  ()
+}
+
+function checkerResult(state: CheckerState) -> CheckResult {
+  let mut nodes: Array<PreviewTypedNode> = []
+  for node in state.nodes {
+    let resolved = resolvedFlatType(node.typeValue, state.inferenceSolutions)
+    nodes.push(PreviewTypedNode {
+      ...node,
+      typeValue: resolved,
+      ambient: flattenedHasHole(resolved),
+    })
+  }
+  let mut calls: Array<PreviewTypedCall> = []
+  for call in state.calls {
+    let calleeType = resolvedFlatType(call.calleeType, state.inferenceSolutions)
+    let resultType = resolvedFlatType(call.resultType, state.inferenceSolutions)
+    calls.push(PreviewTypedCall {
+      ...call,
+      calleeType: calleeType,
+      resultType: resultType,
+      ambient: flattenedHasHole(calleeType) || flattenedHasHole(resultType),
+    })
+  }
+  let mut captures: Array<PreviewTypedCapture> = []
+  for capture in state.captures {
+    let resolved = resolvedFlatType(capture.typeValue, state.inferenceSolutions)
+    captures.push(PreviewTypedCapture {
+      ...capture,
+      typeValue: resolved,
+      ambient: flattenedHasHole(resolved),
+    })
+  }
+  CheckResult {
+    nodes: nodes,
+    calls: calls,
+    captures: captures,
+    diagnostics: state.diagnostics,
+  }
+}
+
+// The documented command-line entry point is
+// `export function main(args: Array<string>, stdin: string) -> Result<int, string>`,
+// so the entry module's exported `main` has exactly one admitted signature.
+function explicitMainType() -> TypeValue {
+  functionType(
+    [constructor("Array", [primitive("string")]), primitive("string")],
+    [],
+    constructor("Result", [primitive("int"), primitive("string")]),
+  )
+}
+
+function exportedMainNameNode(module: ModuleSyntax, statement: SyntaxNode) -> Option<SyntaxNode> {
+  if statement.kind != "statement/export" {
+    return None
+  }
+  let declaration = match functionDeclaration(unwrapExport(statement)) {
+    case Some(value) => value
+    case None => return None
+  }
+  let nameNode = match child(declaration, "name") {
+    case Some(value) => value
+    case None => return None
+  }
+  if text(module.source, nameNode) != "main" {
+    return None
+  }
+  Some(nameNode)
+}
+
+function diagnoseExplicitMainSignature(
+  state: CheckerState,
+  module: ModuleSyntax,
+  nameNode: SyntaxNode,
+) -> () {
+  let definitionIndex = match state.functionIndexes.get(spanKey(
+    module.moduleIndex,
+    nameNode.lo,
+    nameNode.hi,
+  )) {
+    case Some(index) => index
+    case None => -1
+  }
+  let definition = match state.functions.get(definitionIndex) {
+    case Some(value) => value
+    case None => return ()
+  }
+  let mut defaulted = false
+  for value in definition.parameterDefaults {
+    if value {
+      defaulted = true
+    }
+  }
+  let expected = explicitMainType()
+  let actual = functionType(
+    definition.parameterTypes,
+    definition.variadic,
+    definition.result,
+  )
+  if definition.typeParameters.length == 0 && !defaulted && typeEqual(actual, expected) {
+    return ()
+  }
+  addDiagnostic(
+    state,
+    module.moduleIndex,
+    "TPZ5022",
+    "`export function main` must be non-generic and have signature `{typeText(expected)}`; found `{typeText(actual)}`",
+    "",
+    nameNode,
+  )
+}
+
+// Only the entry module owns the command-line entry point; an exported `main`
+// anywhere else is an ordinary function.
+function diagnoseEntryPointSignatures(state: CheckerState) -> () {
+  for module in state.modules {
+    let entry = match state.resolved.modules.get(module.moduleIndex) {
+      case Some(resolved) => resolved.entry
+      case None => false
+    }
+    if !entry {
+      continue
+    }
+    for statement in module.root.children {
+      match exportedMainNameNode(module, statement) {
+        case Some(nameNode) => diagnoseExplicitMainSignature(state, module, nameNode)
+        case None => ()
+      }
+    }
+  }
+  ()
+}
+
+function externReplayError(
+  modules: Array<string>,
+  errors: Array<string>,
+  target: string,
+) -> Option<string> {
+  let mut index = 0
+  for module in modules {
+    if module == target {
+      return errors.get(index)
+    }
+    index += 1
+  }
+  None
+}
+
+function diagnoseExternReplayImport(
+  state: CheckerState,
+  module: ModuleSyntax,
+  statement: SyntaxNode,
+  externReplayModules: Array<string>,
+  externReplayErrors: Array<string>,
+) -> () {
+  let item = match child(statement, "import") {
+    case Some(value) => value
+    case None => return ()
+  }
+  let path = match child(item, "path") {
+    case Some(value) => value
+    case None => return ()
+  }
+  let mut segments: Array<string> = []
+  for segment in children(path, "segments") {
+    segments.push(text(module.source, segment))
+  }
+  let target = stringJoin(segments, ".")
+  match externReplayError(
+    externReplayModules,
+    externReplayErrors,
+    target,
+  ) {
+    case Some(error) => addDiagnostic(
+      state,
+      module.moduleIndex,
+      "TPZ5032",
+      "extern module `{target}` has an invalid deterministic replay binding: {error}",
+      "",
+      path,
+    )
+    case None => ()
+  }
+}
+
+function diagnoseExternReplayErrors(
+  state: CheckerState,
+  externReplayModules: Array<string>,
+  externReplayErrors: Array<string>,
+) -> Result<(), string> {
+  if externReplayModules.length != externReplayErrors.length {
+    return Err("checker extern replay fact columns differ in length")
+  }
+  for module in state.modules {
+    for statement in module.root.children {
+      if statement.kind == "statement/import" {
+        diagnoseExternReplayImport(
+          state,
+          module,
+          statement,
+          externReplayModules,
+          externReplayErrors,
+        )
+      }
+    }
+  }
+  Ok(())
+}
+
+// Runs formation and body phases, preserving diagnostic and observation order.
+export function check(
+  resolved: ResolveResult,
+  externReplayModules: Array<string>,
+  externReplayErrors: Array<string>,
+  maxAstNodes: int,
+  maxAstDepth: int,
+  languageMode: string = "topaz-5.20",
+) -> Result<CheckResult, string> {
+  let service = checkerService()
+  let modules = moduleSyntax(resolved, maxAstNodes, maxAstDepth)?
+  let state = initialCheckerState(resolved, modules, checkerIndexes(resolved), languageMode)
+  diagnoseExternReplayErrors(state, externReplayModules, externReplayErrors)?
+  runCheckerPhases(service, state)
+  Ok(checkerResult(state))
+}

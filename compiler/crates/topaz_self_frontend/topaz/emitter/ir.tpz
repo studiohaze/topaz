@@ -1,0 +1,202 @@
+import stage1_types { Stage1Module, Stage1Operation, LoweringOutput }
+import types { PreviewTypeAtom }
+import std.bytes { Bytes }
+
+export record Table {
+  languageMode: string,
+  ops: Array<Stage1Operation>,
+  index: Map<string, int>,
+  captures: Map<string, Array<Stage1Operation>>,
+  capturedBindings: Map<string, bool>,
+  nominals: Map<string, Array<PreviewTypeAtom>>,
+}
+
+export function buildTable(output: LoweringOutput) -> Table {
+  let mut index: Map<string, int> = map {}
+  let mut captures: Map<string, Array<Stage1Operation>> = map {}
+  let mut capturedBindings: Map<string, bool> = map {}
+  let mut nominals: Map<string, Array<PreviewTypeAtom>> = map {}
+  let mut position = 0
+  for op in output.operations {
+    index.insert(op.id, position)
+    if op.typeDefinition.length > 0 && op.kind != "type-alias" {
+      nominals.insert(op.typeDefinition[0].identity, op.typeDefinition)
+    }
+    if op.kind == "binding/capture" {
+      let mut found = match captures.get(op.parentId) {
+        case Some(list) => list
+        case None => []
+      }
+      found.push(op)
+      captures.insert(op.parentId, found)
+      capturedBindings.insert(op.declarationIdentity, true)
+    }
+    position += 1
+  }
+  let languageMode = match output.modules.get(0) { case Some(module) => module.languageMode; case None => "topaz-5.20" }
+  Table { languageMode: languageMode, ops: output.operations, index: index, captures: captures, capturedBindings: capturedBindings, nominals: nominals }
+}
+
+// Find the runtime type name in its lexical scope, including selected imports.
+export function typeDeclaration(table: Table, originId: string, name: string) -> Result<Option<Stage1Operation>, string> {
+  let origin = opAt(table, originId)?
+  let mut scope = origin.id
+  loop {
+    for declaration in table.ops {
+      if declaration.module != origin.module || declaration.typeDefinition.length == 0 ||
+        declaration.typeDefinition[0].name != name { continue }
+      let mut parent = declaration.parentId
+      if parent != "" {
+        let wrapper = opAt(table, parent)?
+        if wrapper.kind == "export" { parent = wrapper.parentId }
+      }
+      if parent == scope { return Ok(Some(declaration)) }
+    }
+    for imported in table.ops {
+      if imported.module != origin.module || imported.kind != "import" { continue }
+      let mut parent = imported.parentId
+      if parent != "" {
+        let wrapper = opAt(table, parent)?
+        if wrapper.kind == "export" { parent = wrapper.parentId }
+      }
+      if parent != scope { continue }
+      for row in imported.importBindings {
+        let parts = row.split("|")
+        if parts.length != 5 || parts[0] != "selected-import" || parts[2] != name { continue }
+        for root in table.ops {
+          if root.module == imported.importModule && root.parentId == "" {
+            return typeDeclaration(table, root.id, parts[1])
+          }
+        }
+      }
+      ()
+    }
+    if scope == "" { break }
+    let owner = opAt(table, scope)?
+    scope = owner.parentId
+  }
+  Ok(None)
+}
+
+export function opAt(table: Table, id: string) -> Result<Stage1Operation, string> {
+  match table.index.get(id) {
+    case Some(position) => Ok(table.ops[position])
+    case None => Err("unsupported: ir missing operation {id}")
+  }
+}
+
+export function capturesOf(table: Table, op: Stage1Operation) -> Array<Stage1Operation> {
+  match table.captures.get(op.id) {
+    case Some(list) => list
+    case None => []
+  }
+}
+
+// The structural field of an operand label: the last path segment before `:`.
+export function fieldOf(label: string) -> string {
+  let segments = label.split("/")
+  let last = segments[segments.length - 1]
+  last.split(":")[0]
+}
+
+// The name carried by a `field-initializer[i]=<name>` label head.
+export function labelName(label: string) -> string {
+  let head = label.split("/")[0]
+  let parts = head.split("=")
+  if parts.length < 2 {
+    ""
+  } else {
+    parts[1]
+  }
+}
+
+export function children(
+  table: Table,
+  op: Stage1Operation,
+  field: string,
+) -> Result<Array<Stage1Operation>, string> {
+  let mut found: Array<Stage1Operation> = []
+  let mut position = 0
+  for id in op.operands {
+    if fieldOf(op.operandLabels[position]) == field {
+      found.push(opAt(table, id)?)
+    }
+    position += 1
+  }
+  Ok(found)
+}
+
+export function child(
+  table: Table,
+  op: Stage1Operation,
+  field: string,
+) -> Result<Stage1Operation, string> {
+  let found = children(table, op, field)?
+  if found.length != 1 {
+    return Err(refusal("shape {op.kind} operand {field} x{found.length}", op))
+  }
+  Ok(found[0])
+}
+
+export function optionalChild(
+  table: Table,
+  op: Stage1Operation,
+  field: string,
+) -> Result<Option<Stage1Operation>, string> {
+  let found = children(table, op, field)?
+  if found.length == 0 {
+    Ok(None)
+  } else if found.length == 1 {
+    Ok(Some(found[0]))
+  } else {
+    Err(refusal("shape {op.kind} operand {field} x{found.length}", op))
+  }
+}
+
+// Structured refusal: one line naming the first construct outside the
+// emitter's surface and where it occurs. Never a silent fallback.
+export function refusal(what: string, op: Stage1Operation) -> string {
+  "unsupported: {what} at {op.module}:{op.lo}-{op.hi}"
+}
+
+// B2a carries the runtime FileId explicitly, independently of operation ids.
+export function fileOf(op: Stage1Operation) -> string {
+  "{op.sourceOrdinal}"
+}
+
+export function spanOf(op: Stage1Operation) -> string {
+  "Span::new(FileId({fileOf(op)}), {op.lo}, {op.hi})"
+}
+
+export function spanAt(op: Stage1Operation, lo: int, hi: int) -> string {
+  "Span::new(FileId({fileOf(op)}), {lo}, {hi})"
+}
+
+// The declared name span of a binding identity `source:<n>:<lo>:<hi>`.
+export function declarationSpan(op: Stage1Operation) -> string {
+  let parts = op.declarationIdentity.split(":")
+  if parts.length == 4 {
+    spanAt(op, parts[2].toInt() ?? op.lo, parts[3].toInt() ?? op.hi)
+  } else {
+    spanOf(op)
+  }
+}
+
+export function rustName(name: string) -> string {
+  "_t_{(name).encodeUtf8().toHex()}"
+}
+
+export function patternBindings(table: Table, pattern: Stage1Operation) -> Result<Array<Stage1Operation>, string> {
+  let mut found: Array<Stage1Operation> = []
+  if pattern.kind == "pattern/binding" || pattern.kind == "pattern/typed-binding" {
+    if pattern.bindingName != "" { found.push(pattern) }
+  } else if pattern.kind.startsWith("pattern/") {
+    for id in pattern.operands {
+      let sub = opAt(table, id)?
+      for bind in patternBindings(table, sub)? { found.push(bind) }
+      if pattern.kind == "pattern/alternatives" { break }
+    }
+    ()
+  }
+  Ok(found)
+}

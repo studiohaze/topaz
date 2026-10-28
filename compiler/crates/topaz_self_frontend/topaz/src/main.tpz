@@ -1,0 +1,560 @@
+import std.json as jsonBoundary
+
+import checker { check }
+import emitter { emitRust, emitStep }
+import layout { normalize }
+import lowering { lowerStep, lowerValue }
+import parser { parse }
+import profile { checkProfile }
+import raw { lex }
+import resolver { resolvePreview, resolveWithFacts }
+import resolver.model_facts { ResolverHostFactCatalog, resolverHostFacts }
+import stage1_types { LoweringOutput, STAGE1_EXCHANGE_SCHEMA, Stage1Provenance, compilerProvenance }
+import types {
+  CheckResult,
+  LowerBridgeRequest,
+  encodeLowerBridgeRequest,
+  LayoutResult,
+  ParseResult,
+  PreviewAstNode,
+  PreviewCallArgument,
+  PreviewCallEvaluation,
+  PreviewCheckLabel,
+  PreviewDiagnostic,
+  PreviewDirectoryEntry,
+  PreviewGeneratedStdModule,
+  PreviewHostFact,
+  PreviewHostQuery,
+  PreviewImportEdge,
+  PreviewModuleResult,
+  PreviewResolvedDeclaration,
+  PreviewResolvedDiagnostic,
+  PreviewResolvedExport,
+  PreviewResolvedReference,
+  PreviewResolvedScope,
+  PreviewToken,
+  PreviewTypeAtom,
+  PreviewTypedCall,
+  PreviewTypedCapture,
+  PreviewTypedNode,
+  PreviewCheckDiagnostic,
+  RawResult,
+  ResolveResult,
+}
+
+const EXCHANGE_SCHEMA = "topaz.compiler.frontend-preview-exchange/v1"
+
+export record RequestPackageFacts derives JSON {
+  buildRole: string,
+  externModules: Array<string>,
+  externReplayModules: Array<string>,
+  externReplayErrors: Array<string>,
+  generatedStdModules: Array<PreviewGeneratedStdModule>,
+}
+
+record PreviewRequest derives JSON {
+  languageMode: string = "topaz-5.20",
+  schema: string,
+  terminal: string,
+  entry: string,
+  root: string,
+  source: string,
+  sourceId: string,
+  facts: Array<PreviewHostFact>,
+  package: RequestPackageFacts,
+  maxAstNodes: int,
+  maxAstDepth: int,
+}
+
+export record PreviewResponse derives JSON {
+  schema: string,
+  status: string,
+  sourceId: string,
+  raw: Array<PreviewToken>,
+  layout: Array<PreviewToken>,
+  ast: Array<PreviewAstNode>,
+  diagnostics: Array<PreviewDiagnostic>,
+  queries: Array<PreviewHostQuery>,
+  modules: Array<PreviewModuleResult>,
+  edges: Array<PreviewImportEdge>,
+  scopes: Array<PreviewResolvedScope>,
+  declarations: Array<PreviewResolvedDeclaration>,
+  references: Array<PreviewResolvedReference>,
+  exports: Array<PreviewResolvedExport>,
+  resolverDiagnostics: Array<PreviewResolvedDiagnostic>,
+  typedNodes: Array<PreviewTypedNode>,
+  typedCalls: Array<PreviewTypedCall>,
+  typedCaptures: Array<PreviewTypedCapture>,
+  checkerDiagnostics: Array<PreviewCheckDiagnostic>,
+}
+
+export record Stage1Request derives JSON {
+  schema: string,
+  producer: string,
+  compilerSourceSetId: string,
+  terminal: string,
+  entry: string,
+  root: string,
+  source: string,
+  sourceId: string,
+  languageMode: string,
+  profile: string,
+  facts: Array<PreviewHostFact>,
+  package: RequestPackageFacts,
+  maxSourceFacts: int,
+  maxTotalSourceBytes: int,
+  maxAstNodes: int,
+  maxAstDepth: int,
+  maxRawTokens: int,
+  maxLayoutTokens: int,
+  maxHirNodes: int,
+  maxLoweredNodes: int,
+  maxDiagnostics: int,
+  maxGeneratedRustBytes: int,
+  maxFactRounds: int,
+}
+
+record SyntaxPreview {
+  ast: Array<PreviewAstNode>,
+  diagnostics: Array<PreviewDiagnostic>,
+}
+
+record CompilerTypedResponse derives JSON {
+  schema: string,
+  status: string,
+  frontEnd: string,
+  provenance: Stage1Provenance,
+}
+
+function emptyCheckResult() -> CheckResult {
+  CheckResult { nodes: [], calls: [], captures: [], diagnostics: [] }
+}
+
+function resolveRequest(request: PreviewRequest) -> Result<ResolveResult, string> {
+  resolvePreview(
+    request.entry,
+    request.root,
+    request.facts,
+    request.package.externModules,
+    request.package.generatedStdModules,
+    request.maxAstNodes,
+    request.maxAstDepth,
+    request.languageMode,
+  )
+}
+
+function checkResolvedRequest(
+  request: PreviewRequest,
+  resolved: ResolveResult,
+) -> Result<CheckResult, string> {
+  if request.terminal == "typed" &&
+    resolved.queries.length == 0 && resolved.diagnostics.length == 0 {
+    check(
+      resolved,
+      request.package.externReplayModules,
+      request.package.externReplayErrors,
+      request.maxAstNodes,
+      request.maxAstDepth,
+      request.languageMode,
+    )
+  } else {
+    Ok(emptyCheckResult())
+  }
+}
+
+function resolvedStatus(resolved: ResolveResult, checked: CheckResult) -> string {
+  if resolved.queries.length > 0 {
+    "need-facts"
+  } else if resolved.diagnostics.length > 0 || checked.diagnostics.length > 0 {
+    "rejected"
+  } else {
+    "completed"
+  }
+}
+
+function resolvedResponse(
+  request: PreviewRequest,
+  resolved: ResolveResult,
+  checked: CheckResult,
+) -> PreviewResponse {
+  PreviewResponse {
+    schema: EXCHANGE_SCHEMA,
+    status: resolvedStatus(resolved, checked),
+    sourceId: request.sourceId,
+    raw: [],
+    layout: [],
+    ast: [],
+    diagnostics: [],
+    queries: resolved.queries,
+    modules: resolved.modules,
+    edges: resolved.edges,
+    scopes: resolved.scopes,
+    declarations: resolved.declarations,
+    references: resolved.references,
+    exports: resolved.exports,
+    resolverDiagnostics: resolved.diagnostics,
+    typedNodes: checked.nodes,
+    typedCalls: checked.calls,
+    typedCaptures: checked.captures,
+    checkerDiagnostics: checked.diagnostics,
+  }
+}
+
+function processResolvedRequest(request: PreviewRequest) -> Result<PreviewResponse, string> {
+  let resolved = resolveRequest(request)?
+  let checked = checkResolvedRequest(request, resolved)?
+  Ok(resolvedResponse(request, resolved, checked))
+}
+
+function parseSyntax(
+  request: PreviewRequest,
+  raw: RawResult,
+  layout: LayoutResult,
+) -> Result<SyntaxPreview, string> {
+  let mut diagnostics = raw.diagnostics
+  for found in layout.diagnostics {
+    diagnostics.push(found)
+  }
+  let parsed = parse(
+    layout.tokens,
+    request.source,
+    request.maxAstNodes,
+    request.maxAstDepth,
+    request.languageMode,
+  )?
+  for found in parsed.diagnostics {
+    diagnostics.push(found)
+  }
+  Ok(SyntaxPreview { ast: parsed.nodes, diagnostics: diagnostics })
+}
+
+function syntaxResponse(
+  request: PreviewRequest,
+  raw: RawResult,
+  layout: LayoutResult,
+  syntax: SyntaxPreview,
+) -> PreviewResponse {
+  PreviewResponse {
+    schema: EXCHANGE_SCHEMA,
+    status: if syntax.diagnostics.length == 0 { "completed" } else { "rejected" },
+    sourceId: request.sourceId,
+    raw: raw.tokens,
+    layout: layout.tokens,
+    ast: syntax.ast,
+    diagnostics: syntax.diagnostics,
+    queries: [],
+    modules: [],
+    edges: [],
+    scopes: [],
+    declarations: [],
+    references: [],
+    exports: [],
+    resolverDiagnostics: [],
+    typedNodes: [],
+    typedCalls: [],
+    typedCaptures: [],
+    checkerDiagnostics: [],
+  }
+}
+
+function processSyntaxRequest(request: PreviewRequest) -> Result<PreviewResponse, string> {
+  let raw = lex(request.source)
+  let layout = normalize(raw.tokens, request.source)
+  let syntax = parseSyntax(request, raw, layout)?
+  Ok(syntaxResponse(request, raw, layout, syntax))
+}
+
+function process(request: PreviewRequest) -> Result<PreviewResponse, string> {
+  if request.schema != EXCHANGE_SCHEMA {
+    return Err("unsupported front-end preview exchange schema")
+  }
+  if request.terminal == "resolved" || request.terminal == "typed" {
+    processResolvedRequest(request)
+  } else if request.terminal == "ast" {
+    processSyntaxRequest(request)
+  } else {
+    Err("unsupported front-end preview terminal `{request.terminal}`")
+  }
+}
+
+export function frontEndStep(request: Bytes) -> Result<Bytes, string> {
+  let text = request.decodeUtf8()?
+  let decoded = jsonBoundary.parseAs<PreviewRequest>(text)?
+  let response = process(decoded)?
+  let encoded = jsonBoundary.stringify(response)?
+  Ok((encoded).encodeUtf8())
+}
+
+function supportsSelfHostedLanguage(mode: string) -> bool {
+  mode == "topaz-5.16" ||
+    mode == "topaz-5.17" ||
+    mode == "topaz-5.18" ||
+    mode == "topaz-5.19" ||
+    mode == "topaz-5.20" || mode == "topaz-5.21"
+}
+
+function validateStage1Request(request: Stage1Request) -> Result<int, string> {
+  if request.schema != STAGE1_EXCHANGE_SCHEMA {
+    return Err("unsupported Stage 1 exchange schema")
+  }
+  let producerStage = if request.producer == "topaz-stage1" {
+    1
+  } else if request.producer == "topaz-stage2" {
+    2
+  } else {
+    return Err("unsupported compiler producer")
+  }
+  if request.terminal != "typed" && request.terminal != "lowered" && request.terminal != "rust-source" {
+    return Err("Stage 1 supports typed, lowered and rust-source terminals")
+  }
+  if !supportsSelfHostedLanguage(request.languageMode) {
+    return Err("unsupported self-hosted language mode `{request.languageMode}`")
+  }
+  if request.maxFactRounds < 1 {
+    return Err("Stage 1 fact-round budget must be positive")
+  }
+  Ok(producerStage)
+}
+
+function stage1PreviewRequest(request: Stage1Request) -> PreviewRequest {
+  PreviewRequest {
+    schema: EXCHANGE_SCHEMA,
+    languageMode: request.languageMode,
+    terminal: "typed",
+    entry: request.entry,
+    root: request.root,
+    source: "",
+    sourceId: "",
+    facts: request.facts,
+    package: request.package,
+    maxAstNodes: request.maxAstNodes,
+    maxAstDepth: request.maxAstDepth,
+  }
+}
+
+function applyCompilerProfile(
+  profile: string,
+  languageMode: string,
+  base: PreviewResponse,
+) -> Result<PreviewResponse, string> {
+  let mut checkerDiagnostics = base.checkerDiagnostics
+  if base.queries.length == 0 {
+    for diagnostic in checkProfile(
+      profile,
+      base.modules,
+      base.references,
+      base.typedNodes,
+      base.typedCalls,
+      base.typedCaptures,
+      languageMode,
+    )? {
+      checkerDiagnostics.push(diagnostic)
+    }
+  }
+  Ok(PreviewResponse {
+    ...base,
+    status: if base.status == "completed" && checkerDiagnostics.length > 0 {
+      "rejected"
+    } else {
+      base.status
+    },
+    checkerDiagnostics: checkerDiagnostics,
+  })
+}
+
+// Lowering follows imported names to their declarations, which live in module
+// scope; local declarations stay out of the bridge.
+function moduleScopeDeclarations(
+  values: Array<PreviewResolvedDeclaration>,
+) -> Array<PreviewResolvedDeclaration> {
+  let mut declarations: Array<PreviewResolvedDeclaration> = []
+  for value in values {
+    if value.scopeOrdinal == 0 {
+      declarations.push(value)
+    }
+  }
+  declarations
+}
+
+function lowerBridgeRequest(
+  request: Stage1Request,
+  producerStage: int,
+  frontEnd: PreviewResponse,
+) -> Result<Bytes, string> {
+  encodeLowerBridgeRequest(LowerBridgeRequest {
+    ...lowerBridgeValue(request, producerStage, frontEnd),
+    frontEnd: jsonBoundary.stringify(frontEnd)?,
+  })
+}
+
+function lowerBridgeValue(
+  request: Stage1Request,
+  producerStage: int,
+  frontEnd: PreviewResponse,
+) -> LowerBridgeRequest {
+  LowerBridgeRequest {
+    producer: request.producer,
+    producerStage: producerStage,
+    frontEnd: "",
+    frontEndStatus: frontEnd.status,
+    modules: frontEnd.modules,
+    references: frontEnd.references,
+    typedNodes: frontEnd.typedNodes,
+    typedCalls: frontEnd.typedCalls,
+    typedCaptures: frontEnd.typedCaptures,
+    edges: frontEnd.edges,
+    moduleDeclarations: moduleScopeDeclarations(frontEnd.declarations),
+    languageMode: request.languageMode,
+    sourceSetId: request.compilerSourceSetId,
+    maxLoweredNodes: request.maxLoweredNodes,
+  }
+}
+
+function finishCompilerRequest(
+  request: Stage1Request,
+  lowered: Bytes,
+) -> Result<Bytes, string> {
+  if request.terminal == "rust-source" {
+    emitStep(lowered, request.maxGeneratedRustBytes)
+  } else {
+    Ok(lowered)
+  }
+}
+
+export function compilerStep(input: Bytes) -> Result<Bytes, string> {
+  let text = input.decodeUtf8()?
+  let decoded = jsonBoundary.parseAs<Stage1Request>(text)?
+  let producerStage = validateStage1Request(decoded)?
+  let baseFrontEnd = process(stage1PreviewRequest(decoded))?
+  let frontEnd = applyCompilerProfile(decoded.profile, decoded.languageMode, baseFrontEnd)?
+  if decoded.terminal == "typed" {
+    let response = CompilerTypedResponse {
+      schema: STAGE1_EXCHANGE_SCHEMA,
+      status: frontEnd.status,
+      frontEnd: jsonBoundary.stringify(frontEnd)?,
+      provenance: compilerProvenance(decoded.compilerSourceSetId, decoded.producer, producerStage),
+    }
+    return Ok((jsonBoundary.stringify(response)?).encodeUtf8())
+  }
+  let bridge = lowerBridgeRequest(decoded, producerStage, frontEnd)?
+  let lowered = lowerStep(bridge)?
+  finishCompilerRequest(decoded, lowered)
+}
+
+// Results are values. Whole frontend observations and lowered tables are
+// returned only when requested; a typed completion never denotes Rust output.
+export record CompilerResult {
+  status: string,
+  kind: string,
+  diagnostics: Array<PreviewResolvedDiagnostic>,
+  checkerDiagnostics: Array<PreviewCheckDiagnostic>,
+  exports: Array<PreviewResolvedExport>,
+  provenance: Stage1Provenance,
+  generatedRust: Option<string>,
+  lowered: Option<LoweringOutput>,
+  observation: Option<PreviewResponse>,
+}
+
+function resourceLimit(label: string, observed: int, limit: int) -> Result<(), string> {
+  if observed > limit {
+    Err("front-end resolver preview {label} resource limit: observed {observed}, limit {limit}")
+  } else {
+    Ok(())
+  }
+}
+
+function accountSourceFact(
+  request: Stage1Request,
+  totals: Array<int>,
+  fact: PreviewHostFact,
+) -> Result<(), string> {
+  let mut counts = totals
+  if fact.kind == "read-source" {
+    counts[0] += 1
+    if fact.status == "present" { counts[1] += fact.source.byteLength() }
+    resourceLimit("source-fact", counts[0], request.maxSourceFacts)?
+    resourceLimit("total-source-byte", counts[1], request.maxTotalSourceBytes)?
+  }
+  Ok(())
+}
+
+function resolverBudgets(request: Stage1Request, resolved: ResolveResult) -> Result<(), string> {
+  let mut raw = 0
+  let mut layout = 0
+  let mut ast = 0
+  for module in resolved.modules {
+    raw += module.raw.length
+    layout += module.layout.length
+    ast += module.ast.length
+  }
+  resourceLimit("raw-token", raw, request.maxRawTokens)?
+  resourceLimit("layout-token", layout, request.maxLayoutTokens)?
+  resourceLimit("ast-node", ast, request.maxAstNodes)?
+  resourceLimit("resolved-fact", resolved.scopes.length + resolved.declarations.length +
+    resolved.references.length + resolved.exports.length, request.maxHirNodes)?
+  resourceLimit("diagnostic", resolved.diagnostics.length, request.maxDiagnostics)
+}
+
+// The host owns I/O and package facts. K owns this invocation's fact cache,
+// parsing, graph discovery, checking and requested backend work. No state is
+// retained by a subsequent call and no compilerStep replay occurs here.
+export function compile(
+  request: Stage1Request,
+  provide: (PreviewHostQuery) -> Result<PreviewHostFact, string>,
+  observe: bool,
+  includeExports: bool,
+) -> Result<CompilerResult, string> {
+  let producerStage = validateStage1Request(request)?
+  let mut facts: Array<PreviewHostFact> = []
+  let counts: Array<int> = [0, 0]
+  for fact in request.facts {
+    accountSourceFact(request, counts, fact)?
+    facts.push(fact)
+  }
+  let catalog = resolverHostFacts(facts)
+  let hostFacts = ResolverHostFactCatalog {
+    ...catalog,
+    provider: Some((query: PreviewHostQuery) => {
+      let fact = provide(query)?
+      accountSourceFact(request, counts, fact)?
+      Ok(fact)
+    }),
+  }
+  let resolved = resolveWithFacts(request.entry, request.root, hostFacts,
+    request.package.externModules, request.package.generatedStdModules,
+    request.maxAstNodes, request.maxAstDepth, request.languageMode)?
+  resolverBudgets(request, resolved)?
+  let preview = stage1PreviewRequest(request)
+  let checked = checkResolvedRequest(preview, resolved)?
+  let frontEnd = applyCompilerProfile(request.profile, request.languageMode, resolvedResponse(preview, resolved, checked))?
+  resourceLimit("diagnostic", frontEnd.resolverDiagnostics.length +
+    frontEnd.checkerDiagnostics.length, request.maxDiagnostics)?
+  let base = CompilerResult {
+    status: frontEnd.status,
+    kind: "typed",
+    diagnostics: frontEnd.resolverDiagnostics,
+    checkerDiagnostics: frontEnd.checkerDiagnostics,
+    exports: if includeExports { frontEnd.exports } else { [] },
+    provenance: compilerProvenance(request.compilerSourceSetId, request.producer, producerStage),
+    generatedRust: None,
+    lowered: None,
+    observation: if observe { Some(frontEnd) } else { None },
+  }
+  if frontEnd.status != "completed" || request.terminal == "typed" {
+    return Ok(base)
+  }
+  let lowered = lowerValue(lowerBridgeValue(request, producerStage, frontEnd))?
+  if request.terminal == "lowered" {
+    return Ok(CompilerResult {
+      ...base,
+      kind: "lowered",
+      status: if lowered.unsupported.length > 0 { "unsupported" } else { "completed" },
+      lowered: Some(lowered),
+    })
+  }
+  let rust = emitRust(lowered)?
+  if rust.byteLength() > request.maxGeneratedRustBytes {
+    return Err("Stage 1 generated Rust exceeds {request.maxGeneratedRustBytes} bytes")
+  }
+  Ok(CompilerResult { ...base, kind: "rust-source", generatedRust: Some(rust) })
+}

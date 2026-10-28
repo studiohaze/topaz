@@ -1,0 +1,31 @@
+import std.io
+
+record StudyTask {
+    title: string,
+    minutes: int,
+    done: bool = false,
+}
+
+function pace(task: StudyTask) -> string {
+    if task.done {
+        return "done"
+    }
+    match task.minutes {
+        case 1..15 => "quick"
+        case 16..30 => "focused"
+        case _ => "deep"
+    }
+}
+
+let tasks: Array<StudyTask> = [
+    StudyTask { title: "Run first program", minutes: 10, done: true },
+    StudyTask { title: "Build application", minutes: 25 },
+]
+let mut remaining = 0
+for task in tasks {
+    if !task.done {
+        remaining = remaining + task.minutes
+    }
+    io.writeLine("{task.title}: {pace(task)}")
+}
+io.writeLine("remaining: {remaining} minutes")
