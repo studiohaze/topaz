@@ -22,5 +22,3 @@ Generated application output retains GENERATED-OUTPUT-NOTICE.txt and its runtime
 and third-party licenses. This policy grants no rights in third-party material
 beyond those granted by its copyright holders.
 
-The complete v5.20.4 archive is the Last Public Rust Reference Compiler Release /
-Historical Source Snapshot. Its published bytes, licenses and notices are unchanged.

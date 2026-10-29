@@ -1,227 +1,6 @@
 {
-  "schema": "topaz.public-source-components/v1",
-  "effectiveFrom": "v5.21.0",
-  "authority": "Owner implementation instruction 2026-10-23; company-authorized Topaz source scopes. Existing published grants remain effective.",
-  "retentionFrom": "v5.20.4",
-  "historicalReference": {
-    "version": "v5.20.4",
-    "archive": "topaz-stage0-source-v5.20.4.tar.gz",
-    "sha256": "09e3bbe880cb3e8d05984576cb768e090f2f38ec96d866a62db96cf0a37a6b8b"
-  },
-  "components": [
-    {
-      "id": "topaz-self-host",
-      "sources": [
-        "compiler/crates/topaz_self_frontend/topaz/**"
-      ],
-      "extensions": [
-        ".tpz",
-        ".toml"
-      ],
-      "license": "Apache-2.0"
-    },
-    {
-      "id": "topaz-standard-library-tools",
-      "sources": [
-        "compiler/crates/topaz_rt/std/**",
-        "compiler/tools/**",
-        "compiler/contracts/lispex-application/v1/std.lispex.tpz"
-      ],
-      "extensions": [
-        ".tpz"
-      ],
-      "license": "Apache-2.0"
-    },
-    {
-      "id": "topaz-spec-conformance-examples",
-      "sources": [
-        "compiler/spec/**",
-        "compiler/corpus/**",
-        "compiler/fixtures/**",
-        "examples/**",
-        "docs/samples/**",
-        "docs/topaz-v5.19/*.md"
-      ],
-      "extensions": [
-        ".tpz",
-        ".toml",
-        ".md",
-        ".json",
-        ".stdout",
-        ".stderr",
-        ".mdx",
-        ".lock",
-        ".lspx",
-        ".txt",
-        ".TPZ",
-        ".files",
-        ".files-in",
-        ".defer",
-        ".args",
-        ".stdin",
-        ".jsonl"
-      ],
-      "license": "Apache-2.0"
-    },
-    {
-      "id": "topaz-conformance-fixtures",
-      "sources": [
-        "compiler/crates/topaz_difftest/fixtures/**",
-        "compiler/crates/topaz_cli/tests/fixtures/**",
-        "compiler/crates/topaz_self_frontend/tests/fixtures/**"
-      ],
-      "extensions": [
-        ".tpz",
-        ".toml",
-        ".stdout",
-        ".stderr"
-      ],
-      "license": "Apache-2.0"
-    },
-    {
-      "id": "topaz-benchmark-application-authoring-inputs",
-      "sources": [
-        "compiler/scripts/bench/fixtures/**",
-        "compiler/court/installed-application/**",
-        "compiler/docs/evolution/agent-authoring-pilot/references/topaz/**",
-        "compiler/docs/evolution/agent-authoring-pilot/seeds/topaz/**",
-        "compiler/docs/evolution/agent-authoring-pilot/s4-inputs/h1-variant-seeds/topaz/**"
-      ],
-      "extensions": [
-        ".tpz"
-      ],
-      "license": "Apache-2.0"
-    },
-    {
-      "id": "topaz-conformance-entry-metadata",
-      "sources": [
-        "compiler/corpus/**/ENTRY",
-        "compiler/corpus/**/ROOT"
-      ],
-      "extensions": [
-        ""
-      ],
-      "license": "Apache-2.0"
-    },
-    {
-      "id": "topaz-example-support",
-      "sources": [
-        "examples/**"
-      ],
-      "extensions": [
-        ".csv",
-        ".sh",
-        ".py"
-      ],
-      "license": "Apache-2.0"
-    },
-    {
-      "id": "topaz-locked-rule-fixtures",
-      "sources": [
-        "compiler/corpus/lispex-decision-application/bounded-application-v1/.topaz/lispex/rules/*.lpxembed",
-        "docs/samples/guides/lispex-application/.topaz/lispex/rules/*.lpxfull"
-      ],
-      "extensions": [
-        ".lpxembed",
-        ".lpxfull"
-      ],
-      "license": "Apache-2.0"
-    }
-  ],
-  "files": [
-    {
-      "source": "compiler/docs/evolution/V5.6-STDLIB-RUNTIME-INVENTORY.json",
-      "id": "spec-linked-stdlib-inventory",
-      "license": "Apache-2.0"
-    },
-    {
-      "source": "compiler/corpus/v5_4/extern/extern-replay-package/artifacts/host-math.wasm",
-      "id": "extern-replay-fixture-data",
-      "license": "Apache-2.0"
-    },
-    {
-      "source": "LICENSE",
-      "destination": "LICENSE",
-      "id": "public-license",
-      "license": "Apache-2.0"
-    },
-    {
-      "source": "LICENSE-COMPONENTS.txt",
-      "destination": "LICENSE-COMPONENTS.txt",
-      "id": "component-scope",
-      "license": "Apache-2.0"
-    },
-    {
-      "source": "BINARY-LICENSE.txt",
-      "destination": "BINARY-LICENSE.txt",
-      "id": "binary-terms",
-      "license": "LicenseRef-Topaz-Binary"
-    },
-    {
-      "source": "NOTICE",
-      "destination": "NOTICE",
-      "id": "notices",
-      "license": "Apache-2.0"
-    },
-    {
-      "source": "THIRD-PARTY-NOTICES.md",
-      "destination": "THIRD-PARTY-NOTICES.md",
-      "id": "third-party-notices",
-      "license": "Apache-2.0"
-    },
-    {
-      "source": "compiler/contracts/public-source-policy/v1/components.json",
-      "destination": "SOURCE-COMPONENTS.json",
-      "id": "component-map",
-      "license": "Apache-2.0"
-    },
-    {
-      "source": "compiler/contracts/public-source-policy/v1/README.md",
-      "destination": "README.md",
-      "id": "public-readme",
-      "license": "Apache-2.0"
-    },
-    {
-      "source": "compiler/licenses/THIRD-PARTY.md",
-      "destination": "THIRD-PARTY-LICENSES.txt",
-      "id": "third-party-license-texts",
-      "license": "LicenseRef-Third-Party-Notices"
-    }
-  ],
-  "provenance": [
-    {
-      "id": "unicode-derived-tables",
-      "source": "compiler/crates/topaz_self_frontend/topaz/unicode_tables.tpz",
-      "origin": "third-party",
-      "sha256": "16293a12c70d71705abbf76523c0667497c52a4f30360a794e2e80995aceae3c",
-      "license": "Apache-2.0 AND Unicode-3.0",
-      "evidence": "Generated table header identifies pinned UCD 16.0.0 under compiler/tools/unicode-gen/data; Unicode License v3 is reproduced in NOTICE. Company generator code and Unicode data rights coexist."
-    }
-  ],
-  "provenanceAdmission": "Rust is admitted by exact path, SHA-256, origin (public-generated, third-party, previously-published), license and evidence. No implicit generated/runtime Rust admission.",
-  "excludedComponents": [
-    {
-      "sources": [
-        "compiler/lit/**"
-      ],
-      "reason": "Retired LIT implementation, H0 rehearsal and frozen installed copies are historical related-surface evidence, not current public compiler/application inputs. Existing published history and grants remain.",
-      "evidence": "compiler/lit/README.md; current integration program LIL/LIT retirement and version policy"
-    },
-    {
-      "sources": [
-        "compiler/lispex-topaz-vm/**"
-      ],
-      "reason": "Separate branch-local F5 provider/reference package; current application source uses std.lispex and the embedded evaluator, not this provider. Not represented as current release runtime. Existing published grants remain.",
-      "evidence": "compiler/lispex-topaz-vm/README.md; compiler/crates/topaz_lispex_product/src/lib.rs"
-    }
-  ],
-  "privateOriginals": {
-    "paths": [
-      "compiler/crates/**",
-      "compiler/tools/**"
-    ],
-    "meaning": "New company-owned Rust originals are not disclosed. Previously Apache-licensed originals and third-party rights are not revoked or reclassified."
-  },
+  "schema": "topaz.reader-source-components/v1",
+  "license": "Apache-2.0; third-party terms identified in the accompanying notices",
   "snapshot": {
     "version": "v5.21.0",
     "compilerSourceRevision": "fb4c370b18d7c076eceb822261e14affd8869811",
@@ -245,17 +24,6 @@
         "bytes": 9116,
         "sha256": "7a1b2d2865fe1ca0a4ffe11a0ee99026c0ae634b6e9c56dca15056a85a0290c3",
         "component": "public-license",
-        "origin": "authorized-public-source",
-        "license": "Apache-2.0",
-        "sourceRevision": "fb4c370b18d7c076eceb822261e14affd8869811"
-      },
-      {
-        "source": "LICENSE-COMPONENTS.txt",
-        "destination": "LICENSE-COMPONENTS.txt",
-        "mode": "100644",
-        "bytes": 1611,
-        "sha256": "3e96d7cc9a8764b7ba78a7fbecf6a776d2ea7d3fdd41da7d33f3c4be1485bbbc",
-        "component": "component-scope",
         "origin": "authorized-public-source",
         "license": "Apache-2.0",
         "sourceRevision": "fb4c370b18d7c076eceb822261e14affd8869811"
@@ -960,6 +728,16 @@
         "origin": "authorized-public-source",
         "derivedFrom": {
           "source": "compiler/licenses/THIRD-PARTY.md",
+          "sourceRevision": "fb4c370b18d7c076eceb822261e14affd8869811",
+          "change": "snapshot scope and paths; original license terms and package inventory preserved"
+        }
+      },
+      {
+        "destination": "LICENSE-COMPONENTS.txt",
+        "license": "Apache-2.0",
+        "origin": "authorized-public-source",
+        "derivedFrom": {
+          "source": "LICENSE-COMPONENTS.txt",
           "sourceRevision": "fb4c370b18d7c076eceb822261e14affd8869811",
           "change": "snapshot scope and paths; original license terms and package inventory preserved"
         }
