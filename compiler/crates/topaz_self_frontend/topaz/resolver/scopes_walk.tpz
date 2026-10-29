@@ -1088,9 +1088,9 @@ function walkNodeChildren(
     if found.kind == "identifier" {
       continue
     }
-    if node.kind == "expression/call" && found.field == "typeArguments" {
-      continue
-    }
+    // Explicit call type arguments need the same declaration references as an
+    // annotation. In particular, a namespace-qualified nominal must retain its
+    // defining module rather than falling through to an opaque foreign type.
     if (node.kind == "function-declaration" ||
       node.kind == "expression/lambda") &&
       (found.field == "parameters" || found.field == "returnType") {

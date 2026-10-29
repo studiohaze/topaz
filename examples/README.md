@@ -1,6 +1,6 @@
-# Topaz 5.21.0 examples
+# Topaz 5.21.1 examples
 
-Run these commands from the repository root with Topaz 5.21.0.
+Run these commands from the repository root with Topaz 5.21.1.
 
 ## Variables and output
 

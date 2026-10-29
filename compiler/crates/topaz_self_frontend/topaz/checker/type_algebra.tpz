@@ -99,6 +99,16 @@ export function typesOverlap(left: TypeValue, right: TypeValue) -> bool {
 }
 
 export function typeText(value: TypeValue) -> string {
+  typeTextInModule(value, "")
+}
+
+// Diagnostic rendering has a module context; semantic identity and projections
+// keep using typeText's context-free spelling.
+export function diagnosticTypeText(value: TypeValue, currentModule: string) -> string {
+  typeTextInModule(value, currentModule)
+}
+
+function typeTextInModule(value: TypeValue, currentModule: string) -> string {
   let unit = lengthUnit(value)
   if unit != "" { return "Length<{unit}>" }
   if value.kind == "newtype" && value.origin == "" && value.arguments.length == 0 && (value.identity == "builtin:Pt" || value.identity == "builtin:Mm" || value.identity == "builtin:Cm" || value.identity == "builtin:In" || value.identity == "builtin:Em") { return value.identity.replace("builtin:","") }
@@ -113,17 +123,17 @@ export function typeText(value: TypeValue) -> string {
     case "constructor" => if value.name == "Range" {
       "range"
     } else {
-      "{value.name}<{typeListText(value.arguments)}>"
+      "{value.name}<{stringJoinTypes(value.arguments, ", ", currentModule)}>"
     }
     case "function" => {
       let mut parameters = value.parameters
-      let mut textValue = typeListText(parameters)
+      let mut textValue = stringJoinTypes(parameters, ", ", currentModule)
       match value.variadic.get(0) {
         case Some(item) => {
           if textValue != "" {
             textValue = "{textValue}, "
           }
-          textValue = "{textValue}...{typeText(item)}"
+          textValue = "{textValue}...{typeTextInModule(item, currentModule)}"
         }
         case None => ()
       }
@@ -131,9 +141,9 @@ export function typeText(value: TypeValue) -> string {
         case Some(item) => item
         case None => emptyType("unknown")
       }
-      "({textValue}) -> {typeText(resultValue)}"
+      "({textValue}) -> {typeTextInModule(resultValue, currentModule)}"
     }
-    case "union" => stringJoinTypes(value.members, " | ")
+    case "union" => stringJoinTypes(value.members, " | ", currentModule)
     case "record" => {
       let mut fields: Array<string> = []
       let mut index = 0
@@ -142,15 +152,16 @@ export function typeText(value: TypeValue) -> string {
           case Some(found) => found
           case None => ""
         }
-        fields.push("{name}: {typeText(field)}")
+        fields.push("{name}: {typeTextInModule(field, currentModule)}")
         index += 1
       }
       "\{ " + stringJoin(fields, ", ") + " \}"
     }
-    case "enum" | "nominal-record" | "newtype" | "foreign" => if value.arguments.length == 0 {
-      value.identity
-    } else {
-      "{value.identity}<{typeListText(value.arguments)}>"
+    case "enum" | "nominal-record" | "newtype" | "foreign" => {
+      let identity = if currentModule != "" && value.origin != "" &&
+        value.origin != currentModule { "{value.origin}::{value.identity}" } else { value.identity }
+      if value.arguments.length == 0 { identity }
+      else { "{identity}<{stringJoinTypes(value.arguments, ", ", currentModule)}>" }
     }
     case "rigid" => value.name
     case "template" => "template"
@@ -173,17 +184,17 @@ export function typeText(value: TypeValue) -> string {
 }
 
 export function typeListText(values: Array<TypeValue>) -> string {
-  stringJoinTypes(values, ", ")
+  stringJoinTypes(values, ", ", "")
 }
 
-function stringJoinTypes(values: Array<TypeValue>, separator: string) -> string {
+function stringJoinTypes(values: Array<TypeValue>, separator: string, currentModule: string) -> string {
   let mut output = ""
   let mut index = 0
   for value in values {
     if index > 0 {
       output = "{output}{separator}"
     }
-    output = "{output}{typeText(value)}"
+    output = "{output}{typeTextInModule(value, currentModule)}"
     index += 1
   }
   output
@@ -1166,9 +1177,8 @@ export function joinedTypes(
   // widening: fresh scalar branches widen, existing payload domains do not.
   for value in values {
     let completed = substitutePartialTypes(value, bindings)
-    if hasPartialHole(completed) {
-      return emptyType("unknown")
-    }
+    // Keep unresolved structure until its expected-type owner finishes. Erasing
+    // it to Unknown here hides missing Result arguments inside record joins.
     solved.push(completed)
   }
   retainInferenceSolutions(state, bindings)

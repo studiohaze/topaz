@@ -32,6 +32,7 @@ import checker.model {
 }
 import checker.type_algebra {
   assignable,
+  diagnosticTypeText,
   flattenType,
   flattenedHasHole,
   hasHole,
@@ -47,6 +48,7 @@ import checker.syntax_index {
   declarationOriginForReference,
   definitionNameKey,
   moduleAt,
+  moduleIdentityAt,
   protocolDefinition,
   referenceFor,
   replaceNodeType,
@@ -86,6 +88,12 @@ export function calleeReference(
   moduleIndex: int,
   node: SyntaxNode,
 ) -> Option<PreviewResolvedReference> {
+  if node.kind == "expression/parenthesized" {
+    return match child(node, "operand") {
+      case Some(operand) => calleeReference(state, moduleIndex, operand)
+      case None => None
+    }
+  }
   if node.kind == "expression/identifier" {
     return referenceFor(state, moduleIndex, node.lo, node.hi)
   }
@@ -906,6 +914,8 @@ export function recordBoundBuiltin(
   } else { return () }
   match signature { case None => return (); case Some(_) => () }
   let target = if boundary.length == 2 && boundary[0] == "JSON" && member == "parseAs" { "builtin::JsonParseAs" }
+    else if boundary.length == 2 && boundary[0] == "JSON" && member == "parse" { "builtin::JsonParse" }
+    else if boundary.length == 2 && boundary[0] == "JSON" && member == "stringify" { "builtin::JsonStringify" }
     else if receiver.kind == "json-value" && member == "decode" { "builtin::JsonDecode" } else { "" }
   let metadata = BoundBuiltin { typeValue: valueType, receiverType: receiver, member: member, boundary: boundary,
     typeParameters: builtinCallTypeParameters(service, state, moduleIndex, source, value, receiver), signature: signature, target: target }
@@ -1045,6 +1055,8 @@ function builtinCallIdentity(
   match boundBuiltinForCallee(state, moduleIndex, callee) { case Some(bound) => if bound.target != "" { return bound.target }; case None => () }
   let boundary = canonicalBoundaryTarget(state, moduleIndex, source, callee)
   if boundary.length == 2 && boundary[0] == "JSON" && boundary[1] == "parseAs" { return "builtin::JsonParseAs" }
+  if boundary.length == 2 && boundary[0] == "JSON" && boundary[1] == "parse" { return "builtin::JsonParse" }
+  if boundary.length == 2 && boundary[0] == "JSON" && boundary[1] == "stringify" { return "builtin::JsonStringify" }
   if state.languageMode == "topaz-5.21" && callee.kind == "expression/member" {
     match child(callee, "field") {
       case Some(field) => if text(source, field) == "decode" {
@@ -1138,6 +1150,11 @@ function projectedCallIdentity(
   // A bound JSON boundary keeps its builtin target through module aliases,
   // selected imports and value aliases; the std declaration is only the route.
   match boundBuiltinForCallee(state, moduleIndex, callee) { case Some(bound) => if bound.target != "" { return bound.target }; case None => () }
+  let boundary = canonicalBoundaryTarget(state, moduleIndex, source, callee)
+  if boundary.length == 2 && boundary[0] == "JSON" {
+    let intrinsic = builtinCallIdentity(service, state, moduleIndex, source, callee)
+    if intrinsic != "" { return intrinsic }
+  }
   let identity = match reference {
     case Some(found) => referenceTargetIdentity(state, found)
     case None => ""
@@ -1654,11 +1671,12 @@ export function reportExpectedType(
     } else {
       actual
     }
+    let currentModule = moduleIdentityAt(state, moduleIndex)
     addDiagnostic(
       state,
       moduleIndex,
       "TPZ5001",
-      "expected `{typeText(expected)}`, found `{typeText(shown)}`",
+      "expected `{diagnosticTypeText(expected, currentModule)}`, found `{diagnosticTypeText(shown, currentModule)}`",
       "",
       node,
     )

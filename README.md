@@ -2,7 +2,7 @@
 
 Topaz is a programming language for typesetting. The compiler is written in Topaz and emits Rust.
 
-This repository contains the compiler source and examples for Topaz 5.21.0.
+This repository contains the compiler source and examples for Topaz 5.21.1.
 
 ## Install
 

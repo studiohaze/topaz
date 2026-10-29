@@ -71,6 +71,7 @@ import checker.call_facts {
   currentFunctionReturn,
   currentPipeValue,
   inferExpressionWithExpected,
+  inferExpressionContext,
   inferExpressionWithResultContext,
   recordInferredExpression,
   refineExpressionToExpected,
@@ -760,12 +761,17 @@ export function inferBinaryExpression(
   source: Bytes,
   node: SyntaxNode,
 ) -> TypeValue {
+  let operator = attribute(node, "operator")
+  let equality = operator == "equal" || operator == "not-equal"
   let leftNode = child(node, "left")
   let left = match leftNode {
-    case Some(found) => inferExpression(service, state, moduleIndex, source, found)
+    case Some(found) => if equality {
+      inferExpressionContext(service, state, moduleIndex, source, found)
+    } else {
+      inferExpression(service, state, moduleIndex, source, found)
+    }
     case None => emptyType("unknown")
   }
-  let operator = attribute(node, "operator")
   if operator == "coalesce" {
     let optional = if left.kind == "constructor" && left.name == "Option" {
       left.arguments.get(0)
@@ -824,7 +830,11 @@ export function inferBinaryExpression(
     }
   }
   let right = match child(node, "right") {
-    case Some(found) => inferExpression(service, state, moduleIndex, source, found)
+    case Some(found) => if equality {
+      inferExpressionContext(service, state, moduleIndex, source, found)
+    } else {
+      inferExpression(service, state, moduleIndex, source, found)
+    }
     case None => emptyType("unknown")
   }
   let mut lhs = widen(left)

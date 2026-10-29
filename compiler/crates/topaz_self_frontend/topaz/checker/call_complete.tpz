@@ -26,6 +26,8 @@ import checker.model {
 }
 import checker.type_algebra {
   hasHole,
+  hasPartialHole,
+  solvePartialTypeAgainst,
   transformTypeComponents,
   typeContains,
   typeEqual,
@@ -98,6 +100,7 @@ import checker.expression_core {
   inferLambda,
   needsInwardCallContext,
   pipePlaceholderContext,
+  specializeGenericFunctionValue,
   wrapOptionalResult,
 }
 import checker.call_plan {
@@ -192,16 +195,7 @@ export function inferContextualCallArgument(
           case Some(reference) => match functionDefinitionForReference(state, reference) {
             case Some(definition) => if definition.typeParameters.length > 0 {
               let declared = serviceInferExpression(service, state, moduleIndex, source, node)
-              let parameters = callTypeParameters(service, state, moduleIndex, source,
-                node, emptyType("unknown"), Some(definition), None, declared)
-              let scheme = scopeCallParameters(parameters, moduleIndex, node)
-              let inferred = instantiateCallType(declared, parameters, scheme)
-              let mut bindings: Array<TypeBinding> = []
-              collectTypeBindings(inferred, context, bindings, true, scheme)
-              checkFunctionBounds(state, moduleIndex, node, definition, scheme, bindings)
-              let specialized = applyBindings(inferred, bindings)
-              replaceNodeType(state, moduleIndex, "expression", node, specialized)
-              return specialized
+              return specializeGenericFunctionValue(state, moduleIndex, node, declared, context)
             }
             case None => ()
           }
@@ -290,6 +284,29 @@ export function inferCallArguments(
   let frame = match state.pipeValues.get(state.pipeValues.length - 1) {
     case Some(found) => if found.moduleIndex == moduleIndex && found.stage.lo == node.lo && found.stage.hi == node.hi { Some(found) } else { None }
     case None => None
+  }
+  // A placeholder can receive the saved input after an earlier fixed seed.
+  // Admit independent evidence from those earlier slots before inferring the
+  // saved callback. Do not reschedule later slots or variadic tails: each
+  // argument still owns the substitution available at its original check.
+  let mut placeholderSlot = calleeType.parameters.length
+  if match frame { case Some(_) => true; case None => false } &&
+    match preparation.leading { case Some(_) => false; case None => true } {
+    for position in order {
+      let slot = argumentSlots[position]
+      if slot >= 0 && containsPlaceholder(argumentValue(arguments[position])) &&
+        slot < placeholderSlot { placeholderSlot = slot }
+    }
+    for position in order {
+      let slot = argumentSlots[position]
+      if slot >= 0 && slot < placeholderSlot {
+        let argument = arguments[position]
+        let expected = callArgumentExpectedType(
+          applyBindings(preparation.contextualType, argumentBindings), argument, slot)
+        deferred[position] = needsInwardCallContext(state, moduleIndex, source,
+          argumentValue(argument), expected)
+      }
+    }
   }
   let deferLeading = match frame {
     case Some(saved) => needsInwardCallContext(state, moduleIndex, source, saved.node, None)
@@ -413,7 +430,9 @@ export function inferCallArguments(
       match declaredExpected {
         case Some(want) => refineCallArgument(state, moduleIndex, valueNode,
           inferred, callArgumentInferenceContext(applyBindings(want, argumentBindings),
-            preparation.schemeParameters), argumentBindings)
+            preparation.schemeParameters), argumentBindings,
+          slot == -1 && argument.kind == "call-argument/spread" && !dependent &&
+            match inferenceExpected { case Some(_) => false; case None => true })
         case None => ()
       }
     }
@@ -444,6 +463,14 @@ export function inferCallArguments(
     }
   }
   let mut diagnostics = state.diagnostics
+  // Recovered duplicate/overflow arguments have no parameter owner. Rust checks
+  // their inner errors after planning, before replaying owned slot diagnostics.
+  // Move only diagnostics: each expression above was inferred exactly once.
+  for position in order {
+    if argumentSlots[position] == -2 {
+      for diagnostic in argumentDiagnostics[position] { diagnostics.push(diagnostic) }
+    }
+  }
   for diagnostic in leadingDiagnostics { diagnostics.push(diagnostic) }
   match frame { case Some(saved) => for diagnostic in saved.diagnostics { diagnostics.push(diagnostic) }; case None => () }
   // Input inference precedes callee diagnostics; the argument comparison
@@ -459,6 +486,7 @@ export function inferCallArguments(
   }
   let mut variadicDiagnostics: Array<PreviewCheckDiagnostic> = []
   for position in order {
+    if argumentSlots[position] == -2 { continue }
     let scalarTail = hasSpreadTail && argumentSlots[position] == -1 &&
       arguments[position].kind != "call-argument/spread"
     for diagnostic in argumentDiagnostics[position] {
@@ -709,13 +737,20 @@ function refineCallArgument(
   actualType: TypeValue,
   expectedType: TypeValue,
   bindings: Array<TypeBinding>,
+  preserveIndependentShape: bool = false,
 ) -> () {
   let specializedActual = applyBindings(actualType, bindings)
   if !typeEqual(specializedActual, actualType) {
     replaceNodeType(state, moduleIndex, "expression", actualNode, specializedActual)
   }
-  let refined = refineExpressionToExpected(
-    state, moduleIndex, actualNode, specializedActual, expectedType)
+  let refined = if preserveIndependentShape && hasPartialHole(specializedActual) &&
+    !hasHole(expectedType) {
+    let completed = solvePartialTypeAgainst(state, specializedActual, expectedType)
+    replaceNodeType(state, moduleIndex, "expression", actualNode, completed)
+    completed
+  } else {
+    refineExpressionToExpected(state, moduleIndex, actualNode, specializedActual, expectedType)
+  }
   if !expressionResultIsDelegated(actualNode) {
     reportExpectedType(state, moduleIndex, expressionResultNode(actualNode), expectedType, refined)
   }

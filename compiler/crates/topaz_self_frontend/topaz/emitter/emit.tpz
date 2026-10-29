@@ -1124,7 +1124,10 @@ function emitOrdinaryCallWith(ctx: Ctx, op: Stage1Operation, callee: Stage1Opera
       let method = rustStr(callee.detail)
       return Ok(Code { rs: "\{ let __args = vec![{values.join(", ")}]; let __method = __args.first().and_then(|v| v.nominal_id()).and_then(|id| g.protocols.borrow().get(&({module}.to_string(), {name}.to_string(), id.to_string(), {method}.to_string())).cloned()); match __method \{ Some(f) => call_value(f, __args, cx.clone(), {spanOf(op)}).await?, None => builtin_protocol_dispatch({name}, {method}, __args, {spanOf(op)})? \} \}", repr: "value" })
     }
-    if op.callTarget.startsWith("builtin::") {
+    // JSON boundary targets identify callable values, not static namespaces.
+    // Keep callee evaluation and named/spread arguments on the value-call path.
+    let jsonCallable = op.callTarget == "builtin::JsonParse" || op.callTarget == "builtin::JsonStringify"
+    if op.callTarget.startsWith("builtin::") && !jsonCallable {
       let namespace = op.callTarget.split("::")[1]
       if ctx.table.languageMode == "topaz-5.21" && removedStandardStatic(namespace, op.callMethod) { return Err(refusal("use numeric receiver methods", op)) }
       match staticSpec(namespace, op.callMethod) {

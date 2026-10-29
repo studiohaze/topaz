@@ -8,6 +8,7 @@ import unicode { didYouMean }
 import checker.model {
   CheckerService,
   CheckerState,
+  TypeBinding,
   constantRenderEpoch,
   advanceConstantRenderEpoch,
   restoreConstantRenderEpoch,
@@ -44,9 +45,11 @@ import checker.syntax_index {
   child,
   children,
   containsString,
+  functionDefinitionForReference,
   protocolDefinition,
   protocolMethodDefinition,
   referenceFor,
+  replaceNodeType,
   spanKey,
   symbolAt,
   text,
@@ -66,19 +69,25 @@ import checker.protocols_methods {
   referenceTargetType,
 }
 import checker.members_capabilities {
+  applyBindings,
   arraySpreadElement,
   builtinNamespaceMemberType,
   containsByteBuffer,
+  checkFunctionBounds,
+  collectTypeBindings,
   gateCollectionKey,
   iterableElement,
+  instantiateCallType,
   memberType,
   enumVariantType,
   opaqueMemberNames,
   protocolStaticMemberType,
   rigidUnionMissingConcreteMember,
+  scopeCallParameters,
 }
 import checker.call_facts {
   argumentValue,
+  calleeReference,
   builtinIdentifierType,
   containsPlaceholder,
   builtinMutator,
@@ -527,6 +536,45 @@ export function inferTextExpression(
   }
 }
 
+// Named generic values are instantiated at their use site, including a
+// callback's returned value. Sharing this path with direct call arguments keeps
+// their schemes separate without importing the call planner back into this leaf.
+export function specializeGenericFunctionValue(
+  state: CheckerState,
+  moduleIndex: int,
+  node: SyntaxNode,
+  declared: TypeValue,
+  expected: TypeValue,
+) -> TypeValue {
+  if expected.kind != "function" { return declared }
+  match calleeReference(state, moduleIndex, node) {
+    case Some(reference) => match functionDefinitionForReference(state, reference) {
+      case Some(definition) => if definition.typeParameters.length > 0 {
+        let mut parameters: Array<TypeValue> = []
+        let mut index = 0
+        for name in definition.typeParameters {
+          match definition.typeParameterOrigins.get(index) {
+            case Some(origin) => parameters.push(rigid(name, origin))
+            case None => ()
+          }
+          index += 1
+        }
+        let scheme = scopeCallParameters(parameters, moduleIndex, node)
+        let inferred = instantiateCallType(declared, parameters, scheme)
+        let mut bindings: Array<TypeBinding> = []
+        collectTypeBindings(inferred, expected, bindings, true, scheme)
+        checkFunctionBounds(state, moduleIndex, node, definition, scheme, bindings)
+        let specialized = applyBindings(inferred, bindings)
+        replaceNodeType(state, moduleIndex, "expression", node, specialized)
+        return specialized
+      }
+      case None => ()
+    }
+    case None => ()
+  }
+  declared
+}
+
 export function inferIdentifierExpression(
   state: CheckerState,
   moduleIndex: int,
@@ -535,7 +583,10 @@ export function inferIdentifierExpression(
   callee: bool,
 ) -> TypeValue {
   match referenceTargetType(state, moduleIndex, node) {
-    case Some(found) => found
+    case Some(found) => match currentExpectedExpression(state, node) {
+      case Some(expected) => specializeGenericFunctionValue(state, moduleIndex, node, found, expected)
+      case None => found
+    }
     case None => {
       let name = text(source, node)
       // Namespace heads have no value type; the resolver owns bare-use errors.

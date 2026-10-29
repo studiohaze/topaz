@@ -2085,6 +2085,11 @@ export function collectTypeBindings(
   // An unsolved expected component provides no evidence for a scheme slot.
   // Actual unknown inputs still retain their uncertainty during input binding.
   if !widenLiteral && actual.kind == "unknown" { return () }
+  // This marker carries an unsolved call slot, not evidence about its type.
+  // A concrete sibling (for example the callback result) may still solve it.
+  if actual.kind == "unknown" && actual.origin == "generic-call-expectation" {
+    return ()
+  }
   if expected.kind == "rigid" {
     // Only this invocation's instantiated scheme is solvable. Caller rigids
     // remain rigid even during recursion through the same declaration.

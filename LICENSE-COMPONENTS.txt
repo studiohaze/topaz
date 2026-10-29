@@ -21,4 +21,3 @@ Apache-2.0; its separately downloaded executable has component-specific terms.
 Generated application output retains GENERATED-OUTPUT-NOTICE.txt and its runtime
 and third-party licenses. This policy grants no rights in third-party material
 beyond those granted by its copyright holders.
-
