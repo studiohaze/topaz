@@ -6,17 +6,17 @@ This repository contains the compiler source and examples for Topaz 5.21.1.
 
 > ### A quick note from the author
 >
-> The release bot has been doing all the talking here, so I thought I'd interrupt it for a minute.
+> The release bot has been doing all the talking here, so I thought I'd leave a note of my own.
 >
-> Topaz already has a website for people who just want to use it. The ready-to-run CLI, documentation, and bootstrap seeds will stay at [topaz.ooo](https://topaz.ooo). No reason to make that page any busier.
+> Topaz already has a website for people who just want to use it. The CLI, docs, and bootstrap seeds will stay at [topaz.ooo](https://topaz.ooo). I don't want to make that page any busier.
 >
-> I'd like this repository to become a small Topaz Core Kit: the compiler written in Topaz, a CLI written in Topaz, and the handwritten Rust needed to make them work together. Just the source. No generated compiler Rust or prebuilt binaries.
+> I'd like to turn this repo into a small Topaz Core Kit someday. The compiler is already written in Topaz, and I'd like to write the CLI in Topaz too. We'll need a bit of handwritten Rust to make it all work, of course.
 >
-> If you want to build it yourself, you'll start with the matching bootstrap seed from the website. We won't keep another copy of that seed here.
+> Just source code here. No generated compiler Rust or prebuilt binaries. Anyone who wants to build it will need the matching bootstrap seed from the website.
 >
-> None of this is ready yet. For now, the repo is still a source snapshot.
+> There's nothing to try yet. For now, it's still a source snapshot.
 >
-> I just wanted to leave a note before the bot comes back.
+> I just wanted to leave this here before the bot comes back.
 
 ## Install
 
