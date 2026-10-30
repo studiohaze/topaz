@@ -4,6 +4,20 @@ Topaz is a programming language for typesetting. The compiler is written in Topa
 
 This repository contains the compiler source and examples for Topaz 5.21.1.
 
+> ### A quick note from the author
+>
+> The release bot has been doing all the talking here, so I thought I'd interrupt it for a minute.
+>
+> Topaz already has a website for people who just want to use it. The ready-to-run CLI, documentation, and bootstrap seeds will stay at [topaz.ooo](https://topaz.ooo). No reason to make that page any busier.
+>
+> I'd like this repository to become a small Topaz Core Kit: the compiler written in Topaz, a CLI written in Topaz, and the handwritten Rust needed to make them work together. Just the source. No generated compiler Rust or prebuilt binaries.
+>
+> If you want to build it yourself, you'll start with the matching bootstrap seed from the website. We won't keep another copy of that seed here.
+>
+> None of this is ready yet. For now, the repo is still a source snapshot.
+>
+> I just wanted to leave a note before the bot comes back.
+
 ## Install
 
 On macOS and Linux, run the following command.
