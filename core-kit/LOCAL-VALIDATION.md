@@ -549,11 +549,10 @@ source, native image, dependencies and required companions. Comparison covers
 all bytes, manifests and modes. Matching directories still need independent
 construction histories to support a reproduction claim.
 
-The supplied Linux and Windows x86-64 development recipes have `releaseReady`
-false and do not establish a minimum supported OS. They must reject promotion
-and packaging.
-The current catalogue has no public asset rows. Record distribution-command
-execution in [VALIDATION.md](VALIDATION.md) instead of inferring it from these
+The Linux and Windows x86-64 development recipes have `releaseReady` false
+and must reject promotion and packaging. The per-target release recipes are
+the approved inputs for catalogue rows. Record distribution-command execution
+in [VALIDATION.md](VALIDATION.md) instead of inferring it from these
 instructions.
 
 Approved candidates can be staged or packaged on their native target.

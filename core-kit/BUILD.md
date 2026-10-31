@@ -269,8 +269,8 @@ complete native payload reproduction.
 Use `./install-core-kit` or `.\install-core-kit.cmd` for the archive selected
 by `core-kit/downloads.data`. `--archive <file>` supplies that exact pinned
 archive offline. Download installation is separate from the source bootstrap
-and introduces no release dependency into this build path. The current
-catalogue lists no archives, so the source bootstrap is the available path.
+and introduces no release dependency into this build path. A target without
+a catalogue row uses the source bootstrap.
 
 The initial OS adapter checks the catalogue, archive and candidate executable
 before its first execution. Topaz then validates the full payload and current
@@ -284,10 +284,10 @@ The Windows installer and launcher honor the host's script execution policy.
 They do not bypass it or change policy settings. Native `bootstrap.cmd`
 remains available when the host does not permit the PowerShell helpers.
 
-The current catalogue has only its header because no public release assets
-have been approved. It must report an unavailable target before network access.
-Use source bootstrap for the current development checkout. Do not substitute
-fabricated hashes, a moving release or the website CLI.
+Catalogue rows come from `kit payload-pack` for the published release assets.
+A target without a row must report that it is unavailable before network
+access. Do not substitute fabricated hashes, a moving release or the website
+CLI.
 
 ## Payload reproduction and publication
 
@@ -342,15 +342,13 @@ set to avoid a self-hash cycle; installer and launcher sources remain included.
 A publisher-declared commit is provenance rather than proof of input equality.
 The [payload guide](PAYLOADS.md) specifies the exact record and publish checks.
 
-The supplied Linux and Windows x86-64 development recipes keep `releaseReady`
-false. The Windows template uses the imports in the owner's PR #8 report.
-The retained Windows executables fit the new file ceiling
-but still differ. This transition does not establish Windows reproduction,
-a minimum supported OS, approved notices or a public release asset. The owner's
-[completed PR #8 report](validation-pr8-native-comparison.json) records equal
-DLL lists but different timestamps, PDB GUIDs and all reported section hashes.
-Do not repeat that inspection. Continue with current-revision native and
-installation checks in [LOCAL-VALIDATION.md](LOCAL-VALIDATION.md).
+The Linux and Windows x86-64 development recipes keep `releaseReady` false.
+Release packaging uses the per-target release recipes under
+`core-kit/distribution`. Each maps a build record into its payload and states
+the imports and minimum platform measured from the release executable. Release
+candidates come from `core-kit/repro-build.sh` or `core-kit/repro-build.ps1`
+in two separate checkouts. [VALIDATION.md](VALIDATION.md) records the
+comparisons and first installations behind each catalogue row.
 
 `kit payload-record` and `kit payload-verify` retain their byte-inventory
 scope. They do not inspect native compatibility, build independently or

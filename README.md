@@ -113,8 +113,8 @@ compiler self-regeneration check.
 
 ### What installation selects
 
-This checkout has no platform archives listed in its [download catalogue](core-kit/downloads.data).
-When a checkout lists an archive for your platform, `install-core-kit` or
+The [download catalogue](core-kit/downloads.data) lists the release archives
+for this checkout. When it lists an archive for your platform, `install-core-kit` or
 `install-core-kit.cmd` verifies and installs those bytes. The root `topaz`
 and `topaz.cmd` launchers select that version. For the source build above,
 run the executable under `out/core-kit-bootstrap` directly.
