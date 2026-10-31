@@ -1,0 +1,741 @@
+import std.bytes { Bytes }
+import std.fs as files
+
+// These are structural observations, not a loader, a signature verifier or a
+// compatibility test. Target names select this repository's supported format
+// and architecture profiles. They do not prove a producer's compiler or ABI.
+// Every offset is checked before slicing. Counts, strings and tables have
+// independent limits so malformed inputs cannot request unbounded traversal.
+export const MAX_IMAGE_BYTES = 536870912
+const MAX_TABLE_BYTES = 1048576
+const MAX_SECTIONS = 64
+const MAX_DEPENDENCIES = 256
+const MAX_STRING_BYTES = 4096
+const MAX_INT = 9223372036854775807
+const PE_DEBUG_CODEVIEW = 2
+const PE_DEBUG_REPRO = 16
+const CODEVIEW_RSDS = 1396986706
+
+export record Section derives JSON {
+  name: string,
+  offset: int,
+  bytes: int,
+  sha256: string,
+}
+
+export record Field derives JSON {
+  name: string,
+  value: string,
+}
+
+export record Image derives JSON {
+  format: string,
+  target: string,
+  bytes: int,
+  sha256: string,
+  dependencies: Array<string>,
+  sections: Array<Section>,
+  metadata: Array<Field>,
+}
+
+record Segment {
+  address: int,
+  memoryBytes: int,
+  offset: int,
+  bytes: int,
+  flags: int,
+}
+
+record Region {
+  offset: int,
+  bytes: int,
+}
+
+function checkedRange(data: Bytes, offset: int, size: int) -> Result<(), string> {
+  if offset < 0 || size < 0 || offset > data.length() || size > data.length() - offset {
+    return Err("binary contains an out-of-file range")
+  }
+  Ok(())
+}
+
+function checkedExtent(address: int, size: int) -> Result<(), string> {
+  if address < 0 || size < 0 || size > MAX_INT - address {
+    return Err("binary address extent exceeds the supported integer range")
+  }
+  Ok(())
+}
+
+function u16(data: Bytes, offset: int) -> Result<int, string> {
+  checkedRange(data, offset, 2)?
+  Ok((data.get(offset) ?? 0) + (data.get(offset + 1) ?? 0) * 256)
+}
+
+function u32(data: Bytes, offset: int) -> Result<int, string> {
+  checkedRange(data, offset, 4)?
+  Ok((data.get(offset) ?? 0) + (data.get(offset + 1) ?? 0) * 256 +
+    (data.get(offset + 2) ?? 0) * 65536 + (data.get(offset + 3) ?? 0) * 16777216)
+}
+
+function u64(data: Bytes, offset: int) -> Result<int, string> {
+  checkedRange(data, offset, 8)?
+  let low = u32(data, offset)?
+  let high = u32(data, offset + 4)?
+  if high > 2147483647 { return Err("binary integer exceeds the supported signed 64-bit range") }
+  Ok(low + high * 4294967296)
+}
+
+function flag(value: int, bit: int) -> bool { (value / bit) % 2 == 1 }
+
+function fixedName(data: Bytes, offset: int, size: int) -> Result<string, string> {
+  checkedRange(data, offset, size)?
+  let mut end = offset
+  while end < offset + size && (data.get(end) ?? 0) != 0 { end += 1 }
+  data.slice(offset, end).decodeUtf8()
+}
+
+function cString(data: Bytes, offset: int, available: int) -> Result<string, string> {
+  checkedRange(data, offset, available)?
+  let mut index = 0
+  while index < available && index < MAX_STRING_BYTES {
+    let byte = data.get(offset + index) ?? 0
+    if byte == 0 { return data.slice(offset, offset + index).decodeUtf8() }
+    if byte < 32 || byte == 127 { return Err("binary string contains a control byte") }
+    index += 1
+  }
+  Err("binary string is unterminated or exceeds 4 KiB")
+}
+
+function dependencyName(name: string, windows: bool) -> Result<string, string> {
+  if name == "" { return Err("binary dependency name is empty") }
+  if !windows { return Ok(name) }
+  let source = name.encodeUtf8()
+  let mut lower: Array<int> = []
+  let mut index = 0
+  while index < source.length() {
+    let byte = source.get(index) ?? 0
+    if byte < 33 || byte > 126 || byte == 47 || byte == 92 || byte == 58 {
+      return Err("PE dependency must be an ASCII library filename")
+    }
+    if byte >= 65 && byte <= 90 { lower.push(byte + 32) } else { lower.push(byte) }
+    index += 1
+  }
+  let folded = Bytes.fromArray(lower)?
+  folded.decodeUtf8()
+}
+
+function uniqueDependencies(names: Array<string>) -> Result<Array<string>, string> {
+  if names.length > MAX_DEPENDENCIES { return Err("binary has more than 256 dependency declarations") }
+  let mut seen: Set<string> = set {}
+  let mut result: Array<string> = []
+  for name in names {
+    if !seen.contains(name) { seen.add(name); result.push(name) }
+  }
+  result.sort()
+  Ok(result)
+}
+
+function section(data: Bytes, previous: Array<Section>, name: string, offset: int, size: int) -> Result<Section, string> {
+  if previous.length >= MAX_SECTIONS { return Err("binary has more than 64 sections") }
+  checkedRange(data, offset, size)?
+  // Reject overlapping raw sections before hashing. This also bounds total
+  // section hashing by image length, even when all headers are adversarial.
+  if size > 0 {
+    for old in previous {
+      if old.bytes > 0 && offset < old.offset + old.bytes && old.offset < offset + size {
+        return Err("binary raw sections overlap")
+      }
+    }
+  }
+  Ok(Section { name: name, offset: offset, bytes: size, sha256: data.slice(offset, offset + size).sha256().toHex() })
+}
+
+function mapped(segments: Array<Segment>, address: int, size: int, headerBytes: int) -> Result<Region, string> {
+  checkedExtent(address, size)?
+  if address < headerBytes && size <= headerBytes - address {
+    return Ok(Region { offset: address, bytes: headerBytes - address })
+  }
+  let mut found = false
+  let mut result = Region { offset: 0, bytes: 0 }
+  for segment in segments {
+    if address >= segment.address {
+      let delta = address - segment.address
+      if delta < segment.bytes && size <= segment.bytes - delta {
+        if found { return Err("binary address has ambiguous file mappings") }
+        found = true
+        result = Region { offset: segment.offset + delta, bytes: segment.bytes - delta }
+      }
+    }
+  }
+  if !found { return Err("binary address does not map to file-backed data") }
+  Ok(result)
+}
+
+function executableEntry(segments: Array<Segment>, entry: int, executeFlag: int) -> bool {
+  if entry == 0 { return false }
+  for segment in segments {
+    if flag(segment.flags, executeFlag) && entry >= segment.address && entry - segment.address < segment.bytes {
+      return true
+    }
+  }
+  false
+}
+
+function observed(format: string, target: string, data: Bytes, dependencies: Array<string>, sections: Array<Section>, metadata: Array<Field>) -> Result<Image, string> {
+  Ok(Image {
+    format: format, target: target, bytes: data.length(), sha256: data.sha256().toHex(),
+    dependencies: uniqueDependencies(dependencies)?, sections: sections, metadata: metadata,
+  })
+}
+
+function inspectElf(data: Bytes) -> Result<Image, string> {
+  checkedRange(data, 0, 64)?
+  if (data.get(4) ?? 0) != 2 || (data.get(5) ?? 0) != 1 || (data.get(6) ?? 0) != 1 {
+    return Err("only little-endian ELF64 version 1 is supported")
+  }
+  let osAbi = data.get(7) ?? 0
+  if osAbi != 0 && osAbi != 3 { return Err("ELF OS ABI is outside the Linux profile") }
+  let kind = u16(data, 16)?
+  let machine = u16(data, 18)?
+  let target = if machine == 62 { "x86_64-unknown-linux-gnu" } else if machine == 183 {
+    "aarch64-unknown-linux-gnu"
+  } else { return Err("ELF machine is not x86_64 or aarch64") }
+  if (kind != 2 && kind != 3) || u32(data, 20)? != 1 || u16(data, 52)? != 64 {
+    return Err("ELF must have a supported executable header")
+  }
+  let entry = u64(data, 24)?
+  let programOffset = u64(data, 32)?
+  let sectionOffset = u64(data, 40)?
+  let programCount = u16(data, 56)?
+  let sectionCount = u16(data, 60)?
+  let namesIndex = u16(data, 62)?
+  if programCount < 1 || programCount > 64 || u16(data, 54)? != 56 {
+    return Err("ELF program header count or size is unsupported")
+  }
+  if sectionCount > MAX_SECTIONS || (sectionCount > 0 && u16(data, 58)? != 64) || namesIndex == 65535 {
+    return Err("ELF section count, size or extended indexing is unsupported")
+  }
+  if programOffset < 64 { return Err("ELF program headers overlap the file header") }
+  checkedRange(data, programOffset, programCount * 56)?
+  let mut segments: Array<Segment> = []
+  let mut dynamic = Region { offset: 0, bytes: 0 }
+  let mut dynamicAddress = 0
+  let mut haveDynamic = false
+  let mut interpreter = ""
+  let mut index = 0
+  while index < programCount {
+    let at = programOffset + index * 56
+    let kind = u32(data, at)?
+    let flags = u32(data, at + 4)?
+    let offset = u64(data, at + 8)?
+    let address = u64(data, at + 16)?
+    let fileBytes = u64(data, at + 32)?
+    let memoryBytes = u64(data, at + 40)?
+    checkedRange(data, offset, fileBytes)?
+    checkedExtent(address, memoryBytes)?
+    if kind == 1 {
+      if fileBytes > memoryBytes { return Err("ELF load segment is larger than its memory extent") }
+      segments.push(Segment { address: address, memoryBytes: memoryBytes, offset: offset, bytes: fileBytes, flags: flags })
+    } else if kind == 2 {
+      if haveDynamic || fileBytes == 0 || fileBytes > MAX_TABLE_BYTES || fileBytes % 16 != 0 {
+        return Err("ELF dynamic table is duplicate, empty, misaligned or too large")
+      }
+      haveDynamic = true
+      dynamic = Region { offset: offset, bytes: fileBytes }
+      dynamicAddress = address
+    } else if kind == 3 {
+      if interpreter != "" || fileBytes == 0 || fileBytes > MAX_STRING_BYTES {
+        return Err("ELF interpreter declaration is duplicate, empty or too large")
+      }
+      interpreter = cString(data, offset, fileBytes)?
+      if !interpreter.startsWith("/") { return Err("ELF interpreter is not an absolute path") }
+    }
+    index += 1
+  }
+  if !executableEntry(segments, entry, 1) { return Err("ELF entry does not address an executable file-backed load segment") }
+  let mut needed: Array<int> = []
+  let mut stringAddress = 0
+  let mut stringBytes = 0
+  let mut haveStringAddress = false
+  let mut haveStringBytes = false
+  let mut pie = false
+  let mut rpathOffset = -1
+  let mut runpathOffset = -1
+  if haveDynamic {
+    let dynamicMapping = mapped(segments, dynamicAddress, dynamic.bytes, 0)?
+    if dynamicMapping.offset != dynamic.offset { return Err("ELF dynamic table address and file offset disagree") }
+    let mut terminated = false
+    index = 0
+    while index < dynamic.bytes / 16 {
+      let at = dynamic.offset + index * 16
+      let tag = u64(data, at)?
+      let value = u64(data, at + 8)?
+      if tag == 0 { terminated = true; break }
+      if tag == 1 {
+        if needed.length >= MAX_DEPENDENCIES { return Err("ELF has more than 256 dependency declarations") }
+        needed.push(value)
+      } else if tag == 5 {
+        if haveStringAddress { return Err("ELF repeats DT_STRTAB") }
+        haveStringAddress = true
+        stringAddress = value
+      } else if tag == 10 {
+        if haveStringBytes { return Err("ELF repeats DT_STRSZ") }
+        haveStringBytes = true
+        stringBytes = value
+      } else if tag == 15 {
+        if rpathOffset >= 0 { return Err("ELF repeats DT_RPATH") }
+        rpathOffset = value
+      } else if tag == 29 {
+        if runpathOffset >= 0 { return Err("ELF repeats DT_RUNPATH") }
+        runpathOffset = value
+      } else if tag == 1879048187 { pie = flag(value, 134217728) }
+      index += 1
+    }
+    if !terminated { return Err("ELF dynamic table has no DT_NULL terminator") }
+  }
+  if kind == 3 && interpreter == "" && !pie { return Err("ELF shared image is not marked as a position-independent executable") }
+  let mut dependencies: Array<string> = []
+  let mut rpath = ""
+  let mut runpath = ""
+  if haveStringAddress != haveStringBytes ||
+    ((needed.length > 0 || rpathOffset >= 0 || runpathOffset >= 0) && (!haveStringAddress || stringBytes == 0)) {
+    return Err("ELF dependencies have no complete dynamic string table")
+  }
+  if haveStringAddress {
+    if stringBytes == 0 { return Err("ELF dynamic string table is empty") }
+    let strings = mapped(segments, stringAddress, stringBytes, 0)?
+    for offset in needed {
+      if offset >= stringBytes { return Err("ELF dependency offset exceeds DT_STRSZ") }
+      dependencies.push(dependencyName(cString(data, strings.offset + offset, stringBytes - offset)?, false)?)
+    }
+    if rpathOffset >= 0 {
+      if rpathOffset >= stringBytes { return Err("ELF rpath offset exceeds DT_STRSZ") }
+      rpath = cString(data, strings.offset + rpathOffset, stringBytes - rpathOffset)?
+    }
+    if runpathOffset >= 0 {
+      if runpathOffset >= stringBytes { return Err("ELF runpath offset exceeds DT_STRSZ") }
+      runpath = cString(data, strings.offset + runpathOffset, stringBytes - runpathOffset)?
+    }
+  }
+  let mut sections: Array<Section> = []
+  if sectionCount == 0 {
+    if sectionOffset != 0 || namesIndex != 0 { return Err("ELF extended section counts are unsupported") }
+    index = 0
+    for segment in segments {
+      sections.push(section(data, sections, "load-{index}", segment.offset, segment.bytes)?)
+      index += 1
+    }
+  } else {
+    if sectionOffset < 64 || namesIndex == 0 || namesIndex >= sectionCount { return Err("ELF section name table index is invalid") }
+    checkedRange(data, sectionOffset, sectionCount * 64)?
+    let namesAt = sectionOffset + namesIndex * 64
+    if u32(data, namesAt + 4)? != 3 { return Err("ELF section names do not reference a string table") }
+    let nameOffset = u64(data, namesAt + 24)?
+    let nameBytes = u64(data, namesAt + 32)?
+    checkedRange(data, nameOffset, nameBytes)?
+    if nameBytes == 0 { return Err("ELF section name table is empty") }
+    index = 1
+    while index < sectionCount {
+      let at = sectionOffset + index * 64
+      let nameAt = u32(data, at)?
+      let sectionKind = u32(data, at + 4)?
+      let offset = u64(data, at + 24)?
+      let size = u64(data, at + 32)?
+      if nameAt >= nameBytes { return Err("ELF section name exceeds its string table") }
+      let name = cString(data, nameOffset + nameAt, nameBytes - nameAt)?
+      if sectionKind != 0 && sectionKind != 8 {
+        sections.push(section(data, sections, name, offset, size)?)
+      }
+      index += 1
+    }
+  }
+  let mut metadata: Array<Field> = [
+    Field { name: "targetEvidence", value: "ELF class, endianness, machine and OS ABI; runtime compatibility is not established" },
+    Field { name: "elf.osAbi", value: "{osAbi}" },
+    Field { name: "elf.type", value: "{kind}" },
+    Field { name: "elf.machine", value: "{machine}" },
+    Field { name: "elf.entry", value: "{entry}" },
+  ]
+  if interpreter != "" { metadata.push(Field { name: "elf.interpreter", value: interpreter }) }
+  if rpathOffset >= 0 { metadata.push(Field { name: "elf.rpath", value: rpath }) }
+  if runpathOffset >= 0 { metadata.push(Field { name: "elf.runpath", value: runpath }) }
+  observed("elf", target, data, dependencies, sections, metadata)
+}
+
+function peDirectory(data: Bytes, optional: int, count: int, index: int) -> Result<Region, string> {
+  if index >= count { return Ok(Region { offset: 0, bytes: 0 }) }
+  let offset = u32(data, optional + 112 + index * 8)?
+  let size = u32(data, optional + 116 + index * 8)?
+  if index == 8 {
+    if size != 0 { return Err("PE global pointer directory must have a zero size") }
+    return Ok(Region { offset: offset, bytes: 0 })
+  }
+  if (offset == 0) != (size == 0) { return Err("PE directory must have both an address and a size") }
+  Ok(Region { offset: offset, bytes: size })
+}
+
+function guid(data: Bytes, offset: int) -> Result<string, string> {
+  checkedRange(data, offset, 16)?
+  let first = data.slice(offset + 3, offset + 4).toHex() + data.slice(offset + 2, offset + 3).toHex() +
+    data.slice(offset + 1, offset + 2).toHex() + data.slice(offset, offset + 1).toHex()
+  let second = data.slice(offset + 5, offset + 6).toHex() + data.slice(offset + 4, offset + 5).toHex()
+  let third = data.slice(offset + 7, offset + 8).toHex() + data.slice(offset + 6, offset + 7).toHex()
+  let fourth = data.slice(offset + 8, offset + 10).toHex()
+  let fifth = data.slice(offset + 10, offset + 16).toHex()
+  Ok("{first}-{second}-{third}-{fourth}-{fifth}")
+}
+
+function peImports(data: Bytes, segments: Array<Segment>, headerBytes: int, imports: Region) -> Result<Array<string>, string> {
+  let mut dependencies: Array<string> = []
+  if imports.bytes == 0 { return Ok(dependencies) }
+  let descriptorBytes = 20
+  if imports.bytes < descriptorBytes || imports.bytes > MAX_TABLE_BYTES { return Err("PE import directory has an invalid size") }
+  let region = mapped(segments, imports.offset, imports.bytes, headerBytes)?
+  let mut index = 0
+  while index < imports.bytes / descriptorBytes {
+    let at = region.offset + index * descriptorBytes
+    let lookupTable = u32(data, at)?
+    let timestamp = u32(data, at + 4)?
+    let forwarder = u32(data, at + 8)?
+    let nameAddress = u32(data, at + 12)?
+    let addressTable = u32(data, at + 16)?
+    if lookupTable == 0 && timestamp == 0 && forwarder == 0 && nameAddress == 0 && addressTable == 0 {
+      return Ok(dependencies)
+    }
+    if dependencies.length >= MAX_DEPENDENCIES || nameAddress == 0 || addressTable == 0 {
+      return Err("PE import descriptor count or fields are invalid")
+    }
+    mapped(segments, addressTable, 8, headerBytes)?
+    if lookupTable != 0 { mapped(segments, lookupTable, 8, headerBytes)? }
+    let name = mapped(segments, nameAddress, 1, headerBytes)?
+    dependencies.push(dependencyName(cString(data, name.offset, name.bytes)?, true)?)
+    index += 1
+  }
+  Err("PE import directory has no terminating descriptor")
+}
+
+function peDebugFields(data: Bytes, segments: Array<Segment>, headerBytes: int, debug: Region) -> Result<Array<Field>, string> {
+  let mut metadata: Array<Field> = []
+  if debug.bytes == 0 { return Ok(metadata) }
+  let entryBytes = 28
+  if debug.bytes % entryBytes != 0 || debug.bytes / entryBytes > 64 { return Err("PE debug directory has an invalid entry count or size") }
+  let region = mapped(segments, debug.offset, debug.bytes, headerBytes)?
+  let mut index = 0
+  while index < debug.bytes / entryBytes {
+    let at = region.offset + index * entryBytes
+    let stamp = u32(data, at + 4)?
+    let kind = u32(data, at + 12)?
+    let size = u32(data, at + 16)?
+    let address = u32(data, at + 20)?
+    let offset = u32(data, at + 24)?
+    checkedRange(data, offset, size)?
+    if size > 0 && address != 0 {
+      let inImage = mapped(segments, address, size, headerBytes)?
+      if inImage.offset != offset { return Err("PE debug data RVA and file offset disagree") }
+    }
+    metadata.push(Field { name: "pe.debug.{index}.kind", value: "{kind}" })
+    metadata.push(Field { name: "pe.debug.{index}.timestamp", value: "{stamp}" })
+    metadata.push(Field { name: "pe.debug.{index}.bytes", value: "{size}" })
+    if kind == PE_DEBUG_CODEVIEW {
+      if size < 25 || u32(data, offset)? != CODEVIEW_RSDS { return Err("PE CodeView data must contain an RSDS record") }
+      let identifier = guid(data, offset + 4)?
+      let age = u32(data, offset + 20)?
+      let pdb = cString(data, offset + 24, size - 24)?
+      metadata.push(Field { name: "pe.debug.{index}.pdbGuid", value: identifier })
+      metadata.push(Field { name: "pe.debug.{index}.pdbAge", value: "{age}" })
+      metadata.push(Field { name: "pe.debug.{index}.pdbPath", value: pdb })
+    } else if kind == PE_DEBUG_REPRO {
+      metadata.push(Field { name: "pe.debug.{index}.reproducibleMarker", value: "present; marker presence does not prove reproducibility" })
+    }
+    index += 1
+  }
+  Ok(metadata)
+}
+
+function inspectPe(data: Bytes) -> Result<Image, string> {
+  checkedRange(data, 0, 64)?
+  let pe = u32(data, 60)?
+  if pe < 64 { return Err("PE header overlaps its DOS header") }
+  checkedRange(data, pe, 24)?
+  if u32(data, pe)? != 17744 { return Err("PE signature is missing") }
+  let machine = u16(data, pe + 4)?
+  let target = if machine == 34404 { "x86_64-pc-windows-msvc" } else if machine == 43620 {
+    "aarch64-pc-windows-msvc"
+  } else { return Err("PE machine is not x86_64 or aarch64") }
+  let count = u16(data, pe + 6)?
+  let timestamp = u32(data, pe + 8)?
+  let optionalBytes = u16(data, pe + 20)?
+  let characteristics = u16(data, pe + 22)?
+  if count < 1 || count > MAX_SECTIONS || !flag(characteristics, 2) || flag(characteristics, 8192) {
+    return Err("PE must be an executable with 1 to 64 sections and not a DLL")
+  }
+  let optional = pe + 24
+  checkedRange(data, optional, optionalBytes)?
+  if optionalBytes < 112 || u16(data, optional)? != 523 { return Err("only PE32+ optional headers are supported") }
+  let entry = u32(data, optional + 16)?
+  let imageBase = u64(data, optional + 24)?
+  let headerBytes = u32(data, optional + 60)?
+  let checksum = u32(data, optional + 64)?
+  let subsystem = u16(data, optional + 68)?
+  let directoryCount = u32(data, optional + 108)?
+  if directoryCount > 16 || 112 + directoryCount * 8 > optionalBytes {
+    return Err("PE directory count exceeds its optional header or supported directory set")
+  }
+  let table = optional + optionalBytes
+  checkedRange(data, table, count * 40)?
+  checkedRange(data, 0, headerBytes)?
+  if headerBytes < table + count * 40 || headerBytes > MAX_TABLE_BYTES {
+    return Err("PE SizeOfHeaders does not cover its section table or exceeds 1 MiB")
+  }
+  let mut sections: Array<Section> = []
+  let mut segments: Array<Segment> = []
+  let mut index = 0
+  while index < count {
+    let at = table + index * 40
+    let name = fixedName(data, at, 8)?
+    let memoryBytes = u32(data, at + 8)?
+    let address = u32(data, at + 12)?
+    let size = u32(data, at + 16)?
+    let offset = u32(data, at + 20)?
+    let flags = u32(data, at + 36)?
+    if size > 0 && (offset < headerBytes || address < headerBytes) {
+      return Err("PE section overlaps file headers")
+    }
+    if memoryBytes > 4294967296 - address || size > 4294967296 - address {
+      return Err("PE section exceeds the RVA address space")
+    }
+    let extent = if memoryBytes > size { memoryBytes } else { size }
+    for old in segments {
+      let oldExtent = if old.memoryBytes > old.bytes { old.memoryBytes } else { old.bytes }
+      if extent > 0 && oldExtent > 0 && address < old.address + oldExtent && old.address < address + extent {
+        return Err("PE virtual section extents overlap")
+      }
+    }
+    sections.push(section(data, sections, name, offset, size)?)
+    segments.push(Segment { address: address, memoryBytes: memoryBytes, offset: offset, bytes: size, flags: flags })
+    index += 1
+  }
+  if !executableEntry(segments, entry, 536870912) { return Err("PE entry does not address an executable file-backed section") }
+  let mut metadata: Array<Field> = [
+    Field { name: "targetEvidence", value: "PE32+ format and machine; producer ABI and runtime compatibility are not established" },
+    Field { name: "pe.timestamp", value: "{timestamp}" },
+    Field { name: "pe.machine", value: "{machine}" },
+    Field { name: "pe.headersSha256", value: data.slice(0, headerBytes).sha256().toHex() },
+    Field { name: "pe.checksum", value: "{checksum}" },
+    Field { name: "pe.imageBase", value: "{imageBase}" },
+    Field { name: "pe.entryRva", value: "{entry}" },
+    Field { name: "pe.subsystem", value: "{subsystem}" },
+  ]
+  let delay = peDirectory(data, optional, directoryCount, 13)?
+  if delay.bytes != 0 { return Err("PE delay imports are not supported by this dependency inspector") }
+  // The security directory uses a file offset, unlike the other RVA entries.
+  index = 0
+  while index < directoryCount {
+    let directory = peDirectory(data, optional, directoryCount, index)?
+    if directory.bytes > 0 {
+      if index == 4 { checkedRange(data, directory.offset, directory.bytes)? }
+      else { mapped(segments, directory.offset, directory.bytes, headerBytes)? }
+    } else if index == 8 && directory.offset != 0 {
+      mapped(segments, directory.offset, 1, headerBytes)?
+    }
+    index += 1
+  }
+  let imports = peDirectory(data, optional, directoryCount, 1)?
+  let dependencies = peImports(data, segments, headerBytes, imports)?
+  let debug = peDirectory(data, optional, directoryCount, 6)?
+  for field in peDebugFields(data, segments, headerBytes, debug)? { metadata.push(field) }
+  observed("pe", target, data, dependencies, sections, metadata)
+}
+
+function inspectMachO(data: Bytes) -> Result<Image, string> {
+  checkedRange(data, 0, 32)?
+  let machine = u32(data, 4)?
+  let target = if machine == 16777223 { "x86_64-apple-darwin" } else if machine == 16777228 {
+    "aarch64-apple-darwin"
+  } else { return Err("Mach-O CPU is not x86_64 or arm64") }
+  if u32(data, 12)? != 2 { return Err("Mach-O must be an MH_EXECUTE image") }
+  let count = u32(data, 16)?
+  let commandBytes = u32(data, 20)?
+  let subtype = u32(data, 8)?
+  if count < 1 || count > 4096 || commandBytes > MAX_TABLE_BYTES || count > commandBytes / 8 {
+    return Err("Mach-O load command count or table size is invalid")
+  }
+  checkedRange(data, 32, commandBytes)?
+  let mut metadata: Array<Field> = [
+    Field { name: "targetEvidence", value: "thin little-endian Mach-O CPU and executable kind; runtime compatibility is not established" },
+    Field { name: "macho.cpuType", value: "{machine}" },
+    Field { name: "macho.cpuSubtype", value: "{subtype}" },
+  ]
+  let mut dependencies: Array<string> = []
+  let mut sections: Array<Section> = []
+  let mut segments: Array<Segment> = []
+  let mut haveMain = false
+  let mut entry = 0
+  let mut havePlatform = false
+  let mut haveUuid = false
+  let mut haveSignature = false
+  let mut haveLinker = false
+  let mut declaredSections = 0
+  let mut paths = 0
+  let mut cursor = 32
+  let end = 32 + commandBytes
+  let mut index = 0
+  while index < count {
+    if end - cursor < 8 { return Err("Mach-O load command header exceeds its table") }
+    let kind = u32(data, cursor)?
+    let size = u32(data, cursor + 4)?
+    if size < 8 || size % 8 != 0 || size > end - cursor { return Err("Mach-O load command has an invalid extent") }
+    if kind == 25 {
+      if size < 72 { return Err("Mach-O LC_SEGMENT_64 is truncated") }
+      let segmentName = fixedName(data, cursor + 8, 16)?
+      let address = u64(data, cursor + 24)?
+      let memoryBytes = u64(data, cursor + 32)?
+      let offset = u64(data, cursor + 40)?
+      let fileBytes = u64(data, cursor + 48)?
+      let protection = u32(data, cursor + 60)?
+      let sectionCount = u32(data, cursor + 64)?
+      if sectionCount > MAX_SECTIONS || 72 + sectionCount * 80 != size || segments.length >= 64 {
+        return Err("Mach-O segment section count or command size is invalid")
+      }
+      declaredSections += sectionCount
+      if declaredSections > MAX_SECTIONS { return Err("Mach-O has more than 64 section declarations") }
+      checkedRange(data, offset, fileBytes)?
+      checkedExtent(address, memoryBytes)?
+      if fileBytes > memoryBytes { return Err("Mach-O segment exceeds its memory extent") }
+      segments.push(Segment { address: address, memoryBytes: memoryBytes, offset: offset, bytes: fileBytes, flags: protection })
+      let mut sectionIndex = 0
+      while sectionIndex < sectionCount {
+        let at = cursor + 72 + sectionIndex * 80
+        let name = fixedName(data, at, 16)?
+        let declaredSegment = fixedName(data, at + 16, 16)?
+        let sectionAddress = u64(data, at + 32)?
+        let sectionBytes = u64(data, at + 40)?
+        let sectionOffset = u32(data, at + 48)?
+        let sectionKind = u32(data, at + 64)? % 256
+        if declaredSegment != segmentName || sectionAddress < address ||
+          sectionAddress - address > memoryBytes || sectionBytes > memoryBytes - (sectionAddress - address) {
+          return Err("Mach-O section exceeds its declared segment")
+        }
+        if sectionKind != 1 && sectionKind != 12 && sectionKind != 18 {
+          if sectionOffset < offset || sectionOffset - offset > fileBytes || sectionBytes > fileBytes - (sectionOffset - offset) {
+            return Err("Mach-O section exceeds its segment file range")
+          }
+          sections.push(section(data, sections, "{segmentName}.{name}", sectionOffset, sectionBytes)?)
+        }
+        sectionIndex += 1
+      }
+    } else if kind == 12 || kind == 2147483672 || kind == 2147483679 || kind == 32 || kind == 2147483683 {
+      if size < 24 || dependencies.length >= MAX_DEPENDENCIES { return Err("Mach-O dylib declaration is truncated or exceeds the dependency limit") }
+      let nameOffset = u32(data, cursor + 8)?
+      if nameOffset < 24 || nameOffset >= size { return Err("Mach-O dylib name is outside its load command") }
+      dependencies.push(dependencyName(cString(data, cursor + nameOffset, size - nameOffset)?, false)?)
+    } else if kind == 2147483676 {
+      if size < 16 || paths >= 64 { return Err("Mach-O rpath declaration is truncated or exceeds its limit") }
+      let pathOffset = u32(data, cursor + 8)?
+      if pathOffset < 12 || pathOffset >= size { return Err("Mach-O rpath is outside its load command") }
+      metadata.push(Field { name: "macho.rpath.{paths}", value: cString(data, cursor + pathOffset, size - pathOffset)? })
+      paths += 1
+    } else if kind == 14 {
+      if size < 16 || haveLinker { return Err("Mach-O dynamic linker declaration is duplicate or truncated") }
+      let nameOffset = u32(data, cursor + 8)?
+      if nameOffset < 12 || nameOffset >= size { return Err("Mach-O dynamic linker name is outside its command") }
+      let name = cString(data, cursor + nameOffset, size - nameOffset)?
+      if !name.startsWith("/") { return Err("Mach-O dynamic linker path is not absolute") }
+      haveLinker = true
+      metadata.push(Field { name: "macho.dynamicLinker", value: name })
+    } else if kind == 2147483688 {
+      if size != 24 || haveMain { return Err("Mach-O LC_MAIN is duplicate or has an invalid size") }
+      haveMain = true
+      entry = u64(data, cursor + 8)?
+      metadata.push(Field { name: "macho.entryFileOffset", value: "{entry}" })
+    } else if kind == 27 {
+      if size != 24 || haveUuid { return Err("Mach-O UUID command is duplicate or has an invalid size") }
+      haveUuid = true
+      metadata.push(Field { name: "macho.uuid.{index}", value: data.slice(cursor + 8, cursor + 24).toHex() })
+    } else if kind == 50 {
+      if size < 24 || havePlatform { return Err("Mach-O build version is duplicate or truncated") }
+      let platform = u32(data, cursor + 8)?
+      let tools = u32(data, cursor + 20)?
+      if platform != 1 || tools > 64 || 24 + tools * 8 != size { return Err("Mach-O build version is not a supported macOS declaration") }
+      havePlatform = true
+      let minimum = u32(data, cursor + 12)?
+      let sdk = u32(data, cursor + 16)?
+      metadata.push(Field { name: "macho.declaredMinimumOsPacked", value: "{minimum}" })
+      metadata.push(Field { name: "macho.declaredSdkPacked", value: "{sdk}" })
+    } else if kind == 36 {
+      if size != 16 || havePlatform { return Err("Mach-O minimum macOS declaration is duplicate or malformed") }
+      havePlatform = true
+      let minimum = u32(data, cursor + 8)?
+      let sdk = u32(data, cursor + 12)?
+      metadata.push(Field { name: "macho.declaredMinimumOsPacked", value: "{minimum}" })
+      metadata.push(Field { name: "macho.declaredSdkPacked", value: "{sdk}" })
+    } else if kind == 37 || kind == 47 || kind == 48 {
+      return Err("Mach-O declares a non-macOS platform")
+    } else if kind == 29 || kind == 30 || kind == 38 || kind == 41 || kind == 43 || kind == 46 || kind == 2147483699 || kind == 2147483700 {
+      if size != 16 { return Err("Mach-O link-edit data command has an invalid size") }
+      let offset = u32(data, cursor + 8)?
+      let bytes = u32(data, cursor + 12)?
+      checkedRange(data, offset, bytes)?
+      if kind == 29 {
+        if haveSignature { return Err("Mach-O repeats its code signature command") }
+        haveSignature = true
+        metadata.push(Field { name: "macho.codeSignatureBytes", value: "{bytes}" })
+      }
+    } else if kind == 34 || kind == 2147483682 {
+      if size != 48 { return Err("Mach-O dyld info command has an invalid size") }
+      let mut pair = 0
+      while pair < 5 {
+        checkedRange(data, u32(data, cursor + 8 + pair * 8)?, u32(data, cursor + 12 + pair * 8)?)?
+        pair += 1
+      }
+    } else if kind == 2 {
+      if size != 24 { return Err("Mach-O symbol table command has an invalid size") }
+      checkedRange(data, u32(data, cursor + 8)?, u32(data, cursor + 12)? * 16)?
+      checkedRange(data, u32(data, cursor + 16)?, u32(data, cursor + 20)?)?
+    } else if kind == 11 {
+      if size != 80 { return Err("Mach-O dynamic symbol table command has an invalid size") }
+      let widths = [8, 56, 4, 4, 8, 8]
+      let mut pair = 0
+      while pair < 6 {
+        checkedRange(data, u32(data, cursor + 32 + pair * 8)?, u32(data, cursor + 36 + pair * 8)? * widths[pair])?
+        pair += 1
+      }
+    } else if kind == 44 {
+      if size != 24 { return Err("Mach-O encryption info command has an invalid size") }
+      checkedRange(data, u32(data, cursor + 8)?, u32(data, cursor + 12)?)?
+      if u32(data, cursor + 16)? != 0 { return Err("encrypted Mach-O executables are unsupported") }
+    } else if kind == 49 {
+      if size != 40 { return Err("Mach-O note command has an invalid size") }
+      checkedRange(data, u64(data, cursor + 24)?, u64(data, cursor + 32)?)?
+    } else if kind == 1 || kind == 6 || kind == 16 || kind == 39 || kind >= 2147483648 {
+      return Err("Mach-O has an unsupported loader command")
+    }
+    cursor += size
+    index += 1
+  }
+  if cursor != end { return Err("Mach-O load commands do not fill their declared table") }
+  if !havePlatform { return Err("Mach-O has no supported macOS platform declaration") }
+  if !haveMain { return Err("Mach-O executable has no supported LC_MAIN entry command") }
+  let mut executable = false
+  for segment in segments {
+    if flag(segment.flags, 4) && entry >= segment.offset && entry - segment.offset < segment.bytes { executable = true }
+  }
+  if !executable { return Err("Mach-O entry does not address an executable file-backed segment") }
+  observed("macho", target, data, dependencies, sections, metadata)
+}
+
+export function inspectBytes(data: Bytes) -> Result<Image, string> {
+  if data.length() < 4 || data.length() > MAX_IMAGE_BYTES {
+    return Err("binary must be between 4 bytes and 512 MiB")
+  }
+  let magic = u32(data, 0)?
+  if magic == 1179403647 { return inspectElf(data) }
+  if (data.get(0) ?? 0) == 77 && (data.get(1) ?? 0) == 90 { return inspectPe(data) }
+  if magic == 4277009103 { return inspectMachO(data) }
+  Err("unsupported executable format; expected ELF64, PE32+ or a thin little-endian 64-bit Mach-O")
+}
+
+export function inspectImage(path: string) -> Result<Image, string> {
+  // The public filesystem ABI reads a whole Bytes value. The 512 MiB limit is
+  // enforced after that read, not advertised as a pre-allocation safeguard.
+  inspectBytes(files.readBytes(path)?)
+}

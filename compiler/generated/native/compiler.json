@@ -1,0 +1,790 @@
+{
+  "schema": "topaz.native-compiler/v1",
+  "emitterStage": 1,
+  "sourceSetId": "sha256:17d598ebcb0dea65195aba8c0b3ab20f94003a7f343714f7b1df25d790cdacd5",
+  "sourceFiles": [
+    {
+      "path": "checker.tpz",
+      "sha256": "sha256:e39ee31cd9d75f98f8000f3b58cb80d7659f63c3f1e56f49f56752facbc8b959",
+      "bytes": 10171
+    },
+    {
+      "path": "checker/bodies_captures.tpz",
+      "sha256": "sha256:b348cdc1f801c68e6f50a91b2dfe672e359090658ac9c665802d2e093351cf98",
+      "bytes": 32799
+    },
+    {
+      "path": "checker/builtin_signatures.tpz",
+      "sha256": "sha256:d39c56a894a273ca893f9d44a1b49524479515010e8298f01ea597887982d8ad",
+      "bytes": 19672
+    },
+    {
+      "path": "checker/call_complete.tpz",
+      "sha256": "sha256:4260fb5bd202ff7b12c98fcc6445c2adc2527686a67869fdaa4bd44181a1c7f4",
+      "bytes": 61473
+    },
+    {
+      "path": "checker/call_facts.tpz",
+      "sha256": "sha256:a246080e64e11a4b30bc47f7d6ae6b82d91e3b9da8a496668d558dc3712d7370",
+      "bytes": 62154
+    },
+    {
+      "path": "checker/call_plan.tpz",
+      "sha256": "sha256:182c9ffaebd1d63208a3a82e8d1d208029076991f64546f203b141286548af9a",
+      "bytes": 31147
+    },
+    {
+      "path": "checker/diagnostics_derives.tpz",
+      "sha256": "sha256:17945ea7bf5de9f1f8544ddcce963d16e98f5ddc181ea600168d97009c83ad8e",
+      "bytes": 10200
+    },
+    {
+      "path": "checker/expression_control.tpz",
+      "sha256": "sha256:fd94da8bb1c7829abf6beab31b634b27300ca6dd53de97740ccaf13ec2d12f19",
+      "bytes": 49967
+    },
+    {
+      "path": "checker/expression_core.tpz",
+      "sha256": "sha256:cd7ccb973d7bb482fca413868e4fba7908fb284ded18fda429cd41dcdb38e143",
+      "bytes": 64566
+    },
+    {
+      "path": "checker/members_capabilities.tpz",
+      "sha256": "sha256:1e7a01fb79246f255444948f7e4a595d2118a3e30f2994821aa4c6346690bbc9",
+      "bytes": 68918
+    },
+    {
+      "path": "checker/model.tpz",
+      "sha256": "sha256:82c47a23296656fba5242dc4c4010b8c883fc406953c95188ee7c5370a117dab",
+      "bytes": 16694
+    },
+    {
+      "path": "checker/nominals.tpz",
+      "sha256": "sha256:c0893102880f7597e6e27d77456435e23caea27fb800b21b68f4137f01a1cae7",
+      "bytes": 34798
+    },
+    {
+      "path": "checker/patterns.tpz",
+      "sha256": "sha256:cb0e92d481ad5490a1b3dc9a8456ba6e67764abbe24516b943173b34fc0bc614",
+      "bytes": 47023
+    },
+    {
+      "path": "checker/protocols_methods.tpz",
+      "sha256": "sha256:7786cf11b77feea419d3b324080efce5887a385d44f903d119731f5e6d95f4d1",
+      "bytes": 43868
+    },
+    {
+      "path": "checker/statements.tpz",
+      "sha256": "sha256:3c64e9de6bebec0b5259a0212fa754b0db92f4464cfe1a908c405d003ae2ceb3",
+      "bytes": 65183
+    },
+    {
+      "path": "checker/syntax_index.tpz",
+      "sha256": "sha256:d035c48f643e8c4a21ddc3194a9b5418a2642e30c6e9766a144e41fa8fb84984",
+      "bytes": 25908
+    },
+    {
+      "path": "checker/type_algebra.tpz",
+      "sha256": "sha256:0ba8f90b57dfad8dd8552ac730fe99de8a5f6bf4910e97db3870410fb4740862",
+      "bytes": 32885
+    },
+    {
+      "path": "checker_types.tpz",
+      "sha256": "sha256:6e710e4116cd6b71342d0444d587f335c4c720d4649ab66444eeeb1be34fc171",
+      "bytes": 322
+    },
+    {
+      "path": "common/standard_migration.tpz",
+      "sha256": "sha256:727fda6521bb765dd9e94eb50bc297ea554583c068b0f4d0e0681860f9d07440",
+      "bytes": 5164
+    },
+    {
+      "path": "emitter.tpz",
+      "sha256": "sha256:37d2e97132610e92b0f6777b5d88dad151dbf1549265f7f73a7da40bcd636525",
+      "bytes": 8428
+    },
+    {
+      "path": "emitter/builtins.tpz",
+      "sha256": "sha256:e6f29e6cb9822a80359c8abf482a89a2c4f701ee023581813af5431c8e2ed377",
+      "bytes": 18214
+    },
+    {
+      "path": "emitter/emit.tpz",
+      "sha256": "sha256:22a6ba3cc388fe7ed93b3ebd76a226a3a3e3232047e4ef896e11254eb2ff2671",
+      "bytes": 106261
+    },
+    {
+      "path": "emitter/exports.tpz",
+      "sha256": "sha256:4ad549adba331dd178aa05570a129c07c7e010be3f64c505afc32eceed1865fd",
+      "bytes": 3721
+    },
+    {
+      "path": "emitter/ir.tpz",
+      "sha256": "sha256:4616927187fa0e388f65bdab359e907166631c042f3dfe18bc5793c4f5dad754",
+      "bytes": 6565
+    },
+    {
+      "path": "emitter/module.tpz",
+      "sha256": "sha256:9fd0de926c17afdfb42dedccef2103fdb905292a9545c8d1e9327bada229d859",
+      "bytes": 24146
+    },
+    {
+      "path": "emitter/repr.tpz",
+      "sha256": "sha256:634fff7a669bfb6896ce65b4024835f980589347bdf7a62faec43aa1abdad195",
+      "bytes": 7389
+    },
+    {
+      "path": "emitter/rust_text.tpz",
+      "sha256": "sha256:e9a9321e837a86b517b5fac136fd51712bd1a303b75a76714467744598b1867e",
+      "bytes": 865
+    },
+    {
+      "path": "emitter/type_test.tpz",
+      "sha256": "sha256:d2d1f4cfefa0e2723152ca36c23fbcaab49cd23f2a3aaf5d14eae808860b0de0",
+      "bytes": 14324
+    },
+    {
+      "path": "layout.tpz",
+      "sha256": "sha256:845743615e1d0629310897b57310c6a63bab7051bfaca2a9b5d250d5608a2339",
+      "bytes": 13597
+    },
+    {
+      "path": "length.tpz",
+      "sha256": "sha256:ae2e8615580c8f7512327e369e6a56575c4ad6ec0adcf30fa0fc577cb8c4a34a",
+      "bytes": 6185
+    },
+    {
+      "path": "literal.tpz",
+      "sha256": "sha256:b3e52c414ce3c677c2103835fef948d29f25623ea2d7af912b8e44abe5f473a8",
+      "bytes": 13291
+    },
+    {
+      "path": "lowering.tpz",
+      "sha256": "sha256:577c8963ccbc07b38e5835e624cf0776798c8c41e6fa04a444c0ed4840628b8c",
+      "bytes": 91084
+    },
+    {
+      "path": "parser.tpz",
+      "sha256": "sha256:948cd9458ba95d13fe967109a2b4f0a1836e2e9ccf625b20674568a13d0ef491",
+      "bytes": 2780
+    },
+    {
+      "path": "parser/core.tpz",
+      "sha256": "sha256:83426c4e5670527cd4d0b1600159b34b6dd0991887080a164bb5e793059769d6",
+      "bytes": 11833
+    },
+    {
+      "path": "parser/declarations_modules.tpz",
+      "sha256": "sha256:153d92263f81f4699363d44e8dc10f41e5dbf5ae04548a60f8eed644a126dd56",
+      "bytes": 37341
+    },
+    {
+      "path": "parser/expressions.tpz",
+      "sha256": "sha256:1c6d84f2b9361c3fd8d12dd8f173005be70d5b0bea264b910f5c47c35e7e7660",
+      "bytes": 44406
+    },
+    {
+      "path": "parser/types_patterns.tpz",
+      "sha256": "sha256:5e836a97ae90bc3ad8b2256809ab7b530a7eaf027d168f6eae763bf6644ca047",
+      "bytes": 16732
+    },
+    {
+      "path": "profile.tpz",
+      "sha256": "sha256:85a89e0c514a3d19a8eed35ba84b44c49e6632da9f573480fa0ab0d1de21eaa2",
+      "bytes": 25220
+    },
+    {
+      "path": "raw.tpz",
+      "sha256": "sha256:70e0df5df63c3639269249ee08312633813ca7dc3a71bbb9bd6294afe1ce4cb7",
+      "bytes": 22318
+    },
+    {
+      "path": "resolver.tpz",
+      "sha256": "sha256:183dfd85626272277b3ed20c251940cbb0d45dc27277919a0717106667d69ca5",
+      "bytes": 3863
+    },
+    {
+      "path": "resolver/graph.tpz",
+      "sha256": "sha256:4c8c43e9336c2c298bf57693a38634368e000cd17d3d65f6842373fbbe54ebc3",
+      "bytes": 24958
+    },
+    {
+      "path": "resolver/model_facts.tpz",
+      "sha256": "sha256:8aefd2eac6b4d40c8fd3b6cd6ba90181b59807d61dac6af85afb617564a9b222",
+      "bytes": 10804
+    },
+    {
+      "path": "resolver/modules_tables.tpz",
+      "sha256": "sha256:220ebdf4288adbe9ed0670c47898b552664161f6a72576cd5e9ad03d5aa4b0fe",
+      "bytes": 12461
+    },
+    {
+      "path": "resolver/scopes_walk.tpz",
+      "sha256": "sha256:5abef63784bb71504858d07e806a0c7512f274f0becb44caa3a5045c56b59ae4",
+      "bytes": 29435
+    },
+    {
+      "path": "resolver/validation_init.tpz",
+      "sha256": "sha256:05bccf54250f6586d5aad861cc9c1b16271bf130a760b95f4b08bb25d2ec545f",
+      "bytes": 23320
+    },
+    {
+      "path": "src/main.tpz",
+      "sha256": "sha256:ef16cb39e9956e7e3aaed8023f9a45388c49a17bd9336a6e6f29dfa5aeb63bd3",
+      "bytes": 16891
+    },
+    {
+      "path": "stage1_types.tpz",
+      "sha256": "sha256:c4b100cd939e5d0390a752da49ce5777e66111ceb55f72472309d1a0793ad497",
+      "bytes": 4881
+    },
+    {
+      "path": "types.tpz",
+      "sha256": "sha256:689612b142727dbbfe6f14adb2c6cb4892d197d893d2fca5cfc7aeaf2370fdc7",
+      "bytes": 7849
+    },
+    {
+      "path": "unicode.tpz",
+      "sha256": "sha256:df85836258be748486d23e556bba2cfe91411e7f8fe7d819843fb5a933a37881",
+      "bytes": 9697
+    },
+    {
+      "path": "unicode_tables.tpz",
+      "sha256": "sha256:16293a12c70d71705abbf76523c0667497c52a4f30360a794e2e80995aceae3c",
+      "bytes": 133510
+    }
+  ],
+  "runtimeSourceSetId": "sha256:85ed8d3b0571c34bc40c3ffd1be8bcda2a539d6c82c92b417c834507200d9c60",
+  "runtimeFiles": [
+    {
+      "path": "Cargo.lock",
+      "sha256": "sha256:2348a401f4e3fdde9371683ce0ef91cba2f0c828892d15d3f4ef4833d47a06e3",
+      "bytes": 43833
+    },
+    {
+      "path": "Cargo.toml",
+      "sha256": "sha256:ac60072867c6f73080bad817cad7047034bd0f96d08327e1c7164dc46f36caf4",
+      "bytes": 6583
+    },
+    {
+      "path": "crates/topaz_diag/Cargo.toml",
+      "sha256": "sha256:e8c560243e0372f2540b53f0fec01931de57ea2323943ef073d2dd11c17e2f0d",
+      "bytes": 304
+    },
+    {
+      "path": "crates/topaz_diag/src/code.rs",
+      "sha256": "sha256:77dfb2c0288a552bee736189a4cedebf30b36018bb897db036ebdd8fed363b87",
+      "bytes": 4896
+    },
+    {
+      "path": "crates/topaz_diag/src/diagnostic.rs",
+      "sha256": "sha256:bf22c5fb4a6276e9a1c9d6d2d4be3af15fbd12ddc128f2ae04aa7637b040c3d8",
+      "bytes": 4064
+    },
+    {
+      "path": "crates/topaz_diag/src/explain.rs",
+      "sha256": "sha256:17e2a49506ca2191ccea81c31ea802ac77897eb06070cce9c46167de992678ac",
+      "bytes": 47147
+    },
+    {
+      "path": "crates/topaz_diag/src/import_chain.rs",
+      "sha256": "sha256:2c07ebcd60e0b6e3d1ed60e063240f335157564a746c0c723d2130927fa06afa",
+      "bytes": 1179
+    },
+    {
+      "path": "crates/topaz_diag/src/lib.rs",
+      "sha256": "sha256:aa67cc3efb419267db27dd303c05df8968a713cbf2542747fab9b7200b877f3d",
+      "bytes": 1270
+    },
+    {
+      "path": "crates/topaz_diag/src/render.rs",
+      "sha256": "sha256:276b26be5dba98761eb2e62f49253b0142a06ee81b2d1bee194728176f3c0127",
+      "bytes": 9618
+    },
+    {
+      "path": "crates/topaz_diag/src/source_map.rs",
+      "sha256": "sha256:176d1a17ebb27b6b2906dfb30354c7c2d02e120d4be92d094686ffe64d57f749",
+      "bytes": 8270
+    },
+    {
+      "path": "crates/topaz_diag/src/span.rs",
+      "sha256": "sha256:250ab9e196a8823141bc625567c4646786090a27c42e1aa469a31893ed841963",
+      "bytes": 2090
+    },
+    {
+      "path": "crates/topaz_diag/src/suggest.rs",
+      "sha256": "sha256:a9652345523af51e78fbd2926bfb85db552e5a5e3efcf72a6dd8860e3276a003",
+      "bytes": 6568
+    },
+    {
+      "path": "crates/topaz_host_none/Cargo.toml",
+      "sha256": "sha256:ebcc4140f91a3392f6ac99c0de9942ed87189b3385aa8e66968ec2fa396e4e73",
+      "bytes": 496
+    },
+    {
+      "path": "crates/topaz_host_none/src/lib.rs",
+      "sha256": "sha256:d8a90d851b4c73ad7d209f6e60c0e83e07ca8240f10981e7a6a2b8071c0fc00c",
+      "bytes": 12434
+    },
+    {
+      "path": "crates/topaz_product_runtime/Cargo.toml",
+      "sha256": "sha256:369e777761cc2284f38ab9d7a1913c8441887fa7bcd48c2d1dafd05209f26e21",
+      "bytes": 244
+    },
+    {
+      "path": "crates/topaz_product_runtime/src/diagnostic.rs",
+      "sha256": "sha256:6959f405f79599bf0667b778874deb9d4949c14651a6c0e64d1372e36ce10e36",
+      "bytes": 3354
+    },
+    {
+      "path": "crates/topaz_product_runtime/src/lib.rs",
+      "sha256": "sha256:672bf3aad3dab185cd2df51415687a8513c103c353191a69a5b34fb85873e604",
+      "bytes": 4044
+    },
+    {
+      "path": "crates/topaz_product_runtime/src/program/decode_compact.rs",
+      "sha256": "sha256:9959929cc7ba16f952f9b5ec843ee351cd480d455fd7b2a2f893f8265667e68b",
+      "bytes": 15248
+    },
+    {
+      "path": "crates/topaz_product_runtime/src/program/decode_json.rs",
+      "sha256": "sha256:78cb89d6254950cbafd061094ae12e199983d1e28f0a7f616df7fc07512da0e5",
+      "bytes": 30044
+    },
+    {
+      "path": "crates/topaz_product_runtime/src/program/model.rs",
+      "sha256": "sha256:4108f2e95973135e9312c86721d1862f68a762f09df9174d3bcfa122ef3c09e0",
+      "bytes": 11901
+    },
+    {
+      "path": "crates/topaz_product_runtime/src/program/validate.rs",
+      "sha256": "sha256:364480649bfa27e7a6632b2d3c65bcfa014dd7c6827e340d5b307fcca575b0ca",
+      "bytes": 13610
+    },
+    {
+      "path": "crates/topaz_product_runtime/src/runtime/call.rs",
+      "sha256": "sha256:be2d172702d8fe651edfbe0127b44903bfdf69a8232d43a3b316591f82d700ef",
+      "bytes": 73015
+    },
+    {
+      "path": "crates/topaz_product_runtime/src/runtime/environment.rs",
+      "sha256": "sha256:ab8c1b0a64998b90127a32115238934f087efeed1427b5232368ae11d72175d2",
+      "bytes": 6709
+    },
+    {
+      "path": "crates/topaz_product_runtime/src/runtime/evaluate.rs",
+      "sha256": "sha256:3fd3f18e0b61b97d54e132034473e54fcde18e2b3d5843138656690e2b098799",
+      "bytes": 56979
+    },
+    {
+      "path": "crates/topaz_product_runtime/src/runtime/flow.rs",
+      "sha256": "sha256:d802940cbd3d5e59adcba07376539e6bd1a0bcc424f376e6b26d4862bc9540b0",
+      "bytes": 25771
+    },
+    {
+      "path": "crates/topaz_product_runtime/src/runtime/json_schema.rs",
+      "sha256": "sha256:c470a6f7736af3fcf94977c548d4f3b7607505fb7ed5a035e5c9b2bc6191ac5b",
+      "bytes": 13292
+    },
+    {
+      "path": "crates/topaz_product_runtime/src/runtime/machine.rs",
+      "sha256": "sha256:c99a2aeb8c8550c5ecc697a8cfa84236943157ebdb0903652cb42759bbb02c5d",
+      "bytes": 20180
+    },
+    {
+      "path": "crates/topaz_product_runtime/src/runtime/model.rs",
+      "sha256": "sha256:f8dc949ca36a40189608c0156756eebc6e6f46345ccf15ca785b55bac268b951",
+      "bytes": 18763
+    },
+    {
+      "path": "crates/topaz_product_runtime/src/runtime/nominal.rs",
+      "sha256": "sha256:33e51cd9e3fccf36c0ac859abe71b373050c53c2784f5151f9eb9804407a7cd9",
+      "bytes": 50652
+    },
+    {
+      "path": "crates/topaz_product_runtime/src/tests/admission.rs",
+      "sha256": "sha256:82719c583ad442dba6d350d0e584f3db9ae747fb326012a37f9ef57e480770e1",
+      "bytes": 18073
+    },
+    {
+      "path": "crates/topaz_product_runtime/src/tests/assignments.rs",
+      "sha256": "sha256:8d586dad9684f2df09e3a3e852f5077d2b5dc696d55f8aff116ec5974786eb50",
+      "bytes": 5708
+    },
+    {
+      "path": "crates/topaz_product_runtime/src/tests/execution.rs",
+      "sha256": "sha256:d9dd1fa0416963762a1518c85f307e8748a8a7b1740e8511bf7c7a4e682fb5f2",
+      "bytes": 40075
+    },
+    {
+      "path": "crates/topaz_product_runtime/src/tests/export.rs",
+      "sha256": "sha256:d485661cb9f4fb10685131e81f1ef9af3e17cff1e622abe6c661bcebd0dc2c39",
+      "bytes": 10369
+    },
+    {
+      "path": "crates/topaz_product_runtime/src/tests/mod.rs",
+      "sha256": "sha256:02065cbddc1642e75bf4fc06da94fce69f2f65fe9610ccfbef423fa316671a60",
+      "bytes": 2850
+    },
+    {
+      "path": "crates/topaz_product_runtime/src/tests/operators.rs",
+      "sha256": "sha256:342c24f712a803f92c1bf62ca91e7c0a14f4876fad10f504d3dab7f7c324f4e1",
+      "bytes": 15198
+    },
+    {
+      "path": "crates/topaz_product_runtime/src/tests/value_display.rs",
+      "sha256": "sha256:9c104c1273a1467ba0776046e8660d4f393bbfa32e18edaf5fe4b0fea38a05ee",
+      "bytes": 6756
+    },
+    {
+      "path": "crates/topaz_product_runtime/src/wire.rs",
+      "sha256": "sha256:a74671dcff8ebd84426d9e905ee9fdc7f8e1203b730337f50980bade1cc910d8",
+      "bytes": 16263
+    },
+    {
+      "path": "crates/topaz_rt/Cargo.toml",
+      "sha256": "sha256:74fb10df6bbeea91576b0e3d0b66859ebe29d33480a66f17b837f89dc2008f99",
+      "bytes": 294
+    },
+    {
+      "path": "crates/topaz_rt/src/cell.rs",
+      "sha256": "sha256:910fb58f7daab585543eef9e77197adcd5db9fa55e3ec49391112c27556983f8",
+      "bytes": 1473
+    },
+    {
+      "path": "crates/topaz_rt/src/closure.rs",
+      "sha256": "sha256:1a6db8967602e61ee77cae581f4ac4d305b250742035e63ca0247fb4511923b3",
+      "bytes": 49898
+    },
+    {
+      "path": "crates/topaz_rt/src/concurrent.rs",
+      "sha256": "sha256:04c2a489c3b2e46d3444beeb014dc795a2d02eb51fae36e9ec4db7273da53a49",
+      "bytes": 17244
+    },
+    {
+      "path": "crates/topaz_rt/src/defer.rs",
+      "sha256": "sha256:5c245571a5ad35cb869d7612fa97561a332d8dfa2c6bc900a5a27b6a7dd566fb",
+      "bytes": 3021
+    },
+    {
+      "path": "crates/topaz_rt/src/executor.rs",
+      "sha256": "sha256:3dd2dd154c006d4263c3a114556c311271d3dc150c2fc51c120e2b902e3b7dc6",
+      "bytes": 3742
+    },
+    {
+      "path": "crates/topaz_rt/src/lib.rs",
+      "sha256": "sha256:f47cc9fdc5aa2ae973af3eb710229e5c85f72d371a5c11a100e2db6deb95d90f",
+      "bytes": 1951
+    },
+    {
+      "path": "crates/topaz_rt/src/top_cell.rs",
+      "sha256": "sha256:7b36211e7488de2ffcbea3407196406ad5460b7c7ecb37678b23b55a88fd8006",
+      "bytes": 3128
+    },
+    {
+      "path": "crates/topaz_syntax/Cargo.toml",
+      "sha256": "sha256:dc3f2863fa8fe8402b833eebd65870fd7bc14abe6d1134fe8fba28ed6c52a8be",
+      "bytes": 302
+    },
+    {
+      "path": "crates/topaz_syntax/src/ast.rs",
+      "sha256": "sha256:d6c3edc84b32c91857339be35951bb3fc292d1f83dc52b781e4a338e6e061945",
+      "bytes": 45963
+    },
+    {
+      "path": "crates/topaz_syntax/src/integer_bits.rs",
+      "sha256": "sha256:24062691a5bca9bd631d79f5c0efff92ce7ce8adee421087ee7fada6fcadb14d",
+      "bytes": 3169
+    },
+    {
+      "path": "crates/topaz_syntax/src/length.rs",
+      "sha256": "sha256:131a440082deec0938c653e1d54cde61ead4cb5bed13cb9cae4d97834cd8c6f6",
+      "bytes": 18303
+    },
+    {
+      "path": "crates/topaz_syntax/src/lib.rs",
+      "sha256": "sha256:6a2890933da421dc3cdbb5edfa25c0a2fc1f0d207c13d7c938637409cd690dda",
+      "bytes": 1239
+    },
+    {
+      "path": "crates/topaz_syntax/src/literal.rs",
+      "sha256": "sha256:703e834bf912158a28ce009a500ca6c265a2971d1a3214ccc021eb4b2721b63b",
+      "bytes": 6931
+    },
+    {
+      "path": "crates/topaz_syntax/src/literal/cooking.rs",
+      "sha256": "sha256:3323d63047adabf1d36e4d10b617185b209aea90b24b342599f468af39598008",
+      "bytes": 4764
+    },
+    {
+      "path": "crates/topaz_syntax/src/literal/ir.rs",
+      "sha256": "sha256:0af039a869ba278f33aeea59fa9ce0a5c3fd6c60e63de3f3cee1926f66514aba",
+      "bytes": 3712
+    },
+    {
+      "path": "crates/topaz_syntax/src/literal/numeric.rs",
+      "sha256": "sha256:86aea68e66f96f84adfb5de6fa115095a3ef9a0324e6c8627287b3e71ed7522d",
+      "bytes": 6578
+    },
+    {
+      "path": "crates/topaz_syntax/src/standard_api.rs",
+      "sha256": "sha256:5a734acb7098fed5065ebc622414e845f31e6f9537e8f32ef5dd3ac7f5a97938",
+      "bytes": 10168
+    },
+    {
+      "path": "crates/topaz_syntax/src/token.rs",
+      "sha256": "sha256:962b5fa5ccd290f018d429cdcfc2e89fe34f0d4ba191c70a2432c8b3297d2e62",
+      "bytes": 8841
+    },
+    {
+      "path": "crates/topaz_syntax/src/version.rs",
+      "sha256": "sha256:3f8f42b51ef7683cdf0d7c624dc4f6e681ceba127c28137fad8e5e198997bf75",
+      "bytes": 10804
+    },
+    {
+      "path": "crates/topaz_value/Cargo.toml",
+      "sha256": "sha256:a3b91ee58301570b0ddbb4b780985f3ea7b3037063e66d4523f935af0001c46d",
+      "bytes": 253
+    },
+    {
+      "path": "crates/topaz_value/src/lib.rs",
+      "sha256": "sha256:3357cf27bb3ba80e056019bd064de53ceb63c89cb143dc8a5dff13ceccf4cd00",
+      "bytes": 11143
+    },
+    {
+      "path": "crates/topaz_value/src/lispex_application.rs",
+      "sha256": "sha256:d97998390e1330a1c683b6dd4e0a7e96149f659fc985f59c1b2541e82088ebc3",
+      "bytes": 32804
+    },
+    {
+      "path": "crates/topaz_value/src/transcript.rs",
+      "sha256": "sha256:be300e3b336e923707e191d1dc83ce91de71c574034829cd6bb9d7d1f1732e4c",
+      "bytes": 2111
+    },
+    {
+      "path": "crates/topaz_value/src/value/array.rs",
+      "sha256": "sha256:ab78f596e0db9772fba8b54a2958e08d0c8aa7d0365369b44644edaf2e4515d4",
+      "bytes": 3050
+    },
+    {
+      "path": "crates/topaz_value/src/value/bigint.rs",
+      "sha256": "sha256:5a91ccf525448ae11d7f745b35fd09fd8148de14fc0e3cd194c336ef32b7f1d3",
+      "bytes": 11825
+    },
+    {
+      "path": "crates/topaz_value/src/value/builtin_catalog.rs",
+      "sha256": "sha256:6aed19609b580629ad19cdae2497d38ae5b20bbb95bab1acefdee3a51d4e4a9e",
+      "bytes": 55399
+    },
+    {
+      "path": "crates/topaz_value/src/value/builtins/bigint_decimal.rs",
+      "sha256": "sha256:3ee891fbf1345c5811abd7db6793cb568d62fca49bd354066c03f85fec6146e1",
+      "bytes": 7164
+    },
+    {
+      "path": "crates/topaz_value/src/value/builtins/byte_buffer.rs",
+      "sha256": "sha256:bd7ea72fa4a4691ff9fbd487d022b49ceee2b989e23391ee1e9f4053189b6c7c",
+      "bytes": 10286
+    },
+    {
+      "path": "crates/topaz_value/src/value/builtins/bytes.rs",
+      "sha256": "sha256:4f6abddc1c34df24cb2df4aef9d95f38791c2b3f2f7f2955c1c586de42edd81b",
+      "bytes": 14383
+    },
+    {
+      "path": "crates/topaz_value/src/value/builtins/date.rs",
+      "sha256": "sha256:f4a9967238ac132366f1dbce56fe60ae51ea903cf05bfe0cecd5724b56e8b840",
+      "bytes": 5815
+    },
+    {
+      "path": "crates/topaz_value/src/value/builtins/hash_codec.rs",
+      "sha256": "sha256:db07bccd98a529a3d6778ac6d5a0883f88fcd07ddeb64b7e71b6b39d4d5162c5",
+      "bytes": 45632
+    },
+    {
+      "path": "crates/topaz_value/src/value/builtins/math.rs",
+      "sha256": "sha256:a5437958e3ce94b6bff6ec338836cb21ba853e120d653400a0e2545f1b36e758",
+      "bytes": 8973
+    },
+    {
+      "path": "crates/topaz_value/src/value/builtins/mod.rs",
+      "sha256": "sha256:556115a095947fd4a6fb2df286eb6b50ff91d73d43b5da25d06d396d7bdf5726",
+      "bytes": 510
+    },
+    {
+      "path": "crates/topaz_value/src/value/builtins/path_regex_url.rs",
+      "sha256": "sha256:d33211bb27ff6b1d74ca06d7717f1a27dfb948b8103391988638072828da5f17",
+      "bytes": 57896
+    },
+    {
+      "path": "crates/topaz_value/src/value/builtins/test.rs",
+      "sha256": "sha256:66ecb425d5e650616e4b543191eb99475593d055ade829d7b1b95b20fe3ce6bf",
+      "bytes": 6981
+    },
+    {
+      "path": "crates/topaz_value/src/value/callbacks.rs",
+      "sha256": "sha256:c71fcc6f00510af6118bbd90511fb86cdf91acb157f469194d669f5efebd1798",
+      "bytes": 22848
+    },
+    {
+      "path": "crates/topaz_value/src/value/collections.rs",
+      "sha256": "sha256:f645cf9a478a2ee7ad40dc1d577ffce3666aa68bf672063344d6e2ab38714d81",
+      "bytes": 25497
+    },
+    {
+      "path": "crates/topaz_value/src/value/compare.rs",
+      "sha256": "sha256:86fb176401a75a8dc485541a859b178fe65a703d22d47a239591e4122b958f45",
+      "bytes": 16683
+    },
+    {
+      "path": "crates/topaz_value/src/value/decimal.rs",
+      "sha256": "sha256:02e6a3f1ea471850be39edf64f83b5a5faaeacfaf69360eebe419bb7948e21ce",
+      "bytes": 7257
+    },
+    {
+      "path": "crates/topaz_value/src/value/extern_replay.rs",
+      "sha256": "sha256:7bfd87e889ab1fb3017d399cd8e3c771d78e0267cc85c0cf4f71a8e110495683",
+      "bytes": 13305
+    },
+    {
+      "path": "crates/topaz_value/src/value/guards.rs",
+      "sha256": "sha256:96b7fefd2faed28085a5a1d6370ff80270dbf3051398a5a3ee1417c10175ba27",
+      "bytes": 4867
+    },
+    {
+      "path": "crates/topaz_value/src/value/json/abi.rs",
+      "sha256": "sha256:71881d6d9b9b29c8113a2dada784dd92ae2b0b8b6e480f937aee34b394305c00",
+      "bytes": 17870
+    },
+    {
+      "path": "crates/topaz_value/src/value/json/codec.rs",
+      "sha256": "sha256:603aa9a4d169c932efb12d4b7a53af8e0fdea0c2db432d1b40fa8a4d7e2158a5",
+      "bytes": 13244
+    },
+    {
+      "path": "crates/topaz_value/src/value/json/mod.rs",
+      "sha256": "sha256:fe8ea2bbe059cd9659da98548a7156289be012fbc04ff4d8ee4899683771dd52",
+      "bytes": 327
+    },
+    {
+      "path": "crates/topaz_value/src/value/json/parser.rs",
+      "sha256": "sha256:a4bcb121fb6db82db5483ac3b65d645603cadd9e64d6404d6e0cceb4a39a3bf9",
+      "bytes": 13854
+    },
+    {
+      "path": "crates/topaz_value/src/value/json/schema.rs",
+      "sha256": "sha256:11c737405ee332e38fddeb679236b66db6be627c2308afbf2d1ca07959052fb0",
+      "bytes": 43843
+    },
+    {
+      "path": "crates/topaz_value/src/value/length.rs",
+      "sha256": "sha256:7d3fbd8d6d5ab16e2eb99d49f868837c5fc44c3483c37f03a0c986fb3d258fda",
+      "bytes": 8047
+    },
+    {
+      "path": "crates/topaz_value/src/value/members.rs",
+      "sha256": "sha256:c82a6fa30721234c7054778760a101b5d10b91b9410edb51fadafce308104657",
+      "bytes": 75932
+    },
+    {
+      "path": "crates/topaz_value/src/value/mod.rs",
+      "sha256": "sha256:4b16d805348677c9f8809dbb1955ff838b5fd91fcaf4acc47d2414c9958894c3",
+      "bytes": 1696
+    },
+    {
+      "path": "crates/topaz_value/src/value/model.rs",
+      "sha256": "sha256:e351af4eb00d47a53920e382273985013aa60e1f6e1e142cdedaf7c055d5bdf5",
+      "bytes": 23371
+    },
+    {
+      "path": "crates/topaz_value/src/value/operators.rs",
+      "sha256": "sha256:9a55f16ce8f9b36b6f789ffbefbf4536cfbdc508914b8e00321953f88a855229",
+      "bytes": 36323
+    },
+    {
+      "path": "crates/topaz_value/src/value/regex.rs",
+      "sha256": "sha256:a07cc1df0893d57928ab6d2ee7249ea065422987c46b7da13fd829cd2fae01b0",
+      "bytes": 15863
+    },
+    {
+      "path": "crates/topaz_value/src/value/render.rs",
+      "sha256": "sha256:f2a5f18358b3def6be0c9d1e5c2e61798d3b3affa18d5a64c1b99df63c7c5972",
+      "bytes": 15229
+    },
+    {
+      "path": "crates/topaz_value/src/value/runtime.rs",
+      "sha256": "sha256:fc1759817e3214295a69c54d152296c51f7efa81f64c0a542e822e53d72c01c3",
+      "bytes": 27361
+    },
+    {
+      "path": "crates/topaz_value/src/value/sort.rs",
+      "sha256": "sha256:2bcfeda6e6e28ad4adbafc3d820ea33a648a09993040e70c0c296230917d45e7",
+      "bytes": 1239
+    },
+    {
+      "path": "crates/topaz_value/src/value/tests/abi.rs",
+      "sha256": "sha256:c4bc86175e4836bcc0e08c2436aaf852e284cdcc8ffcbc821f4f6605ce51d53b",
+      "bytes": 4111
+    },
+    {
+      "path": "crates/topaz_value/src/value/tests/array.rs",
+      "sha256": "sha256:0e6ff06c3f425864fa72b16b4b5009ae14d1e00eb9e962c7db878eebec702a80",
+      "bytes": 3430
+    },
+    {
+      "path": "crates/topaz_value/src/value/tests/builtins.rs",
+      "sha256": "sha256:6aaf464685de43a0519d471991ccdfb10d317815a50e1ec816e6e6a3743f566b",
+      "bytes": 38566
+    },
+    {
+      "path": "crates/topaz_value/src/value/tests/core.rs",
+      "sha256": "sha256:2acb98967a1551a3b488b4aa651fe8e9e7aceb1d9da4b76b11cb025a0d32c2b8",
+      "bytes": 14426
+    },
+    {
+      "path": "crates/topaz_value/src/value/tests/json.rs",
+      "sha256": "sha256:61c91d8609d749cb05cde4964665624762615c7df80faae387908be9e9993afb",
+      "bytes": 18909
+    },
+    {
+      "path": "crates/topaz_value/src/value/tests/map.rs",
+      "sha256": "sha256:6aa68f7420bed39ead799833b839dd9bd6ceb35160d160c19714056d9c5f1c4b",
+      "bytes": 2947
+    },
+    {
+      "path": "crates/topaz_value/src/value/tests/mod.rs",
+      "sha256": "sha256:01c9b322080db903a310f77c06894b56524825475b42c02bf497f93937d87d41",
+      "bytes": 586
+    },
+    {
+      "path": "crates/topaz_value/src/value/tests/numeric.rs",
+      "sha256": "sha256:a386890766cbcfc5fbe1b284de9dbda5cbf35de972f639244cd194bade7be6ba",
+      "bytes": 24125
+    },
+    {
+      "path": "crates/topaz_value/src/value/tests/sort.rs",
+      "sha256": "sha256:a95552105fded5a856514c378f7815356f40aa8fde06de4f41b30bb2ca64bf17",
+      "bytes": 2038
+    }
+  ],
+  "sourceLanguage": "5.21",
+  "generatedRustSha256": "sha256:5f32cee07a1adea1c67ba8ac8fbd4f3ee4051f019a7856fcdb228740a1d4b8b1",
+  "emitterExecutableSha256": "sha256:bc2077c5467fba81210f641dd4c19c2d01db5a8f4def9bf6d32a81e11a378c2c",
+  "emitterToolchain": "rustc 1.96.0 (ac68faa20 2026-05-25)\nbinary: rustc\ncommit-hash: ac68faa20c58cbccd01ee7208bf3b6e93a7d7f96\ncommit-date: 2026-05-25\nhost: x86_64-pc-windows-msvc\nrelease: 1.96.0\nLLVM version: 22.1.2\n",
+  "derivation": {
+    "sourceCommit": "1326694b5418d07ffd14102dd0fd19055143b3c9",
+    "route": "native C2 emits K Rust",
+    "emitterSourceSetId": "sha256:17d598ebcb0dea65195aba8c0b3ab20f94003a7f343714f7b1df25d790cdacd5",
+    "emitterNativeLinkId": "sha256:a98831c6d5bdffcdfe77723f54d953b57572f2285d0a5212436c04b228fd9c9d",
+    "emitterRustSha256": "sha256:765b6f5c98090de6920a3359924f791bc8679f18702a5e887b5a56735dda29d8",
+    "emitterRuntimeSourceSetId": "sha256:85ed8d3b0571c34bc40c3ffd1be8bcda2a539d6c82c92b417c834507200d9c60",
+    "emitterOrigin": "native-stage1",
+    "bootstrapC1ReceiptSha256": null,
+    "transitionReceipt": {
+      "sha256": "sha256:d818f2be3313331525197c677f3690f7cfbfbb3f5f08a83b35389bf558063101",
+      "bytes": 3327526
+    },
+    "originalTransitionDisposition": "differs",
+    "originalGenerationRole": "R2"
+  }
+}

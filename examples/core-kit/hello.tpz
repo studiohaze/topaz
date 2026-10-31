@@ -1,0 +1,6 @@
+import std.io as io
+
+export function main(args: Array<string>, stdin: string) -> Result<int, string> {
+  io.writeLine("Hello from Topaz Core Kit")
+  Ok(0)
+}

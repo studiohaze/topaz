@@ -1,0 +1,7 @@
+import std.io as io
+import src.greeting { greeting }
+
+export function main(args: Array<string>, stdin: string) -> Result<int, string> {
+  io.writeLine(greeting())
+  Ok(0)
+}

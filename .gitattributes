@@ -1,1 +1,3 @@
 * -text
+compiler/generated/native/compiler.rs whitespace=-blank-at-eol
+core-kit/distribution/RUST-STDLIB-NOTICES.html whitespace=-blank-at-eol

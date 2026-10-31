@@ -1,0 +1,46 @@
+[workspace]
+resolver = "3"
+members = [
+  "crates/topaz_diag",
+  "crates/topaz_syntax",
+  "crates/topaz_value",
+  "crates/topaz_product_runtime",
+  "crates/topaz_rt",
+  "crates/topaz_host_none",
+  "crates/topaz_host_native",
+  "crates/topaz_seed_compiler",
+  "crates/topaz_seed",
+  "core-kit-native"
+]
+default-members = ["crates/topaz_seed", "crates/topaz_host_native"]
+
+[workspace.package]
+version = "5.21.1"
+edition = "2024"
+rust-version = "1.96.0"
+license-file = "../LICENSE-COMPONENTS.txt"
+
+[workspace.dependencies]
+topaz_diag = { path = "crates/topaz_diag" }
+topaz_syntax = { path = "crates/topaz_syntax" }
+topaz_value = { path = "crates/topaz_value" }
+topaz_product_runtime = { path = "crates/topaz_product_runtime" }
+topaz_rt = { path = "crates/topaz_rt" }
+topaz_host_none = { path = "crates/topaz_host_none" }
+topaz_host_native = { path = "crates/topaz_host_native" }
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+all = "warn"
+
+[profile.release]
+debug = 0
+incremental = false
+lto = "off"
+
+# Keep runtime symbols out of the distributed native tools. This applies only
+# to the adapter package and does not change the canonical core's build profile.
+[profile.release.package.topaz-core-kit-native]
+strip = "symbols"

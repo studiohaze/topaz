@@ -1,0 +1,180 @@
+import std.fs as files
+import std.json as json
+import src.contracts { DirectoryEntry, HostFact }
+import src.project_manifest { relativePath }
+
+export type Inspect = (string, string) -> Result<string, string>
+
+record HostQuery derives JSON {
+  kind: string,
+  mountId: string,
+  logicalPath: string,
+}
+
+export record Inspection derives JSON {
+  status: string,
+  path: string,
+  kind: string,
+  alias: string,
+  reason: string,
+}
+
+export record SourceState {
+  root: string,
+  inspect: Inspect,
+  facts: Array<HostFact>,
+  indexes: Map<string, int>,
+  totals: Array<int>,
+}
+
+export function inspectPath(root: string, path: string, inspect: Inspect) -> Result<Inspection, string> {
+  if path != "" { relativePath(path, false)? }
+  let info = json.parseAs<Inspection>(inspect(root, path)?)?
+  if info.status != "present" && info.status != "missing" && info.status != "outside" && info.status != "unreadable" {
+    return Err("native path inspection returned an invalid status")
+  }
+  if info.status == "present" && (info.path == "" || (info.kind != "file" && info.kind != "directory" && info.kind != "other")) {
+    return Err("native path inspection returned incomplete metadata")
+  }
+  Ok(info)
+}
+
+function baseFact(query: HostQuery, status: string) -> HostFact {
+  HostFact {
+    kind: query.kind, mountId: query.mountId, logicalPath: query.logicalPath,
+    status: status, source: "", entries: [], aliasClass: "", reasonCode: "",
+  }
+}
+
+function containment(query: HostQuery, info: Inspection) -> HostFact {
+  let fact = baseFact(query, if info.status == "present" { "inside" } else { info.status })
+  HostFact { ...fact, aliasClass: if info.status == "present" { info.alias } else { "" }, reasonCode: info.reason }
+}
+
+function source(query: HostQuery, info: Inspection) -> HostFact {
+  if info.status == "missing" || (info.status == "present" && info.kind != "file") {
+    return baseFact(query, "missing")
+  }
+  if info.status != "present" {
+    return HostFact { ...baseFact(query, "unreadable"), reasonCode: if info.status == "outside" { "source resolves outside the project root" } else { info.reason } }
+  }
+  let bytes = match files.readBytes(info.path) {
+    case Ok(value) => value
+    case Err(message) => return HostFact { ...baseFact(query, "unreadable"), reasonCode: message }
+  }
+  if bytes.length() > 16777216 {
+    return HostFact { ...baseFact(query, "unreadable"), reasonCode: "source exceeds 16 MiB" }
+  }
+  match bytes.decodeUtf8() {
+    case Ok(text) => HostFact { ...baseFact(query, "present"), source: text }
+    case Err(_) => baseFact(query, "invalid-utf8")
+  }
+}
+
+function listing(query: HostQuery, info: Inspection, state: SourceState) -> Result<HostFact, string> {
+  if info.status == "missing" || (info.status == "present" && info.kind != "directory") {
+    return Ok(baseFact(query, "missing"))
+  }
+  if info.status != "present" {
+    return Ok(HostFact { ...baseFact(query, "unreadable"), reasonCode: if info.status == "outside" { "directory resolves outside the project root" } else { info.reason } })
+  }
+  let children = match files.list(info.path) {
+    case Ok(value) => value
+    case Err(message) => return Ok(HostFact { ...baseFact(query, "unreadable"), reasonCode: message })
+  }
+  if children.length > 65536 { return Err("project directory exceeds 65536 entries") }
+  let mut names: Array<string> = []
+  let mut kinds: Map<string, string> = map {}
+  for child in children {
+    // A directory fact preserves every spelling so the canonical resolver,
+    // not the CLI, decides case and Unicode-normalization collisions.
+    if child.name == "" || child.name.contains("/") || child.name.contains("\\") || child.name.contains("\n") {
+      return Err("project directory contains an unrepresentable entry name")
+    }
+    if kinds.containsKey(child.name) { return Err("project directory returned a duplicate entry name") }
+    let mut kind = child.kind
+    if kind == "symlink" {
+      let path = if query.logicalPath == "" { child.name } else { "{query.logicalPath}/{child.name}" }
+      let target = inspectPath(state.root, path, state.inspect)?
+      kind = if target.status == "present" { target.kind } else { "other" }
+    }
+    names.push(child.name)
+    kinds.insert(child.name, kind)
+  }
+  names.sort()
+  let mut entries: Array<DirectoryEntry> = []
+  for name in names {
+    let kind = match kinds.get(name) {
+      case Some(value) => value
+      case None => "other"
+    }
+    entries.push(DirectoryEntry { name: name, kind: kind })
+  }
+  Ok(HostFact { ...baseFact(query, "present"), entries: entries })
+}
+
+export function provide(queryText: string, state: SourceState) -> Result<string, string> {
+  let query = json.parseAs<HostQuery>(queryText)?
+  if query.mountId != "root" { return Err("project queries must use the root mount") }
+  if query.kind != "physical-containment" && query.kind != "read-source" && query.kind != "list-directory" {
+    return Err("unsupported project source query `{query.kind}`")
+  }
+  if query.logicalPath != "" { relativePath(query.logicalPath, false)? }
+  if query.logicalPath == "" && query.kind != "list-directory" {
+    return Err("source and containment queries require a file path")
+  }
+  let key = "{query.kind}\n{query.logicalPath}"
+  match state.indexes.get(key) {
+    case Some(index) => return json.stringify(state.facts[index])
+    case None => ()
+  }
+  if state.facts.length >= 16384 { return Err("project exceeds 16384 source-query facts") }
+  let fact = if query.logicalPath.startsWith("std/") {
+    // Standard modules come from the checkout's explicit module inventory.
+    // An unavailable standard import cannot load a project-local replacement.
+    baseFact(query, "missing")
+  } else {
+    let info = inspectPath(state.root, query.logicalPath, state.inspect)?
+    if query.kind == "physical-containment" {
+      containment(query, info)
+    } else if query.kind == "read-source" {
+      source(query, info)
+    } else {
+      listing(query, info, state)?
+    }
+  }
+  let mut current = state
+  if fact.kind == "read-source" {
+    current.totals[0] += 1
+    current.totals[1] += fact.source.byteLength()
+    if current.totals[0] > 4096 || current.totals[1] > 16777216 {
+      return Err("project sources and standard modules exceed 4096 source facts or 16 MiB")
+    }
+  }
+  current.indexes.insert(key, current.facts.length)
+  current.facts.push(fact)
+  json.stringify(fact)
+}
+
+export function orderedFacts(facts: Array<HostFact>) -> Result<Array<HostFact>, string> {
+  let mut keys: Array<string> = []
+  let mut indexes: Map<string, int> = map {}
+  let mut index = 0
+  for fact in facts {
+    let key = "{fact.kind}\n{fact.logicalPath}"
+    if indexes.containsKey(key) { return Err("duplicate project fact while saving a request") }
+    keys.push(key)
+    indexes.insert(key, index)
+    index += 1
+  }
+  keys.sort()
+  let mut output: Array<HostFact> = []
+  for key in keys {
+    let position = match indexes.get(key) {
+      case Some(value) => value
+      case None => return Err("missing project fact while saving a request")
+    }
+    output.push(facts[position])
+  }
+  Ok(output)
+}

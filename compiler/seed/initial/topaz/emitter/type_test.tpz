@@ -1,0 +1,307 @@
+import std.json as jsonBoundary
+
+import emitter.ir { Table, typeDeclaration }
+import types { PreviewTypeAtom }
+import emitter.repr { reprAt, isCopyRepr }
+import emitter.rust_text { rustStr }
+
+export function childTypes(atoms: Array<PreviewTypeAtom>, parent: int) -> Array<int> {
+  let mut out: Array<int> = []
+  let mut index = 0
+  for atom in atoms {
+    if atom.parent == parent { out.push(index) }
+    index += 1
+  }
+  out
+}
+
+// Semantic atoms preserve alias expansion, structural fields and nominal
+// identities. Tests inspect the value; a container's outer tag is insufficient.
+function typeTestInner(table: Table, scopeId: string, atoms: Array<PreviewTypeAtom>, index: int, access: string, repr: string, active: Map<string, string>) -> Result<string, string> {
+  if index >= atoms.length { return Err("unsupported: missing pattern type") }
+  let atom = atoms[index]
+  let subs = childTypes(atoms, index)
+  if atom.kind == "newtype" && atom.identity == "builtin:Length" && atom.origin == "" {
+    if subs.length != 1 {return Err("unsupported: Length unit argument")}
+    let marker=atoms[subs[0]]
+    let unit=marker.identity.replace("builtin:","")
+    if marker.kind != "newtype" || marker.origin != "" || marker.identity != "builtin:{unit}" || (unit != "Pt" && unit != "Mm" && unit != "Cm" && unit != "In" && unit != "Em") {return Err("unsupported: Length unit marker")}
+    return Ok("length_from_value(&({access})).is_some_and(|v| v.unit == LengthUnit::{unit})")
+  }
+  if atom.kind == "union" {
+    let mut tests: Array<string> = []
+    for sub in subs { tests.push("({typeTestInner(table, scopeId, atoms, sub, access, repr, active)?})") }
+    return Ok(if tests.length == 0 { "false" } else { tests.join(" || ") })
+  }
+  if atom.kind == "unknown" || atom.kind == "type-parameter" { return Ok("true") }
+  if atom.kind == "rigid" {
+    match runtimeBoundType(table, scopeId, atom.name)? {
+      case Some(body) => return typeTestInner(table, scopeId, body, 0, access, repr, active)
+      case None => return Ok("true")
+    }
+  }
+  if isCopyRepr(repr) {
+    if reprAt(atoms, index) != repr { return Ok("false") }
+    if atom.kind != "literal" { return Ok("true") }
+    return Ok("({access}) == {atom.value}")
+  }
+  let value = "&({access})"
+  if atom.kind == "primitive" || atom.kind == "literal" {
+    let variant = match atom.name {
+      case "int" => "Int"
+      case "float" => "Float"
+      case "bool" => "Bool"
+      case "string" => "Str"
+      case "unit" => return Ok("matches!({value}, Value::Unit)")
+      case "null" => return Ok("matches!({value}, Value::Null)")
+      case "never" => return Ok("false")
+      case _ => return Err("unsupported: pattern type {atom.name}")
+    }
+    if atom.kind == "literal" {
+      let test = if atom.name == "string" { "__v.as_ref() == {rustStr(atom.value)}" } else { "*__v == {atom.value}" }
+      return Ok("matches!({value}, Value::{variant}(__v) if {test})")
+    }
+    return Ok("matches!({value}, Value::{variant}(_))")
+  }
+  if atom.kind == "function" {
+    let mut count = 0
+    let mut variadic = false
+    for sub in subs {
+      if atoms[sub].field == "parameters" { count += 1 }
+      if atoms[sub].field == "variadic" { variadic = true }
+    }
+    return Ok("callable_shape_matches({value}, {count}, {variadic})")
+  }
+  if atom.kind == "record" {
+    let mut checks: Array<string> = []
+    for sub in subs {
+      let test = typeTestInner(table, scopeId, atoms, sub, "(*__v)", "value", active)?
+      checks.push("(match __rec.get({rustStr(atoms[sub].edgeName)}) \{ Some(__v) => {test}, None => false \})")
+    }
+    let rest = if checks.length == 0 { "" } else { " && {checks.join(" && ")}" }
+    return Ok("match {value} \{ Value::Record(__rec) => __rec.len() == {subs.length}{rest}, _ => false \}")
+  }
+  if atom.kind == "constructor" {
+    if atom.name == "Option" && subs.length == 1 {
+      let test = typeTestInner(table, scopeId, atoms, subs[0], "(**__v)", "value", active)?
+      return Ok("match {value} \{ Value::None => true, Value::Some(__v) => {test}, _ => false \}")
+    }
+    if atom.name == "Result" && subs.length == 2 {
+      let yes = typeTestInner(table, scopeId, atoms, subs[0], "(**__v)", "value", active)?
+      let no = typeTestInner(table, scopeId, atoms, subs[1], "(**__v)", "value", active)?
+      return Ok("match {value} \{ Value::Ok(__v) => {yes}, Value::Err(__v) => {no}, _ => false \}")
+    }
+    if (atom.name == "Array" || atom.name == "Set") && subs.length == 1 {
+      if atom.name == "Array" {
+        let stable = stableArrayElement(table, atoms, subs[0])
+        if stable != "" { return Ok("array_elements_match(&({access}), {stable})") }
+      }
+      let test = typeTestInner(table, scopeId, atoms, subs[0], "(*__v)", "value", active)?
+      let items = if atom.name == "Set" { ".items()" } else { "" }
+      return Ok("match {value} \{ Value::{atom.name}(__xs) => __xs.borrow(){items}.iter().all(|__v| {test}), _ => false \}")
+    }
+    if atom.name == "Map" && subs.length == 2 {
+      let key = typeTestInner(table, scopeId, atoms, subs[0], "__key", "value", active)?
+      let val = typeTestInner(table, scopeId, atoms, subs[1], "__val", "value", active)?
+      return Ok("match {value} \{ Value::Map(__xs) => __xs.borrow().pairs().into_iter().all(|(__key, __val)| ({key}) && ({val})), _ => false \}")
+    }
+  }
+  if atom.kind == "enum" || atom.kind == "nominal-record" || atom.kind == "newtype" {
+    return nominalTest(table, scopeId, atoms, index, access, active)
+  }
+  let variant = match atom.kind {
+    case "json-value" => "Json"
+    case "toml-value" => "Toml"
+    case "url" => "Url"
+    case "match" => "RegexMatch"
+    case "bytes" => "Bytes"
+    case "byte-buffer" => "ByteBuffer"
+    case "path" => "Path"
+    case "regex" => "Regex"
+    case "date" => "Date"
+    case "big-int" => "BigInt"
+    case "decimal" => "Decimal"
+    case "rounding-mode" => return Ok("matches!({value}, Value::Enum \{ enum_id, .. \} if enum_id.as_ref() == \"RoundingMode\")")
+    case _ => ""
+  }
+  if variant != "" { return Ok("matches!({value}, Value::{variant}(_))") }
+  return Err("unsupported: pattern type {atom.kind}/{atom.name}/{atom.identity}")
+}
+
+export function nominalIdentity(atom: PreviewTypeAtom) -> string {
+  if atom.identity.contains("::") || atom.origin == "" { atom.identity }
+  else { "{atom.origin}::{atom.identity}" }
+}
+
+// Nested mutable contents are deliberately excluded: their tests must observe
+// mutations through aliases even when the containing array has not changed.
+function stableArrayElement(table: Table, atoms: Array<PreviewTypeAtom>, index: int) -> string {
+  let atom = atoms[index]
+  if atom.kind == "primitive" {
+    let variant = match atom.name {
+      case "int" => "Int"
+      case "float" => "Float"
+      case "bool" => "Bool"
+      case "string" => "String"
+      case "unit" => "Unit"
+      case "null" => "Null"
+      case _ => ""
+    }
+    return if variant == "" { "" } else { "StableArrayElement::{variant}" }
+  }
+  if atom.kind != "nominal-record" && atom.kind != "enum" && atom.kind != "newtype" { return "" }
+  if childTypes(atoms, index).length != 0 { return "" }
+  let identity = nominalIdentity(atom)
+  let declaration = match table.nominals.get(identity) {
+    case Some(found) => found
+    case None => return ""
+  }
+  for part in declaration {
+    if part.parent == 0 && part.field == "typeParameters" { return "" }
+  }
+  let variant = if atom.kind == "nominal-record" { "NominalRecord" }
+    else if atom.kind == "enum" { "Enum" } else { "Newtype" }
+  "StableArrayElement::{variant}({rustStr(identity)})"
+}
+
+export function subtree(atoms: Array<PreviewTypeAtom>, root: int) -> Array<PreviewTypeAtom> {
+  let mut out: Array<PreviewTypeAtom> = []
+  let mut indexes: Map<int, int> = map {}
+  let mut index = root
+  while index < atoms.length {
+    let atom = atoms[index]
+    if index > root && atom.parent < root { break }
+    let parent = if index == root { -1 } else { indexes.get(atom.parent) ?? -1 }
+    indexes.insert(index, out.length)
+    out.push(PreviewTypeAtom { ...atom, parent: parent,
+      field: if index == root { "root" } else { atom.field },
+      index: if index == root { 0 } else { atom.index },
+      edgeName: if index == root { "" } else { atom.edgeName } })
+    index += 1
+  }
+  out
+}
+
+export function substitute(atoms: Array<PreviewTypeAtom>, params: Map<string, Array<PreviewTypeAtom>>) -> Array<PreviewTypeAtom> {
+  let mut out: Array<PreviewTypeAtom> = []
+  let mut indexes: Map<int, int> = map {}
+  let mut index = 0
+  for atom in atoms {
+    let parent = if atom.parent < 0 { -1 } else { indexes.get(atom.parent) ?? -1 }
+    indexes.insert(index, out.length)
+    let actual = if atom.kind == "type-parameter" || atom.kind == "rigid" { params.get(atom.name) } else { None }
+    match actual {
+      case Some(types) => {
+        let offset = out.length
+        for t in types {
+          out.push(PreviewTypeAtom { ...t,
+            parent: if t.parent < 0 { parent } else { t.parent + offset },
+            field: if t.parent < 0 { atom.field } else { t.field },
+            index: if t.parent < 0 { atom.index } else { t.index },
+            edgeName: if t.parent < 0 { atom.edgeName } else { t.edgeName } })
+        }
+      }
+      case None => out.push(PreviewTypeAtom { ...atom, parent: parent })
+    }
+    index += 1
+  }
+  out
+}
+
+function nominalTest(table: Table, scopeId: string, atoms: Array<PreviewTypeAtom>, index: int, access: string,
+  active: Map<string, string>) -> Result<string, string> {
+  let atom = atoms[index]
+  let identity = nominalIdentity(atom)
+  let declaration = match table.nominals.get(identity) {
+    case Some(found) => found
+    case None => return Err("unsupported: nominal type declaration {identity}")
+  }
+  let types = subtree(atoms, index)
+  let key = jsonBoundary.stringify(types)?
+  match active.get(key) {
+    case Some(helper) => return Ok("{helper}(&({access}))")
+    case None => ()
+  }
+  let helper = "__nominal_type_{active.length}"
+  let mut next: Map<string, string> = map {}
+  for pair in active.entries { next.insert(pair.key, pair.value) }
+  next.insert(key, helper)
+  let mut params: Map<string, Array<PreviewTypeAtom>> = map {}
+  let args = childTypes(atoms, index)
+  let mut count = 0
+  for parameter in declaration {
+    if parameter.parent == 0 && parameter.field == "typeParameters" {
+      if count >= args.length { return Err("unsupported: nominal type argument arity {identity}") }
+      params.insert(parameter.name, subtree(atoms, args[count]))
+      count += 1
+    }
+  }
+  if count != args.length { return Err("unsupported: nominal type argument arity {identity}") }
+  if count == 0 {
+    let id = rustStr(identity)
+    if atom.kind == "nominal-record" { return Ok("({access}).is_nominal_record_declaration({id})") }
+    if atom.kind == "newtype" { return Ok("({access}).is_newtype_declaration({id})") }
+    return Ok("matches!(&({access}), Value::Enum \{ enum_id, declaration_identity, .. \} if nominal_declaration_identity(enum_id.as_ref(), declaration_identity.as_deref()) == {id})")
+  }
+  let definition = substitute(declaration, params)
+  let roots = childTypes(definition, 0)
+  let mut checks: Array<string> = []
+  let id = rustStr(identity)
+  let mut body = "false"
+  if atom.kind == "nominal-record" {
+    for field in roots {
+      if definition[field].field != "fields" { continue }
+      let test = typeTestInner(table, scopeId, definition, field, "(*__field)", "value", next)?
+      checks.push("__fields.iter().find(|(n, _)| n.as_ref() == {rustStr(definition[field].edgeName)}).map(|(_, __field)| {test}).unwrap_or(false)")
+    }
+    let fields = if checks.length == 0 { "true" } else { checks.join(" && ") }
+    body = "match __value \{ Value::NominalRecord \{ record_id, declaration_identity, fields: __fields, .. \} if nominal_declaration_identity(record_id.as_ref(), declaration_identity.as_deref()) == {id} => {fields}, _ => false \}"
+  } else if atom.kind == "newtype" {
+    for field in roots {
+      if definition[field].field != "base" { continue }
+      let test = typeTestInner(table, scopeId, definition, field, "(**inner)", "value", next)?
+      body = "match __value \{ Value::Newtype \{ newtype_id, declaration_identity, inner, .. \} if nominal_declaration_identity(newtype_id.as_ref(), declaration_identity.as_deref()) == {id} => {test}, _ => false \}"
+    }
+    ()
+  } else {
+    for variant in roots {
+      if definition[variant].field != "variants" { continue }
+      let payload = childTypes(definition, variant)
+      let mut tests = ["payloads.len() == {payload.length}"]
+      let mut position = 0
+      for field in payload {
+        let test = typeTestInner(table, scopeId, definition, field, "payloads[{position}]", "value", next)?
+        tests.push("({test})")
+        position += 1
+      }
+      checks.push("{rustStr(definition[variant].name)} if {tests.join(" && ")} => true")
+    }
+    body = "match __value \{ Value::Enum \{ enum_id, declaration_identity, variant, payloads, .. \} if nominal_declaration_identity(enum_id.as_ref(), declaration_identity.as_deref()) == {id} => match variant.as_ref() \{ {checks.join(", ")}, _ => false \}, _ => false \}"
+  }
+  Ok("\{ fn {helper}(__value: &Value) -> bool \{ {body} \} {helper}(&({access})) \}")
+}
+
+export function typeTest(table: Table, scopeId: string, atoms: Array<PreviewTypeAtom>, index: int, access: string, repr: string) -> Result<string, string> {
+  let active: Map<string, string> = map {}
+  typeTestInner(table, scopeId, atoms, index, access, repr, active)
+}
+
+// Named runtime types take precedence over erasing a generic parameter.
+function runtimeBoundType(table: Table, scopeId: string, name: string) -> Result<Option<Array<PreviewTypeAtom>>, string> {
+  let declaration = match typeDeclaration(table, scopeId, name)? {
+    case Some(found) => found
+    case None => return Ok(None)
+  }
+  if declaration.kind != "type-alias" { return Ok(Some([declaration.typeDefinition[0]])) }
+  let mut index = 0
+  for atom in declaration.typeDefinition {
+    if atom.parent == 0 && atom.field == "typeParameters" {
+      return Err("unsupported: generic alias arity {name}")
+    }
+    if atom.parent == 0 && atom.field == "base" {
+      return Ok(Some(subtree(declaration.typeDefinition, index)))
+    }
+    index += 1
+  }
+  Err("unsupported: alias definition {name}")
+}

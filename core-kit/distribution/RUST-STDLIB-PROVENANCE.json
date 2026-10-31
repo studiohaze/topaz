@@ -1,0 +1,15 @@
+{
+  "component": "Rust standard library",
+  "modifications": "none",
+  "noticeBytes": 425651,
+  "noticeFile": "RUST-STDLIB-NOTICES.html",
+  "noticeSha256": "78c163fcec50e64bfd85fedb850c273595602fafa2b41f30f75d4e410b80ee83",
+  "rustCompilerVersion": "1.96.0 (ac68faa20 2026-05-25)",
+  "schema": "topaz.core-kit-notice-provenance/v1",
+  "scope": "Unmodified standard-library notice supplied with the pinned Rust release, including its embedded license texts. It describes Rust library source and dependencies across targets, not a claim that every listed dependency is linked into this Core Kit executable.",
+  "sourceArchive": "https://static.rust-lang.org/dist/2026-05-28/rustc-1.96.0-x86_64-unknown-linux-gnu.tar.xz",
+  "sourceArchiveMember": "rustc-1.96.0-x86_64-unknown-linux-gnu/rustc/share/doc/rust/COPYRIGHT-library.html",
+  "sourceArchiveSha256": "7d7fa1d0cfb0fab71a956bb78f41107202c17f30ab56c45288e869a37fd9633d",
+  "verification": "The copied notice matches the installed and extracted file byte for byte. The source archive SHA-256 matches the downloaded Rust 1.96.0 channel manifest.",
+  "version": "1.96.0"
+}

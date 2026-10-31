@@ -1,0 +1,170 @@
+import std.bytes { Bytes }
+import std.fs as files
+import std.io as io
+import std.json as json
+import src.contracts { Capture, Native, fileMetadata }
+import src.download_catalog { Download, encode as encodeCatalogue, inputSetId, validatePublication }
+import src.payload_files { MANIFEST_NAME, PayloadFile, portablePath }
+import src.release_archive { ArchiveEntry, MAX_TAR_BYTES, encode as encodeArchive }
+import src.release_image { inspectImage }
+import src.release_payload { Verified, approve }
+
+record PlannedMember {
+  record: PayloadFile,
+  source: string,
+  mode: string,
+}
+
+record PackageRecord derives JSON {
+  schema: string,
+  evidence: string,
+  declaredSourceCommit: string,
+  inputSetSha256: string,
+  target: string,
+  repository: string,
+  tag: string,
+  recipe: string,
+  recipeSha256: string,
+  requestSha256: string,
+  generatedRustSha256: string,
+  assetName: string,
+  assetBytes: int,
+  assetSha256: string,
+  executableBytes: int,
+  executableSha256: string,
+}
+
+function modeFor(verified: Verified, name: string) -> Result<string, string> {
+  if name == "assembly.json" || name == MANIFEST_NAME { return Ok("0644") }
+  for file in verified.assembly.files { if file.path == name { return Ok(file.mode) } }
+  Err("verified release file has no recorded mode: {name}")
+}
+
+function requireFirstRunDependencies(verified: Verified, plan: PlannedMember) -> Result<(), string> {
+  let image = inspectImage(plan.source)?
+  if image.bytes != plan.record.bytes || image.sha256 != plan.record.sha256 {
+    return Err("release executable bytes changed before the download startup check")
+  }
+  let mut system: Set<string> = set {}
+  for name in verified.assembly.systemDependencies { system.add(name) }
+  for name in image.dependencies {
+    if !system.contains(name) {
+      return Err("download first run cannot use bundled runtime dependency {name}; the installer starts the executable before unpacking companions")
+    }
+  }
+  Ok(())
+}
+
+function members(verified: Verified, native: Native) -> Result<Array<ArchiveEntry>, string> {
+  let mut records: Array<PayloadFile> = []
+  for file in verified.contents { records.push(file) }
+  records.push(verified.manifest)
+  if records.length == 0 || records.length > 256 { return Err("release package exceeds its member count limit") }
+  let mut plans: Array<PlannedMember> = []
+  let mut total = 1024
+  // Check every file's metadata and the complete tar extent before reading
+  // any member into an archive buffer. No file or cumulative bound relies
+  // on a claim made only inside payload.json.
+  for record in records {
+    portablePath(record.path)?
+    if record.path.contains("/") || record.path.startsWith(".") || record.path.byteLength() > 100 {
+      return Err("release archive requires flat visible filenames of at most 100 ASCII bytes")
+    }
+    let meta = fileMetadata("{verified.directory}/{record.path}", native)?
+    if meta.bytes <= 0 || meta.bytes != record.bytes || meta.bytes > MAX_TAR_BYTES {
+      return Err("release file size changed after verification: {record.path}")
+    }
+    let extent = 512 + meta.bytes + (512 - meta.bytes % 512) % 512
+    if extent > MAX_TAR_BYTES - total { return Err("complete release tar exceeds 256 MiB") }
+    total += extent
+    let mode = modeFor(verified, record.path)?
+    if (meta.mode == "" && mode != "0644") || (meta.mode != "" && meta.mode != mode) {
+      return Err("release file mode changed after verification: {record.path}")
+    }
+    plans.push(PlannedMember { record: record, source: meta.path, mode: mode })
+  }
+  // Assembly can carry runtime companions, but the download adapter starts
+  // only the executable. Inspect its imports after all size preflights and
+  // before archive construction, including explicit installed-byte checking.
+  for plan in plans {
+    if plan.record.path == verified.assembly.executable {
+      requireFirstRunDependencies(verified, plan)?
+    }
+  }
+  let mut entries: Array<ArchiveEntry> = []
+  for plan in plans {
+    let bytes = files.readBytes(plan.source)?
+    if bytes.length() != plan.record.bytes || bytes.sha256().toHex() != plan.record.sha256 {
+      return Err("release file bytes changed after verification: {plan.record.path}")
+    }
+    entries.push(ArchiveEntry { path: plan.record.path, mode: plan.mode, bytes: bytes })
+  }
+  Ok(entries)
+}
+
+function executableRecord(verified: Verified) -> Result<PayloadFile, string> {
+  for record in verified.contents {
+    if record.path == verified.assembly.executable { return Ok(record) }
+  }
+  Err("verified payload omits its executable record")
+}
+
+export function archiveBytes(verified: Verified, native: Native) -> Result<Bytes, string> {
+  encodeArchive(members(verified, native)?)
+}
+
+function writeChecked(directory: string, name: string, bytes: Bytes, native: Native) -> Result<(), string> {
+  let destination = "{directory}/{name}"
+  files.writeBytes(destination, bytes)?
+  native("set-file-mode", [destination, "0644"])?
+  let meta = fileMetadata(destination, native)?
+  if meta.bytes != bytes.length() || (meta.mode != "" && meta.mode != "0644") {
+    return Err("written release file has different metadata: {name}")
+  }
+  let actual = files.readBytes(destination)?
+  if actual != bytes { return Err("written release file differs from its prepared bytes: {name}") }
+  Ok(())
+}
+
+export function pack(
+  root: string, first: string, second: string, output: string,
+  repository: string, tag: string, sourceCommit: string, native: Native, capture: Capture,
+) -> Result<int, string> {
+  validatePublication(repository, tag, sourceCommit)?
+  let inputSet = inputSetId(root)?
+  let verified = approve(root, first, second, native, capture)?
+  let packed = archiveBytes(verified, native)?
+  let executable = executableRecord(verified)?
+  let download = Download {
+    target: verified.assembly.target, repository: repository, tag: tag,
+    sourceCommit: sourceCommit, inputSetSha256: inputSet,
+    assetName: "topaz-core-kit-{verified.assembly.target}.tar.gz",
+    assetBytes: packed.length(), assetSha256: packed.sha256().toHex(),
+    executableBytes: executable.bytes, executableSha256: executable.sha256,
+  }
+  let catalogueText = encodeCatalogue([download])?
+  let record = PackageRecord {
+    schema: "topaz.core-kit-package/v1", evidence: "equal-candidates-with-native-checks",
+    declaredSourceCommit: sourceCommit, inputSetSha256: inputSet,
+    target: download.target, repository: repository, tag: tag,
+    recipe: verified.loaded.path, recipeSha256: verified.loaded.sha256,
+    requestSha256: verified.assembly.requestSha256,
+    generatedRustSha256: verified.assembly.generatedRustSha256,
+    assetName: download.assetName, assetBytes: download.assetBytes,
+    assetSha256: download.assetSha256,
+    executableBytes: download.executableBytes, executableSha256: download.executableSha256,
+  }
+  let recordText = "{json.stringify(record)?}\n"
+  if inputSet != inputSetId(root)? { return Err("repository input set changed during release packaging") }
+  // All policy checks and archive construction precede destination creation.
+  // The catalogue is emitted beside the archive and never embedded in it.
+  native("mkdir-parent", [output])?
+  let directory = native("mkdir-new", [output])?
+  writeChecked(directory, download.assetName, packed, native)?
+  writeChecked(directory, "downloads.data", catalogueText.encodeUtf8(), native)?
+  writeChecked(directory, "package.json", recordText.encodeUtf8(), native)?
+  io.writeLine("Verified release archive and catalogue row written to {directory}")
+  io.writeLine("The source commit is a publisher declaration; the input-set digest records the checked repository bytes.")
+  io.writeLine("Retain independent build records and publish these reviewed files through GitHub Releases.")
+  Ok(0)
+}

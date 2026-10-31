@@ -1,0 +1,144 @@
+import std.json as jsonBoundary
+
+import types { PreviewTypeAtom }
+import literal { normalizeLegacyIrDetail }
+
+export const STAGE1_EXCHANGE_SCHEMA = "topaz.compiler.stage1-exchange/v2"
+export const STAGE1_IR_SCHEMA = "topaz.compiler.stage1-ir/v5"
+const STAGE1_PROVENANCE_SCHEMA = "topaz.compiler.stage1-provenance/v1"
+
+export record Stage1Module derives JSON {
+  schema: string,
+  identity: string,
+  path: string,
+  sourceOrdinal: int,
+  initializationOrdinal: int,
+  entry: bool,
+  extern: bool,
+  operationIds: Array<string>,
+  generatedStd: bool,
+  // The package language mode the module was checked under, e.g. `topaz-5.20`.
+  languageMode: string,
+  // Target module identities of this module's import edges, in the
+  // resolver's edge order (one per import item).
+  importEdges: Array<string>,
+}
+
+export record Stage1Operation derives JSON {
+  schema: string,
+  id: string,
+  module: string,
+  lo: int,
+  hi: int,
+  parentId: string,
+  role: string,
+  kind: string,
+  detail: string,
+  operands: Array<string>,
+  operandLabels: Array<string>,
+  semanticType: string,
+  representation: string,
+  referenceIdentity: string,
+  bindingName: string,
+  // On a `binding/capture` for a closure, nested function, or `defer`, whether
+  // this captured reference is an assignment target.
+  bindingMutable: bool,
+  bindingStorage: string,
+  declarationIdentity: string,
+  controlKind: string,
+  controlTarget: string,
+  cleanupIds: Array<string>,
+  callTarget: string,
+  callCalleeKind: string,
+  callMethod: string,
+  callMethodClass: string,
+  callOptional: bool,
+  callShadowFirst: bool,
+  callStageMethod: string,
+  callArguments: Array<string>,
+  callEvaluations: Array<string>,
+  runtimeLeaf: string,
+  generatedNameSeed: string,
+  // Full checked type of `semanticType` as the checker's preorder atom list.
+  // A value identifier or shorthand record pattern field the checker leaves
+  // untyped carries its declaration's type here with `semanticType` empty.
+  semanticTypeAtoms: Array<PreviewTypeAtom>,
+  // Source-declared type: parameter, function signature, annotated let/const.
+  // Nonempty lists have exactly one root.
+  declaredTypeAtoms: Array<PreviewTypeAtom>,
+  // Source-written call type arguments in source order, one rooted tree each.
+  callTypeArguments: Array<Array<PreviewTypeAtom>>,
+  // Type declaration signature: root identity, typeParameters, fields,
+  // variants with payload types, or newtype/alias base. Empty on other operations.
+  typeDefinition: Array<PreviewTypeAtom>,
+  importModule: string,
+  // `kind|sourceName|boundName|lo|hi` per bound import name.
+  importBindings: Array<string>,
+  // Runtime file of this operation's span: the source ordinal of its module.
+  sourceOrdinal: int,
+  // Parser-owned cooked-byte to original-source runs for a literal text segment.
+  literalSourceMap: string = "",
+  // Missing fields in historical v5 responses retain their source codec.
+  literalEncoding: string = "legacy-source/v1",
+}
+
+export record Stage1Provenance derives JSON {
+  schema: string,
+  engine: string,
+  producerStage: int,
+  resultStage: int,
+  defaultEngine: string,
+  exchangeSchema: string,
+  irSchema: string,
+  sourceSetId: string,
+  fixedPoint: string,
+}
+
+export record Stage1Response derives JSON {
+  schema: string,
+  status: string,
+  frontEnd: string,
+  loweredModules: Array<Stage1Module>,
+  loweredOperations: Array<Stage1Operation>,
+  generatedRust: string,
+  unsupported: Array<string>,
+  provenance: Stage1Provenance,
+}
+
+export function decodeStage1Response(text: string) -> Result<Stage1Response, string> {
+  let response = jsonBoundary.parseAs<Stage1Response>(text)?
+  let mut operations: Array<Stage1Operation> = []
+  for op in response.loweredOperations {
+    if op.literalEncoding == "checked-values/v1" { operations.push(op) }
+    else if op.literalEncoding == "legacy-source/v1" {
+      let mut languageMode = "topaz-5.20"
+      for module in response.loweredModules { if module.identity == op.module { languageMode = module.languageMode } }
+      operations.push(Stage1Operation { ...op, detail: normalizeLegacyIrDetail(op.kind, op.detail, languageMode)?, literalEncoding: "checked-values/v1" })
+    } else { return Err("unknown Stage 1 literal encoding") }
+  }
+  Ok(Stage1Response { ...response, loweredOperations: operations })
+}
+
+export function compilerProvenance(
+  sourceSetId: string,
+  producer: string,
+  producerStage: int,
+) -> Stage1Provenance {
+  Stage1Provenance {
+    schema: STAGE1_PROVENANCE_SCHEMA,
+    engine: producer,
+    producerStage: producerStage,
+    resultStage: producerStage,
+    defaultEngine: "rust-stage0",
+    exchangeSchema: STAGE1_EXCHANGE_SCHEMA,
+    irSchema: STAGE1_IR_SCHEMA,
+    sourceSetId: sourceSetId,
+    fixedPoint: "not-run",
+  }
+}
+
+export record LoweringOutput {
+  modules: Array<Stage1Module>,
+  operations: Array<Stage1Operation>,
+  unsupported: Array<string>,
+}

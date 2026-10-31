@@ -1,0 +1,7 @@
+export type Bytes = Bytes
+export type Path = Path
+export let readText = __stdReadText
+export let writeText = __stdWriteText
+export let readBytes = __stdReadBytes
+export let writeBytes = __stdWriteBytes
+export let list = __stdList

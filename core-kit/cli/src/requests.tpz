@@ -1,0 +1,171 @@
+import std.fs as files
+import std.json as json
+import src.contracts {
+  COMPILER_SOURCE_SET, EXCHANGE_SCHEMA,
+  CompilerRequest, HostFact, PackageFacts, StandardModule,
+}
+
+function sourceFact(path: string, source: string) -> HostFact {
+  HostFact {
+    kind: "read-source", mountId: "root", logicalPath: path,
+    status: "present", source: source, entries: [], aliasClass: "", reasonCode: "",
+  }
+}
+
+function virtualEntryContainment() -> HostFact {
+  HostFact {
+    kind: "physical-containment", mountId: "root", logicalPath: "main.tpz",
+    status: "inside", source: "", entries: [], aliasClass: "main.tpz", reasonCode: "",
+  }
+}
+
+function budget(value: int, maximum: int, name: string) -> Result<(), string> {
+  if value < 1 || value > maximum {
+    Err("closed request budget {name} must be in 1..{maximum}")
+  } else {
+    Ok(())
+  }
+}
+
+function validateBudgets(request: CompilerRequest) -> Result<(), string> {
+  budget(request.maxSourceFacts, 16384, "maxSourceFacts")?
+  budget(request.maxTotalSourceBytes, 67108864, "maxTotalSourceBytes")?
+  budget(request.maxAstNodes, 2000000, "maxAstNodes")?
+  budget(request.maxAstDepth, 1024, "maxAstDepth")?
+  budget(request.maxRawTokens, 4000000, "maxRawTokens")?
+  budget(request.maxLayoutTokens, 4000000, "maxLayoutTokens")?
+  budget(request.maxHirNodes, 2000000, "maxHirNodes")?
+  budget(request.maxLoweredNodes, 4000000, "maxLoweredNodes")?
+  budget(request.maxDiagnostics, 100000, "maxDiagnostics")?
+  budget(request.maxGeneratedRustBytes, 536870912, "maxGeneratedRustBytes")?
+  budget(request.maxFactRounds, 49156, "maxFactRounds")?
+  Ok(())
+}
+
+export function standardModules(repositoryRoot: string) -> Result<Array<StandardModule>, string> {
+  let mut modules: Array<StandardModule> = []
+  for name in ["bytes", "fs", "io", "json"] {
+    let path = "std/{name}.tpz"
+    let source = files.readText("{repositoryRoot}/compiler/seed/initial/{path}")?
+    modules.push(StandardModule { identity: "std.{name}", path: path, source: source })
+  }
+  modules.push(StandardModule {
+    identity: "std.toml", path: "std/toml.tpz",
+    source: files.readText("{repositoryRoot}/core-kit/cli/std/toml.tpz")?,
+  })
+  Ok(modules)
+}
+
+export function fromSource(path: string, repositoryRoot: string) -> Result<CompilerRequest, string> {
+  let source = files.readText(path)?
+  if source.byteLength() > 16777216 {
+    return Err("source exceeds the Core Kit single-file limit of 16 MiB")
+  }
+  let modules = standardModules(repositoryRoot)?
+  let mut sourceBytes = source.byteLength()
+  for module in modules { sourceBytes += module.source.byteLength() }
+  if sourceBytes > 16777216 {
+    return Err("source and bundled standard modules together exceed 16 MiB")
+  }
+  // Containment describes this virtual one-file mount, which is inside by
+  // construction. It makes no claim about the caller's filesystem root.
+  Ok(CompilerRequest {
+    schema: EXCHANGE_SCHEMA,
+    producer: "topaz-stage1",
+    compilerSourceSetId: COMPILER_SOURCE_SET,
+    terminal: "typed",
+    entry: "main.tpz", root: "", source: "", sourceId: "main.tpz",
+    languageMode: "topaz-5.21", profile: "",
+    facts: [sourceFact("main.tpz", source), virtualEntryContainment()],
+    package: PackageFacts {
+      buildRole: "standalone",
+      externModules: [], externReplayModules: [], externReplayErrors: [],
+      generatedStdModules: modules,
+    },
+    maxSourceFacts: 1024,
+    maxTotalSourceBytes: 16777216,
+    maxAstNodes: 1000000,
+    maxAstDepth: 512,
+    maxRawTokens: 2000000,
+    maxLayoutTokens: 2000000,
+    maxHirNodes: 1000000,
+    maxLoweredNodes: 2000000,
+    maxDiagnostics: 10000,
+    maxGeneratedRustBytes: 134217728,
+    maxFactRounds: 4096,
+  })
+}
+
+export function fromFile(path: string) -> Result<CompilerRequest, string> {
+  let text = files.readText(path)?
+  fromText(text)
+}
+
+export function fromText(text: string) -> Result<CompilerRequest, string> {
+  if text.byteLength() > 134217728 { return Err("closed request exceeds 128 MiB") }
+  let request = json.parseAs<CompilerRequest>(text)?
+  if request.schema != EXCHANGE_SCHEMA || request.languageMode != "topaz-5.21" {
+    return Err("Core Kit requires the Stage 1 v2 exchange and topaz-5.21 language mode")
+  }
+  if request.compilerSourceSetId != COMPILER_SOURCE_SET {
+    return Err("closed request targets a different canonical compiler source set")
+  }
+  if request.producer != "topaz-stage1" && request.producer != "topaz-stage2" {
+    return Err("closed request has an unsupported producer")
+  }
+  if request.package.externModules.length != 0 ||
+    request.package.externReplayModules.length != 0 ||
+    request.package.externReplayErrors.length != 0 {
+    return Err("Core Kit does not provide extern replay or private evaluator packages")
+  }
+  validateBudgets(request)?
+  if request.facts.length > 65536 { return Err("closed request has too many facts") }
+  let mut keys: Set<string> = set {}
+  let mut entries = 0
+  let mut containment = 0
+  let mut sourceCount = 0
+  let mut sourceBytes = 0
+  for fact in request.facts {
+    if fact.mountId != "root" { return Err("closed request facts must use the root mount") }
+    if fact.kind != "read-source" && fact.kind != "physical-containment" && fact.kind != "list-directory" {
+      return Err("unsupported fact kind: {fact.kind}")
+    }
+    let key = "{fact.kind}\n{fact.mountId}\n{fact.logicalPath}"
+    if keys.contains(key) { return Err("duplicate source fact: {fact.kind} {fact.logicalPath}") }
+    keys.add(key)
+    if fact.kind == "read-source" && fact.logicalPath == request.entry && fact.status == "present" {
+      entries += 1
+    }
+    if fact.kind == "physical-containment" && fact.logicalPath == request.entry {
+      containment += 1
+    }
+    if fact.kind == "read-source" {
+      sourceCount += 1
+      if fact.status == "present" { sourceBytes += fact.source.byteLength() }
+    }
+  }
+  if entries != 1 { return Err("closed request must contain exactly one present entry source fact") }
+  if containment != 1 { return Err("closed request must contain the entry containment fact") }
+  if sourceCount > request.maxSourceFacts || sourceBytes > request.maxTotalSourceBytes {
+    return Err("closed request source facts exceed its declared budgets")
+  }
+  let mut identities: Set<string> = set {}
+  let mut paths: Set<string> = set {}
+  for module in request.package.generatedStdModules {
+    if !module.identity.startsWith("std.") || module.identity == "std.lispex" {
+      return Err("unsupported generated standard module: {module.identity}")
+    }
+    if identities.contains(module.identity) || paths.contains(module.path) {
+      return Err("duplicate generated standard module: {module.identity}")
+    }
+    identities.add(module.identity)
+    paths.add(module.path)
+    sourceBytes += module.source.byteLength()
+  }
+  if sourceBytes > 67108864 { return Err("closed request including standard modules exceeds 64 MiB") }
+  Ok(request)
+}
+
+export function encode(request: CompilerRequest, terminal: string) -> Result<string, string> {
+  json.stringify(CompilerRequest { ...request, terminal: terminal })
+}

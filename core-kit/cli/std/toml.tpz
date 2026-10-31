@@ -1,0 +1,4 @@
+export type TOMLValue = TOMLValue
+export let parse = __stdTomlParse
+export let stringify = __stdTomlStringify
+export let fromJson = __stdTomlFromJson

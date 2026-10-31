@@ -1,0 +1,234 @@
+import std.fs as files
+import std.io as io
+import std.json as json
+import src.contracts { Capture, Native, fileMetadata }
+import src.download_catalog { CATALOG_PATH, MAX_ARCHIVE_BYTES, Download, encode, inputSetId, load, select }
+import src.payload { executableFor }
+import src.release_archive { ArchiveEntry, decode }
+import src.release_payload { Verified, checkNative, verifyAssembled }
+import src.release_package { archiveBytes }
+import src.toolchain { BuildTarget }
+import src.verification { validateRecordedInputs }
+
+const RECEIPT = "installation.data"
+const RECEIPT_SCHEMA = "topaz.core-kit-installation/v1"
+
+function kind(directory: string, name: string) -> Result<string, string> {
+  for entry in files.list(directory)? {
+    if entry.name == name { return Ok(entry.kind) }
+  }
+  Ok("missing")
+}
+
+function receipt(download: Download) -> string {
+  "{RECEIPT_SCHEMA}|{download.target}|{download.assetSha256}|{download.inputSetSha256}\n"
+}
+
+function selected(root: string, native: Native) -> Result<Download, string> {
+  let catalogue = fileMetadata("{root}/{CATALOG_PATH}", native)?
+  if catalogue.bytes == 0 || catalogue.bytes > 65536 {
+    return Err("download catalogue must be nonempty and no larger than 64 KiB")
+  }
+  let target = json.parseAs<BuildTarget>(native("build-target", [])?)?
+  let download = select(load(root)?, target.target)?
+  validateRecordedInputs(root)?
+  if inputSetId(root)? != download.inputSetSha256 {
+    return Err("the pinned download does not match this checkout's source inputs; use its matching source revision or bootstrap locally")
+  }
+  Ok(download)
+}
+
+function unchanged(root: string, download: Download, native: Native) -> Result<(), string> {
+  if encode([selected(root, native)?])? != encode([download])? {
+    return Err("download selection changed during installation; no new installation was activated")
+  }
+  Ok(())
+}
+
+// Inspect every fixed component without following an existing directory link.
+// No version or staging path is supplied by a downloaded archive.
+function cacheDirectory(root: string, target: string, create: bool, native: Native) -> Result<string, string> {
+  let mut current = root
+  for name in ["out", "core-kit-installed", target] {
+    let entryKind = kind(current, name)?
+    if entryKind == "missing" {
+      if !create { return Err("the pinned Core Kit is not installed; run install-core-kit or install-core-kit.cmd") }
+      current = native("mkdir-new", ["{current}/{name}"])?
+    } else if entryKind == "directory" {
+      current = "{current}/{name}"
+    } else {
+      return Err("installation cache components must be real directories: {current}/{name}")
+    }
+  }
+  Ok(current)
+}
+
+function verifyExecutable(directory: string, download: Download, native: Native) -> Result<(), string> {
+  let name = executableFor(download.target)?
+  let file = fileMetadata("{directory}/{name}", native)?
+  if file.bytes != download.executableBytes { return Err("installed executable size differs from the pinned download") }
+  let bytes = files.readBytes(file.path)?
+  if bytes.length() != file.bytes || bytes.sha256().toHex() != download.executableSha256 {
+    return Err("installed executable bytes differ from the pinned download")
+  }
+  Ok(())
+}
+
+function verifyVersion(root: string, directory: string, download: Download, native: Native) -> Result<Verified, string> {
+  let entries = files.list(directory)?
+  if entries.length != 2 || kind(directory, "payload")? != "directory" || kind(directory, RECEIPT)? != "file" {
+    return Err("installed version must contain only its payload directory and completion receipt")
+  }
+  let recorded = fileMetadata("{directory}/{RECEIPT}", native)?
+  let expected = receipt(download)
+  if recorded.bytes != expected.byteLength() || files.readText(recorded.path)? != expected {
+    return Err("installation receipt does not match the pinned download")
+  }
+  if recorded.mode != "" && recorded.mode != "0644" { return Err("installation receipt has an unexpected file mode") }
+  let payload = "{directory}/payload"
+  verifyExecutable(payload, download, native)?
+  let verified = verifyAssembled(root, payload, native)?
+  if verified.assembly.target != download.target || !verified.loaded.recipe.releaseReady {
+    return Err("installed payload is not an approved candidate for the pinned platform")
+  }
+  // A mutable payload.json can describe a changed local candidate. Bind the
+  // complete installation to the catalogue's immutable archive hash as well.
+  // Canonical packaging makes this check independent of the installation path.
+  let archive = archiveBytes(verified, native)?
+  if archive.length() != download.assetBytes || archive.sha256().toHex() != download.assetSha256 {
+    return Err("complete installed payload differs from the pinned release archive")
+  }
+  Ok(verified)
+}
+
+function readArchive(path: string, download: Download, native: Native) -> Result<Array<ArchiveEntry>, string> {
+  let file = fileMetadata(path, native)?
+  if file.bytes != download.assetBytes || file.bytes > MAX_ARCHIVE_BYTES {
+    return Err("archive size differs from the pinned download")
+  }
+  let bytes = files.readBytes(file.path)?
+  if bytes.length() != file.bytes || bytes.sha256().toHex() != download.assetSha256 {
+    return Err("archive SHA-256 differs from the pinned download")
+  }
+  // Decode validates the complete canonical container before any file is
+  // materialized. Only flat regular members and bounded bytes are admitted.
+  let entries = decode(bytes)?
+  let executable = executableFor(download.target)?
+  let mut found = false
+  for entry in entries {
+    if entry.path == executable {
+      if entry.bytes.length() != download.executableBytes || entry.bytes.sha256().toHex() != download.executableSha256 {
+        return Err("archive executable differs from the pinned download")
+      }
+      found = true
+    }
+  }
+  if !found { return Err("archive has no executable for the pinned platform") }
+  Ok(entries)
+}
+
+function newStage(base: string, download: Download, native: Native) -> Result<string, string> {
+  let mut occupied: Set<string> = set {}
+  for entry in files.list(base)? { occupied.add(entry.name) }
+  let mut sequence = 1
+  while sequence <= 10000 {
+    let name = "stage-{download.assetSha256}-{sequence}"
+    if !occupied.contains(name) { return native("mkdir-new", ["{base}/{name}"]) }
+    sequence += 1
+  }
+  Err("installation cache contains too many retained staging directories")
+}
+
+function materialize(root: string, stage: string, entries: Array<ArchiveEntry>, download: Download, native: Native, capture: Capture) -> Result<(), string> {
+  let directory = native("mkdir-new", ["{stage}/payload"])?
+  for entry in entries {
+    let path = "{directory}/{entry.path}"
+    files.writeBytes(path, entry.bytes)?
+    native("set-file-mode", [path, entry.mode])?
+  }
+  verifyExecutable(directory, download, native)?
+  let verified = verifyAssembled(root, directory, native)?
+  if verified.assembly.target != download.target {
+    return Err("archive assembly target differs from the pinned download")
+  }
+  checkNative(root, verified, native, capture)?
+  unchanged(root, download, native)?
+  files.writeText("{stage}/{RECEIPT}", receipt(download))?
+  native("set-file-mode", ["{stage}/{RECEIPT}", "0644"])?
+  verifyVersion(root, stage, download, native)?
+  Ok(())
+}
+
+function installedVersion(root: string, base: string, download: Download, native: Native) -> Result<Option<Verified>, string> {
+  let directory = "{base}/{download.assetSha256}"
+  let entry = kind(base, download.assetSha256)?
+  if entry == "missing" { return Ok(None) }
+  if entry != "directory" {
+    return Err("existing installation destination is not a real directory: {directory}\nInspect the {entry} at that path and move it aside before reinstalling.")
+  }
+  match verifyVersion(root, directory, download, native) {
+    case Ok(version) => Ok(Some(version))
+    case Err(error) => {
+      // A checkout change during verification can also invalidate a good version.
+      unchanged(root, download, native)?
+      Err("{error}\nInspect the installed version at {directory}. If it is damaged, move only that version directory aside and rerun the installer.")
+    }
+  }
+}
+
+function installLocked(root: string, base: string, entries: Array<ArchiveEntry>, download: Download, native: Native, capture: Capture) -> Result<int, string> {
+  let destination = "{base}/{download.assetSha256}"
+  match installedVersion(root, base, download, native)? {
+    case Some(version) => {
+      checkNative(root, version, native, capture)?
+      unchanged(root, download, native)?
+      io.writeLine("The pinned Core Kit is already installed and verified at {destination}/payload")
+      return Ok(0)
+    }
+    case None => ()
+  }
+  let stage = newStage(base, download, native)?
+  match materialize(root, stage, entries, download, native, capture) {
+    case Ok(_) => ()
+    case Err(error) => return Err("{error}\nIncomplete installation retained for inspection at {stage}")
+  }
+  // The lock excludes concurrent Kit installers for this target. The complete
+  // version becomes visible through one sibling rename; older versions remain.
+  unchanged(root, download, native)?
+  match native("rename-directory-new", [stage, destination]) {
+    case Ok(_) => ()
+    case Err(error) => return Err("{error}\nVerified installation remains staged at {stage}")
+  }
+  io.writeLine("Installed the pinned Core Kit at {destination}/payload")
+  io.writeLine("Use this checkout's topaz or topaz.cmd launcher.")
+  Ok(0)
+}
+
+export function checkInstalled(root: string, native: Native) -> Result<int, string> {
+  let download = selected(root, native)?
+  let base = cacheDirectory(root, download.target, false, native)?
+  match installedVersion(root, base, download, native)? {
+    case None => return Err("the pinned Core Kit is not installed; run install-core-kit or install-core-kit.cmd")
+    case Some(_) => ()
+  }
+  unchanged(root, download, native)?
+  io.writeLine("The installed Core Kit and current source inputs match the pinned download.")
+  Ok(0)
+}
+
+export function install(root: string, archive: string, native: Native, capture: Capture) -> Result<int, string> {
+  let download = selected(root, native)?
+  let entries = readArchive(archive, download, native)?
+  unchanged(root, download, native)?
+  let base = cacheDirectory(root, download.target, true, native)?
+  let lock = native("mkdir-new", ["{base}/.install-lock"])?
+  let result = installLocked(root, base, entries, download, native, capture)
+  let released = native("rmdir-empty", [lock])
+  match released {
+    case Ok(_) => result
+    case Err(error) => match result {
+      case Ok(_) => Err("installation completed but its lock could not be released: {error}\nLock retained at {lock}")
+      case Err(previous) => Err("{previous}\nInstallation lock could not be released: {error}\nLock retained at {lock}")
+    }
+  }
+}

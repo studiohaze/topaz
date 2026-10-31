@@ -1,0 +1,545 @@
+import std.fs as files
+import std.json { JSONValue, parse, parseAs, stringify }
+import src.contracts {
+  COMPILER_SOURCE_SET, CompilerRequest, DirectoryEntry, HostFact,
+  PackageFacts, StandardModule,
+}
+import src.payload_files as payloadFiles
+import src.requests { fromText }
+
+// Preparation is read-only. The caller admits the protected repository
+// inventory and commits all refreshed artifacts together after compilation.
+export record PreparedCli {
+  descriptorText: string,
+  requestText: string,
+  sourcePaths: Array<string>,
+  standardPaths: Array<string>,
+  sourceCount: int,
+}
+
+record SourceMapping derives JSON {
+  logicalPath: string,
+  path: string,
+}
+
+record StandardMapping derives JSON {
+  identity: string,
+  path: string,
+  sourceFile: string,
+}
+
+record Descriptor derives JSON {
+  schema: string,
+  requestFile: string,
+  compilerSourceSetId: string,
+  sourceFiles: Array<SourceMapping>,
+  standardModules: Array<StandardMapping>,
+  callable: JSONValue,
+  generatedRust: string,
+}
+
+record SourceTree {
+  paths: Array<string>,
+  directories: Array<string>,
+  listings: Map<string, Array<DirectoryEntry>>,
+}
+
+const MAX_SOURCES = 1024
+const MAX_DIRECTORIES = 256
+const MAX_STANDARD_MODULES = 256
+const MAX_DEPTH = 32
+const CLI_ROOT = "core-kit/cli"
+const INITIAL_REQUEST = "core-kit/cli/initial/request.json"
+const CONTRACT_ENTRY = "_core_kit_refresh_contract.tpz"
+const CONTRACT_SOURCE = """
+import src.main as cli
+
+export type EntryContract = (
+  Array<string>,
+  string,
+  (string, (string) -> Result<string, string>) -> Result<string, string>,
+  (string, Array<string>, string, Array<string>) -> Result<int, string>,
+  (string, Array<string>) -> Result<string, string>,
+  (string, Array<string>, string, Array<string>) -> Result<string, string>,
+) -> Result<int, string>
+
+export function checkedEntry() -> EntryContract \{
+  cli.run
+\}
+"""
+
+function parseDocument(text: string, label: string) -> Result<JSONValue, string> {
+  match parse(text) {
+    case Ok(value) => Ok(value)
+    case Err(error) => Err("invalid {label} JSON at {error.line}:{error.column}: {error.message}")
+  }
+}
+
+function required(value: JSONValue, name: string, label: string) -> Result<JSONValue, string> {
+  match value.get(name) {
+    case Some(found) => Ok(found)
+    case None => Err("{label} requires `{name}`")
+  }
+}
+
+function exactKeys(value: JSONValue, allowed: Array<string>, label: string) -> Result<(), string> {
+  let keys = match value.keys() {
+    case Some(found) => found
+    case None => return Err("{label} must be a JSON object")
+  }
+  for key in keys {
+    let mut found = false
+    for name in allowed { if name == key { found = true } }
+    if !found { return Err("unsupported {label} field `{key}`") }
+  }
+  for name in allowed { required(value, name, label)? }
+  Ok(())
+}
+
+function arrayValue(value: JSONValue, label: string, maximum: int) -> Result<Array<JSONValue>, string> {
+  let values = match value.asArray() {
+    case Some(found) => found
+    case None => return Err("{label} must be a JSON array")
+  }
+  if values.length > maximum { return Err("{label} exceeds {maximum} items") }
+  Ok(values)
+}
+
+function stringValue(value: JSONValue, label: string) -> Result<string, string> {
+  match value.asString() {
+    case Some(found) => Ok(found)
+    case None => Err("{label} must be a JSON string")
+  }
+}
+
+// Reject unknown nested fields before record decoding can project them away.
+function descriptorShape(value: JSONValue) -> Result<(), string> {
+  exactKeys(value, [
+    "schema", "requestFile", "compilerSourceSetId", "sourceFiles",
+    "standardModules", "callable", "generatedRust",
+  ], "CLI descriptor")?
+  for mapping in arrayValue(required(value, "sourceFiles", "CLI descriptor")?, "CLI source mappings", MAX_SOURCES)? {
+    exactKeys(mapping, ["logicalPath", "path"], "CLI source mapping")?
+  }
+  for mapping in arrayValue(required(value, "standardModules", "CLI descriptor")?, "CLI standard mappings", MAX_STANDARD_MODULES)? {
+    exactKeys(mapping, ["identity", "path", "sourceFile"], "CLI standard mapping")?
+  }
+  let callable = required(value, "callable", "CLI descriptor")?
+  exactKeys(callable, ["export", "arguments", "result"], "CLI callable")?
+  if stringValue(required(callable, "export", "CLI callable")?, "CLI callable export")? != "run" ||
+    stringValue(required(callable, "result", "CLI callable")?, "CLI callable result")? != "Result<int, string>" {
+    return Err("kit refresh requires the current public CLI run ABI")
+  }
+  let expected = [
+    "Array<string>", "string",
+    "(string, (string) -> Result<string, string>) -> Result<string, string>",
+    "(string, Array<string>, string, Array<string>) -> Result<int, string>",
+    "(string, Array<string>) -> Result<string, string>",
+    "(string, Array<string>, string, Array<string>) -> Result<string, string>",
+  ]
+  let arguments = arrayValue(required(callable, "arguments", "CLI callable")?, "CLI callable arguments", 6)?
+  if arguments.length != expected.length { return Err("unsupported CLI callable argument count") }
+  let mut index = 0
+  while index < expected.length {
+    if stringValue(arguments[index], "CLI callable argument")? != expected[index] {
+      return Err("unsupported CLI callable argument {index}")
+    }
+    index += 1
+  }
+  Ok(())
+}
+
+function requestShape(value: JSONValue) -> Result<(), string> {
+  exactKeys(value, [
+    "schema", "producer", "compilerSourceSetId", "terminal", "entry", "root",
+    "source", "sourceId", "languageMode", "profile", "facts", "package",
+    "maxSourceFacts", "maxTotalSourceBytes", "maxAstNodes", "maxAstDepth",
+    "maxRawTokens", "maxLayoutTokens", "maxHirNodes", "maxLoweredNodes",
+    "maxDiagnostics", "maxGeneratedRustBytes", "maxFactRounds",
+  ], "CLI initial request")?
+  let package = required(value, "package", "CLI initial request")?
+  exactKeys(package, [
+    "buildRole", "externModules", "externReplayModules", "externReplayErrors", "generatedStdModules",
+  ], "CLI package")?
+  for module in arrayValue(required(package, "generatedStdModules", "CLI package")?, "CLI initial standard modules", MAX_STANDARD_MODULES)? {
+    exactKeys(module, ["identity", "path", "source"], "CLI initial standard module")?
+  }
+  for fact in arrayValue(required(value, "facts", "CLI initial request")?, "CLI initial facts", 65536)? {
+    exactKeys(fact, [
+      "kind", "mountId", "logicalPath", "status", "source", "entries", "aliasClass", "reasonCode",
+    ], "CLI initial fact")?
+    for entry in arrayValue(required(fact, "entries", "CLI initial fact")?, "CLI initial directory entries", MAX_SOURCES + MAX_DIRECTORIES)? {
+      exactKeys(entry, ["name", "kind"], "CLI initial directory entry")?
+    }
+  }
+  Ok(())
+}
+
+function portableName(name: string) -> Result<string, string> {
+  if name.contains("/") { return Err("CLI entry must be a single portable name") }
+  payloadFiles.portablePath(name)
+}
+
+function portablePath(path: string) -> Result<string, string> {
+  if path == "" || path.byteLength() > 1024 { return Err("CLI input path must contain 1..1024 bytes") }
+  let parts = path.split("/")
+  if parts.length > MAX_DEPTH + 4 { return Err("CLI input path exceeds its depth limit") }
+  payloadFiles.portablePath(path)
+}
+
+function requireDirectory(root: string, path: string) -> Result<(), string> {
+  portablePath(path)?
+  let mut parent = root
+  for name in path.split("/") {
+    let mut found = false
+    for child in files.list(parent)? {
+      if child.name != name { continue }
+      if child.kind != "directory" { return Err("CLI input directory must not be a symlink or other file type: {path}") }
+      found = true
+    }
+    if !found { return Err("CLI input directory is missing: {path}") }
+    parent = "{parent}/{name}"
+  }
+  Ok(())
+}
+
+function readText(root: string, path: string, limit: int) -> Result<string, string> {
+  payloadFiles.requireRegularInput(root, path)?
+  let text = files.readText("{root}/{path}")?
+  // std.fs reads a complete buffer. This admission check is not a streaming
+  // allocation limit, and it does not make a filesystem snapshot atomic.
+  if text.byteLength() > limit { return Err("CLI input exceeds {limit} bytes: {path}") }
+  Ok(text)
+}
+
+function sourceTree(root: string) -> Result<SourceTree, string> {
+  requireDirectory(root, "{CLI_ROOT}/src")?
+  let mut paths: Array<string> = []
+  let mut directories = ["src"]
+  let mut listings: Map<string, Array<DirectoryEntry>> = map {}
+  let mut index = 0
+  while index < directories.length {
+    let directory = directories[index]
+    let children = files.list("{root}/{CLI_ROOT}/{directory}")?
+    if children.length > MAX_SOURCES + MAX_DIRECTORIES { return Err("CLI source directory has too many entries") }
+    let mut names: Array<string> = []
+    let mut kinds: Map<string, string> = map {}
+    let mut folded: Set<string> = set {}
+    for child in children {
+      let lower = portableName(child.name)?
+      if folded.contains(lower) { return Err("duplicate or case-aliased CLI source name: {directory}/{child.name}") }
+      folded.add(lower)
+      if child.kind != "file" && child.kind != "directory" {
+        return Err("CLI sources must use regular files and directories, without symlinks: {directory}/{child.name}")
+      }
+      if child.kind == "file" && !child.name.endsWith(".tpz") {
+        return Err("unsupported file in the CLI source tree: {directory}/{child.name}")
+      }
+      names.push(child.name)
+      kinds.insert(child.name, child.kind)
+    }
+    names.sort()
+    let mut entries: Array<DirectoryEntry> = []
+    for name in names {
+      let path = "{directory}/{name}"
+      portablePath("{CLI_ROOT}/{path}")?
+      let kind = kinds.getOr(name, "other")
+      entries.push(DirectoryEntry { name: name, kind: kind })
+      if kind == "directory" {
+        if path.split("/").length > MAX_DEPTH { return Err("CLI source tree exceeds {MAX_DEPTH} directory levels") }
+        directories.push(path)
+        if directories.length > MAX_DIRECTORIES { return Err("CLI source tree exceeds {MAX_DIRECTORIES} directories") }
+      } else {
+        paths.push(path)
+        if paths.length > MAX_SOURCES { return Err("CLI source tree exceeds {MAX_SOURCES} sources") }
+      }
+    }
+    listings.insert(directory, entries)
+    index += 1
+  }
+  if paths.length == 0 { return Err("CLI source tree is empty") }
+  paths.sort()
+  directories.sort()
+  Ok(SourceTree { paths: paths, directories: directories, listings: listings })
+}
+
+function standardName(filename: string) -> Result<string, string> {
+  let folded = portableName(filename)?
+  if !filename.endsWith(".tpz") { return Err("CLI standard module must be a .tpz file: {filename}") }
+  let name = filename.slice(0, filename.scalars().length - 4)
+  if name == "" { return Err("CLI standard module needs a name") }
+  let mut index = 0
+  for byte in name.encodeUtf8().toArray() {
+    let letter = (byte >= 65 && byte <= 90) || (byte >= 97 && byte <= 122)
+    let digit = byte >= 48 && byte <= 57
+    if !letter && byte != 95 && !(index > 0 && digit) {
+      return Err("CLI standard module name must be an ASCII identifier: {filename}")
+    }
+    index += 1
+  }
+  if folded == "lispex.tpz" { return Err("Core Kit does not include std.lispex") }
+  Ok(name)
+}
+
+function standardMappings(root: string) -> Result<Array<StandardMapping>, string> {
+  let mut mappings: Array<StandardMapping> = []
+  let mut identities: Set<string> = set {}
+  for name in ["bytes", "fs", "io", "json"] {
+    mappings.push(StandardMapping {
+      identity: "std.{name}", path: "std/{name}.tpz",
+      sourceFile: "compiler/seed/initial/std/{name}.tpz",
+    })
+    identities.add(name)
+  }
+  requireDirectory(root, "{CLI_ROOT}/std")?
+  let children = files.list("{root}/{CLI_ROOT}/std")?
+  if children.length + 4 > MAX_STANDARD_MODULES { return Err("too many CLI standard modules") }
+  let mut names: Array<string> = []
+  for child in children {
+    if child.kind != "file" { return Err("CLI standard modules must be regular files, without subdirectories or symlinks: {child.name}") }
+    let name = standardName(child.name)?
+    let lower = portableName(name)?
+    if identities.contains(lower) { return Err("duplicate or canonical CLI standard module name: {child.name}") }
+    identities.add(lower)
+    names.push(name)
+  }
+  names.sort()
+  for name in names {
+    mappings.push(StandardMapping {
+      identity: "std.{name}", path: "std/{name}.tpz", sourceFile: "{CLI_ROOT}/std/{name}.tpz",
+    })
+  }
+  Ok(mappings)
+}
+
+function validatePrevious(descriptor: Descriptor, initial: CompilerRequest) -> Result<(), string> {
+  if descriptor.schema != "topaz.note.core-kit-cli-request/v2" || descriptor.compilerSourceSetId != COMPILER_SOURCE_SET {
+    return Err("CLI descriptor does not identify this canonical compiler")
+  }
+  if descriptor.requestFile != INITIAL_REQUEST { return Err("CLI descriptor must use {INITIAL_REQUEST}") }
+  portablePath(descriptor.generatedRust)?
+  if !descriptor.generatedRust.startsWith("out/") || !descriptor.generatedRust.endsWith(".rs") {
+    return Err("CLI generatedRust must name a portable .rs path beneath out/")
+  }
+  if initial.producer != "topaz-stage1" || initial.terminal != "rust-source" ||
+    initial.entry != "src/main.tpz" || initial.sourceId != "src/main.tpz" || initial.root != "" ||
+    initial.package.buildRole != "standalone" {
+    return Err("kit refresh requires the standalone Stage 1 CLI request rooted at src/main.tpz")
+  }
+  if descriptor.sourceFiles.length == 0 { return Err("CLI descriptor source mapping is empty") }
+  let mut sources: Set<string> = set {}
+  let mut folded: Set<string> = set {}
+  for mapping in descriptor.sourceFiles {
+    let lower = portablePath(mapping.logicalPath)?
+    portablePath(mapping.path)?
+    if !mapping.logicalPath.startsWith("src/") || !mapping.logicalPath.endsWith(".tpz") ||
+      mapping.path != "{CLI_ROOT}/{mapping.logicalPath}" {
+      return Err("existing CLI source mapping escapes the managed source tree")
+    }
+    if folded.contains(lower) { return Err("duplicate or case-aliased existing CLI source mapping") }
+    sources.add(mapping.logicalPath)
+    folded.add(lower)
+  }
+  let mut usedSources: Set<string> = set {}
+  let mut sourceCount = 0
+  for fact in initial.facts {
+    if fact.logicalPath != "" {
+      portablePath(fact.logicalPath)?
+      if fact.logicalPath != "src" && !fact.logicalPath.startsWith("src/") {
+        return Err("initial CLI fact escapes the managed virtual source tree")
+      }
+    }
+    if fact.reasonCode != "" { return Err("initial CLI facts must not contain unresolved host errors") }
+    if fact.kind == "read-source" {
+      if fact.status != "present" || !sources.contains(fact.logicalPath) || usedSources.contains(fact.logicalPath) ||
+        fact.entries.length != 0 || fact.aliasClass != "" {
+        return Err("initial CLI source facts must correspond to the previous descriptor")
+      }
+      usedSources.add(fact.logicalPath)
+      sourceCount += 1
+    } else if fact.kind == "physical-containment" {
+      let alias = if fact.logicalPath == "" { "." } else { fact.logicalPath }
+      if fact.status != "inside" || fact.source != "" || fact.entries.length != 0 || fact.aliasClass != alias {
+        return Err("initial CLI containment must describe its closed virtual source tree")
+      }
+    } else {
+      if fact.status != "present" || fact.source != "" || fact.aliasClass != "" {
+        return Err("initial CLI directory facts must describe their closed virtual source tree")
+      }
+      let mut names: Set<string> = set {}
+      for entry in fact.entries {
+        let lower = portableName(entry.name)?
+        if names.contains(lower) || (entry.kind != "file" && entry.kind != "directory") {
+          return Err("invalid or case-aliased initial CLI directory entry")
+        }
+        names.add(lower)
+      }
+    }
+  }
+  if sourceCount != descriptor.sourceFiles.length { return Err("previous CLI sources and initial facts differ") }
+  let mut standards: Map<string, string> = map {}
+  let mut standardNames: Set<string> = set {}
+  let mut fixed: Set<string> = set {}
+  for mapping in descriptor.standardModules {
+    let pieces = mapping.path.split("/")
+    if pieces.length != 2 || pieces[0] != "std" { return Err("invalid existing CLI standard module path") }
+    let name = standardName(pieces[1])?
+    let lower = portableName(name)?
+    if mapping.identity != "std.{name}" || standardNames.contains(lower) { return Err("invalid or duplicate existing CLI standard module identity") }
+    let canonical = name == "bytes" || name == "fs" || name == "io" || name == "json"
+    let sourceFile = if canonical { "compiler/seed/initial/std/{name}.tpz" } else { "{CLI_ROOT}/std/{name}.tpz" }
+    if mapping.sourceFile != sourceFile { return Err("existing CLI standard mapping has an unsupported source location") }
+    standardNames.add(lower)
+    standards.insert(mapping.identity, mapping.path)
+    if canonical { fixed.add(name) }
+  }
+  for name in ["bytes", "fs", "io", "json"] {
+    if !fixed.contains(name) { return Err("existing CLI descriptor omits canonical standard module std.{name}") }
+  }
+  for module in initial.package.generatedStdModules {
+    if !standards.containsKey(module.identity) || standards.getOr(module.identity, "") != module.path {
+      return Err("initial CLI standard modules differ from the previous descriptor")
+    }
+  }
+  if initial.package.generatedStdModules.length != descriptor.standardModules.length {
+    return Err("previous CLI standard mappings and initial modules differ")
+  }
+  Ok(())
+}
+
+function containment(path: string) -> HostFact {
+  HostFact {
+    kind: "physical-containment", mountId: "root", logicalPath: path,
+    status: "inside", source: "", entries: [],
+    aliasClass: if path == "" { "." } else { path }, reasonCode: "",
+  }
+}
+
+function listing(path: string, entries: Array<DirectoryEntry>) -> HostFact {
+  HostFact {
+    kind: "list-directory", mountId: "root", logicalPath: path,
+    status: "present", source: "", entries: entries, aliasClass: "", reasonCode: "",
+  }
+}
+
+export function prepareRefresh(root: string) -> Result<PreparedCli, string> {
+  let descriptorText = readText(root, "{CLI_ROOT}/REQUEST.json", 1048576)?
+  descriptorShape(parseDocument(descriptorText, "CLI descriptor")?)?
+  let descriptor = parseAs<Descriptor>(descriptorText)?
+  // Read only the fixed request location, never a path supplied by an
+  // unadmitted descriptor. fromText also checks every resource budget.
+  let initialText = readText(root, INITIAL_REQUEST, 134217728)?
+  requestShape(parseDocument(initialText, "CLI initial request")?)?
+  let initial = fromText(initialText)?
+  validatePrevious(descriptor, initial)?
+
+  let tree = sourceTree(root)?
+  if tree.paths.length > initial.maxSourceFacts { return Err("refreshed CLI sources exceed the declared source budget") }
+  let mut mappings: Array<SourceMapping> = []
+  let mut sourcePaths: Array<string> = []
+  let mut facts: Array<HostFact> = []
+  let mut entryFound = false
+  let mut entrySource = ""
+  let mut totalBytes = 0
+  for path in tree.paths {
+    let physical = "{CLI_ROOT}/{path}"
+    let source = readText(root, physical, initial.maxTotalSourceBytes)?
+    totalBytes += source.byteLength()
+    if totalBytes > initial.maxTotalSourceBytes { return Err("refreshed CLI sources exceed the declared byte budget") }
+    if path == initial.entry {
+      entryFound = true
+      entrySource = source
+    }
+    mappings.push(SourceMapping { logicalPath: path, path: physical })
+    sourcePaths.push(physical)
+    facts.push(HostFact {
+      kind: "read-source", mountId: "root", logicalPath: path,
+      status: "present", source: source, entries: [], aliasClass: "", reasonCode: "",
+    })
+    facts.push(containment(path))
+  }
+  if !entryFound { return Err("CLI entry src/main.tpz is missing") }
+  facts.push(containment(""))
+  facts.push(listing("", [DirectoryEntry { name: "src", kind: "directory" }]))
+  for directory in tree.directories {
+    facts.push(containment(directory))
+    facts.push(listing(directory, tree.listings.getOr(directory, [])))
+  }
+
+  let standards = standardMappings(root)?
+  let mut modules: Array<StandardModule> = []
+  let mut standardPaths: Array<string> = []
+  for mapping in standards {
+    let source = readText(root, mapping.sourceFile, initial.maxTotalSourceBytes)?
+    totalBytes += source.byteLength()
+    if totalBytes > initial.maxTotalSourceBytes { return Err("refreshed CLI and standard modules exceed the declared byte budget") }
+    modules.push(StandardModule { identity: mapping.identity, path: mapping.path, source: source })
+    standardPaths.push(mapping.sourceFile)
+  }
+  standardPaths.sort()
+  let request = CompilerRequest {
+    ...initial, source: entrySource, facts: facts,
+    package: PackageFacts { ...initial.package, generatedStdModules: modules },
+  }
+  let requestText = stringify(request)?
+  // Reuse admission on the finished candidate so the refresh path cannot
+  // invent a different interpretation of the public request budgets.
+  fromText(requestText)?
+  let updated = Descriptor { ...descriptor, sourceFiles: mappings, standardModules: standards }
+  let updatedText = stringify(updated)?
+  Ok(PreparedCli {
+    descriptorText: "{updatedText}\n", requestText: "{requestText}\n",
+    sourcePaths: sourcePaths, standardPaths: standardPaths, sourceCount: tree.paths.length,
+  })
+}
+
+// Compile this transient entry instead of trusting the descriptor's ABI text.
+// Its literal function type also rejects an extra defaulted parameter, which
+// a six-argument call could otherwise accept. Neither the guard nor its budget
+// allowance belongs in the persisted CLI source snapshot.
+export function validationRequest(text: string) -> Result<string, string> {
+  let initial = fromText(text)?
+  if initial.entry != "src/main.tpz" || initial.sourceId != "src/main.tpz" || initial.root != "" {
+    return Err("CLI callable validation requires the prepared src/main.tpz request")
+  }
+  let mut facts: Array<HostFact> = []
+  let mut rootListing = false
+  for fact in initial.facts {
+    if fact.logicalPath == CONTRACT_ENTRY {
+      return Err("CLI request already contains the reserved callable validation source")
+    }
+    if fact.kind == "list-directory" && fact.logicalPath == "" {
+      if fact.status != "present" { return Err("CLI callable validation requires a present root directory") }
+      let mut entries = [DirectoryEntry { name: CONTRACT_ENTRY, kind: "file" }]
+      for entry in fact.entries {
+        if entry.name == CONTRACT_ENTRY { return Err("CLI root contains the reserved callable validation source") }
+        entries.push(entry)
+      }
+      facts.push(HostFact { ...fact, entries: entries })
+      rootListing = true
+    } else {
+      facts.push(fact)
+    }
+  }
+  if !rootListing { return Err("CLI callable validation requires the prepared root directory listing") }
+  facts.push(HostFact {
+    kind: "read-source", mountId: "root", logicalPath: CONTRACT_ENTRY,
+    status: "present", source: CONTRACT_SOURCE, entries: [], aliasClass: "", reasonCode: "",
+  })
+  facts.push(containment(CONTRACT_ENTRY))
+  let sourceBudget = if initial.maxSourceFacts < 16384 { initial.maxSourceFacts + 1 } else { 16384 }
+  let guardBytes = CONTRACT_SOURCE.byteLength()
+  let byteBudget = if initial.maxTotalSourceBytes <= 67108864 - guardBytes {
+    initial.maxTotalSourceBytes + guardBytes
+  } else {
+    67108864
+  }
+  let request = CompilerRequest {
+    ...initial, terminal: "typed", entry: CONTRACT_ENTRY, sourceId: CONTRACT_ENTRY,
+    source: CONTRACT_SOURCE, facts: facts,
+    maxSourceFacts: sourceBudget, maxTotalSourceBytes: byteBudget,
+  }
+  let result = stringify(request)?
+  fromText(result)?
+  Ok(result)
+}

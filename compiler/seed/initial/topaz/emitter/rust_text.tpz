@@ -1,0 +1,33 @@
+// Rust source text encoding, independent of the IR transport.
+const HEX_DIGITS = "0123456789abcdef"
+
+function hex(value: int) -> string {
+  if value < 16 {
+    HEX_DIGITS.slice(value, value + 1)
+  } else {
+    hex(value / 16) + HEX_DIGITS.slice(value % 16, value % 16 + 1)
+  }
+}
+
+// A Rust string literal whose value is exactly `text`.
+export function rustStr(text: string) -> string {
+  let mut out: Array<string> = ["\""]
+  for scalar in text.scalars() {
+    let code = scalar.codePointAt(0) ?? 0
+    if scalar == "\\" {
+      out.push("\\\\")
+    } else if scalar == "\"" {
+      out.push("\\\"")
+    } else if scalar == "\n" {
+      out.push("\\n")
+    } else if scalar == "\t" {
+      out.push("\\t")
+    } else if code < 32 || code == 127 {
+      out.push("\\u\{{hex(code)}\}")
+    } else {
+      out.push(scalar)
+    }
+  }
+  out.push("\"")
+  out.join("")
+}

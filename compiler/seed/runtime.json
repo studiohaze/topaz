@@ -1,0 +1,12 @@
+{
+  "schema": "topaz.bootstrap-seed-runtime/v1",
+  "authority": "Owner approved the six native runtime crates and the seed runner under Apache-2.0 on 2026-10-26.",
+  "crates": [
+    "topaz_diag",
+    "topaz_syntax",
+    "topaz_value",
+    "topaz_product_runtime",
+    "topaz_rt",
+    "topaz_host_none"
+  ]
+}

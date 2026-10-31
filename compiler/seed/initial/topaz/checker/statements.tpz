@@ -1,0 +1,1819 @@
+import literal { signedIntegerInput, decodeIntegerLiteral, decodeDecimalFloatLiteral }
+// Statement checking for bindings, assignment, effects, and control transfer.
+// Block sequencing is owned here; expression inference returns through the
+// checker service so imports remain one-way.
+
+import length { decodeLength, signedLengthInput, roundFraction, lengthFloatMultiply, lengthRatio, lengthResolve, fromMilliPoints, toMilliPoints }
+import types {
+  KnownLiteralRender,
+  KnownLiteralRenderField,
+  renderKnownLiteral,
+  PreviewAstAttribute,
+  SyntaxNode,
+}
+import checker_types { TypeValue }
+import checker.model {
+  FoldedConstant,
+  constantRenderEpoch,
+  advanceConstantRenderEpoch,
+  restoreConstantRenderEpoch,
+  CheckerService,
+  CheckerRequest,
+  CheckerState,
+  LoopFrame,
+  MAX_CONSTANT_EXPONENT,
+  MINIMUM_INT_DECIMAL,
+  ModuleSyntax,
+  constructor,
+  emptyType,
+  functionType,
+  primitive,
+  lengthUnit,
+  rigid,
+}
+import checker.type_algebra {
+  assignable,
+  hasHole,
+  hasPartialHole,
+  typeText,
+  widen,
+}
+import checker.syntax_index {
+  addDiagnostic,
+  moduleAt,
+  addNode,
+  attribute,
+  bindSymbol,
+  boolAttribute,
+  child,
+  children,
+  functionIndexForReference,
+  declarationOriginForReference,
+  declarationFor,
+  resolvedTypeOfReference,
+  declarationConstantForReference,
+  setDeclarationConstant,
+  referenceFor,
+  replaceNodeType,
+  spanKey,
+  text,
+  unwrapExport,
+}
+import checker.nominals {
+  formType,
+  substitute,
+  targetType,
+}
+import checker.patterns {
+  bindNamedPatternType,
+  patternBindingType,
+  patternIsIrrefutable,
+}
+import checker.protocols_methods { predeclareBlockFunctions }
+import checker.call_facts {
+  calleeReference,
+  recordBoundBuiltin,
+  argumentValue,
+  checkExpressionExpected,
+  checkExpressionExpectedResult,
+  checkReturn,
+  currentExpressionChecksResult,
+  inferExpressionContext,
+  inferExpressionWithExpected,
+  refineExpressionToExpected,
+  reportExpectedType,
+}
+import checker.expression_core {
+  hasBranchJoinContext,
+  checkAssignmentRootMutable,
+  expressionTerminates,
+  hasLiteralJoinContext,
+  inferLambda,
+  optionalReceiver,
+}
+import checker.expression_control {
+  checkLoopExitStatement,
+  inferBinaryExpression,
+  inferExpression,
+}
+
+function bindingAnnotationType(
+  service: CheckerService,
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  item: SyntaxNode,
+) -> Option<TypeValue> {
+  match child(item, "type") {
+    case Some(found) => return Some(formType(
+      service,
+      state,
+      moduleIndex,
+      source,
+      found,
+      [],
+      "binding",
+    ))
+    case None => ()
+  }
+  match child(item, "pattern") {
+    case Some(pattern) => if pattern.kind == "pattern/typed" {
+      match child(pattern, "type") {
+        case Some(found) => return Some(formType(
+          service,
+          state,
+          moduleIndex,
+          source,
+          found,
+          [],
+          "binding",
+        ))
+        case None => ()
+      }
+    }
+    case None => ()
+  }
+  None
+}
+
+function inferBindingValue(
+  service: CheckerService,
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  item: SyntaxNode,
+  annotation: Option<TypeValue>,
+) -> TypeValue {
+  match child(item, "value") {
+    case Some(value) => match annotation {
+      case Some(expected) => if value.kind == "expression/lambda" &&
+        expected.kind == "function" {
+        let inferred = inferLambda(
+          service,
+          state,
+          moduleIndex,
+          source,
+          value,
+          Some(expected),
+        )
+        addNode(state, moduleIndex, "expression", value, inferred)
+        inferred
+      } else {
+        inferExpressionWithExpected(
+          service,
+          state,
+          moduleIndex,
+          source,
+          value,
+          expected,
+          true,
+        )
+      }
+      case None => {
+        // Like Stage 0's at_bare_binding, the reporting site is the
+        // initializer itself. Parentheses and block tails preserve it;
+        // receivers, arguments, elements and loop iterables do not.
+        let mut contexts = state.bareBindingExpressions
+        contexts.push(bareBindingExpression(value))
+        let diagnosticStart = state.diagnostics.length
+        let inferred = inferExpression(service, state, moduleIndex, source, value)
+        contexts.pop()
+        // Callable aliases retain their declaration scheme until a value-use
+        // context instantiates it (including generated standard wrappers).
+        if inferred.kind != "function" && hasPartialHole(inferred) &&
+          state.diagnostics.length == diagnosticStart {
+          addDiagnostic(state, moduleIndex, "TPZ5020",
+            "this expression needs a contextual type (§22.1): annotate the binding or surrounding expectation",
+            "", bareBindingExpression(value))
+        }
+        inferred
+      }
+    }
+    case None => emptyType("unknown")
+  }
+}
+
+function bareBindingExpression(value: SyntaxNode) -> SyntaxNode {
+  if value.kind == "expression/parenthesized" {
+    match child(value, "operand") {
+      case Some(inner) => return bareBindingExpression(inner)
+      case None => ()
+    }
+  }
+  if value.kind == "expression/block" {
+    match child(value, "block") {
+      case Some(block) => match child(block, "tail") {
+        case Some(tail) => return bareBindingExpression(tail)
+        case None => ()
+      }
+      case None => ()
+    }
+  }
+  value
+}
+
+function bindCheckedDeclaration(
+  service: CheckerService,
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  item: SyntaxNode,
+  expected: TypeValue,
+) -> () {
+  if item.kind == "statement/let" {
+    match child(item, "pattern") {
+      case Some(pattern) => {
+        if pattern.kind == "pattern/typed" {
+          bindNamedPatternType(
+            state,
+            moduleIndex,
+            source,
+            pattern,
+            expected,
+            expected,
+            boolAttribute(item, "mutable"),
+          )
+        } else {
+          let coverage = patternBindingType(
+            service,
+            state,
+            moduleIndex,
+            source,
+            pattern,
+            expected,
+            boolAttribute(item, "mutable"),
+          )
+          if pattern.kind != "pattern/binding" &&
+            !patternIsIrrefutable(state, moduleIndex, expected, coverage) {
+            addDiagnostic(
+              state,
+              moduleIndex,
+              "TPZ5026",
+              "refutable pattern in `let`: it does not match every value of the type — use `if let` to handle the non-matching case",
+              "",
+              pattern,
+            )
+          }
+        }
+      }
+      case None => ()
+    }
+    return ()
+  }
+  let nameNode = match child(item, "name") {
+    case Some(found) => found
+    case None => item
+  }
+  match declarationFor(state, moduleIndex, nameNode.lo, nameNode.hi) {
+    case Some(declaration) => {
+      let key = "lexical:{moduleIndex}:{declaration.scopeOrdinal}:{declaration.namespace}:{declaration.name}"
+      match state.declarationIndexes.get(key) {
+        case Some(index) => match state.resolved.declarations.get(index) {
+          case Some(first) => if first.lo < declaration.lo {
+            addDiagnostic(state, moduleIndex, "TPZ5008", "`{declaration.name}` is already declared in this scope", "", nameNode)
+          }
+          case None => ()
+        }
+        case None => ()
+      }
+    }
+    case None => ()
+  }
+  bindSymbol(
+    state,
+    moduleIndex,
+    nameNode.lo,
+    nameNode.hi,
+    text(source, nameNode),
+    expected,
+    false,
+  )
+  addNode(state, moduleIndex, "binding", nameNode, expected)
+}
+
+function aliasReferenceNode(node: SyntaxNode) -> Option<SyntaxNode> {
+  if node.kind == "expression/identifier" {
+    return Some(node)
+  }
+  if node.kind == "expression/parenthesized" {
+    return match child(node, "operand") {
+      case Some(found) => aliasReferenceNode(found)
+      case None => None
+    }
+  }
+  if node.kind == "expression/block" {
+    return match child(node, "block") {
+      case Some(block) => if children(block, "statements").length == 0 {
+        match child(block, "tail") {
+          case Some(found) => aliasReferenceNode(found)
+          case None => None
+        }
+      } else {
+        None
+      }
+      case None => None
+    }
+  }
+  None
+}
+
+function bindingDeclarationNode(item: SyntaxNode) -> Option<SyntaxNode> {
+  if item.kind == "statement/const" {
+    return child(item, "name")
+  }
+  match child(item, "pattern") {
+    case Some(pattern) => if pattern.kind == "pattern/binding" ||
+      pattern.kind == "pattern/typed" {
+      child(pattern, "name")
+    } else {
+      None
+    }
+    case None => None
+  }
+}
+
+function recordFunctionAlias(
+  state: CheckerState,
+  moduleIndex: int,
+  item: SyntaxNode,
+) -> () {
+  let declaration = match bindingDeclarationNode(item) {
+    case Some(found) => found
+    case None => return ()
+  }
+  let value = match child(item, "value") {
+    case Some(found) => found
+    case None => return ()
+  }
+  let referenceNode = match aliasReferenceNode(value) {
+    case Some(found) => found
+    case None => return ()
+  }
+  match referenceFor(
+    state,
+    moduleIndex,
+    referenceNode.lo,
+    referenceNode.hi,
+  ) {
+    case Some(reference) => {
+      let functionIndex = functionIndexForReference(state, reference)
+      if functionIndex >= 0 {
+        let mut aliases = state.functionAliases
+        aliases.insert(
+          spanKey(
+            moduleIndex,
+            declaration.lo,
+            declaration.hi,
+          ),
+          functionIndex,
+        )
+      }
+    }
+    case None => ()
+  }
+  ()
+}
+
+function functionAliasSemanticType(
+  state: CheckerState,
+  moduleIndex: int,
+  item: SyntaxNode,
+) -> Option<TypeValue> {
+  let declaration = match bindingDeclarationNode(item) {
+    case Some(found) => found
+    case None => return None
+  }
+  let functionIndex = match state.functionAliases.get(spanKey(
+    moduleIndex,
+    declaration.lo,
+    declaration.hi,
+  )) {
+    case Some(found) => found
+    case None => return None
+  }
+  let definition = match state.functions.get(functionIndex) {
+    case Some(found) => found
+    case None => return None
+  }
+  if definition.typeParameters.length == 0 {
+    return None
+  }
+  let mut arguments: Array<TypeValue> = []
+  let mut index = 0
+  for parameter in definition.typeParameters {
+    let origin = match definition.typeParameterOrigins.get(index) {
+      case Some(found) => found
+      case None => return None
+    }
+    arguments.push(rigid(parameter, origin))
+    index += 1
+  }
+  Some(substitute(
+    functionType(
+      definition.parameterTypes,
+      definition.variadic,
+      definition.result,
+    ),
+    definition.typeParameters,
+    arguments,
+  ))
+}
+
+function checkBindingStatement(
+  service: CheckerService,
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  item: SyntaxNode,
+) -> () {
+  let renderEpoch = constantRenderEpoch(state)
+  let annotation = bindingAnnotationType(service, state, moduleIndex, source, item)
+  let mut value = inferBindingValue(
+    service,
+    state,
+    moduleIndex,
+    source,
+    item,
+    annotation,
+  )
+  let expected = match annotation {
+    case Some(found) => found
+    case None => if item.kind == "statement/const" { value } else { widen(value) }
+  }
+  match annotation {
+    case Some(_) => ()
+    case None => match child(item, "value") {
+      case Some(found) => if found.kind == "expression/comprehension" &&
+        hasHole(value) {
+        addDiagnostic(
+          state,
+          moduleIndex,
+          "TPZ5612",
+          "this comprehension's element type cannot be inferred (§6.4): annotate the binding with its collection type",
+          "",
+          found,
+        )
+      }
+      case None => ()
+    }
+  }
+  match child(item, "value") {
+    case Some(found) => {
+      value = refineExpressionToExpected(
+        state,
+        moduleIndex,
+        found,
+        value,
+        expected,
+      )
+    }
+    case None => ()
+  }
+  match child(item, "value") {
+    case Some(found) => reportExpectedType(state, moduleIndex, found, expected, value)
+    case None => ()
+  }
+  if item.kind == "statement/const" { restoreConstantRenderEpoch(state, renderEpoch) }
+  let mut constant: Option<FoldedConstant> = None
+  if item.kind == "statement/const" {
+    match child(item, "value") {
+      case Some(found) => match constantExpressionInvalid(state, moduleIndex, found, false) {
+        case Some(invalid) => {
+          let unavailable = match referenceFor(state, moduleIndex, invalid.lo, invalid.hi) {
+            case Some(reference) => match declarationOriginForReference(state, reference) {
+              case Some(declaration) => declaration.declarationKind == "const" &&
+                reference.scopeOrdinal == 0 && declaration.moduleIndex == moduleIndex &&
+                declaration.lo > invalid.lo
+              case None => false
+            }
+            case None => false
+          }
+          if unavailable {
+            addDiagnostic(state, moduleIndex, "TPZ5002", "`{text(source, invalid)}` is not bound", "", invalid)
+          } else {
+            addDiagnostic(state, moduleIndex, "TPZ5001", "`const` initializers must be constant expressions (§4)", "", invalid)
+          }
+        }
+        case None => match foldConstantScalar(state, moduleIndex, found) {
+          case Ok(value) => { constant = Some(value) }
+          case Err(_) => ()
+        }
+      }
+      case None => ()
+    }
+  }
+  bindCheckedDeclaration(service, state, moduleIndex, source, item, expected)
+  match constant {
+    case Some(value) => match child(item, "name") {
+      case Some(name) => setDeclarationConstant(state, moduleIndex, name.lo, name.hi, value)
+      case None => ()
+    }
+    case None => ()
+  }
+  match [bindingDeclarationNode(item), child(item, "value")] {
+    case [Some(declaration), Some(initializer)] => recordBoundBuiltin(service, state, moduleIndex, source, declaration, initializer, value)
+    case _ => ()
+  }
+  recordFunctionAlias(state, moduleIndex, item)
+  match annotation {
+    case None => match functionAliasSemanticType(state, moduleIndex, item) {
+      case Some(projected) => match bindingDeclarationNode(item) {
+        case Some(declaration) => replaceNodeType(
+          state,
+          moduleIndex,
+          "binding",
+          declaration,
+          projected,
+        )
+        case None => ()
+      }
+      case None => ()
+    }
+    case Some(_) => ()
+  }
+  ()
+}
+
+function checkUsingStatement(
+  service: CheckerService,
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  item: SyntaxNode,
+) -> () {
+  match child(item, "value") {
+    case Some(found) => {
+      let _ = checkExpressionExpected(
+        service,
+        state,
+        moduleIndex,
+        source,
+        found,
+        emptyType("file"),
+      )
+    }
+    case None => ()
+  }
+  match child(item, "name") {
+    case Some(name) => {
+      bindSymbol(
+        state,
+        moduleIndex,
+        name.lo,
+        name.hi,
+        text(source, name),
+        emptyType("file"),
+        false,
+      )
+      addNode(state, moduleIndex, "binding", name, emptyType("file"))
+    }
+    case None => ()
+  }
+  match child(item, "body") {
+    case Some(body) => {
+      let _ = checkBlock(service, state, moduleIndex, source, body)
+    }
+    case None => ()
+  }
+  ()
+}
+
+function checkEffectStatement(
+  service: CheckerService,
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  item: SyntaxNode,
+) -> () {
+  let expression = if item.kind == "statement/defer" {
+    child(item, "value")
+  } else {
+    item.children.get(0)
+  }
+  match expression {
+    case Some(found) => if found.kind == "expression/for" {
+      let mut contexts = state.statementExpressionContexts
+      contexts.push(found.lo)
+      let _ = inferExpression(service, state, moduleIndex, source, found)
+      contexts.pop()
+    } else {
+      let _ = inferExpression(service, state, moduleIndex, source, found)
+    }
+    case None => ()
+  }
+  ()
+}
+
+function assignmentTargetHasOptional(node: SyntaxNode) -> bool {
+  if node.kind == "expression/optional-access" {
+    return true
+  }
+  match child(node, "object") {
+    case Some(object) => assignmentTargetHasOptional(object)
+    case None => false
+  }
+}
+
+function lastAssignmentIndex(node: SyntaxNode) -> Option<SyntaxNode> {
+  if node.kind == "expression/member" {
+    return match child(node, "object") {
+      case Some(object) => lastAssignmentIndex(object)
+      case None => None
+    }
+  }
+  if node.kind == "expression/index" {
+    return Some(node)
+  }
+  None
+}
+
+function reportMapAssignmentTarget(
+  service: CheckerService,
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  target: SyntaxNode,
+) -> () {
+  match lastAssignmentIndex(target) {
+    case Some(index) => match child(index, "object") {
+      case Some(object) => {
+        let objectType = inferExpression(service, state, moduleIndex, source, object)
+        if objectType.kind == "constructor" && objectType.name == "Map" {
+          addDiagnostic(
+            state,
+            moduleIndex,
+            "TPZ5001",
+            "a Map is not index-assignable; use `m.insert` (§22)",
+            "",
+            target,
+          )
+        }
+      }
+      case None => ()
+    }
+    case None => ()
+  }
+  ()
+}
+
+function assignmentBinaryNode(
+  item: SyntaxNode,
+  target: SyntaxNode,
+  value: SyntaxNode,
+) -> SyntaxNode {
+  SyntaxNode {
+    kind: "expression/binary",
+    lo: item.lo,
+    hi: item.hi,
+    field: "",
+    index: 0,
+    attributes: [PreviewAstAttribute {
+      name: "operator",
+      kind: "string",
+      value: attribute(item, "operator"),
+    }],
+    children: [
+      SyntaxNode { ...target, field: "left", index: 0 },
+      SyntaxNode { ...value, field: "right", index: 1 },
+    ],
+  }
+}
+
+function checkAssignmentStatement(
+  service: CheckerService,
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  item: SyntaxNode,
+) -> () {
+  let target = match child(item, "target") {
+    case Some(found) => found
+    case None => return ()
+  }
+  let value = match child(item, "value") {
+    case Some(found) => found
+    case None => return ()
+  }
+  checkAssignmentRootMutable(state, moduleIndex, source, target, false)
+  if assignmentTargetHasOptional(target) {
+    addDiagnostic(
+      state,
+      moduleIndex,
+      "TPZ5001",
+      "cannot assign through optional access `?.` (§4)",
+      "",
+      target,
+    )
+  }
+  reportMapAssignmentTarget(service, state, moduleIndex, source, target)
+  let operator = attribute(item, "operator")
+  if operator == "assign" {
+    let targetType = inferExpression(service, state, moduleIndex, source, target)
+    let _ = checkExpressionExpected(
+      service,
+      state,
+      moduleIndex,
+      source,
+      value,
+      targetType,
+    )
+    return ()
+  }
+  if operator == "coalesce" {
+    let targetType = inferExpression(service, state, moduleIndex, source, target)
+    match optionalReceiver(targetType) {
+      case Some(_) => {
+        let _ = checkExpressionExpected(
+          service,
+          state,
+          moduleIndex,
+          source,
+          value,
+          targetType,
+        )
+      }
+      case None => {
+        if !hasHole(targetType) {
+          addDiagnostic(
+            state,
+            moduleIndex,
+            "TPZ5001",
+            "`??=` needs an Option or nullable target, found `{typeText(targetType)}`",
+            "",
+            target,
+          )
+        }
+        let _ = inferExpression(service, state, moduleIndex, source, value)
+      }
+    }
+    return ()
+  }
+  let targetType = inferExpression(service, state, moduleIndex, source, target)
+  let result = inferBinaryExpression(
+    service,
+    state,
+    moduleIndex,
+    source,
+    assignmentBinaryNode(item, target, value),
+  )
+  reportExpectedType(
+    state,
+    moduleIndex,
+    item,
+    widen(targetType),
+    result,
+  )
+  ()
+}
+
+function checkWhileStatement(
+  service: CheckerService,
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  item: SyntaxNode,
+) -> () {
+  match child(item, "condition") {
+    case Some(found) => {
+      let _ = checkExpressionExpected(
+        service,
+        state,
+        moduleIndex,
+        source,
+        found,
+        primitive("bool"),
+      )
+    }
+    case None => ()
+  }
+  let mut frames = state.loopFrames
+  frames.push(LoopFrame {
+    label: "",
+    valueLoop: false,
+    bareTarget: true,
+    bareError: "",
+    expected: None,
+    breaks: [],
+  })
+  match child(item, "body") {
+    case Some(found) => {
+      let _ = checkBlock(service, state, moduleIndex, source, found)
+    }
+    case None => ()
+  }
+  frames.pop()
+  ()
+}
+
+function checkModuleOnlyDeclaration(
+  state: CheckerState,
+  moduleIndex: int,
+  statement: SyntaxNode,
+  kind: string,
+) -> () {
+  match child(statement, "name") {
+    case Some(name) => addDiagnostic(
+      state,
+      moduleIndex,
+      "TPZ5022",
+      "{kind} declarations are module-top-level only",
+      "",
+      name,
+    )
+    case None => ()
+  }
+  ()
+}
+
+export function checkStatement(
+  service: CheckerService,
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  statement: SyntaxNode,
+) -> () {
+  let item = unwrapExport(statement)
+  match item.kind {
+    case "statement/function" => match child(item, "declaration") {
+      case Some(declaration) => {
+        let _ = service(state, CheckerRequest {
+          kind: "check-function",
+          moduleIndex: moduleIndex,
+          source: source,
+          node: declaration,
+          typeValue: emptyType("unknown"),
+        })
+      }
+      case None => ()
+    }
+    case "statement/let" | "statement/const" =>
+      checkBindingStatement(service, state, moduleIndex, source, item)
+    case "statement/using" => checkUsingStatement(
+      service,
+      state,
+      moduleIndex,
+      source,
+      item,
+    )
+    case "statement/return" =>
+      checkReturn(service, state, moduleIndex, source, item)
+    case "statement/break" | "statement/continue" =>
+      checkLoopExitStatement(service, state, moduleIndex, source, item)
+    case "statement/expression" | "statement/defer" =>
+      checkEffectStatement(service, state, moduleIndex, source, item)
+    case "statement/assign" => {
+      advanceConstantRenderEpoch(state)
+      checkAssignmentStatement(service, state, moduleIndex, source, item)
+    }
+    case "statement/while" => checkWhileStatement(
+      service,
+      state,
+      moduleIndex,
+      source,
+      item,
+    )
+    case "statement/protocol" => checkModuleOnlyDeclaration(state, moduleIndex, item, "protocol")
+    case "statement/impl" => checkModuleOnlyDeclaration(state, moduleIndex, item, "impl")
+    case "statement/record" => checkModuleOnlyDeclaration(state, moduleIndex, item, "record")
+    case "statement/enum" => checkModuleOnlyDeclaration(state, moduleIndex, item, "enum")
+    case "statement/newtype" => checkModuleOnlyDeclaration(state, moduleIndex, item, "newtype")
+    case _ => ()
+  }
+}
+
+export function checkBlock(
+  service: CheckerService,
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  block: SyntaxNode,
+) -> TypeValue {
+  let inheritedContext = hasLiteralJoinContext(state, block)
+  let inheritedJoin = hasBranchJoinContext(state, block)
+  if inheritedContext {
+    let mut contexts = state.literalJoinContexts
+    contexts.pop()
+  }
+  predeclareBlockFunctions(service, state, moduleIndex, block)
+  for statement in children(block, "statements") {
+    checkStatement(service, state, moduleIndex, source, statement)
+  }
+  let result = match child(block, "tail") {
+    case Some(found) => {
+      let mut joins = state.branchJoinContexts
+      if inheritedJoin { joins.push(found.lo) }
+      let inferred = if inheritedContext {
+        inferExpressionContext(service, state, moduleIndex, source, found)
+      } else {
+        inferExpression(service, state, moduleIndex, source, found)
+      }
+      if inheritedJoin { joins.pop() }
+      inferred
+    }
+    case None => primitive("unit")
+  }
+  if inheritedContext {
+    let mut contexts = state.literalJoinContexts
+    contexts.push(block.lo)
+  }
+  result
+}
+
+export function checkBlockExpected(
+  service: CheckerService,
+  state: CheckerState,
+  moduleIndex: int,
+  source: Bytes,
+  block: SyntaxNode,
+  expectedReturn: TypeValue,
+) -> TypeValue {
+  let checkResult = currentExpressionChecksResult(state, block)
+  predeclareBlockFunctions(service, state, moduleIndex, block)
+  for statement in children(block, "statements") {
+    checkStatement(service, state, moduleIndex, source, statement)
+  }
+  match child(block, "tail") {
+    case Some(found) => {
+      checkExpressionExpectedResult(
+        service,
+        state,
+        moduleIndex,
+        source,
+        found,
+        expectedReturn,
+        true,
+        checkResult && !expressionTerminates(found),
+      )
+    }
+    case None => primitive("unit")
+  }
+}
+
+export function precheckTopLevelBindings(
+  service: CheckerService,
+  state: CheckerState,
+  module: ModuleSyntax,
+) -> () {
+  for statement in module.root.children {
+    let item = unwrapExport(statement)
+    if item.kind == "statement/const" {
+      checkStatement(
+        service,
+        state,
+        module.moduleIndex,
+        module.source,
+        statement,
+      )
+    } else if item.kind == "statement/let" {
+      let mut suppressions = state.typeCapabilitySuppressions
+      suppressions.push(true)
+      match child(item, "pattern") {
+        case Some(pattern) => {
+          let mut expectedValues: Array<TypeValue> = []
+          match child(item, "type") {
+            case Some(typeNode) => expectedValues.push(formType(
+              service,
+              state,
+              module.moduleIndex,
+              module.source,
+              typeNode,
+              [],
+              "binding",
+            ))
+            case None => if pattern.kind == "pattern/typed" {
+              match child(pattern, "type") {
+                case Some(typeNode) => expectedValues.push(formType(
+                  service,
+                  state,
+                  module.moduleIndex,
+                  module.source,
+                  typeNode,
+                  [],
+                  "binding",
+                ))
+                case None => ()
+              }
+            } else {
+              ()
+            }
+          }
+          match expectedValues.get(0) {
+            case Some(expected) => patternBindingType(
+              service,
+              state,
+              module.moduleIndex,
+              module.source,
+              pattern,
+              expected,
+              boolAttribute(item, "mutable"),
+            )
+            case None => ()
+          }
+        }
+        case None => ()
+      }
+      suppressions.pop()
+    }
+  }
+  ()
+}
+
+export function constantExpressionShape(
+  state: CheckerState,
+  moduleIndex: int,
+  node: SyntaxNode,
+  defaultValue: bool,
+) -> bool {
+  match constantExpressionInvalid(state, moduleIndex, node, defaultValue) {
+    case Some(_) => false
+    case None => true
+  }
+}
+
+function constantFloatShape(state: CheckerState, moduleIndex: int, node: SyntaxNode) -> bool {
+  if node.kind == "expression/float" { return true }
+  if node.kind == "expression/identifier" {
+    return match resolvedTypeOfReference(state, moduleIndex, node) { case Some(value) => value.name == "float"; case None => false }
+  }
+  if node.kind == "expression/parenthesized" || node.kind == "expression/unary" {
+    return match child(node, "operand") { case Some(value) => constantFloatShape(state, moduleIndex, value); case None => false }
+  }
+  if node.kind == "expression/binary" {
+    let operator = attribute(node, "operator")
+    if operator != "add" && operator != "subtract" && operator != "multiply" && operator != "divide" && operator != "remainder" && operator != "power" { return false }
+    let left = match child(node, "left") { case Some(value) => value; case None => return false }
+    let right = match child(node, "right") { case Some(value) => value; case None => return false }
+    return constantFloatShape(state, moduleIndex, left) && constantFloatShape(state, moduleIndex, right)
+  }
+  false
+}
+
+function constantIntegerBitShape(state: CheckerState, moduleIndex: int, node: SyntaxNode) -> bool {
+  if node.kind == "expression/integer" { return true }
+  if node.kind == "expression/identifier" {
+    return match resolvedTypeOfReference(state, moduleIndex, node) { case Some(value) => value.name == "int"; case None => false }
+  }
+  if node.kind == "expression/parenthesized" || node.kind == "expression/unary" {
+    return match child(node, "operand") { case Some(value) => constantIntegerBitShape(state, moduleIndex, value); case None => false }
+  }
+  if node.kind == "expression/binary" {
+    let operator = attribute(node, "operator")
+    if operator != "add" && operator != "subtract" && operator != "multiply" && operator != "divide" && operator != "remainder" && operator != "power" { return false }
+    let left = match child(node, "left") { case Some(value) => value; case None => return false }
+    let right = match child(node, "right") { case Some(value) => value; case None => return false }
+    return constantIntegerBitShape(state, moduleIndex, left) && constantIntegerBitShape(state, moduleIndex, right)
+  }
+  match integerBitConstant(state, moduleIndex, node) { case Some(_) => true; case None => false }
+}
+
+function integerBitConstant(state: CheckerState, moduleIndex: int, node: SyntaxNode) -> Option<SyntaxNode> {
+  if state.languageMode != "topaz-5.21" || node.kind != "expression/call" || children(node, "arguments").length != 1 || children(node, "typeArguments").length != 0 { return None }
+  let callee = match child(node, "callee") { case Some(value) => value; case None => return None }
+  if callee.kind != "expression/member" { return None }
+  let object = match child(callee, "object") { case Some(value) => value; case None => return None }
+  let field = match child(callee, "field") { case Some(value) => value; case None => return None }
+  let source = match moduleAt(state, moduleIndex) { case Some(module) => module.source; case None => return None }
+  let name = text(source, field)
+  if name != "and" && name != "or" && name != "xor" && name != "shift" { return None }
+  let argument = children(node, "arguments")[0]
+  if argument.kind == "call-argument/spread" { return None }
+  if argument.kind == "call-argument/named" {
+    let parameter = match child(argument, "name") { case Some(value) => text(source, value); case None => return None }
+    if parameter != (if name == "shift" { "count" } else { "other" }) { return None }
+  }
+  if constantIntegerBitShape(state, moduleIndex, object) && constantIntegerBitShape(state, moduleIndex, argumentValue(argument)) { Some(object) } else { None }
+}
+
+function floatIntegerConstant(state: CheckerState, moduleIndex: int, node: SyntaxNode) -> Option<SyntaxNode> {
+  if state.languageMode != "topaz-5.21" || node.kind != "expression/call" || children(node, "arguments").length != 0 || children(node, "typeArguments").length != 0 { return None }
+  let callee = match child(node, "callee") { case Some(value) => value; case None => return None }
+  if callee.kind != "expression/member" { return None }
+  let object = match child(callee, "object") { case Some(value) => value; case None => return None }
+  let field = match child(callee, "field") { case Some(value) => value; case None => return None }
+  let source = match moduleAt(state, moduleIndex) { case Some(module) => module.source; case None => return None }
+  let name = text(source, field)
+  if (name == "trunc" || name == "floor" || name == "ceil" || name == "round") && constantFloatShape(state, moduleIndex, object) { Some(object) } else { None }
+}
+
+
+function lengthConstructorName(state:CheckerState,moduleIndex:int,node:SyntaxNode)->string {
+  if state.languageMode != "topaz-5.21" || node.kind != "expression/call" {return ""}
+  let mut generated=false
+  for module in state.modules {if module.identity == "std.typeset" && module.generatedStd {generated=true}}
+  if !generated {return ""}
+  let callee = match child(node,"callee") {case Some(v)=>v;case None=>return ""}
+  let reference = match calleeReference(state,moduleIndex,callee) {case Some(v)=>v;case None=>return ""}
+  if reference.targetModule == "std.typeset" && (reference.targetName == "fromScaledPoints" || reference.targetName == "fromMilliPoints") {return reference.targetName}
+  ""
+}
+function constantLengthUnit(state:CheckerState,moduleIndex:int,node:SyntaxNode)->string {
+  let source = match moduleAt(state,moduleIndex) {case Some(v)=>v.source;case None=>return ""}
+  match signedLengthInput(node,source) {case Some(input)=>return match decodeLength(input.spelling,input.negative) {case Ok(v)=>v.unit;case Err(_)=>""};case None=>()}
+  if node.kind == "expression/identifier" {return match resolvedTypeOfReference(state,moduleIndex,node) {case Some(v)=>lengthUnit(v);case None=>""}}
+  if node.kind == "expression/parenthesized" || node.kind == "expression/unary" {return match child(node,"operand") {case Some(v)=>constantLengthUnit(state,moduleIndex,v);case None=>""}}
+  if node.kind == "expression/binary" {
+    let left=match child(node,"left") {case Some(v)=>constantLengthUnit(state,moduleIndex,v);case None=>""}
+    let right=match child(node,"right") {case Some(v)=>constantLengthUnit(state,moduleIndex,v);case None=>""}
+    let op=attribute(node,"operator")
+    if (op == "add" || op == "subtract") && left == right {return left}
+    if op == "multiply" && (left == "" || right == "") {return if left == "" {right} else {left}}
+    if op == "divide" && right == "" {return left}
+  }
+  if node.kind == "expression/call" {
+    if lengthConstructorName(state,moduleIndex,node) != "" {return "Pt"}
+    let callee=match child(node,"callee") {case Some(v)=>v;case None=>return ""}
+    let field=match child(callee,"field") {case Some(v)=>text(source,v);case None=>return ""}
+    let object=match child(callee,"object") {case Some(v)=>v;case None=>return ""}
+    let unit=constantLengthUnit(state,moduleIndex,object)
+    if unit == "Em" {return if field == "resolve" {"Pt"} else {""}}
+    if unit != "" {return match field {case "toPt"=>"Pt";case "toMm"=>"Mm";case "toCm"=>"Cm";case "toIn"=>"In";case _=>""}}
+  }
+  ""
+}
+function lengthConstantReceiver(state:CheckerState,moduleIndex:int,node:SyntaxNode)->Option<SyntaxNode> {
+  if state.languageMode != "topaz-5.21" || node.kind != "expression/call" {return None}
+  let source=match moduleAt(state,moduleIndex) {case Some(v)=>v.source;case None=>return None}
+  let callee=match child(node,"callee") {case Some(v)=>v;case None=>return None}
+  let object=match child(callee,"object") {case Some(v)=>v;case None=>return None}
+  let field=match child(callee,"field") {case Some(v)=>text(source,v);case None=>return None}
+  let unit=constantLengthUnit(state,moduleIndex,object)
+  if unit == "Em" {return if field == "resolve" {Some(object)} else {None}}
+  if unit != "" && (field == "toPt" || field == "toMm" || field == "toCm" || field == "toIn" || field == "scaledPoints" || (unit == "Pt" && field == "toMilliPoints")) {return Some(object)}
+  None
+}
+function constantExpressionInvalid(
+  state: CheckerState,
+  moduleIndex: int,
+  node: SyntaxNode,
+  defaultValue: bool,
+) -> Option<SyntaxNode> {
+  let constructor=lengthConstructorName(state,moduleIndex,node)
+  let lengthReceiver=lengthConstantReceiver(state,moduleIndex,node)
+  if constructor != "" || lengthReceiver != None {
+    match lengthReceiver {case Some(object)=>match constantExpressionInvalid(state,moduleIndex,object,defaultValue) {case Some(invalid)=>return Some(invalid);case None=>()};case None=>()}
+    for arg in children(node,"arguments") {
+      let value=argumentValue(arg)
+      match constantExpressionInvalid(state,moduleIndex,value,defaultValue) {case Some(invalid)=>return Some(invalid);case None=>()}
+    }
+    return None
+  }
+  match integerBitConstant(state, moduleIndex, node) {
+    case Some(object) => {
+      match constantExpressionInvalid(state, moduleIndex, object, defaultValue) { case Some(invalid) => return Some(invalid); case None => () }
+      return constantExpressionInvalid(state, moduleIndex, argumentValue(children(node, "arguments")[0]), defaultValue)
+    }
+    case None => ()
+  }
+  match floatIntegerConstant(state, moduleIndex, node) {
+    case Some(object) => return constantExpressionInvalid(state, moduleIndex, object, defaultValue)
+    case None => ()
+  }
+  if node.kind == "expression/length" || node.kind == "expression/integer" || node.kind == "expression/float" ||
+    node.kind == "expression/boolean" || node.kind == "expression/null" ||
+    node.kind == "expression/unit" {
+    return None
+  }
+  if node.kind == "expression/identifier" {
+    if defaultValue { return None }
+    let reference = match referenceFor(state, moduleIndex, node.lo, node.hi) {
+      case Some(found) => found
+      case None => return None
+    }
+    let declaration = match declarationOriginForReference(state, reference) {
+      case Some(found) => found
+      case None => return None
+    }
+    if declaration.declarationKind == "function" { return None }
+    if declaration.declarationKind == "const" {
+      if reference.scopeOrdinal == 0 && declaration.moduleIndex == moduleIndex &&
+        declaration.lo > node.lo { return Some(node) }
+      return None
+    }
+    return Some(node)
+  }
+  if node.kind == "expression/parenthesized" || node.kind == "expression/unary" {
+    return match child(node, "operand") {
+      case Some(value) => constantExpressionInvalid(state, moduleIndex, value, defaultValue)
+      case None => Some(node)
+    }
+  }
+  if node.kind == "expression/binary" {
+    if attribute(node, "operator") == "in" { return Some(node) }
+    let left = match child(node, "left") {
+      case Some(value) => value
+      case None => return Some(node) }
+    match constantExpressionInvalid(state, moduleIndex, left, defaultValue) {
+      case Some(invalid) => return Some(invalid)
+      case None => ()
+    }
+    return match child(node, "right") {
+      case Some(value) => constantExpressionInvalid(state, moduleIndex, value, defaultValue)
+      case None => Some(node)
+    }
+  }
+  if node.kind == "expression/string" {
+    if attribute(node, "tag") != "" { return Some(node) }
+    for part in node.children {
+      if part.kind == "string-part/interpolation" {
+        let value = match child(part, "value") {
+          case Some(value) => value
+          case None => return Some(node) }
+        match constantExpressionInvalid(state, moduleIndex, value, defaultValue) {
+          case Some(invalid) => return Some(invalid)
+          case None => ()
+        }
+      } else if part.kind != "string-part/text" { return Some(node) }
+    }
+    return None
+  }
+  if node.kind == "expression/array" {
+    for element in node.children {
+      if element.kind == "array-element/spread" { return Some(node) }
+      match constantExpressionInvalid(state, moduleIndex, element, defaultValue) {
+        case Some(invalid) => return Some(invalid)
+        case None => ()
+      }
+    }
+    return None
+  }
+  if node.kind == "expression/record-literal" {
+    for field in node.children {
+      let value = match child(field, "value") {
+        case Some(value) => value
+        case None => return Some(node) }
+      match constantExpressionInvalid(state, moduleIndex, value, defaultValue) {
+        case Some(invalid) => return Some(invalid)
+        case None => ()
+      }
+    }
+    return None
+  }
+  Some(node)
+}
+
+
+function minimumInt() -> int {
+  match MINIMUM_INT_DECIMAL.toInt() {
+    case Some(found) => found
+    case None => 0
+  }
+}
+
+function constantExpressionFault(
+  state: CheckerState,
+  moduleIndex: int,
+  node: SyntaxNode,
+  message: string,
+) -> () {
+  addDiagnostic(
+    state,
+    moduleIndex,
+    "TPZ5001",
+    "constant expression error: {message}",
+    "",
+    node,
+  )
+}
+
+function constantIntegerResult(
+  state: CheckerState,
+  moduleIndex: int,
+  node: SyntaxNode,
+  value: BigInt,
+  overflow: string,
+) -> Option<BigInt> {
+  match value.toInt() {
+    case Some(_) => Some(value)
+    case None => {
+      constantExpressionFault(state, moduleIndex, node, overflow)
+      None
+    }
+  }
+}
+
+function constantIntegerPower(base: BigInt, exponent: int) -> BigInt {
+  let mut result = (1).toBigInt()
+  let mut factor = base
+  let mut remaining = exponent
+  while remaining > 0 {
+    if remaining % 2 == 1 {
+      result = result * factor
+    }
+    remaining = remaining / 2
+    if remaining > 0 {
+      factor = factor * factor
+    }
+  }
+  result
+}
+
+export function foldConstantInteger(
+  state: CheckerState,
+  moduleIndex: int,
+  node: SyntaxNode,
+) -> Option<BigInt> {
+  match foldConstantScalar(state, moduleIndex, node) {
+    case Ok(Integer(value)) => Some(value)
+    case _ => None
+  }
+}
+
+function foldConstantScalar(
+  state: CheckerState,
+  moduleIndex: int,
+  node: SyntaxNode,
+) -> Result<FoldedConstant, ()> {
+
+  let source=match moduleAt(state,moduleIndex) {case Some(v)=>v.source;case None=>return Ok(FoldedConstant.Unknown)}
+  match signedLengthInput(node,source) {
+    case Some(input)=>return match decodeLength(input.spelling,input.negative) {
+      case Ok(value)=>Ok(FoldedConstant.Length(value.unit,value.ticks))
+      case Err(message)=>{constantExpressionFault(state,moduleIndex,node,message);Err(())}
+    }
+    case None=>()
+  }
+  let constructor=lengthConstructorName(state,moduleIndex,node)
+  let receiverNode=lengthConstantReceiver(state,moduleIndex,node)
+  if constructor != "" || receiverNode != None {
+    let receiver=match receiverNode {case Some(v)=>foldConstantScalar(state,moduleIndex,v)?;case None=>FoldedConstant.Unknown}
+    let mut values:Array<FoldedConstant> = []
+    for arg in children(node,"arguments") {values.push(foldConstantScalar(state,moduleIndex,argumentValue(arg))?)}
+    let result:Result<FoldedConstant,string> = if constructor != "" {
+      match values.get(0) {
+        case Some(Integer(value))=>match value.toInt() {
+          case Some(value)=>if constructor == "fromScaledPoints" {Ok(FoldedConstant.Length("Pt",value))} else {match fromMilliPoints(value) {case Ok(v)=>Ok(FoldedConstant.Length("Pt",v));case Err(e)=>Err(e)}}
+          case None=>Ok(FoldedConstant.Unknown)
+        }
+        case _=>Ok(FoldedConstant.Unknown)
+      }
+    } else {
+      let callee=match child(node,"callee") {case Some(v)=>v;case None=>return Ok(FoldedConstant.Unknown)}
+      let method=match child(callee,"field") {case Some(v)=>text(source,v);case None=>return Ok(FoldedConstant.Unknown)}
+      match receiver {
+        case Length(unit,ticks)=>if method == "scaledPoints" {Ok(FoldedConstant.Integer((ticks).toBigInt()))}
+          else if method == "toMilliPoints" {match toMilliPoints(ticks) {case Ok(v)=>Ok(FoldedConstant.Integer((v).toBigInt()));case Err(e)=>Err(e)}}
+          else if method == "resolve" {match values.get(0) {case Some(Length("Pt",font))=>match lengthResolve(ticks,font) {case Ok(v)=>Ok(FoldedConstant.Length("Pt",v));case Err(e)=>Err(e)};case _=>Ok(FoldedConstant.Unknown)}}
+          else {Ok(FoldedConstant.Length(match method {case "toPt"=>"Pt";case "toMm"=>"Mm";case "toCm"=>"Cm";case "toIn"=>"In";case _=>unit},ticks))}
+        case _=>Ok(FoldedConstant.Unknown)
+      }
+    }
+    return match result {case Ok(v)=>Ok(v);case Err(message)=>{constantExpressionFault(state,moduleIndex,node,message);Err(())}}
+  }
+  match integerBitConstant(state, moduleIndex, node) {
+    case Some(object) => {
+      let left = match foldConstantScalar(state, moduleIndex, object)? { case Integer(value) => match value.toInt() { case Some(value) => value; case None => return Ok(FoldedConstant.Unknown) }; case _ => return Ok(FoldedConstant.Unknown) }
+      let argument = argumentValue(children(node, "arguments")[0])
+      let right = match foldConstantScalar(state, moduleIndex, argument)? { case Integer(value) => match value.toInt() { case Some(value) => value; case None => return Ok(FoldedConstant.Unknown) }; case _ => return Ok(FoldedConstant.Unknown) }
+      let source = match moduleAt(state, moduleIndex) { case Some(module) => module.source; case None => return Ok(FoldedConstant.Unknown) }
+      let callee = match child(node, "callee") { case Some(value) => value; case None => return Ok(FoldedConstant.Unknown) }
+      let field = match child(callee, "field") { case Some(value) => value; case None => return Ok(FoldedConstant.Unknown) }
+      let method = text(source, field)
+      if method == "shift" && (right < -63 || right > 63) {
+        constantExpressionFault(state, moduleIndex, node, "integer shift count must be between -63 and 63")
+        return Err(())
+      }
+      let value = match method { case "and" => left.and(right); case "or" => left.or(right); case "xor" => left.xor(right); case _ => left.shift(right) }
+      return Ok(FoldedConstant.Integer(value.toBigInt()))
+    }
+    case None => ()
+  }
+  match floatIntegerConstant(state, moduleIndex, node) {
+    case Some(object) => {
+      let value = match foldConstantScalar(state, moduleIndex, object)? { case Floating(value) => value; case _ => return Ok(FoldedConstant.Unknown) }
+      let source = match moduleAt(state, moduleIndex) { case Some(module) => module.source; case None => return Ok(FoldedConstant.Unknown) }
+      let callee = match child(node, "callee") { case Some(value) => value; case None => return Ok(FoldedConstant.Unknown) }
+      let field = match child(callee, "field") { case Some(value) => value; case None => return Ok(FoldedConstant.Unknown) }
+      let method = text(source, field)
+      // binary64 spacing at +/-2^63 makes this input interval equal
+      // to the rounded-result interval for all four integer conversions. Check
+      // before the receiver so a compiler constant error stays at the user node.
+      if !value.isFinite() || value < -9223372036854775808.0 || value >= 9223372036854775808.0 {
+        constantExpressionFault(state, moduleIndex, node, "float.{method} result is not representable as int")
+        return Err(())
+      }
+      let rounded = match method {
+        case "floor" => value.floor().toFloat()
+        case "ceil" => value.ceil().toFloat()
+        case "round" => value.round().toFloat()
+        case _ => if value < 0.0 { value.ceil().toFloat() } else { value.floor().toFloat() }
+      }
+      // Two exact 32-bit lanes
+      // transfer the binary64 integer to the arbitrary-precision fold representation.
+      // Each lane is below 2^53; shortest float text cannot round a low bit away.
+      let high = (rounded / 4294967296.0).floor().toFloat()
+      let low = rounded - high * 4294967296.0
+      let highInt = match "{high}".replace(".0", "").toInt() { case Some(value) => value; case None => return Ok(FoldedConstant.Unknown) }
+      let lowInt = match "{low}".replace(".0", "").toInt() { case Some(value) => value; case None => return Ok(FoldedConstant.Unknown) }
+      return Ok(FoldedConstant.Integer((highInt * 4294967296 + lowInt).toBigInt()))
+    }
+    case None => ()
+  }
+  let integerSource = match moduleAt(state, moduleIndex) { case Some(module) => module.source; case None => Bytes.empty() }
+  match signedIntegerInput(node, integerSource) {
+    case Some(input) => return Ok(match decodeIntegerLiteral(input.spelling, input.negative) {
+      case Some(value) => FoldedConstant.Integer(value.toBigInt())
+      case None => FoldedConstant.Unknown
+    })
+    case None => ()
+  }
+  if node.kind == "expression/integer" {
+    return Ok(match attribute(node, "valueDecimal").toInt() {
+      case Some(value) => FoldedConstant.Integer(value.toBigInt())
+      case None => FoldedConstant.Unknown
+    })
+  }
+  if node.kind == "expression/boolean" { return Ok(FoldedConstant.Boolean(boolAttribute(node, "value"))) }
+  if node.kind == "expression/null" { return Ok(FoldedConstant.Null) }
+  if node.kind == "expression/unit" { return Ok(FoldedConstant.Unit) }
+  if node.kind == "expression/float" {
+    let source = match moduleAt(state, moduleIndex) {
+      case Some(module) => module.source
+      case None => return Ok(FoldedConstant.Unknown)
+    }
+    if state.languageMode == "topaz-5.21" {return Ok(match decodeDecimalFloatLiteral(text(source,node)) {case Some(value)=>FoldedConstant.Floating(value);case None=>FoldedConstant.Unknown})}
+    return Ok(match text(source, node).replace("_", "").parseFloat() {
+      case Ok(value) => FoldedConstant.Floating(value)
+      case Err(_) => FoldedConstant.Unknown
+    })
+  }
+  if node.kind == "expression/identifier" {
+    match referenceFor(state, moduleIndex, node.lo, node.hi) {
+      case Some(reference) => match declarationConstantForReference(state, reference) {
+        case Some(value) => return Ok(value)
+        case None => ()
+      }
+      case None => ()
+    }
+    let value = match resolvedTypeOfReference(state, moduleIndex, node) {
+      case Some(value) => value
+      case None => return Ok(FoldedConstant.Unknown)
+    }
+    if value.kind == "literal" && value.name == "int" {
+      return Ok(match value.value.toInt() {
+        case Some(value) => FoldedConstant.Integer(value.toBigInt())
+        case None => FoldedConstant.Unknown
+      })
+    }
+    if value.kind == "literal" && value.name == "bool" { return Ok(FoldedConstant.Boolean(value.value == "true")) }
+    if value.name == "null" { return Ok(FoldedConstant.Null) }
+    return Ok(FoldedConstant.Unknown)
+  }
+  if node.kind == "expression/parenthesized" {
+    return match child(node, "operand") {
+      case Some(value) => foldConstantScalar(state, moduleIndex, value)
+      case None => Ok(FoldedConstant.Unknown)
+    }
+  }
+  if node.kind == "expression/string" {
+    let source = match moduleAt(state, moduleIndex) {
+      case Some(module) => module.source
+      case None => return Ok(FoldedConstant.Unknown)
+    }
+    let mut output = ""
+    let mut known = true
+    for part in node.children {
+      if part.kind == "string-part/text" {
+        output = output + attribute(part, "cooked")
+      } else {
+        let value = match child(part, "value") {
+          case Some(value) => foldConstantScalar(state, moduleIndex, value)?
+          case None => FoldedConstant.Unknown
+        }
+        match value {
+          case Text(value) => { output = output + value }
+          case Integer(value) => { output = output + value.toString(10) }
+          case Floating(value) => { output = output + "{value}" }
+          case Length(unit,value) => { output = output + "Length<{unit}>({value})" }
+          case Boolean(value) => { output = output + "{value}" }
+          case Null => { output = output + "null" }
+          case Unit => { output = output + "()" }
+          case Rendered(shape, mutable, epoch) => if !mutable || epoch == constantRenderEpoch(state) {
+            output = output + renderKnownLiteral(shape)
+          } else { known = false }
+          case _ => { known = false }
+        }
+      }
+    }
+    return Ok(if known { FoldedConstant.Text(output) } else { FoldedConstant.NonNull })
+  }
+  if node.kind == "expression/array" || node.kind == "expression/record-literal" {
+    let array = node.kind == "expression/array"
+    let source = match moduleAt(state, moduleIndex) { case Some(module) => module.source; case None => return Ok(FoldedConstant.NonNull) }
+    let mut shapes: Array<KnownLiteralRender> = []
+    let mut fields: Array<KnownLiteralRenderField> = []
+    let mut known = true
+    let mut mutable = array
+    for element in node.children {
+      let valueNode = if array { Some(element) } else { child(element, "value") }
+      match valueNode {
+        case Some(valueNode) => {
+          let value = foldConstantScalar(state, moduleIndex, valueNode)?
+          match foldedRenderShape(state, value) {
+            case Some(shape) => { shapes.push(shape) }
+            case None => { known = false }
+          }
+          mutable = mutable || foldedRenderIsMutable(value)
+          if !array {
+            match child(element, "name") {
+              case Some(name) => match foldedRenderShape(state, value) {
+                case Some(shape) => { fields.push(KnownLiteralRenderField { name: text(source, name), shape: shape }) }
+                case None => { known = false }
+              }
+              case None => { known = false }
+            }
+          }
+        }
+        case None => { known = false }
+      }
+    }
+    fields.sortBy((field) => field.name)
+    return Ok(if known {
+      FoldedConstant.Rendered(if array { KnownLiteralRender.Array(shapes) } else { KnownLiteralRender.Record(fields) }, mutable, constantRenderEpoch(state))
+    } else { FoldedConstant.NonNull })
+  }
+  if node.kind == "expression/unary" {
+    let operand = match child(node, "operand") {
+      case Some(value) => value
+      case None => return Ok(FoldedConstant.Unknown) }
+    let value = foldConstantScalar(state, moduleIndex, operand)?
+    let operator = attribute(node, "operator")
+    if operator == "plus" { return Ok(value) }
+    return match value {
+      case Length(unit,value) => if operator == "minus" {
+        match roundFraction(-(value).toBigInt(),(1).toBigInt()) {case Ok(v)=>Ok(FoldedConstant.Length(unit,v));case Err(message)=>{constantExpressionFault(state,moduleIndex,node,message);Err(())}}
+      } else {Ok(FoldedConstant.Unknown)}
+      case Floating(value) => if operator == "minus" { Ok(FoldedConstant.Floating(-value)) } else { Ok(FoldedConstant.Unknown) }
+      case Boolean(value) => if operator == "not" { Ok(FoldedConstant.Boolean(!value)) } else { Ok(FoldedConstant.Unknown) }
+      case Integer(value) => if operator == "minus" {
+        match constantIntegerResult(state, moduleIndex, node, -value, "integer negation overflows") {
+          case Some(value) => Ok(FoldedConstant.Integer(value))
+          case None => Err(())
+        }
+      } else { Ok(FoldedConstant.Unknown) }
+      case _ => Ok(FoldedConstant.Unknown)
+    }
+  }
+  if node.kind != "expression/binary" { return Ok(FoldedConstant.Unknown) }
+  let leftNode = match child(node, "left") {
+    case Some(value) => value
+    case None => return Ok(FoldedConstant.Unknown) }
+  let rightNode = match child(node, "right") {
+    case Some(value) => value
+    case None => return Ok(FoldedConstant.Unknown) }
+  let left = foldConstantScalar(state, moduleIndex, leftNode)?
+  let operator = attribute(node, "operator")
+  if operator == "and" || operator == "or" {
+    return match left {
+      case Boolean(value) => if (operator == "and" && !value) || (operator == "or" && value) { Ok(left) }
+        else { foldConstantScalar(state, moduleIndex, rightNode) }
+      case _ => Ok(FoldedConstant.Unknown)
+    }
+  }
+  if operator == "coalesce" {
+    return match left {
+      case Null => foldConstantScalar(state, moduleIndex, rightNode)
+      case Unknown => Ok(FoldedConstant.Unknown)
+      case _ => Ok(left)
+    }
+  }
+  let right = foldConstantScalar(state, moduleIndex, rightNode)?
+  match foldLengthBinary(operator,left,right) {
+    case Some(result)=>return match result {case Ok(v)=>Ok(v);case Err(message)=>{constantExpressionFault(state,moduleIndex,node,message);Err(())}}
+    case None=>()
+  }
+  if operator == "equal" || operator == "not-equal" {
+    match right {
+      case Null => {
+        let equal = match left {
+          case Unknown => return Ok(FoldedConstant.Unknown)
+          case Null => true
+          case _ => false
+        }
+        return Ok(FoldedConstant.Boolean(if operator == "equal" { equal } else { !equal }))
+      }
+      case _ => ()
+    }
+  }
+  match left {
+    case Text(leftValue) => return match right {
+      case Text(rightValue) => {
+        if operator == "equal" { return Ok(FoldedConstant.Boolean(leftValue == rightValue)) }
+        if operator == "not-equal" { return Ok(FoldedConstant.Boolean(leftValue != rightValue)) }
+        if operator == "less-than" { return Ok(FoldedConstant.Boolean(leftValue < rightValue)) }
+        if operator == "less-or-equal" { return Ok(FoldedConstant.Boolean(leftValue <= rightValue)) }
+        if operator == "greater-than" { return Ok(FoldedConstant.Boolean(leftValue > rightValue)) }
+        if operator == "greater-or-equal" { return Ok(FoldedConstant.Boolean(leftValue >= rightValue)) }
+        if operator == "add" { return Ok(FoldedConstant.Text(leftValue + rightValue)) }
+        Ok(FoldedConstant.Unknown)
+      }
+      case Null => if operator == "equal" { Ok(FoldedConstant.Boolean(false)) } else if operator == "not-equal" { Ok(FoldedConstant.Boolean(true)) } else { Ok(FoldedConstant.Unknown) }
+      case _ => Ok(FoldedConstant.Unknown)
+    }
+    case Floating(leftValue) => return match right {
+      case Floating(rightValue) => {
+        if operator == "equal" { return Ok(FoldedConstant.Boolean(leftValue == rightValue)) }
+        if operator == "not-equal" { return Ok(FoldedConstant.Boolean(leftValue != rightValue)) }
+        if operator == "less-than" { return Ok(FoldedConstant.Boolean(leftValue < rightValue)) }
+        if operator == "less-or-equal" { return Ok(FoldedConstant.Boolean(leftValue <= rightValue)) }
+        if operator == "greater-than" { return Ok(FoldedConstant.Boolean(leftValue > rightValue)) }
+        if operator == "greater-or-equal" { return Ok(FoldedConstant.Boolean(leftValue >= rightValue)) }
+        if operator == "add" { return Ok(FoldedConstant.Floating(leftValue + rightValue)) }
+        if operator == "subtract" { return Ok(FoldedConstant.Floating(leftValue - rightValue)) }
+        if operator == "multiply" { return Ok(FoldedConstant.Floating(leftValue * rightValue)) }
+        if operator == "divide" { return Ok(FoldedConstant.Floating(leftValue / rightValue)) }
+        if operator == "power" { return Ok(FoldedConstant.Floating(leftValue ** rightValue)) }
+        Ok(FoldedConstant.Unknown)
+      }
+      case Null => if operator == "equal" { Ok(FoldedConstant.Boolean(false)) } else if operator == "not-equal" { Ok(FoldedConstant.Boolean(true)) } else { Ok(FoldedConstant.Unknown) }
+      case _ => Ok(FoldedConstant.Unknown)
+    }
+    case Null => {
+      let equal = match right { case Null => true
+        case Unknown => return Ok(FoldedConstant.Unknown)
+        case _ => false }
+      return Ok(if operator == "equal" { FoldedConstant.Boolean(equal) } else if operator == "not-equal" { FoldedConstant.Boolean(!equal) } else { FoldedConstant.Unknown })
+    }
+    case Unit => return match right {
+      case Unit => Ok(if operator == "equal" { FoldedConstant.Boolean(true) } else if operator == "not-equal" { FoldedConstant.Boolean(false) } else { FoldedConstant.Unknown })
+      case _ => Ok(FoldedConstant.Unknown)
+    }
+    case _ => ()
+  }
+  match left {
+    case Boolean(leftValue) => return match right {
+      case Boolean(rightValue) => if operator == "equal" { Ok(FoldedConstant.Boolean(leftValue == rightValue)) }
+        else if operator == "not-equal" { Ok(FoldedConstant.Boolean(leftValue != rightValue)) }
+        else { Ok(FoldedConstant.Unknown) }
+      case _ => Ok(FoldedConstant.Unknown)
+    }
+    case _ => ()
+  }
+  let leftValue = match left {
+    case Integer(value) => value
+    case _ => return Ok(FoldedConstant.Unknown) }
+  let rightValue = match right {
+    case Integer(value) => value
+    case _ => return Ok(FoldedConstant.Unknown) }
+  if operator == "equal" { return Ok(FoldedConstant.Boolean(leftValue == rightValue)) }
+  if operator == "not-equal" { return Ok(FoldedConstant.Boolean(leftValue != rightValue)) }
+  if operator == "less-than" { return Ok(FoldedConstant.Boolean(leftValue < rightValue)) }
+  if operator == "less-or-equal" { return Ok(FoldedConstant.Boolean(leftValue <= rightValue)) }
+  if operator == "greater-than" { return Ok(FoldedConstant.Boolean(leftValue > rightValue)) }
+  if operator == "greater-or-equal" { return Ok(FoldedConstant.Boolean(leftValue >= rightValue)) }
+  match foldConstantBinaryIntegers(state, moduleIndex, node, operator, leftValue, rightValue) {
+    case Some(value) => Ok(FoldedConstant.Integer(value))
+    case None => Err(())
+  }
+}
+
+function foldConstantBinaryIntegers(
+  state: CheckerState, moduleIndex: int, node: SyntaxNode,
+  operator: string, left: BigInt, right: BigInt,
+) -> Option<BigInt> {
+  let leftInt = match left.toInt() {
+    case Some(found) => found
+    case None => return None
+  }
+  let rightInt = match right.toInt() {
+    case Some(found) => found
+    case None => return None
+  }
+  match operator {
+    case "add" => constantIntegerResult(
+      state,
+      moduleIndex,
+      node,
+      left + right,
+      "integer addition overflows",
+    )
+    case "subtract" => constantIntegerResult(
+      state,
+      moduleIndex,
+      node,
+      left - right,
+      "integer subtraction overflows",
+    )
+    case "multiply" => constantIntegerResult(
+      state,
+      moduleIndex,
+      node,
+      left * right,
+      "integer multiplication overflows",
+    )
+    case "divide" => if rightInt == 0 {
+      constantExpressionFault(
+        state,
+        moduleIndex,
+        node,
+        "integer division by zero",
+      )
+      None
+    } else {
+      match left.div(right) {
+        case Ok(found) => constantIntegerResult(
+          state,
+          moduleIndex,
+          node,
+          found,
+          "integer division overflows",
+        )
+        case Err(_) => None
+      }
+    }
+    case "remainder" => if rightInt == 0 {
+      constantExpressionFault(
+        state,
+        moduleIndex,
+        node,
+        "integer remainder by zero",
+      )
+      None
+    } else if leftInt == minimumInt() && rightInt == -1 {
+      constantExpressionFault(
+        state,
+        moduleIndex,
+        node,
+        "integer remainder overflows",
+      )
+      None
+    } else {
+      match left.mod(right) {
+        case Ok(found) => Some(found)
+        case Err(_) => None
+      }
+    }
+    case "power" => if rightInt < 0 {
+      constantExpressionFault(
+        state,
+        moduleIndex,
+        node,
+        "integer exponent must be non-negative; use float operands",
+      )
+      None
+    } else if rightInt > MAX_CONSTANT_EXPONENT {
+      constantExpressionFault(
+        state,
+        moduleIndex,
+        node,
+        "integer exponentiation overflows",
+      )
+      None
+    } else {
+      constantIntegerResult(
+        state,
+        moduleIndex,
+        node,
+        constantIntegerPower(left, rightInt),
+        "integer exponentiation overflows",
+      )
+    }
+    case _ => return None
+  }
+}
+
+
+function foldedRenderShape(state: CheckerState, value: FoldedConstant) -> Option<KnownLiteralRender> {
+  match value {
+    case Integer(value) => Some(KnownLiteralRender.Text(value.toString(10)))
+    case Floating(value) => Some(KnownLiteralRender.Text("{value}"))
+    case Length(unit,value) => Some(KnownLiteralRender.Text("Length<{unit}>({value})"))
+    case Text(value) => Some(KnownLiteralRender.Text(value))
+    case Boolean(value) => Some(KnownLiteralRender.Text("{value}"))
+    case Null => Some(KnownLiteralRender.Text("null"))
+    case Unit => Some(KnownLiteralRender.Text("()"))
+    case Rendered(shape, mutable, epoch) => if !mutable || epoch == constantRenderEpoch(state) { Some(shape) } else { None }
+    case _ => None
+  }
+}
+
+function foldedRenderIsMutable(value: FoldedConstant) -> bool {
+  match value { case Rendered(_, mutable, _) => mutable; case _ => false }
+}
+
+function lengthFoldResult(unit:string,value:Result<int,string>)->Result<FoldedConstant,string> {
+  match value {case Ok(v)=>Ok(FoldedConstant.Length(unit,v));case Err(e)=>Err(e)}
+}
+function foldLengthBinary(op:string,left:FoldedConstant,right:FoldedConstant)->Option<Result<FoldedConstant,string>> {
+  match left {
+    case Length(unit,a)=>return match right {
+      case Length(other,b)=>if unit != other {None} else {
+        if op == "divide" {return Some(match lengthRatio(a,b) {case Ok(v)=>Ok(FoldedConstant.Floating(v));case Err(e)=>Err(e)})}
+        if op == "equal" {return Some(Ok(FoldedConstant.Boolean(a==b)))}
+        if op == "not-equal" {return Some(Ok(FoldedConstant.Boolean(a!=b)))}
+        if op == "less-than" {return Some(Ok(FoldedConstant.Boolean(a<b)))}
+        if op == "less-or-equal" {return Some(Ok(FoldedConstant.Boolean(a<=b)))}
+        if op == "greater-than" {return Some(Ok(FoldedConstant.Boolean(a>b)))}
+        if op == "greater-or-equal" {return Some(Ok(FoldedConstant.Boolean(a>=b)))}
+        if op == "add" {Some(lengthFoldResult(unit,roundFraction((a).toBigInt()+(b).toBigInt(),(1).toBigInt())))}
+        else if op == "subtract" {Some(lengthFoldResult(unit,roundFraction((a).toBigInt()-(b).toBigInt(),(1).toBigInt())))} else {None}
+      }
+      case Integer(b)=>if op == "multiply" {Some(lengthFoldResult(unit,roundFraction((a).toBigInt()*b,(1).toBigInt())))} else if op == "divide" {Some(lengthFoldResult(unit,roundFraction((a).toBigInt(),b)))} else {None}
+      case Floating(b)=>if op == "multiply" {Some(lengthFoldResult(unit,lengthFloatMultiply(a,b)))} else {None}
+      case _=>None
+    }
+    case Integer(b)=>match right {case Length(unit,a)=>if op == "multiply" {return Some(lengthFoldResult(unit,roundFraction((a).toBigInt()*b,(1).toBigInt())))};case _=>()}
+    case Floating(b)=>match right {case Length(unit,a)=>if op == "multiply" {return Some(lengthFoldResult(unit,lengthFloatMultiply(a,b)))};case _=>()}
+    case _=>()
+  }
+  None
+}

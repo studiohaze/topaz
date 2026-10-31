@@ -1,0 +1,2 @@
+export type Bytes = Bytes
+export type ByteBuffer = ByteBuffer

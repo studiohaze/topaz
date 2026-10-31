@@ -1,0 +1,101 @@
+import std.fs as files
+import std.io as io
+import std.json as json
+import src.contracts { COMPILER_SOURCE_SET }
+import src.payload_files { MANIFEST_NAME, PayloadFile, compareRecords, payloadFiles, repositoryFiles }
+import src.verification { validateRecordedInputs }
+
+const SCHEMA = "topaz.core-kit-payload/v1"
+const EVIDENCE = "recorded-inputs-only"
+
+record PayloadManifest derives JSON {
+  schema: string,
+  evidence: string,
+  compilerSourceSetId: string,
+  target: string,
+  executable: string,
+  files: Array<PayloadFile>,
+  repositoryInputs: Array<PayloadFile>,
+}
+
+export function executableFor(target: string) -> Result<string, string> {
+  if target == "x86_64-pc-windows-msvc" || target == "aarch64-pc-windows-msvc" {
+    return Ok("topaz-core-kit.exe")
+  }
+  if target == "x86_64-unknown-linux-gnu" || target == "aarch64-unknown-linux-gnu" ||
+    target == "x86_64-apple-darwin" || target == "aarch64-apple-darwin" {
+    return Ok("topaz-core-kit")
+  }
+  Err("target is not mapped by the repository launchers: {target}")
+}
+
+function collect(repositoryRoot: string, directory: string, target: string, recorded: bool) -> Result<PayloadManifest, string> {
+  let executable = executableFor(target)?
+  let contents = payloadFiles(directory, executable, recorded)?
+  let inputs = repositoryFiles(repositoryRoot)?
+  validateRecordedInputs(repositoryRoot)?
+  Ok(PayloadManifest {
+    schema: SCHEMA, evidence: EVIDENCE, compilerSourceSetId: COMPILER_SOURCE_SET,
+    target: target, executable: executable, files: contents, repositoryInputs: inputs,
+  })
+}
+
+function encoded(manifest: PayloadManifest) -> Result<string, string> {
+  Ok("{json.stringify(manifest)?}\n")
+}
+
+export function recordPayload(repositoryRoot: string, directory: string, target: string) -> Result<int, string> {
+  // Never execute, copy or rebuild the candidate being recorded. In
+  // particular, its filename and --target are not an ABI compatibility test.
+  let manifest = collect(repositoryRoot, directory, target, false)?
+  let text = encoded(manifest)?
+  if text.byteLength() > 1048576 { return Err("payload manifest exceeds 1 MiB") }
+  files.writeText("{directory}/{MANIFEST_NAME}", text)?
+  io.writeLine("payload byte inventory written: {directory}/{MANIFEST_NAME}")
+  io.writeLine("Recorded {manifest.files.length} payload files and {manifest.repositoryInputs.length} repository inputs.")
+  io.writeLine("This records bytes only; it does not certify build provenance, licensing, platform support or reproducibility.")
+  Ok(0)
+}
+
+export function verifyPayload(repositoryRoot: string, directory: string) -> Result<int, string> {
+  // Inspect the manifest entry before reading; a symlink must not be treated
+  // as a harmless excluded filename. Other paths are collected independently
+  // of manifest declarations before any recorded hashes are trusted.
+  let mut present = false
+  for entry in files.list(directory)? {
+    if entry.name == MANIFEST_NAME {
+      if entry.kind != "file" { return Err("payload.json must be a regular file") }
+      present = true
+    }
+  }
+  if !present { return Err("payload.json is missing") }
+  let text = files.readText("{directory}/{MANIFEST_NAME}")?
+  if text.byteLength() == 0 || text.byteLength() > 1048576 {
+    return Err("payload manifest must be nonempty and no larger than 1 MiB")
+  }
+  let manifest = json.parseAs<PayloadManifest>(text)?
+  if manifest.schema != SCHEMA || manifest.evidence != EVIDENCE {
+    return Err("unsupported payload schema or evidence claim")
+  }
+  if manifest.compilerSourceSetId != COMPILER_SOURCE_SET {
+    return Err("payload manifest targets a different canonical compiler")
+  }
+  if manifest.executable != executableFor(manifest.target)? {
+    return Err("payload executable does not match its target filename")
+  }
+  if manifest.files.length == 0 || manifest.files.length > 256 ||
+    manifest.repositoryInputs.length == 0 || manifest.repositoryInputs.length > 1024 {
+    return Err("payload manifest has an invalid file count")
+  }
+  // Typed JSON decoding projects known fields. Requiring the writer's exact
+  // representation also rejects duplicate/extra fields and ambiguous edits.
+  if text != encoded(manifest)? {
+    return Err("payload.json must use the exact canonical representation written by payload-record")
+  }
+  let actual = collect(repositoryRoot, directory, manifest.target, true)?
+  compareRecords(manifest.files, actual.files, "payload")?
+  compareRecords(manifest.repositoryInputs, actual.repositoryInputs, "repository input")?
+  io.writeLine("Payload inventory matches: {actual.files.length} payload files and {actual.repositoryInputs.length} repository inputs.")
+  io.writeLine("This checks recorded bytes only; it does not certify build provenance, licensing, platform support or reproducibility.")
+  Ok(0)
+}

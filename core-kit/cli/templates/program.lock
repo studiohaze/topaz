@@ -1,0 +1,53 @@
+# Locked public runtime closure used by the Topaz-authored native build command.
+version = 4
+
+[[package]]
+name = "topaz-core-kit-program"
+version = "0.1.0"
+dependencies = [
+ "topaz_host_native",
+ "topaz_product_runtime",
+ "topaz_rt",
+]
+
+[[package]]
+name = "topaz_diag"
+version = "5.21.1"
+
+[[package]]
+name = "topaz_host_native"
+version = "5.21.1"
+dependencies = [
+ "topaz_value",
+]
+
+[[package]]
+name = "topaz_product_runtime"
+version = "5.21.1"
+dependencies = [
+ "topaz_value",
+]
+
+[[package]]
+name = "topaz_rt"
+version = "5.21.1"
+dependencies = [
+ "topaz_diag",
+ "topaz_product_runtime",
+ "topaz_value",
+]
+
+[[package]]
+name = "topaz_syntax"
+version = "5.21.1"
+dependencies = [
+ "topaz_diag",
+]
+
+[[package]]
+name = "topaz_value"
+version = "5.21.1"
+dependencies = [
+ "topaz_diag",
+ "topaz_syntax",
+]

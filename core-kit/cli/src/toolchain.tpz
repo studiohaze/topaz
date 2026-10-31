@@ -1,0 +1,69 @@
+import std.json as json
+import src.contracts { Capture, CapturedOutput, Native }
+
+export record BuildTarget derives JSON {
+  target: string,
+  executableSuffix: string,
+}
+
+function targetInfo(native: Native) -> Result<BuildTarget, string> {
+  let info = json.parseAs<BuildTarget>(native("build-target", [])?)?
+  if info.target == "" || info.target.byteLength() > 128 {
+    return Err("native build target is missing or invalid")
+  }
+  for byte in info.target.encodeUtf8().toArray() {
+    let letter = (byte >= 65 && byte <= 90) || (byte >= 97 && byte <= 122)
+    let digit = byte >= 48 && byte <= 57
+    if !letter && !digit && byte != 95 && byte != 45 {
+      return Err("native build target contains invalid characters")
+    }
+  }
+  let suffix = if info.target.contains("-windows-") { ".exe" } else { "" }
+  if info.executableSuffix != suffix { return Err("native executable suffix differs from its target") }
+  Ok(info)
+}
+
+function toolOutput(
+  capture: Capture,
+  executable: string,
+  arguments: Array<string>,
+  repositoryRoot: string,
+) -> Result<string, string> {
+  let response = json.parseAs<CapturedOutput>(capture(
+    executable, arguments, "{repositoryRoot}/compiler",
+    ["RUSTUP_TOOLCHAIN=1.96.0", "RUSTUP_AUTO_INSTALL=0", "CARGO_NET_OFFLINE=true"],
+  )?)?
+  if response.code != 0 {
+    return Err("{executable} toolchain check failed with exit {response.code}\n{response.stderr}")
+  }
+  if response.stdout.byteLength() > 65536 { return Err("unexpectedly large {executable} version output") }
+  Ok(response.stdout.replace("\r\n", "\n"))
+}
+
+export function checkToolchain(repositoryRoot: string, native: Native, capture: Capture) -> Result<BuildTarget, string> {
+  let target = targetInfo(native)?
+  let rust = toolOutput(capture, "rustc", ["-vV"], repositoryRoot)?
+  let mut release = ""
+  let mut host = ""
+  for line in rust.split("\n") {
+    let parts = line.split(": ")
+    if parts.length != 2 { continue }
+    if parts[0] == "release" {
+      if release != "" { return Err("Rust version output contains duplicate release fields") }
+      release = parts[1]
+    }
+    if parts[0] == "host" {
+      if host != "" { return Err("Rust version output contains duplicate host fields") }
+      host = parts[1]
+    }
+  }
+  if release != "1.96.0" { return Err("native builds require installed Rust 1.96.0, found `{release}`") }
+  if host != target.target {
+    return Err("Rust host `{host}` differs from this Kit's native target `{target.target}`")
+  }
+  let cargo = toolOutput(capture, "cargo", ["--version"], repositoryRoot)?
+  if !cargo.startsWith("cargo 1.96.0 ") {
+    return Err("native builds require installed Cargo 1.96.0")
+  }
+  Ok(target)
+}

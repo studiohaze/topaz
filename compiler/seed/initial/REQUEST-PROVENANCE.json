@@ -1,0 +1,11 @@
+{
+  "schema": "topaz.note.seed-request/v1",
+  "compilerSourceSetId": "sha256:17d598ebcb0dea65195aba8c0b3ab20f94003a7f343714f7b1df25d790cdacd5",
+  "sourceFiles": 50,
+  "sourceBytes": 1435281,
+  "generatedCompilerSha256": "sha256:5f32cee07a1adea1c67ba8ac8fbd4f3ee4051f019a7856fcdb228740a1d4b8b1",
+  "standardModules": {
+    "std/bytes.tpz": "b2e8cf36825b8efe70cc69b2ca81f63fafdd076ee495428986fe540f36618576",
+    "std/json.tpz": "52be8dd203e0127157cb77cfcda2658ca37eb7b9b63527f71eec52bea4acc0e6"
+  }
+}

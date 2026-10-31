@@ -1,0 +1,103 @@
+import std.json as json
+
+export type Provider = (string) -> Result<string, string>
+export type Compile = (string, Provider) -> Result<string, string>
+export type Process = (string, Array<string>, string, Array<string>) -> Result<int, string>
+export type Capture = (string, Array<string>, string, Array<string>) -> Result<string, string>
+export type Native = (string, Array<string>) -> Result<string, string>
+
+export record FileMetadata derives JSON {
+  path: string,
+  bytes: int,
+  mode: string,
+}
+
+export function fileMetadata(path: string, native: Native) -> Result<FileMetadata, string> {
+  json.parseAs<FileMetadata>(native("file-metadata", [path])?)
+}
+
+export record CapturedOutput derives JSON {
+  code: int,
+  stdout: string,
+  stderr: string,
+}
+
+export const COMPILER_SOURCE_SET = "sha256:17d598ebcb0dea65195aba8c0b3ab20f94003a7f343714f7b1df25d790cdacd5"
+export const EXCHANGE_SCHEMA = "topaz.compiler.stage1-exchange/v2"
+export const VERSION = "topaz-core-kit 0.1.0-dev (canonical Topaz 5.21.1)"
+
+export record DirectoryEntry derives JSON {
+  name: string,
+  kind: string,
+}
+
+export record HostFact derives JSON {
+  kind: string,
+  mountId: string,
+  logicalPath: string,
+  status: string,
+  source: string,
+  entries: Array<DirectoryEntry>,
+  aliasClass: string,
+  reasonCode: string,
+}
+
+export record StandardModule derives JSON {
+  identity: string,
+  path: string,
+  source: string,
+}
+
+export record PackageFacts derives JSON {
+  buildRole: string,
+  externModules: Array<string>,
+  externReplayModules: Array<string>,
+  externReplayErrors: Array<string>,
+  generatedStdModules: Array<StandardModule>,
+}
+
+// This is the public Stage 1 exchange, not a second compiler interface.
+export record CompilerRequest derives JSON {
+  schema: string,
+  producer: string,
+  compilerSourceSetId: string,
+  terminal: string,
+  entry: string,
+  root: string,
+  source: string,
+  sourceId: string,
+  languageMode: string,
+  profile: string,
+  facts: Array<HostFact>,
+  package: PackageFacts,
+  maxSourceFacts: int,
+  maxTotalSourceBytes: int,
+  maxAstNodes: int,
+  maxAstDepth: int,
+  maxRawTokens: int,
+  maxLayoutTokens: int,
+  maxHirNodes: int,
+  maxLoweredNodes: int,
+  maxDiagnostics: int,
+  maxGeneratedRustBytes: int,
+  maxFactRounds: int,
+}
+
+// JSON record decoding projects the fields this CLI uses. Both diagnostic
+// families include these fields; their complete responses remain in the core.
+export record Diagnostic derives JSON {
+  moduleIndex: int,
+  code: string,
+  message: string,
+  lo: int,
+  hi: int,
+  notes: Array<string>,
+}
+
+export record CompilerResponse derives JSON {
+  status: string,
+  kind: string,
+  diagnostics: Array<Diagnostic>,
+  checkerDiagnostics: Array<Diagnostic>,
+  generatedRust: Option<string>,
+}

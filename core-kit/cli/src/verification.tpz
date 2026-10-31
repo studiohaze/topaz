@@ -1,0 +1,176 @@
+import std.fs as files
+import std.io as io
+import src.contracts { COMPILER_SOURCE_SET }
+import src.payload_files { portablePath }
+
+export record FileRecord {
+  kind: string,
+  path: string,
+  digest: string,
+}
+
+export record Inventory {
+  files: Array<FileRecord>,
+  compilerCount: int,
+  snapshotCount: int,
+  inputCount: int,
+}
+
+function validDigest(text: string) -> bool {
+  let bytes = text.encodeUtf8()
+  if bytes.length() != 64 { return false }
+  for byte in bytes.toArray() {
+    if !((byte >= 48 && byte <= 57) || (byte >= 97 && byte <= 102)) { return false }
+  }
+  true
+}
+
+function validPath(text: string) -> bool {
+  if text == "" || text.startsWith("/") || text.endsWith("/") || text.contains("//") {
+    return false
+  }
+  for segment in text.split("/") {
+    if segment == "." || segment == ".." { return false }
+  }
+  for byte in text.encodeUtf8().toArray() {
+    let letter = (byte >= 65 && byte <= 90) || (byte >= 97 && byte <= 122)
+    let digit = byte >= 48 && byte <= 57
+    if !letter && !digit && byte != 95 && byte != 46 && byte != 47 && byte != 45 {
+      return false
+    }
+  }
+  true
+}
+
+function expectedCount(metadata: Map<string, string>, key: string, observed: int) -> Result<(), string> {
+  let text = metadata.getOr(key, "")
+  if text == "" || text.startsWith("0") { return Err("invalid inventory count: {key}") }
+  for byte in text.encodeUtf8().toArray() {
+    if byte < 48 || byte > 57 { return Err("invalid inventory count: {key}") }
+  }
+  match text.toInt() {
+    case Some(expected) => if expected == observed && expected > 0 {
+      Ok(())
+    } else {
+      Err("inventory count mismatch: {key}")
+    }
+    case None => Err("inventory count is outside the integer range: {key}")
+  }
+}
+
+export function parseInventory(text: string) -> Result<Inventory, string> {
+  if text.byteLength() == 0 || text.byteLength() > 1048576 {
+    return Err("verifier inventory must be nonempty and no larger than 1 MiB")
+  }
+  let mut metadata: Map<string, string> = map {}
+  let mut records: Array<FileRecord> = []
+  let mut seen: Set<string> = set {}
+  let mut inputs: Set<string> = set {}
+  let mut compilerCount = 0
+  let mut snapshotCount = 0
+  let mut inputCount = 0
+  let mut lineNumber = 0
+  for line in text.split("\n") {
+    lineNumber += 1
+    if line == "" || line.startsWith("#") { continue }
+    let fields = line.split("|")
+    let kind = fields[0]
+    if kind == "format" || kind == "compiler_source_set" ||
+      kind == "compiler_sources" || kind == "snapshot_files" || kind == "input_files" {
+      if fields.length != 2 || metadata.containsKey(kind) {
+        return Err("invalid or duplicate inventory metadata at line {lineNumber}")
+      }
+      metadata.insert(kind, fields[1])
+      continue
+    }
+    if kind != "compiler_source" && kind != "snapshot_file" && kind != "input_file" {
+      return Err("unknown inventory record at line {lineNumber}")
+    }
+    if fields.length != 3 {
+      return Err("inventory file record needs three fields at line {lineNumber}")
+    }
+    let path = fields[1]
+    let digest = fields[2]
+    if !validPath(path) || !validDigest(digest) {
+      return Err("invalid inventory path or digest at line {lineNumber}")
+    }
+    if kind != "compiler_source" && portablePath(path)? == "core-kit/downloads.data" {
+      return Err("download catalogue must remain outside the recorded build inputs")
+    }
+    let key = "{kind}|{path}"
+    if seen.contains(key) { return Err("duplicate inventory file record: {key}") }
+    seen.add(key)
+    records.push(FileRecord { kind: kind, path: path, digest: digest })
+    if kind == "compiler_source" {
+      compilerCount += 1
+    } else if kind == "snapshot_file" {
+      snapshotCount += 1
+    } else {
+      inputCount += 1
+      inputs.add(path)
+    }
+  }
+  if metadata.getOr("format", "") != "topaz.core-kit-inputs/v2" {
+    return Err("unsupported verifier inventory format")
+  }
+  if metadata.getOr("compiler_source_set", "") != COMPILER_SOURCE_SET {
+    return Err("verifier inventory targets a different canonical compiler")
+  }
+  expectedCount(metadata, "compiler_sources", compilerCount)?
+  expectedCount(metadata, "snapshot_files", snapshotCount)?
+  expectedCount(metadata, "input_files", inputCount)?
+  for path in [
+    "SOURCE-COMPONENTS.json",
+    "compiler/generated/native/compiler.json",
+    "compiler/generated/native/compiler.rs",
+    "compiler/seed/initial/request.json",
+    "compiler/seed/initial/REQUEST-PROVENANCE.json",
+    "compiler/seed/initial/std/bytes.tpz",
+    "compiler/seed/initial/std/fs.tpz",
+    "compiler/seed/initial/std/io.tpz",
+    "compiler/seed/initial/std/json.tpz",
+    "core-kit/cli/REQUEST.json",
+    "core-kit/cli/initial/request.json",
+  ] {
+    if !inputs.contains(path) { return Err("required verifier input is missing: {path}") }
+  }
+  Ok(Inventory {
+    files: records,
+    compilerCount: compilerCount,
+    snapshotCount: snapshotCount,
+    inputCount: inputCount,
+  })
+}
+
+function checkHash(repositoryRoot: string, path: string, expected: string) -> Result<(), string> {
+  let bytes = files.readBytes("{repositoryRoot}/{path}")?
+  if bytes.sha256().toHex() != expected { return Err("hash mismatch: {path}") }
+  Ok(())
+}
+
+function checkedInventory(repositoryRoot: string) -> Result<Inventory, string> {
+  // Parse and validate the complete inventory before using any of its paths.
+  // JSON manifests/requests are covered by their exact recorded byte hashes.
+  let inventory = parseInventory(files.readText("{repositoryRoot}/core-kit/verify-core.data")?)?
+  for file in inventory.files {
+    if file.kind == "compiler_source" {
+      checkHash(repositoryRoot, "compiler/crates/topaz_self_frontend/topaz/{file.path}", file.digest)?
+      checkHash(repositoryRoot, "compiler/seed/initial/topaz/{file.path}", file.digest)?
+    } else {
+      checkHash(repositoryRoot, file.path, file.digest)?
+    }
+  }
+  Ok(inventory)
+}
+
+export function validateRecordedInputs(repositoryRoot: string) -> Result<(), string> {
+  checkedInventory(repositoryRoot)?
+  Ok(())
+}
+
+export function verify(repositoryRoot: string) -> Result<int, string> {
+  let inventory = checkedInventory(repositoryRoot)?
+  io.writeLine("Core Kit input hashes match: {inventory.compilerCount} compiler source pairs, {inventory.snapshotCount} snapshot files, {inventory.inputCount} input files")
+  io.writeLine("This checks recorded input bytes. It does not rebuild the compiler or prove reproducibility.")
+  Ok(0)
+}

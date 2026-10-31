@@ -1,0 +1,235 @@
+import std.bytes { Bytes }
+import std.fs as files
+import std.json as json
+import src.payload_files { portablePath, repositoryFiles, requireRegularInput }
+
+export const RECIPE_SCHEMA = "topaz.core-kit-release-recipe/v2"
+export const PAYLOAD_FILE_BYTE_LIMIT = 268435456
+
+export record ReleaseFile derives JSON {
+  source: string,
+  destination: string,
+  role: string,
+}
+
+export record ReleaseRecipe derives JSON {
+  schema: string,
+  target: string,
+  executable: string,
+  format: string,
+  minimumPlatform: string,
+  allowedSystemDependencies: Array<string>,
+  files: Array<ReleaseFile>,
+  fileByteLimit: int,
+  releaseReady: bool,
+}
+
+export record LoadedRecipe {
+  path: string,
+  text: string,
+  sha256: string,
+  recipe: ReleaseRecipe,
+}
+
+// These existing texts retain their own scope and terms. The component and
+// notice-scope records describe the distinction from the website distribution;
+// this mapping does not assign licenses to newly added implementation files.
+function requiredFiles() -> Array<ReleaseFile> {
+  [
+    ReleaseFile { source: "BINARY-LICENSE.txt", destination: "BINARY-LICENSE.txt", role: "notice" },
+    ReleaseFile { source: "LICENSE", destination: "LICENSE", role: "notice" },
+    ReleaseFile { source: "LICENSE-COMPONENTS.txt", destination: "LICENSE-COMPONENTS.txt", role: "notice" },
+    ReleaseFile { source: "NOTICE", destination: "NOTICE", role: "notice" },
+    ReleaseFile { source: "SOURCE-COMPONENTS.json", destination: "SOURCE-COMPONENTS.json", role: "component" },
+    ReleaseFile { source: "THIRD-PARTY-LICENSES.txt", destination: "THIRD-PARTY-LICENSES.txt", role: "notice" },
+    ReleaseFile { source: "THIRD-PARTY-NOTICES.md", destination: "THIRD-PARTY-NOTICES.md", role: "notice" },
+    ReleaseFile { source: "compiler/seed/runtime.json", destination: "SEED-RUNTIME.json", role: "component" },
+    ReleaseFile { source: "core-kit/UPSTREAM-PORT.md", destination: "UPSTREAM-PORT.md", role: "component" },
+    ReleaseFile { source: "core-kit/distribution/COMPONENTS.json", destination: "COMPONENTS.json", role: "component" },
+    ReleaseFile { source: "core-kit/distribution/NOTICE-SCOPE.md", destination: "NOTICE-SCOPE.md", role: "component" },
+    ReleaseFile { source: "core-kit/distribution/RUST-STDLIB-NOTICES.html", destination: "RUST-STDLIB-NOTICES.html", role: "notice" },
+    ReleaseFile { source: "core-kit/distribution/RUST-STDLIB-PROVENANCE.json", destination: "RUST-STDLIB-PROVENANCE.json", role: "component" },
+  ]
+}
+
+function targetContract(recipe: ReleaseRecipe) -> Result<(), string> {
+  let format = match recipe.target {
+    case "x86_64-unknown-linux-gnu" | "aarch64-unknown-linux-gnu" => "elf"
+    case "x86_64-pc-windows-msvc" | "aarch64-pc-windows-msvc" => "pe"
+    case "x86_64-apple-darwin" | "aarch64-apple-darwin" => "macho"
+    case _ => return Err("release recipe target is not mapped by the repository launchers")
+  }
+  let executable = if format == "pe" { "topaz-core-kit.exe" } else { "topaz-core-kit" }
+  if recipe.format != format || recipe.executable != executable {
+    return Err("release recipe target, format and executable do not agree")
+  }
+  if recipe.fileByteLimit != PAYLOAD_FILE_BYTE_LIMIT {
+    return Err("release recipe must enforce the 256 MiB payload file limit")
+  }
+  if recipe.minimumPlatform.byteLength() == 0 || recipe.minimumPlatform.byteLength() > 2048 {
+    return Err("release recipe requires a bounded platform description")
+  }
+  for byte in recipe.minimumPlatform.encodeUtf8().toArray() {
+    if byte < 32 || byte == 127 { return Err("release platform description must be one plain-text line") }
+  }
+  Ok(())
+}
+
+function dependencyKey(name: string, format: string) -> Result<string, string> {
+  if name.byteLength() == 0 || name.byteLength() > 512 {
+    return Err("release system dependency name is empty or too long")
+  }
+  if format == "macho" {
+    if !name.startsWith("/usr/lib/") && !name.startsWith("/System/Library/") {
+      return Err("Mach-O system dependencies must use absolute /usr/lib/ or /System/Library/ install names")
+    }
+    return portablePath(name.slice(1, name.scalars().length))
+  }
+  if name == "." || name == ".." || name.endsWith(".") {
+    return Err("invalid release system dependency name")
+  }
+  let mut folded: Array<int> = []
+  for byte in name.encodeUtf8().toArray() {
+    let letter = (byte >= 65 && byte <= 90) || (byte >= 97 && byte <= 122)
+    let digit = byte >= 48 && byte <= 57
+    if !letter && !digit && byte != 95 && byte != 46 && byte != 45 && byte != 43 {
+      return Err("release system dependencies require flat loader names")
+    }
+    if format == "pe" && byte >= 65 && byte <= 90 {
+      return Err("PE system dependency names must use lowercase ASCII")
+    }
+    folded.push(if byte >= 65 && byte <= 90 { byte + 32 } else { byte })
+  }
+  // PE inputs are already lowercase. Other systems retain exact dependency
+  // identity, while admission also rejects aliases differing only by case.
+  if format == "pe" { return Ok(name) }
+  let bytes = Bytes.fromArray(folded)?
+  bytes.decodeUtf8()
+}
+
+function systemDependencies(recipe: ReleaseRecipe) -> Result<(), string> {
+  if recipe.allowedSystemDependencies.length > 128 {
+    return Err("release recipe exceeds 128 system dependencies")
+  }
+  let mut seen: Set<string> = set {}
+  let mut ordered: Array<string> = []
+  for name in recipe.allowedSystemDependencies {
+    let key = dependencyKey(name, recipe.format)?
+    if seen.contains(key) { return Err("duplicate or case-aliased release system dependency: {name}") }
+    seen.add(key)
+    ordered.push(name)
+  }
+  ordered.sort()
+  if ordered.join("\n") != recipe.allowedSystemDependencies.join("\n") {
+    return Err("release system dependencies must be sorted")
+  }
+  Ok(())
+}
+
+function admittedSource(file: ReleaseFile, recipe: ReleaseRecipe) -> Result<(), string> {
+  if file.role == "runtime" {
+    if !file.source.startsWith("core-kit/distribution/runtime/{recipe.target}/") {
+      return Err("release runtime files must be checked in under their distribution target")
+    }
+    return Ok(())
+  }
+  if file.role != "notice" && file.role != "component" {
+    return Err("release file role must be notice, component or runtime")
+  }
+  if file.source.startsWith("core-kit/distribution/") { return Ok(()) }
+  for required in requiredFiles() {
+    if file.source == required.source { return Ok(()) }
+  }
+  Err("release notice/component source is outside the declared distribution inputs: {file.source}")
+}
+
+function fileMappings(recipe: ReleaseRecipe) -> Result<(), string> {
+  if recipe.files.length == 0 || recipe.files.length > 128 {
+    return Err("release recipe must contain between 1 and 128 file mappings")
+  }
+  let mut destinations: Set<string> = set {}
+  let mut sources: Set<string> = set {}
+  let mut ordered: Array<string> = []
+  let mut byName: Map<string, ReleaseFile> = map {}
+  for file in recipe.files {
+    let source = portablePath(file.source)?
+    let destination = portablePath(file.destination)?
+    if file.destination.contains("/") || file.destination.startsWith(".") || file.destination.byteLength() > 100 {
+      return Err("release payload destinations must be flat visible filenames of at most 100 ASCII bytes")
+    }
+    if destination == "assembly.json" || destination == "payload.json" || destination == "generated_cli.rs" ||
+      destination == "topaz-core-kit" || destination == "topaz-core-kit.exe" {
+      return Err("release file mapping uses a reserved destination: {file.destination}")
+    }
+    if sources.contains(source) || destinations.contains(destination) {
+      return Err("duplicate or case-aliased release source/destination")
+    }
+    admittedSource(file, recipe)?
+    sources.add(source)
+    destinations.add(destination)
+    ordered.push(file.destination)
+    byName.insert(file.destination, file)
+  }
+  let original = ordered.join("\n")
+  ordered.sort()
+  if original != ordered.join("\n") { return Err("release file mappings must be sorted by destination") }
+  for required in requiredFiles() {
+    let file = match byName.get(required.destination) {
+      case Some(found) => found
+      case None => return Err("required release notice/component mapping is missing: {required.destination}")
+    }
+    if file.source != required.source || file.role != required.role {
+      return Err("required release notice/component mapping was substituted: {required.destination}")
+    }
+  }
+  Ok(())
+}
+
+export function admitRecipe(text: string) -> Result<ReleaseRecipe, string> {
+  if text.byteLength() == 0 || text.byteLength() > 1048576 {
+    return Err("release recipe must be nonempty and no larger than 1 MiB")
+  }
+  let recipe = json.parseAs<ReleaseRecipe>(text)?
+  if recipe.schema != RECIPE_SCHEMA { return Err("unsupported release recipe schema") }
+  if text != "{json.stringify(recipe)?}\n" {
+    return Err("release recipe must use canonical JSON with one final LF")
+  }
+  targetContract(recipe)?
+  systemDependencies(recipe)?
+  fileMappings(recipe)?
+  Ok(recipe)
+}
+
+export function loadRecipe(root: string, path: string) -> Result<LoadedRecipe, string> {
+  portablePath(path)?
+  if !path.startsWith("core-kit/distribution/") || !path.endsWith(".json") {
+    return Err("release recipe must be a repository-relative JSON file under core-kit/distribution")
+  }
+  let records = repositoryFiles(root)?
+  let mut covered: Set<string> = set {}
+  let mut byteCounts: Map<string, int> = map {}
+  let mut hashes: Map<string, string> = map {}
+  for record in records {
+    covered.add(record.path)
+    byteCounts.insert(record.path, record.bytes)
+    hashes.insert(record.path, record.sha256)
+  }
+  if !covered.contains(path) { return Err("release recipe is absent from the repository input inventory") }
+  requireRegularInput(root, path)?
+  let text = files.readText("{root}/{path}")?
+  let digest = text.encodeUtf8().sha256().toHex()
+  if digest != hashes.getOr(path, "") { return Err("release recipe changed while its inputs were inspected") }
+  let recipe = admitRecipe(text)?
+  for file in recipe.files {
+    if file.source == path { return Err("release recipe cannot copy itself through a file mapping") }
+    if !covered.contains(file.source) {
+      return Err("release source is absent from the repository input inventory: {file.source}")
+    }
+    requireRegularInput(root, file.source)?
+    let size = byteCounts.getOr(file.source, 0)
+    if size == 0 || size > recipe.fileByteLimit {
+      return Err("release source must be nonempty and within the payload file limit: {file.source}")
+    }
+  }
+  Ok(LoadedRecipe { path: path, text: text, sha256: digest, recipe: recipe })
+}

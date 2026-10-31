@@ -1,0 +1,193 @@
+// Runtime-callable static namespace members. Generic schema calls belong to
+// the type-directed surface and never enter this catalog.
+export function staticBuiltin(namespace: string, member: string) -> string {
+  match staticSpec(namespace, member) {
+    case Some(spec) => spec.tag
+    case None => ""
+  }
+}
+
+export function freeBuiltin(name: string) -> string {
+  match name {
+    case "print" => "Print"
+    case "toInt" => "ToInt"
+    case "toIntRadix" => "ToIntRadix"
+    case "fromCodePoint" => "FromCodePoint"
+    case "toFloat" => "ToFloat"
+    case "input" => "Input"
+    case "map" => "MapFn"
+    case "filter" => "FilterFn"
+    case "reduce" => "ReduceFn"
+    case "open" => "Open"
+    case "assert" => "TestAssert"
+    case _ => ""
+  }
+}
+
+// Runtime operations a generated std.lispex module names directly: the same
+// module and name pairs as the Rust emitter's `lispex_intrinsic_kind`.
+export function lispexIntrinsic(module: string, name: string) -> string {
+  match "{module}::{name}" {
+    case "std.fs::__stdReadText" => "FsReadText"
+    case "std.fs::__stdWriteText" => "FsWriteText"
+    case "std.fs::__stdReadBytes" => "FsReadBytes"
+    case "std.fs::__stdWriteBytes" => "FsWriteBytes"
+    case "std.fs::__stdList" => "FsList"
+    case "std.io::__stdWriteLine" => "Print"
+    case "std.io::__stdReadStdin" => "Input"
+    case "std.io::__stdOpen" => "Open"
+    case "std.json::__stdJsonParse" => "JsonParse"
+    case "std.json::__stdJsonStringify" => "JsonStringify"
+    case "std.json::__stdJsonParseAs" => "JsonParseAs"
+    case "std.csv::__stdCsvParse" => "CsvParse"
+    case "std.csv::__stdCsvParseWithHeader" => "CsvParseWithHeader"
+    case "std.csv::__stdCsvStringify" => "CsvStringify"
+    case "std.csv::__stdCsvStringifyWithHeader" => "CsvStringifyWithHeader"
+    case "std.toml::__stdTomlParse" => "TomlParse"
+    case "std.toml::__stdTomlStringify" => "TomlStringify"
+    case "std.toml::__stdTomlFromJson" => "TomlFromJson"
+    case "std.test::__stdAssert" => "TestAssert"
+    case "std.test::__stdAssertEq" => "TestAssertEq"
+    case "std.test::__stdAssertNe" => "TestAssertNe"
+    case "std.test::__stdAssertContains" => "TestAssertContains"
+    case "std.test::__stdAssertOk" => "TestAssertOk"
+    case "std.test::__stdAssertErr" => "TestAssertErr"
+    case "std.test::__stdAssertSome" => "TestAssertSome"
+    case "std.test::__stdAssertNone" => "TestAssertNone"
+    case "std.test::__stdAssertGolden" => "TestAssertGolden"
+    case "std.typeset::__lengthFromScaledPoints" => "LengthFromScaledPoints"
+    case "std.typeset::__lengthFromMilliPoints" => "LengthFromMilliPoints"
+    case "std.lispex.rules::__lispexRule" => "LispexRule"
+    case "std.lispex::__lispexValueFromCanonical" => "LispexValueFromCanonical"
+    case "std.lispex::__lispexCanonicalBytes" => "LispexCanonicalBytes"
+    case "std.lispex::__lispexDefaultLimits" => "LispexDefaultLimits"
+    case "std.lispex::__lispexInspectRule" => "LispexInspectRule"
+    case "std.lispex::__lispexEvaluate" => "LispexEvaluate"
+    case "std.lispex::__lispexEvaluateWithEvidence" => "LispexEvaluateWithEvidence"
+    case "std.lispex::__lispexConsumerArtifactFromBytes" => "LispexConsumerArtifactFromBytes"
+    case "std.lispex::__lispexConsumerArtifactBytes" => "LispexConsumerArtifactBytes"
+    case "std.lispex::__lispexPortableCoreBytes" => "LispexPortableCoreBytes"
+    case "std.lispex::__lispexInspectConsumerArtifact" => "LispexInspectConsumerArtifact"
+    case "std.lispex::__lispexVerifyConsumerArtifact" => "LispexVerifyConsumerArtifact"
+    case "std.lispex::__lispexFreshReplay" => "LispexFreshReplay"
+    case _ => ""
+  }
+}
+
+export record BuiltinSpec { tag: string, leaf: string, params: Array<string>, style: string, defaults: Array<string> }
+
+export function staticSpec(namespace: string, member: string) -> Option<BuiltinSpec> {
+  match "{namespace}.{member}" {
+    case "Math.sqrt" => Some(BuiltinSpec { tag: "MathSqrt", leaf: "builtin_math_sqrt", params: ["x"], style: "fallible", defaults: [""] })
+    case "Math.abs" => Some(BuiltinSpec { tag: "MathAbs", leaf: "builtin_math_abs", params: ["x"], style: "fallible", defaults: [""] })
+    case "Math.floor" => Some(BuiltinSpec { tag: "MathFloor", leaf: "builtin_math_floor", params: ["x"], style: "fallible", defaults: [""] })
+    case "Math.ceil" => Some(BuiltinSpec { tag: "MathCeil", leaf: "builtin_math_ceil", params: ["x"], style: "fallible", defaults: [""] })
+    case "Math.round" => Some(BuiltinSpec { tag: "MathRound", leaf: "builtin_math_round", params: ["x"], style: "fallible", defaults: [""] })
+    case "Math.sin" => Some(BuiltinSpec { tag: "MathSin", leaf: "builtin_math_sin", params: ["x"], style: "fallible", defaults: [""] })
+    case "Math.cos" => Some(BuiltinSpec { tag: "MathCos", leaf: "builtin_math_cos", params: ["x"], style: "fallible", defaults: [""] })
+    case "Math.tan" => Some(BuiltinSpec { tag: "MathTan", leaf: "builtin_math_tan", params: ["x"], style: "fallible", defaults: [""] })
+    case "Math.isNaN" => Some(BuiltinSpec { tag: "MathIsNaN", leaf: "builtin_math_is_nan", params: ["x"], style: "fallible", defaults: [""] })
+    case "Math.isFinite" => Some(BuiltinSpec { tag: "MathIsFinite", leaf: "builtin_math_is_finite", params: ["x"], style: "fallible", defaults: [""] })
+    case "Math.parseFloat" => Some(BuiltinSpec { tag: "MathParseFloat", leaf: "builtin_math_parse_float", params: ["s"], style: "fallible", defaults: [""] })
+    case "Math.min" => Some(BuiltinSpec { tag: "MathMin", leaf: "builtin_math_min", params: ["a", "b"], style: "fallible", defaults: ["", ""] })
+    case "Math.max" => Some(BuiltinSpec { tag: "MathMax", leaf: "builtin_math_max", params: ["a", "b"], style: "fallible", defaults: ["", ""] })
+    case "Bytes.empty" => Some(BuiltinSpec { tag: "BytesEmpty", leaf: "builtin_bytes_empty", params: [], style: "fallible", defaults: [] })
+    case "Bytes.encodeUtf8" => Some(BuiltinSpec { tag: "BytesEncodeUtf8", leaf: "builtin_bytes_encode_utf8", params: ["s"], style: "fallible", defaults: [""] })
+    case "Bytes.fromArray" => Some(BuiltinSpec { tag: "BytesFromArray", leaf: "builtin_bytes_from_array", params: ["values"], style: "fallible", defaults: [""] })
+    case "Bytes.fromHex" => Some(BuiltinSpec { tag: "BytesFromHex", leaf: "builtin_bytes_from_hex", params: ["s"], style: "fallible", defaults: [""] })
+    case "Bytes.fromBase64" => Some(BuiltinSpec { tag: "BytesFromBase64", leaf: "builtin_bytes_from_base64", params: ["s"], style: "fallible", defaults: [""] })
+    case "Bytes.concat" => Some(BuiltinSpec { tag: "BytesConcat", leaf: "builtin_bytes_concat", params: ["a", "b"], style: "fallible", defaults: ["", ""] })
+    case "Encoding.utf8Encode" => Some(BuiltinSpec { tag: "EncodingUtf8Encode", leaf: "builtin_bytes_encode_utf8", params: ["text"], style: "fallible", defaults: [""] })
+    case "Encoding.utf8Decode" => Some(BuiltinSpec { tag: "EncodingUtf8Decode", leaf: "builtin_bytes_decode_utf8", params: ["bytes"], style: "fallible", defaults: [""] })
+    case "Encoding.hexEncode" => Some(BuiltinSpec { tag: "EncodingHexEncode", leaf: "builtin_bytes_to_hex", params: ["bytes"], style: "fallible", defaults: [""] })
+    case "Encoding.hexDecode" => Some(BuiltinSpec { tag: "EncodingHexDecode", leaf: "builtin_bytes_from_hex", params: ["text"], style: "fallible", defaults: [""] })
+    case "Encoding.base64Encode" => Some(BuiltinSpec { tag: "EncodingBase64Encode", leaf: "builtin_bytes_to_base64", params: ["bytes"], style: "fallible", defaults: [""] })
+    case "Encoding.base64Decode" => Some(BuiltinSpec { tag: "EncodingBase64Decode", leaf: "builtin_bytes_from_base64", params: ["text"], style: "fallible", defaults: [""] })
+    case "Codec.gzipCompress" => Some(BuiltinSpec { tag: "CodecGzipCompress", leaf: "builtin_codec_gzip_compress", params: ["bytes"], style: "fallible", defaults: [""] })
+    case "Codec.gzipDecompress" => Some(BuiltinSpec { tag: "CodecGzipDecompress", leaf: "builtin_codec_gzip_decompress", params: ["bytes"], style: "fallible", defaults: [""] })
+    case "Codec.deflateCompress" => Some(BuiltinSpec { tag: "CodecDeflateCompress", leaf: "builtin_codec_deflate_compress", params: ["bytes"], style: "fallible", defaults: [""] })
+    case "Codec.deflateFixedCompress" => Some(BuiltinSpec { tag: "CodecDeflateFixedCompress", leaf: "builtin_codec_deflate_fixed_compress", params: ["bytes"], style: "fallible", defaults: [""] })
+    case "Codec.zlibFixedCompress" => Some(BuiltinSpec { tag: "CodecZlibFixedCompress", leaf: "builtin_codec_zlib_fixed_compress", params: ["bytes"], style: "fallible", defaults: [""] })
+    case "Codec.reedSolomon255223Protect" => Some(BuiltinSpec { tag: "CodecReedSolomon255223Protect", leaf: "builtin_codec_reed_solomon_255_223_protect", params: ["bytes"], style: "fallible", defaults: [""] })
+    case "Codec.deflateDecompress" => Some(BuiltinSpec { tag: "CodecDeflateDecompress", leaf: "builtin_codec_deflate_decompress", params: ["bytes"], style: "fallible", defaults: [""] })
+    case "Codec.zstdDecompress" => Some(BuiltinSpec { tag: "CodecZstdDecompress", leaf: "builtin_codec_zstd_decompress", params: ["bytes"], style: "fallible", defaults: [""] })
+    case "Codec.zstdCompress" => Some(BuiltinSpec { tag: "CodecZstdCompress", leaf: "builtin_codec_zstd_compress", params: ["bytes", "level"], style: "fallible", defaults: ["", "Value::Int(3)"] })
+    case "Hash.sha256" => Some(BuiltinSpec { tag: "HashSha256", leaf: "builtin_hash_sha256", params: ["data"], style: "fallible", defaults: [""] })
+    case "Hash.sha512" => Some(BuiltinSpec { tag: "HashSha512", leaf: "builtin_hash_sha512", params: ["data"], style: "fallible", defaults: [""] })
+    case "Hash.hmacSha256" => Some(BuiltinSpec { tag: "HashHmacSha256", leaf: "builtin_hash_hmac_sha256", params: ["key", "message"], style: "fallible", defaults: ["", ""] })
+    case "Hash.crc32" => Some(BuiltinSpec { tag: "HashCrc32", leaf: "builtin_hash_crc32", params: ["data"], style: "fallible", defaults: [""] })
+    case "FS.readText" => Some(BuiltinSpec { tag: "FsReadText", leaf: "builtin_fs_read_text", params: ["path"], style: "host", defaults: [""] })
+    case "FS.writeText" => Some(BuiltinSpec { tag: "FsWriteText", leaf: "builtin_fs_write_text", params: ["path", "text"], style: "host", defaults: ["", ""] })
+    case "FS.readBytes" => Some(BuiltinSpec { tag: "FsReadBytes", leaf: "builtin_fs_read_bytes", params: ["path"], style: "host", defaults: [""] })
+    case "FS.writeBytes" => Some(BuiltinSpec { tag: "FsWriteBytes", leaf: "builtin_fs_write_bytes", params: ["path", "bytes"], style: "host", defaults: ["", ""] })
+    case "FS.list" => Some(BuiltinSpec { tag: "FsList", leaf: "builtin_fs_list", params: ["path"], style: "host", defaults: [""] })
+    case "Cli.hasFlag" => Some(BuiltinSpec { tag: "CliHasFlag", leaf: "builtin_cli_has_flag", params: ["args", "name"], style: "fallible", defaults: ["", ""] })
+    case "Cli.option" => Some(BuiltinSpec { tag: "CliOption", leaf: "builtin_cli_option", params: ["args", "name"], style: "fallible", defaults: ["", ""] })
+    case "Cli.options" => Some(BuiltinSpec { tag: "CliOptions", leaf: "builtin_cli_options", params: ["args", "name"], style: "fallible", defaults: ["", ""] })
+    case "Cli.positionals" => Some(BuiltinSpec { tag: "CliPositionals", leaf: "builtin_cli_positionals", params: ["args"], style: "fallible", defaults: [""] })
+    case "Path.from" => Some(BuiltinSpec { tag: "PathFrom", leaf: "builtin_path_from", params: ["text"], style: "fallible", defaults: [""] })
+    case "Path.cwdRelative" => Some(BuiltinSpec { tag: "PathCwdRelative", leaf: "builtin_path_cwd_relative", params: ["text"], style: "fallible", defaults: [""] })
+    case "Path.project" => Some(BuiltinSpec { tag: "PathProject", leaf: "builtin_path_project", params: ["text"], style: "fallible", defaults: [""] })
+    case "Regex.compile" => Some(BuiltinSpec { tag: "RegexCompile", leaf: "builtin_regex_compile", params: ["pattern"], style: "fallible", defaults: [""] })
+    case "CSV.parse" => Some(BuiltinSpec { tag: "CsvParse", leaf: "builtin_csv_parse", params: ["text"], style: "fallible", defaults: [""] })
+    case "CSV.parseWithHeader" => Some(BuiltinSpec { tag: "CsvParseWithHeader", leaf: "builtin_csv_parse_with_header", params: ["text"], style: "fallible", defaults: [""] })
+    case "CSV.stringify" => Some(BuiltinSpec { tag: "CsvStringify", leaf: "builtin_csv_stringify", params: ["rows"], style: "fallible", defaults: [""] })
+    case "CSV.stringifyWithHeader" => Some(BuiltinSpec { tag: "CsvStringifyWithHeader", leaf: "builtin_csv_stringify_with_header", params: ["rows", "columns"], style: "fallible", defaults: ["", ""] })
+    case "TOML.parse" => Some(BuiltinSpec { tag: "TomlParse", leaf: "builtin_toml_parse", params: ["text"], style: "fallible", defaults: [""] })
+    case "TOML.stringify" => Some(BuiltinSpec { tag: "TomlStringify", leaf: "builtin_toml_stringify", params: ["value"], style: "fallible", defaults: [""] })
+    case "TOML.toJson" => Some(BuiltinSpec { tag: "TomlToJson", leaf: "builtin_toml_to_json", params: ["value"], style: "fallible", defaults: [""] })
+    case "TOML.fromJson" => Some(BuiltinSpec { tag: "TomlFromJson", leaf: "builtin_toml_from_json", params: ["value"], style: "fallible", defaults: [""] })
+    case "URL.parse" => Some(BuiltinSpec { tag: "UrlParse", leaf: "builtin_url_parse", params: ["text"], style: "fallible", defaults: [""] })
+    case "Date.fromYmd" => Some(BuiltinSpec { tag: "DateFromYmd", leaf: "builtin_date_from_ymd", params: ["year", "month", "day"], style: "fallible", defaults: ["", "", ""] })
+    case "Date.parseIso" => Some(BuiltinSpec { tag: "DateParseIso", leaf: "builtin_date_parse_iso", params: ["text"], style: "fallible", defaults: [""] })
+    case "BigInt.fromInt" => Some(BuiltinSpec { tag: "BigIntFromInt", leaf: "builtin_bigint_from_int", params: ["n"], style: "fallible", defaults: [""] })
+    case "BigInt.parse" => Some(BuiltinSpec { tag: "BigIntParse", leaf: "builtin_bigint_parse", params: ["text", "radix"], style: "fallible", defaults: ["", ""] })
+    case "Decimal.fromInt" => Some(BuiltinSpec { tag: "DecimalFromInt", leaf: "builtin_decimal_from_int", params: ["n"], style: "fallible", defaults: [""] })
+    case "Decimal.parse" => Some(BuiltinSpec { tag: "DecimalParse", leaf: "builtin_decimal_parse", params: ["text"], style: "fallible", defaults: [""] })
+    case "Array.of" => Some(BuiltinSpec { tag: "ArrayOf", leaf: "Value::array", params: [], style: "variadic", defaults: [] })
+    case "Set.of" => Some(BuiltinSpec { tag: "SetOf", leaf: "builtin_set_of", params: [], style: "variadic-fallible", defaults: [] })
+    case "Map.new" => Some(BuiltinSpec { tag: "MapNew", leaf: "builtin_map_new", params: [], style: "raw", defaults: [] })
+    case "Map.ofEntries" => Some(BuiltinSpec { tag: "MapOfEntries", leaf: "builtin_map_of_entries", params: ["entries"], style: "fallible", defaults: [""] })
+    case "JSON.stringify" => Some(BuiltinSpec { tag: "JsonStringify", leaf: "builtin_json_stringify", params: ["value"], style: "raw", defaults: [""] })
+    case "JSON.parse" => Some(BuiltinSpec { tag: "JsonParse", leaf: "builtin_json_parse", params: ["text"], style: "fallible", defaults: [""] })
+    case "ByteBuffer.allocate" => Some(BuiltinSpec { tag: "ByteBufferAllocate", leaf: "builtin_byte_buffer_allocate", params: ["length", "value"], style: "optional-second", defaults: ["", "Value::Int(0)"] })
+    case "ByteBuffer.fromBytes" => Some(BuiltinSpec { tag: "ByteBufferFromBytes", leaf: "builtin_byte_buffer_from_bytes", params: ["value"], style: "fallible", defaults: [""] })
+    case "Test.assert" => Some(BuiltinSpec { tag: "TestAssert", leaf: "builtin_test_assert", params: ["condition", "message"], style: "fallible", defaults: ["", "Value::str(\"assertion failed\")"] })
+    case "Test.assertEq" => Some(BuiltinSpec { tag: "TestAssertEq", leaf: "builtin_test_assert_eq", params: ["actual", "expected"], style: "fallible", defaults: ["", ""] })
+    case "Test.assertNe" => Some(BuiltinSpec { tag: "TestAssertNe", leaf: "builtin_test_assert_ne", params: ["actual", "expected"], style: "fallible", defaults: ["", ""] })
+    case "Test.assertContains" => Some(BuiltinSpec { tag: "TestAssertContains", leaf: "builtin_test_assert_contains", params: ["text", "needle"], style: "fallible", defaults: ["", ""] })
+    case "Test.assertOk" => Some(BuiltinSpec { tag: "TestAssertOk", leaf: "builtin_test_assert_ok", params: ["value"], style: "fallible", defaults: [""] })
+    case "Test.assertErr" => Some(BuiltinSpec { tag: "TestAssertErr", leaf: "builtin_test_assert_err", params: ["value"], style: "fallible", defaults: [""] })
+    case "Test.assertSome" => Some(BuiltinSpec { tag: "TestAssertSome", leaf: "builtin_test_assert_some", params: ["value"], style: "fallible", defaults: [""] })
+    case "Test.assertNone" => Some(BuiltinSpec { tag: "TestAssertNone", leaf: "builtin_test_assert_none", params: ["value"], style: "fallible", defaults: [""] })
+    case "Test.assertGolden" => Some(BuiltinSpec { tag: "TestAssertGolden", leaf: "builtin_test_assert_golden", params: ["path", "actual"], style: "host", defaults: ["", ""] })
+    case _ => None
+  }
+}
+
+// Free scalar/host leaves retain their direct ABI; callback builtins and open
+// use the existing callable runtime dispatch.
+export function freeSpec(name: string) -> Option<BuiltinSpec> {
+  if name == "assert" { return staticSpec("Test", "assert") }
+  let leaf = match name {
+    case "print" => "builtin_print"
+    case "input" => "builtin_input"
+    case "toInt" => "builtin_to_int"
+    case "toIntRadix" => "builtin_to_int_radix"
+    case "fromCodePoint" => "builtin_from_code_point"
+    case "toFloat" => "builtin_to_float"
+    case _ => ""
+  }
+  if leaf == "" { return None }
+  let params = match name {
+    case "print" => ["value"]
+    case "input" => []
+    case "toInt" => ["text"]
+    case "toIntRadix" => ["text", "radix"]
+    case _ => ["n"]
+  }
+  let style = if name == "input" { "host-raw" } else if name == "print" { "host" } else { "fallible" }
+  let mut defaults: Array<string> = []
+  for parameter in params { defaults.push("") }
+  Some(BuiltinSpec { tag: freeBuiltin(name), leaf: leaf, params: params, style: style, defaults: defaults })
+}

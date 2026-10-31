@@ -1,0 +1,65 @@
+import std.bytes { Bytes }
+import std.fs as files
+import std.io as io
+import std.json as json
+import src.contracts { Native, fileMetadata }
+import src.release_image { Image, MAX_IMAGE_BYTES, inspectBytes }
+
+const SAMPLE_LIMIT = 16
+const BLOCK_BYTES = 65536
+
+record Comparison derives JSON {
+  schema: string,
+  left: Image,
+  right: Image,
+  sameBytes: bool,
+  firstDifferentOffsets: Array<int>,
+}
+
+function readImage(path: string, native: Native) -> Result<Bytes, string> {
+  // The mechanical metadata query bounds allocation before the complete-byte
+  // filesystem API is used. A concurrent file change still gets checked after.
+  let meta = fileMetadata(path, native)?
+  if meta.bytes == 0 || meta.bytes > MAX_IMAGE_BYTES {
+    return Err("binary inspection requires a nonempty regular file no larger than 512 MiB")
+  }
+  let bytes = files.readBytes(meta.path)?
+  if bytes.length() != meta.bytes { return Err("binary file size changed during inspection") }
+  Ok(bytes)
+}
+
+function sampledDifferences(left: Bytes, right: Bytes) -> Array<int> {
+  let common = if left.length() < right.length() { left.length() } else { right.length() }
+  let mut offsets: Array<int> = []
+  let mut start = 0
+  while start < common && offsets.length < SAMPLE_LIMIT {
+    let end = if common - start > BLOCK_BYTES { start + BLOCK_BYTES } else { common }
+    if left.slice(start, end) != right.slice(start, end) {
+      let mut position = start
+      while position < end && offsets.length < SAMPLE_LIMIT {
+        if left.get(position) != right.get(position) { offsets.push(position) }
+        position += 1
+      }
+    }
+    start = end
+  }
+  if left.length() != right.length() && offsets.length < SAMPLE_LIMIT { offsets.push(common) }
+  offsets
+}
+
+export function inspect(path: string, other: string, native: Native) -> Result<int, string> {
+  let bytes = readImage(path, native)?
+  let left = inspectBytes(bytes)?
+  if other == "" {
+    io.writeLine(json.stringify(left)?)
+    return Ok(0)
+  }
+  let compared = readImage(other, native)?
+  let right = inspectBytes(compared)?
+  let report = Comparison {
+    schema: "topaz.core-kit-binary-comparison/v1", left: left, right: right,
+    sameBytes: bytes == compared, firstDifferentOffsets: sampledDifferences(bytes, compared),
+  }
+  io.writeLine(json.stringify(report)?)
+  Ok(0)
+}

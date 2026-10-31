@@ -1,0 +1,36 @@
+import std.json as json
+import src.contracts { CompilerResponse, Diagnostic }
+
+function diagnosticLines(diagnostics: Array<Diagnostic>) -> Array<string> {
+  let mut lines: Array<string> = []
+  for diagnostic in diagnostics {
+    lines.push("{diagnostic.code}: module {diagnostic.moduleIndex}, bytes {diagnostic.lo}..{diagnostic.hi}: {diagnostic.message}")
+    for note in diagnostic.notes { lines.push("  {note}") }
+  }
+  lines
+}
+
+export function completed(text: string, terminal: string) -> Result<CompilerResponse, string> {
+  let response = json.parseAs<CompilerResponse>(text)?
+  if response.status != "completed" {
+    let mut lines = diagnosticLines(response.diagnostics)
+    for line in diagnosticLines(response.checkerDiagnostics) { lines.push(line) }
+    if lines.length == 0 { lines.push("compiler status: {response.status}") }
+    return Err(lines.join("\n"))
+  }
+  if response.kind != terminal {
+    return Err("compiler returned `{response.kind}` for requested `{terminal}`")
+  }
+  Ok(response)
+}
+
+export function rustSource(response: CompilerResponse) -> Result<string, string> {
+  match response.generatedRust {
+    case Some(source) => if source == "" {
+      Err("compiler completed without generated Rust")
+    } else {
+      Ok(source)
+    }
+    case None => Err("compiler completed without generated Rust")
+  }
+}
