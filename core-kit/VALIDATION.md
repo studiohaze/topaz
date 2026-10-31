@@ -4,6 +4,110 @@ PR numbers and merge commits in this record identify change sets in the
 development history before Core Kit was published here. Those commits are
 not part of this repository's history.
 
+## Release builds for Windows and Linux x86-64
+
+The catalogue rows for `core-kit-5.21.1` were packed from source commit
+`67c65839430802ce30da95acce6e1fa30abb4a47`. Its payload input set has 324
+repository inputs and SHA-256
+`bda7efa3a52b65a09b511ac35383c6df8808d6050864c2b76d9c17b76c7fd6fb`. Later
+commits that change only documentation or the catalogue keep that input set.
+
+Each target was built twice with its path-normalized script, once in each of
+two checkouts of that commit at different paths. One path was longer and
+contained a space. Each checkout started with an empty `compiler/target`.
+Both builds used Rust/Cargo 1.96.0, the default release profile and
+`CARGO_BUILD_JOBS=2`. Each payload carries `BUILD-RECORD.json` with the
+toolchain and environment.
+
+| Target | Executable bytes | Executable SHA-256 | Archive bytes | Archive SHA-256 |
+| --- | ---: | --- | ---: | --- |
+| `x86_64-pc-windows-msvc` | 145,312,768 | `ea18ffe08803e6da13d9b478e078f3b19361f35c7bb07e6f51260fcf575a6edb` | 148,174,395 | `61afcdd3cfb4a86703288edb72ca6787cf3b5a63c19ab2975993b999b922eef5` |
+| `x86_64-unknown-linux-gnu` | 100,370,720 | `5a9e2fa9f9528632021213ea2ec57353dbef7545c142bbac7684490bf92293db` | 103,228,634 | `d25e54259a09a751cff6c7a8de96fb06cf49b38bc084e4837eb0d537966364e9` |
+
+Every build linked the same 2,114,898-byte generated CLI Rust with SHA-256
+`654a196520bfee7ea62788e6cc40ac283abdef6fca0c69f73b007d7dc5564b64`.
+
+In each checkout the Kit from that checkout assembled one candidate from each
+of the two builds, compared them and packed them. The two checkouts wrote
+byte-identical archives and catalogue rows, so either build reproduces the
+published archive. Each candidate held 17 payload files.
+
+### Windows x64
+
+The host was Windows 11 Pro 10.0.26200 x64 with Visual Studio Build Tools
+2022 17.14, MSVC 14.44.35207 and Windows SDK 10.0.26100.0. The final link
+used `/INCREMENTAL:NO`, `/Brepro` and `/DEBUG:NONE`. Both builds ran
+`core-kit\repro-build.ps1`.
+
+- `kit binary-info` reported `sameBytes` true with no differing offsets.
+- The only build path left in the executable is
+  `/topaz-core-kit\compiler\target\x86_64-pc-windows-msvc\release\build\topaz-core-kit-native-6b2aba09c74b61a0\out\generated_cli.rs`.
+  It is identical in both builds. A byte search found no drive letter path,
+  user directory or checkout folder name.
+- The executable declares PE operating system and subsystem version 6.0 and
+  imports ten DLLs. `vcruntime140.dll` belongs to the Visual C++ 2015-2022
+  x64 Redistributable. The others are part of Windows 10 and later.
+- Each Kit passed `--version`, `kit verify`, `kit refresh --check` and the
+  example project check in its own checkout. The first checkout's Kit passed
+  `smoke.cmd --native-build`, and `verify-core.ps1` passed there.
+- First installation used a source copy of commit
+  `9a94a2d3fb37d383de3c729209d1a6a1790f802c`, which adds these catalogue rows,
+  without `.git`, `out` or `compiler/target`. The installer process had only
+  the Windows system directories and Windows PowerShell on `PATH`, with no
+  Rust, Cargo, rustup, `link.exe` or `cl.exe`. The host execution policy was
+  `CurrentUser RemoteSigned`, with Windows PowerShell 5.1 and bsdtar 3.8.9.
+  `install-core-kit.cmd --archive`, `topaz.cmd --version`, the example project
+  check and `kit install --check` passed. The installation receipt names
+  the archive and input set above.
+- The Visual C++ runtime 14.50.35719 was installed on that host. Windows
+  Sandbox was not available, so this run is not a clean-machine result.
+
+An ordinary `bootstrap.cmd` followed by `kit build` in one checkout of the
+same CLI inputs produced two identical 145,312,768-byte executables with
+SHA-256 `c444fe2b650ca39b7482dd5c5f8121ec503f0295418ca09e426f012d11daa071`.
+They differ from the release executable only through the embedded checkout
+path, which the path-normalized build replaces.
+
+### Linux x86-64
+
+Both builds ran `core-kit/repro-build.sh` in fresh containers from one build
+image. That image is `ubuntu:22.04` with digest
+`sha256:e0f80c829509ef4df9e76bd8944eb7b8ec25cbb379b112a7f9448b2c77a77c9b`
+plus build-essential 12.9ubuntu3, GCC 11.4.0, binutils 2.38, glibc 2.35 and
+Rust 1.96.0 installed by rustup with the minimal profile. Rust linked through
+the GCC driver with its bundled LLD 22.1.2. The two checkouts were mounted at
+different container paths.
+
+- `cmp` and `kit binary-info` found identical executables.
+- The only build path left is
+  `/topaz-core-kit/compiler/target/x86_64-unknown-linux-gnu/release/build/topaz-core-kit-native-ac8d00b7dc4bf8f5/out/generated_cli.rs`
+  in both builds. Neither mount path appears in the executable.
+- The executable needs `libgcc_s.so.1`, `libm.so.6`, `libc.so.6` and
+  `ld-linux-x86-64.so.2`. Its newest required glibc symbol version is
+  `GLIBC_2.34`.
+- Each Kit passed `--version`, `kit verify`, `kit refresh --check`, the
+  example project check and `verify-core.sh` in its own checkout. The first
+  checkout's Kit passed `smoke.sh --native-build`.
+- First installation ran in a new container from the plain `ubuntu:22.04`
+  image above, without network access. It had no Rust, Cargo, rustup, C
+  compiler, linker or curl. A source copy of commit `9a94a2d` installed the
+  archive with `install-core-kit --archive`. `topaz --version`, the example
+  project and source checks and `kit install --check` passed.
+
+A container limited to 6 GiB of memory with 2 GiB of swap was killed while
+compiling the canonical core. The recorded builds ran with swap available.
+An ordinary bootstrap and `kit build` in one checkout produced identical
+100,370,720-byte executables with SHA-256
+`8cbde129b55d7dcb761830efeae9b5540daff5eb07941cff20c4aa83cd776edb`, which
+embed that checkout's path.
+
+### macOS
+
+The macOS release recipes and build records are part of the same input set.
+The macOS archives are built with `core-kit/repro-build.sh` from the same
+source commit and are listed when their rows are added. Archives packed
+before these recipes and records existed are not catalogued.
+
 ## CLI, installation recovery and native adapter
 
 Linux x86-64 validation used pinned Rust/Cargo 1.96.0 and the public

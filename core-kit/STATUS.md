@@ -8,10 +8,13 @@ canonical public compiler, generated compiler Rust, seed inputs, public runtime
 and source build materials. Platform executables belong in named GitHub
 Releases and the checkout's ignored installation cache.
 
-The public catalogue currently contains its schema header only. No release
-asset, approved platform recipe or native binary has been published by this
-change. An installation request without a matching target fails before a
-network request and points to the independent source bootstrap.
+The catalogue lists release archives for `x86_64-pc-windows-msvc` and
+`x86_64-unknown-linux-gnu` on the `core-kit-5.21.1` GitHub Release. Their
+release recipes set `releaseReady`, and each archive was reproduced from two
+separate checkouts. The macOS recipes are in place and their rows follow
+their own reproduced builds. An installation request without a matching
+target fails before a network request and points to the independent source
+bootstrap. [Release build record](VALIDATION.md#release-builds-for-windows-and-linux-x86-64)
 
 The READMEs describe the completed product and its intended `studiohaze/topaz`
 home. This page and [VALIDATION.md](VALIDATION.md) record actual availability
@@ -40,7 +43,7 @@ and execution evidence. No repository migration is performed by the product.
   per-target lock, stage, validation, receipt and activation sequence.
 - The CLI descriptor maps 27 modules and its initial request contains 58 facts.
   The byte verifier covers 50 canonical source pairs, 62 original snapshot files
-  and 57 additional inputs. The payload input list contains 314 paths.
+  and 65 additional inputs. The payload input list contains 324 paths.
 - `kit binary-info` reports bounded ELF64, PE32+ and thin Mach-O metadata and
   complete-byte comparison with at most sixteen difference samples. It does
   not execute the inspected image or establish a minimum supported OS.
@@ -87,13 +90,16 @@ and execution evidence. No repository migration is performed by the product.
   permitted local PowerShell helpers, .NET and tar.exe. Execution policy is
   respected. Source `bootstrap.cmd` remains available without those scripts.
 
-The Linux and Windows x86_64 development recipes remain `releaseReady` false
-and include their thirteen required notice/component companions. The Windows
-template records exactly the ten imports in the supplied PR #8 comparison,
-without claiming a minimum Windows version or bundling those system DLLs.
-Package and installation
-regression fixtures may explicitly approve that recipe inside a private test
-checkout; this does not approve or publish the real platform release.
+Release recipes for Windows x86-64, Linux x86-64 and both macOS targets set
+`releaseReady` true. Each maps the thirteen required notice/component
+companions plus a per-target build record, and states the imports and
+minimum platform measured from its release executable. Windows requires the
+Visual C++ 2015-2022 x64 runtime and Windows 10 or later. Linux requires
+glibc 2.34 or later. The Linux and Windows development recipes remain
+`releaseReady` false for development assembly and comparison.
+`core-kit/repro-build.sh` and `core-kit/repro-build.ps1` build with fixed
+source-path mappings, so builds in different checkout locations produce the
+same executable.
 
 ## Validation scope
 
@@ -172,21 +178,21 @@ the process PATH. [Installation receipt and host details](validation-pr16-no-bui
 
 ## Remaining release work
 
-- First installation on a Windows host without Rust or Visual Studio, with the
-  available Visual C++ runtime recorded. The private packaging fixture already
-  exercised a Windows maintenance write when it refreshed the changed recipe.
-- Default-profile platform measurements, actual system/runtime observations,
-  minimum OS evidence and approved platform recipes. macOS needs native
-  validation as well.
-- Complete independent reproduction of each final platform payload and
-  archive. Deterministic packaging of one supplied build is a separate result.
-- Review of the final platform notices, then publication of the
-  actual named release assets and their measured catalogue rows.
-- Preparation of the intended default branch and repository home.
+- macOS aarch64 and x86_64 archives built with `repro-build.sh` from the
+  release source commit, then their catalogue rows.
+- Windows first installation on a separate clean machine, such as Windows
+  Sandbox or a VM, including one without the Visual C++ runtime to confirm
+  the stated prerequisite. The recorded run used a source copy without
+  build tools on the build host.
+- Execution on the oldest stated platforms. Windows 10 and glibc 2.34 hosts
+  have not been run.
+- Publication of the named release assets, then confirming the uploaded
+  lengths and digests against the catalogue rows.
 
 Additional package dependencies and broader project configuration remain a
 separate compiler/provider contract review. The current project contract is
 documented in [the command guide](cli/README.md).
 
 [LOCAL-VALIDATION.md](LOCAL-VALIDATION.md) provides the remaining native handoff.
-The source bootstrap remains usable while no matching public asset exists.
+The source bootstrap remains available for every target, with or without a
+catalogue row.
