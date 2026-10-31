@@ -1,5 +1,9 @@
 # Core Kit validation record
 
+PR numbers and merge commits in this record identify change sets in the
+development history before Core Kit was published here. Those commits are
+not part of this repository's history.
+
 ## CLI, installation recovery and native adapter
 
 Linux x86-64 validation used pinned Rust/Cargo 1.96.0 and the public
@@ -89,7 +93,7 @@ Windows PowerShell 5.1, tar 3.8.9 and CurrentUser RemoteSigned. Both
 retained PR #13 executables matched their recorded hash before the run.
 In a detached worktree, the owner enabled the test recipe, refreshed and
 verified the inputs, assembled one candidate from each build, compared the
-pair and packed the archive. [PR #14](https://github.com/clavef/topaz_note/pull/14)
+pair and packed the archive.
 
 | Artifact | Bytes | SHA-256 |
 | --- | ---: | --- |
@@ -98,8 +102,8 @@ pair and packed the archive. [PR #14](https://github.com/clavef/topaz_note/pull/
 
 `install-core-kit.cmd --archive` installed those bytes offline. The installed
 launcher passed `--version`, `check --root examples/core-kit/project` and
-`kit install --check`. The fixture and matching catalogue remain under
-`D:\Projects\topaz-offline-a8c14a618d0f4c49a961bf4766ad0b58`.
+`kit install --check`. The fixture and matching catalogue are retained on
+the test host.
 The public catalogue has no release row. First installation on a clean host
 and reproduction with independent caches remain open.
 [Clean Windows handoff](LOCAL-VALIDATION.md#first-run-on-an-ordinary-windows-host)
@@ -117,7 +121,7 @@ The archive was 148,166,203 bytes with SHA-256
 `cc745fab9e18c678def212cc46691f1fe1b15f94f76ba5f6d924557eaa5e0108`.
 The receipt and host details are retained in
 [validation-pr16-no-build-tools-install.json](validation-pr16-no-build-tools-install.json).
-The fixture is `D:\Projects\topaz-clean-host-pr16-20261031`.
+The fixture is retained on the same host.
 
 This is no-build-tool evidence on the existing Windows 11 host, not an
 independent clean-machine or separate-kernel result. A Windows Sandbox, VM or
@@ -143,6 +147,8 @@ modes. The bounded comparison is retained in
 [validation-pr15-native-comparison.json](validation-pr15-native-comparison.json),
 and the package receipt is retained in
 [validation-pr15-offline-package.json](validation-pr15-offline-package.json).
+The retained receipt omits the private test repository name. Its other fields
+are as written by `payload-pack`.
 
 In a separate build copy, the owner changed one byte of `generated_cli.rs`
 and kept the successful compiler response intact. `payload-assemble` compares
@@ -160,8 +166,8 @@ test reached it and observed both promotion and packaging refuse the mismatch.
 The private archive was packed in a detached fixture and installed with
 `install-core-kit.cmd --archive` without network access. The installed
 launcher passed `--version`, `check --root examples/core-kit/project` and
-`kit install --check`. The fixture remains outside the repository at
-`D:\Projects\topaz-offline-pr15-fe2bfbfb8d794bbeb6292f702fdbdaa2`.
+`kit install --check`. The fixture remains outside the repository on the
+test host.
 The development recipe remains `releaseReady: false`, so this does not claim
 public release approval, independent-cache reproduction or clean-host
 installation.
@@ -171,7 +177,7 @@ installation.
 On 31 October 2026 the owner tested the PR #13 source on Windows x64 with
 Rust/Cargo 1.96.0. The PR head `7b716ca` and its merge `cf4df7c` have the
 same Git tree. The run used one worktree and shared its Cargo target directory
-between bootstrap and `kit build`. [PR #13](https://github.com/clavef/topaz_note/pull/13)
+between bootstrap and `kit build`.
 
 | Check | Reported result |
 | --- | --- |
@@ -674,16 +680,16 @@ maintenance or distribution path.
 
 On 2026-10-31 KST, the owner supplied the completed Windows verification
 transcript for PR #8 merge
-`b6a97245189365f93801f9e996c3c3152bcd3e3e`. The local agent used a detached
-worktree at `D:\Projects\topaz-note-pr8-verify` and retained that worktree,
-its Cargo cache and output files after verification.
+`b6a97245189365f93801f9e996c3c3152bcd3e3e`. The run used a detached PR #8
+worktree and retained that worktree, its Cargo cache and output files after
+verification.
 
-The agent reported successful ordinary `bootstrap.cmd` and
+The transcript reports successful ordinary `bootstrap.cmd` and
 `core-kit\smoke.cmd --native-build` runs using the pinned Rust/Cargo 1.96.0
 offline build path. The expanded smoke covered project `--root` resolution,
 checking and building, saved request replay, payload verification, and native
-sample and project execution. The smoke logs remain at
-`D:\Projects\topaz-note-pr8-verify\out\core-kit smoke-17111-2065`.
+sample and project execution. The smoke logs remain in that worktree at
+`out\core-kit smoke-17111-2065`.
 
 The bootstrap executable then completed `kit build`. The resulting Kit passed
 `--version`, `check --root` against the bundled project and `kit verify`.
@@ -831,10 +837,10 @@ Windows result above covers the earlier PR #8 revision separately.
 
 ## Owner-reported Windows payload validation
 
-On 2026-10-31 KST, the owner supplied the local agent's completed verification
-transcript for PR #4 merge
-`f2031f09f967511fdf26d1e86f8b8868a6a39d9f`. The agent used a clean detached
-worktree at `D:\Projects\topaz-note-pr4-verify` and reported successful
+On 2026-10-31 KST, the owner supplied the completed verification transcript
+for PR #4 merge
+`f2031f09f967511fdf26d1e86f8b8868a6a39d9f`. The run used a clean detached
+PR #4 worktree and reports successful
 `bootstrap.cmd` and `core-kit\smoke.cmd --native-build` runs.
 
 The ordinary bootstrap used the pinned Rust/Cargo 1.96.0 offline path, generated
@@ -858,9 +864,9 @@ The generated CLI identity matches the Linux payload-command build recorded
 below. The Windows executable digest identifies one artifact. It does not
 establish an independent Windows rebuild or complete payload reproduction.
 
-The owner reported the smoke logs retained at
-`D:\Projects\topaz-note-pr4-verify\out\core-kit smoke-31867-23936`.
-The transcript shows unsuccessful attempts to copy those logs into the OPS
+The owner reported the smoke logs retained in that worktree at
+`out\core-kit smoke-31867-23936`.
+The transcript shows unsuccessful attempts to copy those logs into a separate
 archive. No successful secondary archive, complete raw log set, linker/SDK
 identity or inherited build configuration was supplied for independent
 inspection. Preserve the original worktree and its Cargo cache while using
@@ -1361,7 +1367,7 @@ bootstrap; the complete native execution evidence is recorded separately above.
 
 ## Owner-reported Windows bootstrap and canonical regeneration
 
-On 2026-10-31, the owner supplied the local agent's completed work transcript.
+On 2026-10-31, the owner supplied the completed work transcript.
 It records these results from a detached Windows worktree initially checked out
 at the PR #1 merge, `4c44896ffdd14e83061e0b2a42cedc7196560b7f`:
 
@@ -1369,10 +1375,10 @@ at the PR #1 merge, `4c44896ffdd14e83061e0b2a42cedc7196560b7f`:
 | --- | --- |
 | `bootstrap.cmd` | Pinned Rust/Cargo 1.96.0 offline build completed in 17m23s, followed by CLI Rust generation and native Core Kit linking. The command uses the default profile; no profile override was shown in the transcript. |
 | `core-kit/smoke.cmd --native-build` | Passed after the hash and sample assertions were changed from `findstr /X` to substring checks in `7d9219674f2e02a27c0d3d9e26779f7fdc8e38ef` and `aaeb4cc79ca4823d38077a8db838e71349f2061d`. |
-| `bootstrap.cmd --verify-core` | Completed; the agent reported that the regenerated canonical compiler matched the checked-in `compiler/generated/native/compiler.rs` byte for byte. |
+| `bootstrap.cmd --verify-core` | Completed. The transcript reports that the regenerated canonical compiler matched the checked-in `compiler/generated/native/compiler.rs` byte for byte. |
 
 This is owner-supplied execution evidence. The transcript includes the commands
-and agent conclusions, but not the complete successful terminal outputs,
+and reported conclusions, but not the complete successful terminal outputs,
 regenerated-file hashes, full toolchain/linker/SDK identity, or inherited build
 configuration. The temporary verification worktrees were subsequently removed.
 The byte-comparison result is therefore recorded as reported, not as a second
@@ -1399,14 +1405,19 @@ identities, as recorded at the top of this document.
 
 - Completion of the default optimized Linux release build.
 - Independent inspection of the complete reported Windows outputs and build
-  environment, an independent Windows executable reproduction, Windows
-  PowerShell 5.1 execution, or macOS support. The owner-reported PR #4 result
-  covers the PR #3 manifest relocation and exact-output CMD assertions. The
-  later PR #8 result adds project and Kit-build execution and matching generated
-  CLI Rust, while its two executable files fail the byte comparison.
-- Windows execution of current maintenance, packaging or release installation.
-  The supplied execution transcript ends at PR #8; the later bounded image
-  report does not exercise the new installer or kit refresh.
+  environment. The Windows results above are owner-reported.
+- An independent Windows executable reproduction. The matching PR #13 and
+  PR #15 pairs came from one checkout with a shared Cargo target. The PR #8
+  and PR #11 pairs failed the byte comparison.
+- Windows installation on a separate clean host. The PR #14 and PR #15
+  installations ran on the development machine with Windows PowerShell 5.1
+  and `CurrentUser RemoteSigned`. The PR #16 fixture excluded Rust and Visual
+  Studio from the installer PATH on that same host. The default execution
+  policy and a host without the Visual C++ runtime were not exercised.
+- Windows execution of the source-edit maintenance gate, refresh rollback or
+  rejection at the native build-ID check. On Windows, PR #14 refreshed one
+  changed recipe and PR #15 exercised the matching build-ID path.
+- macOS support.
 - A locally repeated canonical core comparison on the Linux validation host.
   The owner-reported Windows regeneration match is recorded above.
 - Reproduction of the default optimized release or an assembled complete

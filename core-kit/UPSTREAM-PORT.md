@@ -1,17 +1,16 @@
 # Public upstream port record
 
-The runtime and seed implementation in this branch was ported from the
-development repository `clavef/topaz` at:
+The runtime and seed implementation here was ported from the Topaz
+development source at this commit.
 
 ```text
 9a89a6201ac541fb4d36c13498586c81cb7b0aba
 ```
 
-That development repository is private. Access to it is not a public license
+The development source is not public. Its existence is not a public license
 grant for all of its contents. This port uses the selected public seed scope
-described by that repository's
-`compiler/contracts/public-snapshot/seed/runtime.json`, and the seed runner
-from the same source state.
+recorded in [compiler/seed/runtime.json](../compiler/seed/runtime.json), and
+the seed runner from the same source state.
 
 ## Ported paths
 

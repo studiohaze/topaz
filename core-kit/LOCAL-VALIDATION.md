@@ -19,12 +19,12 @@ The later [PR #11 comparison](validation-pr11-native-comparison.json) at
 `e322fa2` narrows the difference. Bootstrap and `kit build` produced identical
 CLI Rust and matching code sections. The two final EXEs differ in `.rdata`,
 PE timestamps and PDB GUIDs. Both payloads assembled and their inventories
-failed comparison. Keep `D:\Projects\topaz-note-pr11-verify` with its two
-outputs, `out\pr11-native-comparison.json` and `out\core-kit smoke-29611-379`.
+failed comparison. Keep the retained PR #11 worktree with its two outputs,
+`out\pr11-native-comparison.json` and `out\core-kit smoke-29611-379`.
 
 ## Preserve the completed PR #8 evidence
 
-Keep `D:\Projects\topaz-note-pr8-verify` at its reported revision with
+Keep the retained PR #8 worktree at its reported revision with
 `compiler/target` and both earlier output directories intact. Its smoke logs
 are under `out\core-kit smoke-17111-2065`. Keep the supplied comparison report
 with those artifacts. Do not overwrite either old executable while building
@@ -319,7 +319,7 @@ can be checked without rebuilding unchanged dependencies.
 ### Offline installation from the PR #13 pair
 
 Use the two Windows build directories retained under
-`D:\Projects\topaz-note-pr13-verify\out\relink-20261031-1151`.
+`out\relink-20261031-1151` in the PR #13 worktree.
 The development candidates record the original recipe hash. The test below
 assembles fresh candidates against a private recipe in a new detached worktree.
 It reuses the original compiler requests, responses, generated Rust and EXEs.
@@ -327,7 +327,9 @@ The source commit in the test catalogue identifies the retained checkout.
 The input-set digest identifies the modified fixture.
 
 Run in Windows PowerShell on the machine with both outputs. The settings
-at the start of the example identify the retained PR #13 pair. For a later
+at the start of the example identify the retained PR #13 pair. Replace the
+bracketed values with the local worktree path and a private test repository
+name. For a later
 revision, complete the native comparison first and supply its checkout, run
 directory, Git tree, measured EXE hash and private test tag. Keep the fixture local, with its
 uncommitted recipe, refreshed inventory and test catalogue.
@@ -340,10 +342,11 @@ uncommitted recipe, refreshed inventory and test catalogue.
         if ($LASTEXITCODE -ne 0) { throw "$program $args failed (exit $LASTEXITCODE)." }
     }
 
-    $retained = 'D:\Projects\topaz-note-pr13-verify'
+    $retained = '<retained PR #13 worktree>'
     $run = "$retained/out/relink-20261031-1151"
     $expectedTree = 'c962658dbd510f4d8c50a6e0ee0efd4826eb9dfe'
     $expectedExe = '2fd7f98d5faf00d13c331703bd37b0603216b15503e4113607a7946f9ee169c9'
+    $testRepository = '<owner/name>'
     $testTag = 'pr13-offline-fixture'
     $kit = "$run/bootstrap/topaz-core-kit.exe"
     $revision = Invoke-Checked git -C $retained rev-parse HEAD
@@ -372,7 +375,7 @@ uncommitted recipe, refreshed inventory and test catalogue.
         Invoke-Checked $kit kit payload-assemble --build-dir "$run/kit-build" --recipe $recipe --out-dir out/candidate-b
         Invoke-Checked $kit kit payload-compare --payload-dir out/candidate-a --other out/candidate-b
         Invoke-Checked $kit kit payload-pack --payload-dir out/candidate-a --other out/candidate-b `
-            --out-dir out/private-package --repository clavef/topaz_note --tag $testTag --source-commit $revision
+            --out-dir out/private-package --repository $testRepository --tag $testTag --source-commit $revision
         Copy-Item -LiteralPath 'out/private-package/downloads.data' -Destination 'core-kit/downloads.data'
         $archive = (Resolve-Path 'out/private-package/topaz-core-kit-x86_64-pc-windows-msvc.tar.gz').Path
         Invoke-Checked .\install-core-kit.cmd --archive $archive
@@ -392,7 +395,7 @@ installer output and the selected version's `installation.data`. Record the
 Windows version, architecture, PowerShell and `tar.exe` versions, and the host
 execution policy. A successful run here covers offline installation on this
 development machine. The public catalogue and platform recipe are maintained
-in the development repository.
+in this repository.
 
 ### Windows negative control for the linked CLI
 
@@ -401,7 +404,8 @@ match the PR #13 source. Put its three genuine PR #13 compiler files beside
 a copy of the PR #15 EXE. This controlled mismatch keeps the compiler records
 consistent, so assembly can reach completion. Native release approval must
 then reject the different linked CLI digest. The commands use a fresh folder
-under the fixture's ignored `out` directory.
+under the fixture's ignored `out` directory. Replace the bracketed values with
+the local fixture and worktree paths and a private test repository name.
 
 ```powershell
 & {
@@ -410,9 +414,9 @@ under the fixture's ignored `out` directory.
         & $program @args
         if ($LASTEXITCODE -ne 0) { throw "$program $args failed (exit $LASTEXITCODE)." }
     }
-    $fixture = 'D:\Projects\topaz-offline-a8c14a618d0f4c49a961bf4766ad0b58'
-    $old = 'D:\Projects\topaz-note-pr13-verify\out\relink-20261031-1151\bootstrap'
-    $new = 'D:\Projects\topaz-note-pr15-verify\out\pr15-20261031-1345\bootstrap'
+    $fixture = '<retained PR #14 offline fixture>'
+    $old = '<retained PR #13 worktree>\out\relink-20261031-1151\bootstrap'
+    $new = '<retained PR #15 worktree>\out\pr15-20261031-1345\bootstrap'
     $kit = "$new/topaz-core-kit.exe"
     $savedRoot = $env:TOPAZ_CORE_KIT_ROOT
     Push-Location -LiteralPath $fixture
@@ -442,7 +446,7 @@ under the fixture's ignored `out` directory.
             $destination = "$case/$command"
             $extra = @()
             if ($command -eq 'payload-pack') {
-                $extra = @('--repository','clavef/topaz_note','--tag','pr15-negative-fixture','--source-commit',$revision)
+                $extra = @('--repository','<owner/name>','--tag','pr15-negative-fixture','--source-commit',$revision)
             }
             $ErrorActionPreference = 'Continue'
             $messages = & $kit kit $command --payload-dir "$case/a" --other "$case/b" --out-dir $destination @extra 2>&1
@@ -502,7 +506,7 @@ parsing elsewhere do not replace this Windows gate or establish macOS support.
 ### First run on an ordinary Windows host
 
 Use the PR #15 archive under `out/private-package` and the matching checkout
-from `D:\Projects\topaz-offline-pr15-fe2bfbfb8d794bbeb6292f702fdbdaa2`.
+from the retained PR #15 offline fixture.
 The package receipt records the archive hash for transfer.
 [Archive identity and result](VALIDATION.md#pr-15-windows-build-and-offline-installation)
 

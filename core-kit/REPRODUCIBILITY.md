@@ -139,7 +139,7 @@ metadata. The report does not identify the responsible build decision or
 establish a root cause. These remain supplied local observations, not an
 independent reconstruction of the native build environment.
 
-Preserve `D:\Projects\topaz-note-pr8-verify`, its Cargo cache, both outputs,
+Preserve the retained PR #8 worktree, its Cargo cache, both outputs,
 the smoke logs under `out\core-kit smoke-17111-2065` and the supplied report.
 The old-pair inspection is complete. Do not repeat it, overwrite those outputs,
 remove their cache or rerun `--verify-core` as part of this transition.
