@@ -22,17 +22,25 @@
       "grantor": "Studio Haze Inc.",
       "license": "Apache-2.0",
       "paths": [
+        ".gitignore",
         "bootstrap*",
+        "compiler/Cargo.lock",
+        "compiler/Cargo.toml",
+        "compiler/README.md",
         "compiler/core-kit-native/**",
         "compiler/crates/topaz_host_native/**",
+        "compiler/crates/topaz_seed_compiler/**",
+        "compiler/generated/native/*",
+        "compiler/rust-toolchain.toml",
         "compiler/seed/**",
         "core-kit/**",
+        "dist/README.md",
         "examples/core-kit/**",
         "install-core-kit*",
         "topaz*"
       ],
       "record": "core-kit/distribution/NOTICE-SCOPE.md",
-      "scope": "Topaz Core Kit files and the ported topaz_host_native crate. Root patterns without a slash name files at the repository root."
+      "scope": "Topaz Core Kit files, their compiler workspace and the ported topaz_host_native crate. Root patterns without a slash name files at the repository root."
     }
   ],
   "nativePackages": [

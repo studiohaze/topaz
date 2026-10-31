@@ -18,8 +18,14 @@ The full license text is in LICENSE. This license was authorized on
 - `compiler/seed/**`
 - `compiler/crates/topaz_host_native/**`, the native host crate ported from
   the development source
+- `compiler/crates/topaz_seed_compiler/**`
+- `compiler/generated/native/*`
+- `compiler/Cargo.toml`, `compiler/Cargo.lock`, `compiler/rust-toolchain.toml`
+  and `compiler/README.md`
 - `examples/core-kit/**`
-- the root `bootstrap*`, `install-core-kit*` and `topaz*` launchers
+- `dist/README.md`
+- the root `bootstrap*`, `install-core-kit*` and `topaz*` launchers and the
+  root `.gitignore`
 
 The six public seed runtime crates and the standalone seed runner were
 licensed under Apache-2.0 on 2026-10-26. These are `topaz_diag`,
