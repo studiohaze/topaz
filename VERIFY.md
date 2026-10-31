@@ -12,14 +12,26 @@ from this repository. The predicate says so in its `notEstablished` list.
 
 ## 1. Verify the signature
 
-Pick a commit of this repository whose workflow and scripts you have reviewed,
-and pin it with `--signer-digest`. Then run gh on the file you downloaded.
+`--signer-digest` is the commit the workflow ran at, so pin a commit that issued
+an attestation. The current v2 attestation came from run
+[41215275227](https://github.com/studiohaze/topaz/actions/runs/41215275227) at
+commit `1c5b59925e404e95b4d67a2274586be91ec0f967`. Review the workflow and
+scripts at that commit. If you reviewed a later commit instead, check that they
+haven't changed since.
+
+```sh
+git diff 1c5b59925e404e95b4d67a2274586be91ec0f967 <reviewed commit> -- \
+  .github/workflows/verify-topaz-release.yml scripts/
+```
+
+An empty diff means both commits run the same checks. Then run gh on the file
+you downloaded.
 
 ```sh
 gh attestation verify topaz-linux-x86_64 \
   --repo studiohaze/topaz \
   --signer-workflow studiohaze/topaz/.github/workflows/verify-topaz-release.yml \
-  --signer-digest <reviewed commit> \
+  --signer-digest 1c5b59925e404e95b4d67a2274586be91ec0f967 \
   --source-ref refs/heads/main \
   --deny-self-hosted-runners \
   --predicate-type https://github.com/studiohaze/topaz/attestations/static-release-bytes/v2 \
@@ -32,8 +44,8 @@ place of the CLI. All three files are subjects of the same attestation.
 ## 2. Check what the statement says
 
 gh checks who signed the statement and that your file is one of its subjects.
-It doesn't check the rest of the statement. Check out the same reviewed commit
-and run the policy check from it.
+It doesn't check the rest of the statement. Run the policy check from the commit
+you reviewed.
 
 ```sh
 python3 -I scripts/check-topaz-attestation.py attestation.json
@@ -45,3 +57,11 @@ checks are the expected ones and the `notEstablished` list is present.
 
 Earlier attestations used the v1 type. The first of them named only the CLI, so
 the policy check rejects every v1 result.
+
+## Issued attestations
+
+| Run | Commit | Type | Subjects |
+| --- | --- | --- | --- |
+| [41215275227](https://github.com/studiohaze/topaz/actions/runs/41215275227) | `1c5b599` | v2 | CLI, seed archive, `compiler.rs` |
+| [41213079276](https://github.com/studiohaze/topaz/actions/runs/41213079276) | `d552cf6` | v1 | CLI, seed archive, `compiler.rs` |
+| [41212135782](https://github.com/studiohaze/topaz/actions/runs/41212135782) | `d9757ac` | v1 | CLI |
