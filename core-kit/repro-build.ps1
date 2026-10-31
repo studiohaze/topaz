@@ -46,6 +46,13 @@ $env:CARGO_ENCODED_RUSTFLAGS = "--remap-path-prefix=$root=/topaz-core-kit$separa
 'Changing compiler flags can rebuild the core dependency even when canonical self-regeneration is disabled.'
 # Windows PowerShell 5.1 turns redirected native stderr into error records.
 # Cargo progress uses stderr, so only the exit status decides the result.
+# The flags apply to this build only. A script run in an existing session
+# removes them again so a later run starts from the same refusal check.
 $ErrorActionPreference = 'Continue'
-& "$root\bootstrap.cmd" --out $out
-exit $LASTEXITCODE
+try {
+    & "$root\bootstrap.cmd" --out $out
+    $code = $LASTEXITCODE
+} finally {
+    Remove-Item Env:CARGO_ENCODED_RUSTFLAGS -ErrorAction SilentlyContinue
+}
+exit $code
