@@ -13,7 +13,6 @@ jobs:
       contents: read
     outputs:
       predicate: ${{ steps.check.outputs.predicate }}
-      subject: ${{ steps.check.outputs.subject }}
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
@@ -26,7 +25,6 @@ jobs:
           python3 scripts/verify-topaz-release.py > "$RUNNER_TEMP/predicate.json"
           jq . "$RUNNER_TEMP/predicate.json"
           printf 'predicate=%s\n' "$(jq -c . "$RUNNER_TEMP/predicate.json")" >> "$GITHUB_OUTPUT"
-          printf 'subject=sha256:%s\n' "$(jq -er .subject.sha256 "$RUNNER_TEMP/predicate.json")" >> "$GITHUB_OUTPUT"
 
   attest:
     needs: verify
@@ -37,11 +35,23 @@ jobs:
       id-token: write
       attestations: write
     steps:
-      - name: Attest the static checks for the verified CLI digest
+      # Every file the checks compare is a subject, so the attestation is not
+      # read as a claim about the CLI alone.
+      - name: List the verified files
+        shell: bash
+        env:
+          PREDICATE: ${{ needs.verify.outputs.predicate }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$PREDICATE" | jq -er '
+            "\(.subject.sha256)  \(.subject.name)",
+            "\(.compilerRust.seedArchiveSha256)  \(.compilerRust.seedUrl | split("/") | last)",
+            "\(.compilerRust.sha256)  \(.compilerRust.publicPath)"' > "$RUNNER_TEMP/subjects.txt"
+          cat "$RUNNER_TEMP/subjects.txt"
+      - name: Attest the static checks for the verified files
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4
         with:
-          subject-name: topaz-linux-x86_64
-          subject-digest: ${{ needs.verify.outputs.subject }}
+          subject-checksums: ${{ runner.temp }}/subjects.txt
           predicate-type: https://github.com/studiohaze/topaz/attestations/static-release-bytes/v1
           predicate: ${{ needs.verify.outputs.predicate }}
           create-storage-record: false
