@@ -7,22 +7,28 @@ not part of this repository's history.
 ## Release builds for Windows and Linux x86-64
 
 The catalogue rows for `core-kit-5.21.1` were packed from source commit
-`67c65839430802ce30da95acce6e1fa30abb4a47`. Its payload input set has 324
+`4811032c6faa8b725c2143c73ee64a941e0cd2b5`. Its payload input set has 324
 repository inputs and SHA-256
-`bda7efa3a52b65a09b511ac35383c6df8808d6050864c2b76d9c17b76c7fd6fb`. Later
+`79c55e0d208cfe9243d7a3fe775df9f75fbce41f52d9811e7a09c50a46c3c563`. Later
 commits that change only documentation or the catalogue keep that input set.
 
 Each target was built twice with its path-normalized script, once in each of
-two checkouts of that commit at different paths. One path was longer and
-contained a space. Each checkout started with an empty `compiler/target`.
+two checkouts at different paths. One path was longer and contained a space.
+Each checkout started with an empty `compiler/target`. The builds ran at
+earlier commits of this change with the same compiled sources and path
+mappings. Commits after them changed build records, input inventories,
+documentation and the Windows script's flag cleanup after a run. None of
+these is compiled into the executable. Both
+checkouts were then moved to the source commit for assembly, comparison,
+packing and the checks below.
 Both builds used Rust/Cargo 1.96.0, the default release profile and
 `CARGO_BUILD_JOBS=2`. Each payload carries `BUILD-RECORD.json` with the
 toolchain and environment.
 
 | Target | Executable bytes | Executable SHA-256 | Archive bytes | Archive SHA-256 |
 | --- | ---: | --- | ---: | --- |
-| `x86_64-pc-windows-msvc` | 145,312,768 | `ea18ffe08803e6da13d9b478e078f3b19361f35c7bb07e6f51260fcf575a6edb` | 148,174,395 | `61afcdd3cfb4a86703288edb72ca6787cf3b5a63c19ab2975993b999b922eef5` |
-| `x86_64-unknown-linux-gnu` | 100,370,720 | `5a9e2fa9f9528632021213ea2ec57353dbef7545c142bbac7684490bf92293db` | 103,228,634 | `d25e54259a09a751cff6c7a8de96fb06cf49b38bc084e4837eb0d537966364e9` |
+| `x86_64-pc-windows-msvc` | 145,312,768 | `ea18ffe08803e6da13d9b478e078f3b19361f35c7bb07e6f51260fcf575a6edb` | 148,174,395 | `2958dfca411200c8ad0864c2105393263deea327e044658b7ce9618b16b1bf78` |
+| `x86_64-unknown-linux-gnu` | 100,370,720 | `5a9e2fa9f9528632021213ea2ec57353dbef7545c142bbac7684490bf92293db` | 103,228,634 | `8056151eb0425306329c3b39f1b5243fc31a1755f9a7e006ea235eaf0b17c170` |
 
 Every build linked the same 2,114,898-byte generated CLI Rust with SHA-256
 `654a196520bfee7ea62788e6cc40ac283abdef6fca0c69f73b007d7dc5564b64`.
@@ -51,7 +57,7 @@ used `/INCREMENTAL:NO`, `/Brepro` and `/DEBUG:NONE`. Both builds ran
   example project check in its own checkout. The first checkout's Kit passed
   `smoke.cmd --native-build`, and `verify-core.ps1` passed there.
 - First installation used a source copy of commit
-  `9a94a2d3fb37d383de3c729209d1a6a1790f802c`, which adds these catalogue rows,
+  `7dc906921575b2bbc7d9b2f2c92091abf98965a7`, which adds these catalogue rows,
   without `.git`, `out` or `compiler/target`. The installer process had only
   the Windows system directories and Windows PowerShell on `PATH`, with no
   Rust, Cargo, rustup, `link.exe` or `cl.exe`. The host execution policy was
@@ -90,7 +96,7 @@ different container paths.
   checkout's Kit passed `smoke.sh --native-build`.
 - First installation ran in a new container from the plain `ubuntu:22.04`
   image above, without network access. It had no Rust, Cargo, rustup, C
-  compiler, linker or curl. A source copy of commit `9a94a2d` installed the
+  compiler, linker or curl. A source copy of commit `7dc9069` installed the
   archive with `install-core-kit --archive`. `topaz --version`, the example
   project and source checks and `kit install --check` passed.
 
