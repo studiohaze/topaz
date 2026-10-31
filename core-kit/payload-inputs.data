@@ -276,6 +276,8 @@ core-kit/distribution/README.md
 core-kit/distribution/RUST-STDLIB-NOTICES.html
 core-kit/distribution/RUST-STDLIB-PROVENANCE.json
 core-kit/distribution/linux-x86_64-development.json
+core-kit/distribution/macos-aarch64-release.json
+core-kit/distribution/macos-x86_64-release.json
 core-kit/distribution/windows-x86_64-development.json
 core-kit/downloads.ps1
 core-kit/downloads.sh
