@@ -259,6 +259,16 @@ These checks are optional for ordinary use. Changes to the CLI or packaging
 around unchanged compiler inputs do not require repeating the expensive
 canonical self-regeneration.
 
+### Checking the website release
+
+A workflow in this repository checks the Topaz 5.21.1 Linux x86_64 release
+from the website. It verifies the signed checksum list, checks that the
+compiler Rust inside the website's seed matches
+`compiler/generated/native/compiler.rs`, then attests the CLI, the seed and
+that file. [VERIFY.md](VERIFY.md) shows how to check the attestation with
+`gh`. The attestation covers those bytes. It doesn't claim that the website
+CLI was built from this checkout.
+
 ## Working on Core Kit
 
 Start with the [Topaz CLI modules](core-kit/cli/src). Command handling,
