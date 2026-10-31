@@ -1,11 +1,47 @@
 {
   "compilerSourceSetId": "sha256:17d598ebcb0dea65195aba8c0b3ab20f94003a7f343714f7b1df25d790cdacd5",
+  "licenseAuthorizations": [
+    {
+      "date": "2026-10-26",
+      "grantor": "Studio Haze Inc.",
+      "license": "Apache-2.0",
+      "paths": [
+        "compiler/crates/topaz_diag/**",
+        "compiler/crates/topaz_host_none/**",
+        "compiler/crates/topaz_product_runtime/**",
+        "compiler/crates/topaz_rt/**",
+        "compiler/crates/topaz_seed/**",
+        "compiler/crates/topaz_syntax/**",
+        "compiler/crates/topaz_value/**"
+      ],
+      "record": "compiler/seed/runtime.json",
+      "scope": "The six public seed runtime crates and the standalone seed runner"
+    },
+    {
+      "date": "2026-10-31",
+      "grantor": "Studio Haze Inc.",
+      "license": "Apache-2.0",
+      "paths": [
+        "bootstrap*",
+        "compiler/core-kit-native/**",
+        "compiler/crates/topaz_host_native/**",
+        "compiler/seed/**",
+        "core-kit/**",
+        "examples/core-kit/**",
+        "install-core-kit*",
+        "topaz*"
+      ],
+      "record": "core-kit/distribution/NOTICE-SCOPE.md",
+      "scope": "Topaz Core Kit files and the ported topaz_host_native crate. Root patterns without a slash name files at the repository root."
+    }
+  ],
   "nativePackages": [
     {
       "name": "topaz-core-kit-native",
       "policyReferences": [
         "LICENSE-COMPONENTS.txt",
-        "core-kit/UPSTREAM-PORT.md"
+        "core-kit/UPSTREAM-PORT.md",
+        "core-kit/distribution/NOTICE-SCOPE.md"
       ],
       "role": "local-native-adapter",
       "sourcePaths": [
@@ -31,7 +67,8 @@
       "name": "topaz_host_native",
       "policyReferences": [
         "LICENSE-COMPONENTS.txt",
-        "core-kit/UPSTREAM-PORT.md"
+        "core-kit/UPSTREAM-PORT.md",
+        "core-kit/distribution/NOTICE-SCOPE.md"
       ],
       "role": "public-native-host",
       "sourcePaths": [
@@ -122,7 +159,6 @@
     }
   ],
   "pendingReview": [
-    "The historical SOURCE-COMPONENTS.json describes its published snapshot. The newer local CLI/native additions need an authoritative component policy record before release readiness is asserted.",
     "LICENSE-COMPONENTS.txt refers to GENERATED-OUTPUT-NOTICE.txt for generated application output. That file is absent from this checkout. No replacement terms are invented here.",
     "Platform runtime files and their notices, tested support scope and independent complete release reproduction remain platform-specific release review work."
   ],
@@ -146,7 +182,7 @@
     "version": "1.96.0"
   },
   "schema": "topaz.core-kit-components/v1",
-  "scope": "Descriptive Core Kit composition and existing policy references. This record makes no new license grant and does not certify distribution readiness.",
+  "scope": "Core Kit composition, license authorizations and existing policy references. This record does not certify distribution readiness.",
   "thirdPartyScope": {
     "explanation": "The inherited files retain the broader website distribution inventory and original texts. They are preserved as inherited notices rather than claimed to be the minimal Core Kit link graph. Cargo.lock has no registry packages; Rust standard-library and platform runtime components are considered separately.",
     "inheritedWebsiteInventory": [
@@ -158,7 +194,8 @@
   "topazCli": {
     "policyReferences": [
       "LICENSE-COMPONENTS.txt",
-      "core-kit/UPSTREAM-PORT.md"
+      "core-kit/UPSTREAM-PORT.md",
+      "core-kit/distribution/NOTICE-SCOPE.md"
     ],
     "role": "Topaz-authored command, project, build, maintenance and distribution policy",
     "sourcePath": "core-kit/cli/src"

@@ -82,10 +82,10 @@ source inputs without rebuilding the payload.
 
 ## Notice provenance
 
-COMPONENTS.json describes the native Cargo closure and references the existing
-source policy. NOTICE-SCOPE.md explains the inherited website inventory and
-the distinction from Core Kit's selected components. Neither file changes a
-license grant.
+COMPONENTS.json describes the native Cargo closure, its license
+authorizations and the existing source policy. NOTICE-SCOPE.md states the
+Apache-2.0 license of the Core Kit files and explains the inherited website
+inventory and the distinction from Core Kit's selected components.
 
 RUST-STDLIB-NOTICES.html is copied without modification from the pinned Rust
 1.96.0 release. RUST-STDLIB-PROVENANCE.json records its exact archive member,

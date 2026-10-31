@@ -1,8 +1,35 @@
 # Core Kit notice scope
 
 This bundle preserves the repository's existing license and notice texts.
-COMPONENTS.json describes the selected Core Kit composition and points to
-the existing policy records. It makes no new license grant.
+This record also states the license of the Topaz Core Kit files.
+COMPONENTS.json describes the selected Core Kit composition, its license
+authorizations and the policy record for each component.
+
+## Core Kit license
+
+Studio Haze Inc. licenses the following Topaz Core Kit files under the
+Apache License, Version 2.0, the same terms as the existing public source.
+The full license text is in LICENSE. This license was authorized on
+2026-10-31.
+
+- `core-kit/**`, including the Topaz CLI sources, the PowerShell and sh
+  scripts and the Rust adapter in `core-kit/native`
+- `compiler/core-kit-native/**`
+- `compiler/seed/**`
+- `compiler/crates/topaz_host_native/**`, the native host crate ported from
+  the development source
+- `examples/core-kit/**`
+- the root `bootstrap*`, `install-core-kit*` and `topaz*` launchers
+
+The six public seed runtime crates and the standalone seed runner were
+licensed under Apache-2.0 on 2026-10-26. These are `topaz_diag`,
+`topaz_syntax`, `topaz_value`, `topaz_product_runtime`, `topaz_rt`,
+`topaz_host_none` and `topaz_seed` under `compiler/crates`.
+`compiler/seed/runtime.json` records that authorization.
+
+The root LICENSE-COMPONENTS.txt points to this record. Third-party material
+keeps the terms granted by its copyright holders. The notices below still
+apply to a built executable.
 
 ## Public compiler and runtime
 
@@ -17,8 +44,9 @@ Core Kit additions. The standalone runner belongs to reconstruction and is
 not linked into the native Core Kit executable.
 
 LICENSE, LICENSE-COMPONENTS.txt and BINARY-LICENSE.txt retain their original
-terms and scopes. This bundle does not replace those texts or extend a
-historical snapshot inventory to unlisted source files.
+terms and scopes. This bundle does not replace those texts. Files that are
+neither in a snapshot inventory nor in the Core Kit license above gain no
+license from this record.
 
 ## Inherited website notices
 
@@ -52,8 +80,7 @@ need to agree with the retained native validation and build evidence.
 The repository policy refers to GENERATED-OUTPUT-NOTICE.txt for generated
 application output. That file is absent from this checkout. This scope record
 does not invent replacement terms or claim that a new notice has been supplied.
-Application output notice work and the authoritative component policy for
-new local CLI/native additions remain recorded in COMPONENTS.json.
+Application output notice work remains recorded in COMPONENTS.json.
 
 Payload byte comparison establishes matching supplied files. It does not
 independently authenticate a publisher or decide component licensing, platform

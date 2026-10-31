@@ -391,7 +391,8 @@ history or grants a source license.
 
 The inherited third-party notices describe the website's larger product.
 `COMPONENTS.json` and `NOTICE-SCOPE.md` describe the reduced Kit's selected
-components and those inherited notice boundaries. Seed runtime authorization
+components and those inherited notice boundaries. `NOTICE-SCOPE.md` also
+records the Apache-2.0 license of the Core Kit files. Seed runtime authorization
 is recorded in `compiler/seed/runtime.json`; [UPSTREAM-PORT.md](UPSTREAM-PORT.md)
 records the selected public port. Platform and system components still need
 their applicable terms and review. Keep release claims within the actual

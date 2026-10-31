@@ -21,3 +21,9 @@ Apache-2.0; its separately downloaded executable has component-specific terms.
 Generated application output retains GENERATED-OUTPUT-NOTICE.txt and its runtime
 and third-party licenses. This policy grants no rights in third-party material
 beyond those granted by its copyright holders.
+
+The Apache grant in LICENSE also applies to the Topaz Core Kit files listed in
+core-kit/distribution/NOTICE-SCOPE.md. They include the Core Kit sources,
+scripts and launchers, the compiler seed inputs and the topaz_host_native
+crate. That record identifies the covered paths and the date of their
+authorization.

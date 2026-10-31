@@ -180,7 +180,7 @@ the process PATH. [Installation receipt and host details](validation-pr16-no-bui
   validation as well.
 - Complete independent reproduction of each final platform payload and
   archive. Deterministic packaging of one supplied build is a separate result.
-- Review of the final notices and component policy, then publication of the
+- Review of the final platform notices, then publication of the
   actual named release assets and their measured catalogue rows.
 - Preparation of the intended default branch and repository home.
 

@@ -30,7 +30,9 @@ the seed runner from the same source state.
 
 The six seed runtime crates are the approved public runtime closure. The
 native host adapter is ported separately because it is the OS boundary needed
-by native programs, not part of the no-capability seed compiler.
+by native programs, not part of the no-capability seed compiler. Studio Haze
+Inc. licensed `topaz_host_native` under Apache-2.0 on 2026-10-31, as recorded
+in [the Core Kit notice scope](distribution/NOTICE-SCOPE.md).
 
 ## Deliberately not ported
 

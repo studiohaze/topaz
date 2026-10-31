@@ -347,6 +347,9 @@ The component-specific terms and notices are recorded in [LICENSE](LICENSE),
 [LICENSE-COMPONENTS.txt](LICENSE-COMPONENTS.txt), [NOTICE](NOTICE),
 [SOURCE-COMPONENTS.json](SOURCE-COMPONENTS.json) and the accompanying third-party
 notices. The original source snapshot inventory is retained as provenance.
+Topaz Core Kit files and the `topaz_host_native` crate are licensed under
+Apache-2.0 as listed in the
+[Core Kit notice scope](core-kit/distribution/NOTICE-SCOPE.md).
 The [port record](core-kit/UPSTREAM-PORT.md) identifies the selected public
 runtime scope. Published platform payloads include the component records and
 notices that apply to their actual files.
