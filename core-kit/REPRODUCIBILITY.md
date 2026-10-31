@@ -16,8 +16,11 @@ Use the already-installed Rust/Cargo 1.96.0 and native linker.
 ./core-kit/repro-build.sh ../kit-output
 ```
 
-The default output is `out/core-kit-repro/topaz-core-kit`. This small wrapper
-uses the ordinary source bootstrap and does not regenerate the canonical core.
+The default output is `out/core-kit-repro/topaz-core-kit`. When one checkout
+builds more than one target, such as both macOS architectures, pass a separate
+output directory for each target so the second build does not replace the
+first. This small wrapper uses the ordinary source bootstrap and does not
+regenerate the canonical core.
 It applies the following Rust flags to the target crates, including their
 dependencies.
 
@@ -191,10 +194,9 @@ including both manifests, plus the required modes. It refuses to compare one
 canonical directory with itself. Two distinct directories still do not prove
 independent construction. Preserve the build histories described above.
 
-The supplied Linux and Windows x86-64 development recipes keep their
-`releaseReady` fields false. They allow assembly and comparison but refuse
-native release promotion and packaging. The download catalogue currently
-contains only its header. No approved public release asset is represented.
+The Linux and Windows x86-64 development recipes keep their `releaseReady`
+fields false. They allow assembly and comparison but refuse native release
+promotion and packaging. The per-target release recipes permit both.
 
 A reviewed release recipe permits native candidate version, source check,
 project check and `kit verify` gates. The candidate must also report the digest
