@@ -16,8 +16,11 @@ Use the already-installed Rust/Cargo 1.96.0 and native linker.
 ./core-kit/repro-build.sh ../kit-output
 ```
 
-The default output is `out/core-kit-repro/topaz-core-kit`. This small wrapper
-uses the ordinary source bootstrap and does not regenerate the canonical core.
+The default output is `out/core-kit-repro/topaz-core-kit`. When one checkout
+builds more than one target, such as both macOS architectures, pass a separate
+output directory for each target so the second build does not replace the
+first. This small wrapper uses the ordinary source bootstrap and does not
+regenerate the canonical core.
 It applies the following Rust flags to the target crates, including their
 dependencies.
 
@@ -49,6 +52,31 @@ self-regeneration remains disabled.
 The wrapper normalizes source paths. It does not select a linker/SDK, erase
 inherited Cargo configuration, or certify an arbitrary build environment.
 Record those inputs and compare the actual output before claiming a result.
+
+## Windows path-normalized build
+
+`core-kit/repro-build.ps1` applies the same two mappings on Windows and then
+runs the ordinary `bootstrap.cmd`. It needs Windows PowerShell 5.1 or later
+where local scripts are already allowed, plus the installed Rust/Cargo 1.96.0
+and MSVC linker.
+
+```powershell
+.\core-kit\repro-build.ps1
+# A custom output may be outside the checkout and may contain spaces.
+.\core-kit\repro-build.ps1 ..\kit-output
+```
+
+The default output is `out\core-kit-repro\topaz-core-kit.exe`. The checkout
+maps to `/topaz-core-kit` and the selected output's `generated_cli.rs` maps to
+`/topaz-core-kit/generated/cli.rs`. The script starts `bootstrap.cmd` through
+the same full checkout path that it maps, so every absolute source path Cargo
+passes to rustc begins with that prefix. Separators after the mapped prefix
+stay as Windows wrote them. An existing `RUSTFLAGS` or
+`CARGO_ENCODED_RUSTFLAGS` is rejected, as is a generated file that is a link.
+
+The final link already uses `/INCREMENTAL:NO`, `/Brepro` and `/DEBUG:NONE`
+from the native build script. The wrapper does not select the Visual Studio
+or Windows SDK version. Record them with the result.
 
 ## Cargo package identity
 
@@ -166,10 +194,9 @@ including both manifests, plus the required modes. It refuses to compare one
 canonical directory with itself. Two distinct directories still do not prove
 independent construction. Preserve the build histories described above.
 
-The supplied Linux and Windows x86-64 development recipes keep their
-`releaseReady` fields false. They allow assembly and comparison but refuse
-native release promotion and packaging. The download catalogue currently
-contains only its header. No approved public release asset is represented.
+The Linux and Windows x86-64 development recipes keep their `releaseReady`
+fields false. They allow assembly and comparison but refuse native release
+promotion and packaging. The per-target release recipes permit both.
 
 A reviewed release recipe permits native candidate version, source check,
 project check and `kit verify` gates. The candidate must also report the digest

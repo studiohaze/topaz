@@ -25,6 +25,21 @@ Those import observations establish neither current-revision execution nor a
 minimum supported Windows version. Both development recipes keep releaseReady
 set to false.
 
+Release recipes have releaseReady set to true and select one target each.
+They are windows-x86_64-release.json, linux-x86_64-release.json,
+macos-aarch64-release.json and macos-x86_64-release.json. Each records the
+system imports of the default-profile release executable, the platform
+version that executable declares or requires and the hosts where its first
+installation ran. They bundle no runtime libraries.
+
+Each release recipe maps the thirteen companions of the development recipes
+and also maps build-<Rust-target>.json to BUILD-RECORD.json in its payload. That record names the path-normalized build command and its
+source-path mappings, the Rust and Cargo versions, the linker and SDK and
+the build host or container image. The payload's own payload.json and
+assembly.json record the inputs. The record describes the environment in
+which the published executable was built and compared. It is not a check
+that a later build environment matches.
+
 A recipe with releaseReady set to true permits native promotion and release
 packaging after the
 complete candidate comparison and execution checks pass. That setting is

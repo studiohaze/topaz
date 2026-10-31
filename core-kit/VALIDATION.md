@@ -4,6 +4,132 @@ PR numbers and merge commits in this record identify change sets in the
 development history before Core Kit was published here. Those commits are
 not part of this repository's history.
 
+## Release builds
+
+The catalogue rows for `core-kit-5.21.1` were packed from source commit
+`4811032c6faa8b725c2143c73ee64a941e0cd2b5`. Its payload input set has 324
+repository inputs and SHA-256
+`79c55e0d208cfe9243d7a3fe775df9f75fbce41f52d9811e7a09c50a46c3c563`. Later
+commits that change only documentation or the catalogue keep that input set.
+
+Each target was built twice with its path-normalized script, once in each of
+two checkouts at different paths. One path was longer and contained a space.
+Each checkout started with an empty `compiler/target`. The builds ran at
+earlier commits of this change with the same compiled sources and path
+mappings. Commits after them changed build records, input inventories,
+documentation and the Windows script's flag cleanup after a run. None of
+these is compiled into the executable. Both
+checkouts were then moved to the source commit for assembly, comparison,
+packing and the checks below.
+Both builds used Rust/Cargo 1.96.0, the default release profile and
+`CARGO_BUILD_JOBS=2`. Each payload carries `BUILD-RECORD.json` with the
+toolchain and environment.
+
+| Target | Executable bytes | Executable SHA-256 | Archive bytes | Archive SHA-256 |
+| --- | ---: | --- | ---: | --- |
+| `x86_64-pc-windows-msvc` | 145,312,768 | `ea18ffe08803e6da13d9b478e078f3b19361f35c7bb07e6f51260fcf575a6edb` | 148,174,395 | `2958dfca411200c8ad0864c2105393263deea327e044658b7ce9618b16b1bf78` |
+| `x86_64-unknown-linux-gnu` | 100,370,720 | `5a9e2fa9f9528632021213ea2ec57353dbef7545c142bbac7684490bf92293db` | 103,228,634 | `8056151eb0425306329c3b39f1b5243fc31a1755f9a7e006ea235eaf0b17c170` |
+| `aarch64-apple-darwin` | 72,526,304 | `2d523a73fe6ebfe7f0b27e0e8da7c1a137e5e65bdc539654acba1af1d4c0643c` | 75,381,389 | `cd01a47a8250d033bb3722132e93508f378301cbc5e943e673d2ea60680cfab8` |
+| `x86_64-apple-darwin` | 94,217,152 | `097d87f7fd2a95e3ff92d21a4435e7dee316c8c5a8b0dc5fcb893c15495ec9bb` | 97,074,436 | `31f98b30ab7592aeea6b309a2ccec73a90a611c499da783de517f43d01a38200` |
+
+Every build linked the same 2,114,898-byte generated CLI Rust with SHA-256
+`654a196520bfee7ea62788e6cc40ac283abdef6fca0c69f73b007d7dc5564b64`.
+
+In each checkout the Kit from that checkout assembled one candidate from each
+of the two builds, compared them and packed them. The two checkouts wrote
+byte-identical archives and catalogue rows, so either build reproduces the
+published archive. Each candidate held 17 payload files.
+
+### Windows x64
+
+The host was Windows 11 Pro 10.0.26200 x64 with Visual Studio Build Tools
+2022 17.14, MSVC 14.44.35207 and Windows SDK 10.0.26100.0. The final link
+used `/INCREMENTAL:NO`, `/Brepro` and `/DEBUG:NONE`. Both builds ran
+`core-kit\repro-build.ps1`.
+
+- `kit binary-info` reported `sameBytes` true with no differing offsets.
+- The only build path left in the executable is
+  `/topaz-core-kit\compiler\target\x86_64-pc-windows-msvc\release\build\topaz-core-kit-native-6b2aba09c74b61a0\out\generated_cli.rs`.
+  It is identical in both builds. A byte search found no drive letter path,
+  user directory or checkout folder name.
+- The executable declares PE operating system and subsystem version 6.0 and
+  imports ten DLLs. `vcruntime140.dll` belongs to the Visual C++ 2015-2022
+  x64 Redistributable. The others are part of Windows 10 and later.
+- Each Kit passed `--version`, `kit verify`, `kit refresh --check` and the
+  example project check in its own checkout. The first checkout's Kit passed
+  `smoke.cmd --native-build`, and `verify-core.ps1` passed there.
+- First installation used a source copy of commit
+  `7dc906921575b2bbc7d9b2f2c92091abf98965a7`, which adds these catalogue rows,
+  without `.git`, `out` or `compiler/target`. The installer process had only
+  the Windows system directories and Windows PowerShell on `PATH`, with no
+  Rust, Cargo, rustup, `link.exe` or `cl.exe`. The host execution policy was
+  `CurrentUser RemoteSigned`, with Windows PowerShell 5.1 and bsdtar 3.8.9.
+  `install-core-kit.cmd --archive`, `topaz.cmd --version`, the example project
+  check and `kit install --check` passed. The installation receipt names
+  the archive and input set above.
+- The Visual C++ runtime 14.50.35719 was installed on that host. Windows
+  Sandbox was not available, so this run is not a clean-machine result.
+
+An ordinary `bootstrap.cmd` followed by `kit build` in one checkout of the
+same CLI inputs produced two identical 145,312,768-byte executables with
+SHA-256 `c444fe2b650ca39b7482dd5c5f8121ec503f0295418ca09e426f012d11daa071`.
+They differ from the release executable only through the embedded checkout
+path, which the path-normalized build replaces.
+
+### Linux x86-64
+
+Both builds ran `core-kit/repro-build.sh` in fresh containers from one build
+image. That image is `ubuntu:22.04` with digest
+`sha256:e0f80c829509ef4df9e76bd8944eb7b8ec25cbb379b112a7f9448b2c77a77c9b`
+plus build-essential 12.9ubuntu3, GCC 11.4.0, binutils 2.38, glibc 2.35 and
+Rust 1.96.0 installed by rustup with the minimal profile. Rust linked through
+the GCC driver with its bundled LLD 22.1.2. The two checkouts were mounted at
+different container paths.
+
+- `cmp` and `kit binary-info` found identical executables.
+- The only build path left is
+  `/topaz-core-kit/compiler/target/x86_64-unknown-linux-gnu/release/build/topaz-core-kit-native-ac8d00b7dc4bf8f5/out/generated_cli.rs`
+  in both builds. Neither mount path appears in the executable.
+- The executable needs `libgcc_s.so.1`, `libm.so.6`, `libc.so.6` and
+  `ld-linux-x86-64.so.2`. Its newest required glibc symbol version is
+  `GLIBC_2.34`.
+- Each Kit passed `--version`, `kit verify`, `kit refresh --check`, the
+  example project check and `verify-core.sh` in its own checkout. The first
+  checkout's Kit passed `smoke.sh --native-build`.
+- First installation ran in a new container from the plain `ubuntu:22.04`
+  image above, without network access. It had no Rust, Cargo, rustup, C
+  compiler, linker or curl. A source copy of commit `7dc9069` installed the
+  archive with `install-core-kit --archive`. `topaz --version`, the example
+  project and source checks and `kit install --check` passed.
+
+A container limited to 6 GiB of memory with 2 GiB of swap was killed while
+compiling the canonical core. The recorded builds ran with swap available.
+An ordinary bootstrap and `kit build` in one checkout produced identical
+100,370,720-byte executables with SHA-256
+`8cbde129b55d7dcb761830efeae9b5540daff5eb07941cff20c4aa83cd776edb`, which
+embed that checkout's path.
+
+### macOS
+
+Both macOS targets were built on one Apple M1 host with macOS 27.0.1
+(26A434), Command Line Tools 26.6, the macOS 26.5 SDK and ld-1267. The builds
+shared the existing Cargo home, which supplies no package sources. The
+`x86_64-apple-darwin` builds, checks and installation ran under Rosetta 2
+with a separate x86-64 Rust installation. No Intel Mac was used.
+
+- `cmp` and `kit binary-info` found identical executables for each target.
+  Neither checkout path nor the home directory appears in them.
+- Both executables import only `/usr/lib/libSystem.B.dylib`. The aarch64
+  executable declares minimum macOS 11.0 and the x86-64 executable 10.12.
+- Each Kit passed `smoke.sh --native-build`, `verify-core.sh`, `kit verify`
+  and `kit refresh --check` in both checkouts.
+- First installation used a source copy of the source commit with the macOS
+  rows added to its catalogue. `install-core-kit --archive`,
+  `topaz --version`, the example project and source checks and
+  `kit install --check` passed for both targets.
+- A Windows source copy with all four rows installed the Windows archive and
+  passed the same checks, so the complete catalogue is accepted.
+
 ## CLI, installation recovery and native adapter
 
 Linux x86-64 validation used pinned Rust/Cargo 1.96.0 and the public

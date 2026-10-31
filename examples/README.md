@@ -15,8 +15,8 @@ kit=./out/core-kit-bootstrap/topaz-core-kit
 $kit = '.\out\core-kit-bootstrap\topaz-core-kit.exe'
 ```
 
-The root `topaz` and `topaz.cmd` launchers run an installed Kit. This checkout
-lists no platform archives, so use the executable built from source.
+The root `topaz` and `topaz.cmd` launchers run an installed Kit. Without an
+installed Kit, use the executable built from source.
 
 ## Start with the Core Kit examples
 

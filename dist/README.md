@@ -1,8 +1,9 @@
 # Core Kit downloads
 
 [Build Core Kit from source](../README.md#build-the-kit-from-source) for this
-checkout. Its [catalogue](../core-kit/downloads.data) has no platform archives
-listed. The source build puts the executable under `out/core-kit-bootstrap`.
+checkout, or install the release archive its
+[catalogue](../core-kit/downloads.data) lists for your platform. The source
+build puts the executable under `out/core-kit-bootstrap`.
 
 ## Install the Kit selected by your checkout
 

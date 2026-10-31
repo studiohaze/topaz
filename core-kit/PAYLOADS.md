@@ -24,19 +24,19 @@ transport without choosing release inputs or approving a platform.
 
 ## Current release evidence
 
-The checked-in `core-kit/downloads.data` contains only its schema header.
-There are no approved public asset rows. This is intentional. A published
-URL, size or hash must come from the actual reviewed release output and must
-not be invented to make the installer appear available.
+Every row in `core-kit/downloads.data` comes from `kit payload-pack` for an
+archive published on the named GitHub Release. A published URL, size or hash
+must come from the actual reviewed release output and must not be invented to
+make the installer appear available.
 
-The supplied platform recipes are
-[`linux-x86_64-development.json`](distribution/linux-x86_64-development.json)
-and [`windows-x86_64-development.json`](distribution/windows-x86_64-development.json).
-Both keep `releaseReady` false. The Linux recipe records the observed x86-64
-development host with glibc 2.39. The Windows recipe records the ten DLL imports
-in the owner's retained PR #8 pair. Neither establishes a minimum supported OS.
-They support development assembly and comparison, while native promotion,
-packaging and installation require approved release material.
+Release recipes in `core-kit/distribution` set `releaseReady` for one target
+each and record the measured imports and minimum platform. Each also maps
+`build-<target>.json` to `BUILD-RECORD.json`, which names the build command,
+source-path mappings, Rust and Cargo versions, linker, SDK and host or
+container image. The development recipes for Linux and Windows x86-64 keep
+`releaseReady` false and remain available for assembly and comparison.
+[VALIDATION.md](VALIDATION.md) records the builds and installations behind
+each row.
 
 The source-first transition does not resolve the owner's retained Windows
 executable mismatch. The 131,391,488-byte files fit the new release file-size
