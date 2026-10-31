@@ -17,12 +17,17 @@ jobs:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           persist-credentials: false
+      # The tests feed the verifier changed signatures and seeds that reach
+      # openssl and the byte comparison, so a weakened check stops here.
+      - name: Test the verifier and the attestation policy offline
+        shell: bash
+        run: python3 -I -m unittest discover -s scripts -p 'test_*.py' -v
       - id: check
         name: Verify pinned release and public compiler materials
         shell: bash
         run: |
           set -euo pipefail
-          python3 scripts/verify-topaz-release.py > "$RUNNER_TEMP/predicate.json"
+          python3 -I scripts/verify-topaz-release.py > "$RUNNER_TEMP/predicate.json"
           jq . "$RUNNER_TEMP/predicate.json"
           printf 'predicate=%s\n' "$(jq -c . "$RUNNER_TEMP/predicate.json")" >> "$GITHUB_OUTPUT"
 
@@ -52,6 +57,6 @@ jobs:
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4
         with:
           subject-checksums: ${{ runner.temp }}/subjects.txt
-          predicate-type: https://github.com/studiohaze/topaz/attestations/static-release-bytes/v1
+          predicate-type: https://github.com/studiohaze/topaz/attestations/static-release-bytes/v2
           predicate: ${{ needs.verify.outputs.predicate }}
           create-storage-record: false
