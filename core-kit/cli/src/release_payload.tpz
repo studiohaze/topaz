@@ -1,0 +1,487 @@
+import std.fs as files
+import std.io as io
+import std.json as json
+import src.contracts { COMPILER_SOURCE_SET, VERSION, Capture, CapturedOutput, FileMetadata, Native, fileMetadata }
+import src.kit_inputs as kitInputs
+import src.payload { recordPayload, verifyPayload }
+import src.payload_files { MANIFEST_NAME, PayloadFile, payloadFiles, portablePath }
+import src.release_archive { MAX_TAR_BYTES }
+import src.release_image { Image, inspectImage }
+import src.release_recipe { LoadedRecipe, ReleaseRecipe, loadRecipe }
+import src.requests { encode, fromText }
+import src.responses { completed, rustSource }
+import src.toolchain { BuildTarget }
+import src.verification { validateRecordedInputs }
+
+const ASSEMBLY_NAME = "assembly.json"
+const GENERATED_NAME = "generated_cli.rs"
+const ASSEMBLY_SCHEMA = "topaz.core-kit-assembly/v1"
+
+export record AssemblyFile derives JSON {
+  path: string,
+  role: string,
+  mode: string,
+}
+
+export record Assembly derives JSON {
+  schema: string,
+  evidence: string,
+  compilerSourceSetId: string,
+  target: string,
+  executable: string,
+  format: string,
+  recipe: string,
+  recipeSha256: string,
+  requestSha256: string,
+  generatedRustSha256: string,
+  systemDependencies: Array<string>,
+  minimumPlatform: string,
+  files: Array<AssemblyFile>,
+}
+
+record PlannedFile {
+  file: AssemblyFile,
+  source: string,
+  bytes: int,
+  sha256: string,
+}
+
+export record Verified {
+  directory: string,
+  loaded: LoadedRecipe,
+  assembly: Assembly,
+  contents: Array<PayloadFile>,
+  manifest: PayloadFile,
+}
+
+record ManifestTarget derives JSON {
+  target: string,
+  executable: string,
+}
+
+function parentDirectory(file: FileMetadata) -> Result<string, string> {
+  let mut parts = file.path.split("/")
+  parts.pop()
+  let directory = parts.join("/")
+  if directory == "" || directory.endsWith(":") {
+    return Err("a payload must use a directory below the filesystem root")
+  }
+  Ok(directory)
+}
+
+function regularFile(directory: string, name: string) -> Result<string, string> {
+  for entry in files.list(directory)? {
+    if entry.name == name {
+      if entry.kind != "file" { return Err("payload/build input must be a regular file: {name}") }
+      return Ok("{directory}/{name}")
+    }
+  }
+  Err("required payload/build file is missing: {name}")
+}
+
+function readText(path: string, maximum: int, native: Native) -> Result<string, string> {
+  let meta = fileMetadata(path, native)?
+  if meta.bytes == 0 || meta.bytes > maximum { return Err("text input has an invalid size: {path}") }
+  let text = files.readText(meta.path)?
+  if text.byteLength() != meta.bytes { return Err("text input changed while being read: {path}") }
+  Ok(text)
+}
+
+function fileMode(recipe: ReleaseRecipe, path: string) -> string {
+  if path == recipe.executable && recipe.format != "pe" { "0755" } else { "0644" }
+}
+
+function checkMode(path: string, expected: string, native: Native) -> Result<(), string> {
+  let meta = fileMetadata(path, native)?
+  if meta.mode == "" {
+    if expected == "0755" { return Err("this host cannot validate the required Unix executable mode") }
+  } else if meta.mode != expected {
+    return Err("payload mode differs from its assembly record: {path}")
+  }
+  Ok(())
+}
+
+function normalizedRequest(root: string) -> Result<string, string> {
+  encode(fromText(kitInputs.prepare(root)?)?, "rust-source")
+}
+
+function expectedFiles(recipe: ReleaseRecipe) -> Array<AssemblyFile> {
+  let mut names = [recipe.executable, GENERATED_NAME]
+  for mapping in recipe.files { names.push(mapping.destination) }
+  names.sort()
+  let mut output: Array<AssemblyFile> = []
+  for name in names {
+    let mut role = if name == recipe.executable { "executable" } else { "generated-source" }
+    for mapping in recipe.files { if mapping.destination == name { role = mapping.role } }
+    output.push(AssemblyFile { path: name, role: role, mode: fileMode(recipe, name) })
+  }
+  output
+}
+
+function dependencies(recipe: ReleaseRecipe, image: Image) -> Result<Array<string>, string> {
+  if image.target != recipe.target || image.format != recipe.format {
+    return Err("executable format or machine differs from the platform recipe")
+  }
+  let mut allowed: Set<string> = set {}
+  for name in recipe.allowedSystemDependencies { allowed.add(name) }
+  let mut bundled: Set<string> = set {}
+  for mapping in recipe.files {
+    if mapping.role == "runtime" {
+      bundled.add(if recipe.format == "pe" { portablePath(mapping.destination)? } else { mapping.destination })
+    }
+  }
+  let mut system: Array<string> = []
+  for name in image.dependencies {
+    if allowed.contains(name) {
+      system.push(name)
+    } else if !bundled.contains(name) {
+      return Err("executable imports an unclassified runtime dependency: {name}")
+    }
+  }
+  for field in image.metadata {
+    if field.name == "elf.interpreter" {
+      let parts = field.value.split("/")
+      let name = parts[parts.length - 1]
+      let expected = if recipe.target == "x86_64-unknown-linux-gnu" {
+        "/lib64/ld-linux-x86-64.so.2"
+      } else {
+        "/lib/ld-linux-aarch64.so.1"
+      }
+      if field.value != expected { return Err("ELF interpreter path is outside the supported release profile: {field.value}") }
+      if !allowed.contains(name) { return Err("ELF interpreter is not classified by the platform recipe: {field.value}") }
+    }
+    if field.name == "macho.dynamicLinker" && field.value != "/usr/lib/dyld" {
+      return Err("Mach-O dynamic loader is outside the supported release profile")
+    }
+    if field.name == "elf.rpath" || field.name == "elf.runpath" || field.name.startsWith("macho.rpath.") {
+      return Err("this recipe does not admit embedded runtime search paths: {field.value}")
+    }
+  }
+  system.sort()
+  Ok(system)
+}
+
+function planned(file: AssemblyFile, source: string, limit: int, native: Native) -> Result<PlannedFile, string> {
+  let meta = fileMetadata(source, native)?
+  if meta.bytes == 0 || meta.bytes > limit {
+    return Err("payload file must be nonempty and no larger than its limit of {limit} bytes: {file.path}")
+  }
+  let bytes = files.readBytes(meta.path)?
+  if bytes.length() != meta.bytes { return Err("payload input changed while being read: {source}") }
+  Ok(PlannedFile { file: file, source: meta.path, bytes: meta.bytes, sha256: bytes.sha256().toHex() })
+}
+
+function copyPlanned(directory: string, plan: PlannedFile, native: Native) -> Result<(), string> {
+  let destination = "{directory}/{plan.file.path}"
+  native("copy-file", [plan.source, destination])?
+  native("set-file-mode", [destination, plan.file.mode])?
+  let bytes = files.readBytes(destination)?
+  if bytes.length() != plan.bytes || bytes.sha256().toHex() != plan.sha256 {
+    return Err("copied payload input changed during assembly: {plan.file.path}")
+  }
+  checkMode(destination, plan.file.mode, native)
+}
+
+function encoded(assembly: Assembly) -> Result<string, string> {
+  Ok("{json.stringify(assembly)?}\n")
+}
+
+function requireAssemblyMembership(contents: Array<PayloadFile>, expected: Array<AssemblyFile>, limit: int) -> Result<(), string> {
+  if contents.length != expected.length + 1 { return Err("assembled payload file membership differs from its recipe") }
+  let mut seen: Set<string> = set {}
+  for file in expected { seen.add(file.path) }
+  seen.add(ASSEMBLY_NAME)
+  for file in contents {
+    if !seen.contains(file.path) || file.bytes == 0 || file.bytes > limit {
+      return Err("assembled payload contains an unexpected, empty or oversized file: {file.path}")
+    }
+  }
+  Ok(())
+}
+
+function preflightMembers(directory: string, expected: Array<AssemblyFile>, limit: int, native: Native) -> Result<(), string> {
+  let mut names: Set<string> = set {}
+  for file in expected { names.add(file.path) }
+  names.add(ASSEMBLY_NAME)
+  names.add(MANIFEST_NAME)
+  let entries = files.list(directory)?
+  if entries.length != names.length { return Err("assembled payload file membership differs from its recipe") }
+  let mut tarBytes = 1024
+  for entry in entries {
+    if entry.kind != "file" || !names.contains(entry.name) {
+      return Err("assembled payload has an unexpected file or nonregular entry: {entry.name}")
+    }
+    let meta = fileMetadata("{directory}/{entry.name}", native)?
+    let maximum = if entry.name == ASSEMBLY_NAME || entry.name == MANIFEST_NAME { 1048576 } else { limit }
+    if meta.bytes == 0 || meta.bytes > maximum {
+      return Err("assembled payload contains an empty or oversized file: {entry.name}")
+    }
+    let extent = 512 + meta.bytes + (512 - meta.bytes % 512) % 512
+    if extent > MAX_TAR_BYTES - tarBytes { return Err("complete assembled payload tar would exceed 256 MiB") }
+    tarBytes += extent
+  }
+  Ok(())
+}
+
+export function verifyAssembled(root: string, requested: string, native: Native) -> Result<Verified, string> {
+  let assemblyPath = regularFile(requested, ASSEMBLY_NAME)?
+  let directory = parentDirectory(fileMetadata(assemblyPath, native)?)?
+  let text = readText(assemblyPath, 1048576, native)?
+  let assembly = json.parseAs<Assembly>(text)?
+  if assembly.schema != ASSEMBLY_SCHEMA || assembly.evidence != "assembled-candidate" ||
+    assembly.compilerSourceSetId != COMPILER_SOURCE_SET || text != encoded(assembly)? {
+    return Err("assembly.json has an unsupported contract or noncanonical representation")
+  }
+  let loaded = loadRecipe(root, assembly.recipe)?
+  let recipe = loaded.recipe
+  if assembly.recipeSha256 != loaded.sha256 || assembly.target != recipe.target ||
+    assembly.executable != recipe.executable || assembly.format != recipe.format ||
+    assembly.minimumPlatform != recipe.minimumPlatform {
+    return Err("assembly record differs from its checked-in platform recipe")
+  }
+  let expected = expectedFiles(recipe)
+  if json.stringify(assembly.files)? != json.stringify(expected)? {
+    return Err("assembly file roles or modes differ from the recipe")
+  }
+  preflightMembers(directory, expected, recipe.fileByteLimit, native)?
+  let manifestPath = regularFile(directory, MANIFEST_NAME)?
+  let manifestText = readText(manifestPath, 1048576, native)?
+  let manifestTarget = json.parseAs<ManifestTarget>(manifestText)?
+  if manifestTarget.target != recipe.target || manifestTarget.executable != recipe.executable {
+    return Err("payload manifest target differs from its assembly recipe")
+  }
+  let currentRequest = normalizedRequest(root)?
+  if assembly.requestSha256 != currentRequest.encodeUtf8().sha256().toHex() {
+    return Err("assembly compiler input differs from the current CLI sources")
+  }
+  let generated = regularFile(directory, GENERATED_NAME)?
+  let generatedMeta = fileMetadata(generated, native)?
+  if generatedMeta.bytes == 0 || generatedMeta.bytes > recipe.fileByteLimit {
+    return Err("assembled generated Rust has an invalid size")
+  }
+  let generatedBytes = files.readBytes(generated)?
+  if generatedBytes.sha256().toHex() != assembly.generatedRustSha256 {
+    return Err("assembled generated CLI Rust differs from its record")
+  }
+  let executable = regularFile(directory, recipe.executable)?
+  let meta = fileMetadata(executable, native)?
+  if meta.bytes == 0 || meta.bytes > recipe.fileByteLimit {
+    return Err("assembled executable exceeds its payload file limit")
+  }
+  let image = inspectImage(executable)?
+  let system = dependencies(recipe, image)?
+  if json.stringify(system)? != json.stringify(assembly.systemDependencies)? {
+    return Err("assembled executable dependencies differ from its record")
+  }
+  verifyPayload(root, directory)?
+  let contents = payloadFiles(directory, recipe.executable, true)?
+  requireAssemblyMembership(contents, expected, recipe.fileByteLimit)?
+  for file in expected { checkMode("{directory}/{file.path}", file.mode, native)? }
+  checkMode("{directory}/{ASSEMBLY_NAME}", "0644", native)?
+  checkMode("{directory}/{MANIFEST_NAME}", "0644", native)?
+  for mapping in recipe.files {
+    let original = files.readBytes("{root}/{mapping.source}")?
+    let copied = files.readBytes("{directory}/{mapping.destination}")?
+    if original != copied { return Err("assembled companion differs from its repository input: {mapping.destination}") }
+  }
+  if manifestText != readText(manifestPath, 1048576, native)? {
+    return Err("payload manifest changed while the candidate was inspected")
+  }
+  let manifest = PayloadFile {
+    path: MANIFEST_NAME, bytes: manifestText.byteLength(),
+    sha256: manifestText.encodeUtf8().sha256().toHex(),
+  }
+  Ok(Verified { directory: directory, loaded: loaded, assembly: assembly, contents: contents, manifest: manifest })
+}
+
+export function assemble(root: string, build: string, recipePath: string, output: string, native: Native) -> Result<int, string> {
+  let loaded = loadRecipe(root, recipePath)?
+  let recipe = loaded.recipe
+  validateRecordedInputs(root)?
+  let requestPath = regularFile(build, "cli.request.json")?
+  let request = encode(fromText(readText(requestPath, 134217728, native)?)?, "rust-source")?
+  let expectedRequest = normalizedRequest(root)?
+  if request != expectedRequest { return Err("build input does not describe the current CLI sources") }
+  let generatedPath = regularFile(build, GENERATED_NAME)?
+  let generated = readText(generatedPath, recipe.fileByteLimit, native)?
+  let responsePath = regularFile(build, "cli.response.json")?
+  let response = readText(responsePath, 134217728, native)?
+  if rustSource(completed(response, "rust-source")?)? != generated {
+    return Err("generated CLI Rust differs from the recorded successful compiler response")
+  }
+  let executable = regularFile(build, recipe.executable)?
+  let executableMeta = fileMetadata(executable, native)?
+  if executableMeta.bytes == 0 || executableMeta.bytes > recipe.fileByteLimit {
+    return Err("executable is {executableMeta.bytes} bytes; this payload profile permits at most {recipe.fileByteLimit} bytes")
+  }
+  let image = inspectImage(executable)?
+  let system = dependencies(recipe, image)?
+  let expected = expectedFiles(recipe)
+  let mut plan: Array<PlannedFile> = []
+  for file in expected {
+    let mut source = if file.path == recipe.executable { executable } else { generatedPath }
+    for mapping in recipe.files { if file.path == mapping.destination { source = "{root}/{mapping.source}" } }
+    plan.push(planned(file, source, recipe.fileByteLimit, native)?)
+  }
+  let assembly = Assembly {
+    schema: ASSEMBLY_SCHEMA, evidence: "assembled-candidate", compilerSourceSetId: COMPILER_SOURCE_SET,
+    target: recipe.target, executable: recipe.executable, format: recipe.format,
+    recipe: loaded.path, recipeSha256: loaded.sha256,
+    requestSha256: request.encodeUtf8().sha256().toHex(),
+    generatedRustSha256: generated.encodeUtf8().sha256().toHex(),
+    systemDependencies: system, minimumPlatform: recipe.minimumPlatform, files: expected,
+  }
+  // Admission completes before creating the exclusively owned destination.
+  native("mkdir-parent", [output])?
+  let directory = native("mkdir-new", [output])?
+  for file in plan { copyPlanned(directory, file, native)? }
+  files.writeText("{directory}/{ASSEMBLY_NAME}", encoded(assembly)?)?
+  native("set-file-mode", ["{directory}/{ASSEMBLY_NAME}", "0644"])?
+  recordPayload(root, directory, recipe.target)?
+  native("set-file-mode", ["{directory}/{MANIFEST_NAME}", "0644"])?
+  verifyAssembled(root, directory, native)?
+  io.writeLine("Assembled complete candidate at {directory}")
+  if !recipe.releaseReady {
+    io.writeLine("The selected recipe is for development evidence and is not approved for release publication.")
+  }
+  Ok(0)
+}
+
+function compareCandidates(root: string, first: string, second: string, native: Native) -> Result<Verified, string> {
+  let left = verifyAssembled(root, first, native)?
+  let right = verifyAssembled(root, second, native)?
+  if left.directory == right.directory { return Err("payload comparison requires two distinct directories") }
+  if encoded(left.assembly)? != encoded(right.assembly)? {
+    return Err("candidate assembly records differ")
+  }
+  if json.stringify(left.contents)? != json.stringify(right.contents)? ||
+    json.stringify(left.manifest)? != json.stringify(right.manifest)? {
+    return Err("candidate recorded inventories differ")
+  }
+  let mut records: Array<PayloadFile> = []
+  for file in left.contents { records.push(file) }
+  records.push(left.manifest)
+  for record in records {
+    let beforePath = "{left.directory}/{record.path}"
+    let afterPath = "{right.directory}/{record.path}"
+    let beforeMeta = fileMetadata(beforePath, native)?
+    let afterMeta = fileMetadata(afterPath, native)?
+    if beforeMeta.bytes != record.bytes || afterMeta.bytes != record.bytes {
+      return Err("candidate size changed during comparison: {record.path}")
+    }
+    let before = files.readBytes(beforePath)?
+    let after = files.readBytes(afterPath)?
+    if before.length() != record.bytes || before.sha256().toHex() != record.sha256 || before != after {
+      return Err("complete candidate bytes differ or changed: {record.path}")
+    }
+  }
+  io.writeLine("Complete candidate files, manifests and required modes match.")
+  io.writeLine("Retain the independent build and platform test records; directory names alone do not prove independent construction.")
+  Ok(left)
+}
+
+export function compare(root: string, first: string, second: string, native: Native) -> Result<int, string> {
+  compareCandidates(root, first, second, native)?
+  Ok(0)
+}
+
+function runCheck(executable: string, arguments: Array<string>, root: string, capture: Capture) -> Result<string, string> {
+  let result = json.parseAs<CapturedOutput>(capture(
+    executable, arguments, root, ["TOPAZ_CORE_KIT_ROOT={root}"],
+  )?)?
+  if result.code != 0 {
+    return Err("candidate execution check failed with exit {result.code}\n{result.stderr}")
+  }
+  if result.stdout.byteLength() > 1048576 || result.stderr.byteLength() > 1048576 {
+    return Err("candidate execution produced excessive output")
+  }
+  Ok(result.stdout)
+}
+
+function sameVerified(before: Verified, after: Verified) -> Result<(), string> {
+  if before.directory != after.directory || encoded(before.assembly)? != encoded(after.assembly)? ||
+    json.stringify(before.contents)? != json.stringify(after.contents)? ||
+    json.stringify(before.manifest)? != json.stringify(after.manifest)? {
+    return Err("candidate changed after its recorded verification")
+  }
+  Ok(())
+}
+
+export function checkNative(root: string, verified: Verified, native: Native, capture: Capture) -> Result<Verified, string> {
+  let current = verifyAssembled(root, verified.directory, native)?
+  sameVerified(verified, current)?
+  let recipe = current.loaded.recipe
+  if !recipe.releaseReady { return Err("platform recipe is not approved for release use") }
+  let target = json.parseAs<BuildTarget>(native("build-target", [])?)?
+  if target.target != recipe.target { return Err("candidate execution checks require a native Kit for its target") }
+  let executable = "{current.directory}/{recipe.executable}"
+  let version = runCheck(executable, ["--version"], root, capture)?
+  if version != "{VERSION}\n" { return Err("candidate returned a different Core Kit version") }
+  runCheck(executable, ["check", "--source", "{root}/examples/core-kit/hello.tpz"], root, capture)?
+  runCheck(executable, ["check", "--root", "{root}/examples/core-kit/project"], root, capture)?
+  runCheck(executable, ["kit", "verify"], root, capture)?
+  // Revalidate after executing the candidate. Never regenerate its inventory.
+  let after = verifyAssembled(root, current.directory, native)?
+  sameVerified(current, after)?
+  Ok(after)
+}
+
+export function approve(root: string, first: string, second: string, native: Native, capture: Capture) -> Result<Verified, string> {
+  let verified = compareCandidates(root, first, second, native)?
+  let checked = checkNative(root, verified, native, capture)?
+  let executable = "{checked.directory}/{checked.loaded.recipe.executable}"
+  let buildId = match runCheck(executable, ["kit", "build-id"], root, capture) {
+    case Ok(output) => output
+    case Err(error) => return Err("cannot read the candidate's linked CLI build ID; rebuild with a Kit that supports kit build-id:\n{error}")
+  }
+  if buildId != "{checked.assembly.generatedRustSha256}\n" {
+    return Err("the candidate executable was not linked from the recorded generated_cli.rs; rebuild in a fresh output directory and reassemble the candidates")
+  }
+  let after = compareCandidates(root, first, second, native)?
+  sameVerified(checked, after)?
+  Ok(after)
+}
+
+export function copyVerified(root: string, verified: Verified, output: string, native: Native) -> Result<Verified, string> {
+  let current = verifyAssembled(root, verified.directory, native)?
+  sameVerified(verified, current)?
+  let recipe = current.loaded.recipe
+  let mut plans: Array<PlannedFile> = []
+  for file in current.contents {
+    let role = if file.path == recipe.executable { "executable" } else { "companion" }
+    let plan = planned(
+      AssemblyFile { path: file.path, role: role, mode: fileMode(recipe, file.path) },
+      "{current.directory}/{file.path}", recipe.fileByteLimit, native,
+    )?
+    if plan.bytes != file.bytes || plan.sha256 != file.sha256 {
+      return Err("candidate changed before staging: {file.path}")
+    }
+    plans.push(plan)
+  }
+  let manifestPlan = planned(
+    AssemblyFile { path: MANIFEST_NAME, role: "manifest", mode: "0644" },
+    "{current.directory}/{MANIFEST_NAME}", recipe.fileByteLimit, native,
+  )?
+  if manifestPlan.bytes != current.manifest.bytes || manifestPlan.sha256 != current.manifest.sha256 {
+    return Err("candidate manifest changed before staging")
+  }
+  plans.push(manifestPlan)
+  // Complete all reads before creating an exclusively owned destination.
+  native("mkdir-parent", [output])?
+  let destination = native("mkdir-new", [output])?
+  // A failed copy leaves the owned directory for inspection. No earlier
+  // installed version or release candidate is overwritten.
+  for plan in plans { if plan.file.path != recipe.executable { copyPlanned(destination, plan, native)? } }
+  for plan in plans { if plan.file.path == recipe.executable { copyPlanned(destination, plan, native)? } }
+  let compared = compareCandidates(root, current.directory, destination, native)?
+  sameVerified(current, compared)?
+  verifyAssembled(root, destination, native)
+}
+
+export function promote(root: string, first: string, second: string, output: string, native: Native, capture: Capture) -> Result<int, string> {
+  let approved = approve(root, first, second, native, capture)?
+  let staged = copyVerified(root, approved, output, native)?
+  io.writeLine("Verified candidate bytes staged unchanged at {staged.directory}")
+  io.writeLine("Keep release artifacts outside Git and publish the reviewed package through GitHub Releases.")
+  Ok(0)
+}

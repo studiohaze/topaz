@@ -1,0 +1,17 @@
+[package]
+name = "topaz_seed"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license-file.workspace = true
+publish = false
+
+[[bin]]
+name = "topaz-seed"
+path = "src/main.rs"
+
+[dependencies]
+topaz_rt = { workspace = true }
+topaz_product_runtime = { workspace = true }
+topaz_host_none = { workspace = true }
+topaz_seed_compiler = { path = "../topaz_seed_compiler" }

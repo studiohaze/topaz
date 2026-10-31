@@ -1,0 +1,272 @@
+import std.bytes { Bytes, ByteBuffer }
+import src.payload_files { portablePath }
+
+// A bounded flat ustar subset wrapped in the public canonical gzip codec.
+// The gzip codec uses stored DEFLATE blocks. It gives stable transport bytes,
+// not a compression-ratio optimization or an external archiver dependency.
+export const MAX_TAR_BYTES = 268435456
+export const MAX_ARCHIVE_BYTES = 536870912
+const BLOCK = 512
+const MAX_FILES = 256
+
+export record ArchiveEntry {
+  path: string,
+  mode: string,
+  bytes: Bytes,
+}
+
+function filename(path: string) -> Result<string, string> {
+  let folded = portablePath(path)?
+  if path.contains("/") || path.startsWith(".") || path.byteLength() > 100 {
+    return Err("release archive names must be flat visible ASCII filenames of at most 100 bytes")
+  }
+  Ok(folded)
+}
+
+function modeNumber(mode: string) -> Result<int, string> {
+  match mode {
+    case "0644" => Ok(420)
+    case "0755" => Ok(493)
+    case _ => Err("release archive modes must be 0644 or 0755")
+  }
+}
+
+function padding(length: int) -> int { (BLOCK - length % BLOCK) % BLOCK }
+
+function zeros(length: int) -> Array<int> {
+  let mut bytes: Array<int> = []
+  let mut index = 0
+  while index < length { bytes.push(0); index += 1 }
+  bytes
+}
+
+function octal(value: int, digits: int) -> Result<Array<int>, string> {
+  if value < 0 { return Err("negative tar field") }
+  let mut output: Array<int> = []
+  let mut index = 0
+  while index < digits { output.push(48); index += 1 }
+  let mut remaining = value
+  index = digits
+  while index > 0 {
+    index -= 1
+    output[index] = 48 + remaining % 8
+    remaining = remaining / 8
+  }
+  if remaining != 0 { return Err("tar numeric field exceeds its canonical width") }
+  Ok(output)
+}
+
+function header(path: string, mode: string, length: int) -> Result<Bytes, string> {
+  filename(path)?
+  if length <= 0 || length > MAX_TAR_BYTES { return Err("archive member size exceeds its supported range") }
+  let mut output = zeros(BLOCK)
+  let name = path.encodeUtf8().toArray()
+  let mut index = 0
+  while index < name.length { output[index] = name[index]; index += 1 }
+  let modeBytes = octal(modeNumber(mode)?, 7)?
+  let zero7 = octal(0, 7)?
+  index = 0
+  while index < 7 {
+    output[100 + index] = modeBytes[index]
+    output[108 + index] = zero7[index]
+    output[116 + index] = zero7[index]
+    output[329 + index] = zero7[index]
+    output[337 + index] = zero7[index]
+    index += 1
+  }
+  let sizeBytes = octal(length, 11)?
+  let zero11 = octal(0, 11)?
+  index = 0
+  while index < 11 {
+    output[124 + index] = sizeBytes[index]
+    output[136 + index] = zero11[index]
+    index += 1
+  }
+  index = 148
+  while index < 156 { output[index] = 32; index += 1 }
+  output[156] = 48
+  let magic = "ustar".encodeUtf8().toArray()
+  index = 0
+  while index < magic.length { output[257 + index] = magic[index]; index += 1 }
+  output[263] = 48
+  output[264] = 48
+  let mut sum = 0
+  for byte in output { sum += byte }
+  let checksum = octal(sum, 6)?
+  index = 0
+  while index < 6 { output[148 + index] = checksum[index]; index += 1 }
+  output[154] = 0
+  output[155] = 32
+  Bytes.fromArray(output)
+}
+
+function sortedEntries(entries: Array<ArchiveEntry>) -> Result<Array<ArchiveEntry>, string> {
+  if entries.length == 0 || entries.length > MAX_FILES {
+    return Err("release archive must contain between 1 and 256 regular files")
+  }
+  let mut names: Array<string> = []
+  let mut seen: Set<string> = set {}
+  let mut byName: Map<string, ArchiveEntry> = map {}
+  for entry in entries {
+    let folded = filename(entry.path)?
+    modeNumber(entry.mode)?
+    if seen.contains(folded) { return Err("release archive has duplicate or case-aliased names") }
+    seen.add(folded)
+    names.push(entry.path)
+    byName.insert(entry.path, entry)
+  }
+  names.sort()
+  let mut ordered: Array<ArchiveEntry> = []
+  for name in names {
+    let entry = match byName.get(name) {
+      case Some(entry) => entry
+      case None => return Err("internal archive name mapping is incomplete")
+    }
+    ordered.push(entry)
+  }
+  Ok(ordered)
+}
+
+export function encode(entries: Array<ArchiveEntry>) -> Result<Bytes, string> {
+  let ordered = sortedEntries(entries)?
+  let mut total = BLOCK * 2
+  for entry in ordered {
+    let length = entry.bytes.length()
+    if length <= 0 || length > MAX_TAR_BYTES { return Err("archive members must be nonempty and no larger than 256 MiB") }
+    let extent = BLOCK + length + padding(length)
+    if extent > MAX_TAR_BYTES - total { return Err("complete release tar exceeds 256 MiB") }
+    total += extent
+  }
+  let mut output = ByteBuffer.allocate(total)
+  let mut offset = 0
+  for entry in ordered {
+    let metadata = ByteBuffer.fromBytes(header(entry.path, entry.mode, entry.bytes.length())?)
+    output.copy(metadata, 0, offset, BLOCK)
+    offset += BLOCK
+    let contents = ByteBuffer.fromBytes(entry.bytes)
+    output.copy(contents, 0, offset, entry.bytes.length())
+    offset += entry.bytes.length() + padding(entry.bytes.length())
+  }
+  let tar = output.toBytes()
+  tar.gzipCompress()
+}
+
+function u16(data: Bytes, offset: int) -> int {
+  (data.get(offset) ?? 0) + (data.get(offset + 1) ?? 0) * 256
+}
+
+function u32(data: Bytes, offset: int) -> int {
+  u16(data, offset) + u16(data, offset + 2) * 65536
+}
+
+function preflightGzip(data: Bytes) -> Result<(), string> {
+  if data.length() < 23 || data.length() > MAX_ARCHIVE_BYTES {
+    return Err("release archive must be nonempty and no larger than 512 MiB")
+  }
+  let trailer = data.length() - 8
+  let advertised = u32(data, trailer + 4)
+  if advertised < BLOCK * 2 || advertised > MAX_TAR_BYTES || advertised % BLOCK != 0 {
+    return Err("gzip tar size is outside the supported 256 MiB profile")
+  }
+  // Stored blocks cannot expand beyond their recorded body length. Count
+  // their complete extents before the public codec allocates the tar buffer.
+  let mut offset = 10
+  let mut total = 0
+  let mut lastBlock = false
+  while !lastBlock {
+    if offset > trailer || trailer - offset < 5 { return Err("truncated release gzip block") }
+    let flags = data.get(offset) ?? 0
+    if flags != 0 && flags != 1 { return Err("release gzip requires canonical stored DEFLATE blocks") }
+    lastBlock = flags == 1
+    let length = u16(data, offset + 1)
+    if u16(data, offset + 3) != 65535 - length { return Err("invalid release gzip block length") }
+    if !lastBlock && length != 65535 { return Err("nonfinal release gzip block must use the canonical length") }
+    if lastBlock && length == 0 { return Err("nonempty release gzip must not add an empty final block") }
+    offset += 5
+    if length > trailer - offset || length > MAX_TAR_BYTES - total {
+      return Err("release gzip body exceeds its declared or supported size")
+    }
+    total += length
+    offset += length
+  }
+  if offset != trailer || total != advertised {
+    return Err("release gzip block totals or trailing bytes differ from its declared size")
+  }
+  Ok(())
+}
+
+function allZero(data: Bytes, start: int, length: int) -> bool {
+  let mut index = start
+  while index < start + length {
+    if (data.get(index) ?? -1) != 0 { return false }
+    index += 1
+  }
+  true
+}
+
+function tarNumber(data: Bytes, start: int, digits: int) -> Result<int, string> {
+  let mut value = 0
+  let mut index = 0
+  while index < digits {
+    let byte = data.get(start + index) ?? 0
+    if byte < 48 || byte > 55 { return Err("release tar fields require canonical octal digits") }
+    value = value * 8 + byte - 48
+    index += 1
+  }
+  if (data.get(start + digits) ?? -1) != 0 { return Err("release tar numeric field must end with NUL") }
+  Ok(value)
+}
+
+export function decode(compressed: Bytes) -> Result<Array<ArchiveEntry>, string> {
+  preflightGzip(compressed)?
+  let tar = compressed.gzipDecompress()?
+  if tar.length() > MAX_TAR_BYTES || tar.length() % BLOCK != 0 {
+    return Err("release tar exceeds its supported size or block alignment")
+  }
+  let mut entries: Array<ArchiveEntry> = []
+  let mut names: Array<string> = []
+  let mut seen: Set<string> = set {}
+  let mut offset = 0
+  while offset + BLOCK <= tar.length() {
+    if allZero(tar, offset, BLOCK) {
+      if tar.length() - offset != BLOCK * 2 || !allZero(tar, offset, BLOCK * 2) {
+        return Err("release tar must end with precisely two zero blocks")
+      }
+      if entries.length == 0 { return Err("release tar contains no payload files") }
+      let before = names.join("\n")
+      names.sort()
+      if before != names.join("\n") { return Err("release tar members must be sorted") }
+      return Ok(entries)
+    }
+    if entries.length >= MAX_FILES { return Err("release tar exceeds 256 members") }
+    let mut end = offset
+    while end < offset + 100 && (tar.get(end) ?? 0) != 0 { end += 1 }
+    let path = tar.slice(offset, end).decodeUtf8()?
+    let folded = filename(path)?
+    if seen.contains(folded) { return Err("release tar repeats a name or case alias") }
+    let mode = match tarNumber(tar, offset + 100, 7)? {
+      case 420 => "0644"
+      case 493 => "0755"
+      case _ => return Err("release tar has an unsupported file mode")
+    }
+    let length = tarNumber(tar, offset + 124, 11)?
+    if length <= 0 || length > MAX_TAR_BYTES { return Err("release tar member size exceeds its supported range") }
+    let actual = tar.slice(offset, offset + BLOCK)
+    if actual != header(path, mode, length)? {
+      return Err("release tar header differs from the canonical regular-file contract")
+    }
+    offset += BLOCK
+    if length > tar.length() - offset { return Err("release tar member extends beyond the archive") }
+    let bytes = tar.slice(offset, offset + length)
+    offset += length
+    let remaining = padding(length)
+    if remaining > tar.length() - offset || !allZero(tar, offset, remaining) {
+      return Err("release tar file padding must be zero")
+    }
+    offset += remaining
+    seen.add(folded)
+    names.push(path)
+    entries.push(ArchiveEntry { path: path, mode: mode, bytes: bytes })
+  }
+  Err("release tar is missing its complete end marker")
+}

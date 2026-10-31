@@ -1,0 +1,5 @@
+# Pinned exactly per CDR-001 §3. This is the v0.1 MSRV; changing it
+# requires a CDR or release-governance note.
+[toolchain]
+channel = "1.96.0"
+components = ["rustfmt", "clippy"]

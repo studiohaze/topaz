@@ -1,0 +1,11 @@
+#!/bin/sh
+# Only select the pinned local installation. Preserve cwd, argv and streams.
+set -eu
+_kit_root=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
+. "$_kit_root/core-kit/downloads.sh"
+_kit_host_target
+_kit_load_download
+_kit_installed_path
+TOPAZ_CORE_KIT_ROOT=$_kit_root
+export TOPAZ_CORE_KIT_ROOT
+exec "$_kit_payload" "$@"

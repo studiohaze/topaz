@@ -1,0 +1,209 @@
+import std.bytes { Bytes }
+import std.fs as files
+
+export const INPUT_LIST = "core-kit/payload-inputs.data"
+export const MANIFEST_NAME = "payload.json"
+
+export record PayloadFile derives JSON {
+  path: string,
+  bytes: int,
+  sha256: string,
+}
+
+// Payload names are a deliberately portable subset, including on Windows.
+// Return an ASCII case-folded spelling so aliases cannot hide extra files.
+function portableName(name: string) -> Result<string, string> {
+  if name == "" || name == "." || name == ".." || name.byteLength() > 128 || name.endsWith(".") {
+    return Err("invalid portable payload/input name: {name}")
+  }
+  let mut folded: Array<int> = []
+  for byte in name.encodeUtf8().toArray() {
+    let letter = (byte >= 65 && byte <= 90) || (byte >= 97 && byte <= 122)
+    let digit = byte >= 48 && byte <= 57
+    if !letter && !digit && byte != 95 && byte != 46 && byte != 45 {
+      return Err("invalid portable payload/input name: {name}")
+    }
+    folded.push(if byte >= 65 && byte <= 90 { byte + 32 } else { byte })
+  }
+  let foldedBytes = Bytes.fromArray(folded)?
+  let lower = foldedBytes.decodeUtf8()?
+  let base = lower.split(".")[0]
+  if base == "con" || base == "prn" || base == "aux" || base == "nul" {
+    return Err("reserved Windows payload/input name: {name}")
+  }
+  if base.byteLength() == 4 && (base.startsWith("com") || base.startsWith("lpt")) {
+    let last = base.encodeUtf8().toArray()[3]
+    if last >= 49 && last <= 57 { return Err("reserved Windows payload/input name: {name}") }
+  }
+  Ok(lower)
+}
+
+export function portablePath(path: string) -> Result<string, string> {
+  if path == "" || path.byteLength() > 1024 {
+    return Err("invalid payload repository input path")
+  }
+  let mut folded: Array<string> = []
+  for segment in path.split("/") { folded.push(portableName(segment)?) }
+  Ok(folded.join("/"))
+}
+
+// Inventory paths are relative to this already selected checkout. Inspect
+// each component rather than following a listed symlink into another tree.
+export function requireRegularInput(root: string, path: string) -> Result<(), string> {
+  let parts = path.split("/")
+  let mut parent = root
+  let mut index = 0
+  while index < parts.length {
+    let name = parts[index]
+    let required = if index + 1 == parts.length { "file" } else { "directory" }
+    let mut found = false
+    for entry in files.list(parent)? {
+      if entry.name != name { continue }
+      if entry.kind != required {
+        return Err("repository input must use regular files/directories, without symlinks: {path}")
+      }
+      found = true
+    }
+    if !found { return Err("repository input is missing: {path}") }
+    parent = "{parent}/{name}"
+    index += 1
+  }
+  Ok(())
+}
+
+function describe(root: string, path: string) -> Result<PayloadFile, string> {
+  let bytes = files.readBytes("{root}/{path}")?
+  // The public API returns a complete byte buffer; this bound is checked
+  // after reading and is not a streaming allocation limit.
+  if bytes.length() > 536870912 { return Err("payload/input file exceeds 512 MiB: {path}") }
+  Ok(PayloadFile { path: path, bytes: bytes.length(), sha256: bytes.sha256().toHex() })
+}
+
+export function requiredInputs(paths: Set<string>) -> Result<(), string> {
+  // Final archive hashes are recorded only after the payload exists. Binding
+  // that catalogue into payload.json would make the archive depend on itself.
+  for path in paths {
+    if portablePath(path)? == "core-kit/downloads.data" {
+      return Err("download catalogue is transport metadata and must not be a payload repository input")
+    }
+  }
+  for path in [
+    INPUT_LIST, "core-kit/verify-core.data", "SOURCE-COMPONENTS.json",
+    "compiler/Cargo.toml", "compiler/Cargo.lock", "compiler/rust-toolchain.toml",
+    "compiler/generated/native/compiler.rs", "compiler/generated/native/compiler.json",
+    "compiler/seed/initial/request.json", "compiler/seed/initial/REQUEST-PROVENANCE.json",
+    "compiler/seed/runtime.json", "core-kit/cli/data/input.txt",
+    "compiler/seed/initial/std/bytes.tpz", "compiler/seed/initial/std/fs.tpz",
+    "compiler/seed/initial/std/io.tpz", "compiler/seed/initial/std/json.tpz",
+    "core-kit/cli/REQUEST.json", "core-kit/cli/initial/request.json",
+    "core-kit/cli/src/main.tpz", "core-kit/cli/src/arguments.tpz",
+    "core-kit/cli/src/commands.tpz", "core-kit/cli/src/payload.tpz",
+    "core-kit/cli/src/payload_files.tpz", "core-kit/cli/templates/program.rs",
+    "core-kit/cli/templates/program.lock", "compiler/core-kit-native/Cargo.toml",
+    "core-kit/native/build.rs", "core-kit/native/src/lib.rs", "core-kit/native/src/main.rs",
+    "core-kit/native/src/bin/generate-cli.rs", "LICENSE", "NOTICE", "LICENSE-COMPONENTS.txt",
+    "topaz", "topaz.cmd", "bootstrap", "bootstrap.cmd",
+    "install-core-kit", "install-core-kit.cmd", "core-kit/install.ps1",
+    "core-kit/downloads.sh", "core-kit/downloads.ps1", "core-kit/launch.ps1",
+  ] {
+    if !paths.contains(path) { return Err("required payload repository input is omitted: {path}") }
+  }
+  Ok(())
+}
+
+export function repositoryFiles(root: string) -> Result<Array<PayloadFile>, string> {
+  requireRegularInput(root, INPUT_LIST)?
+  let text = files.readText("{root}/{INPUT_LIST}")?
+  if text.byteLength() == 0 || text.byteLength() > 1048576 {
+    return Err("payload repository input list must be nonempty and no larger than 1 MiB")
+  }
+  let lines = text.split("\n")
+  if lines[0] != "topaz.core-kit-payload-inputs/v1" {
+    return Err("unsupported payload repository input list format")
+  }
+  let mut paths: Array<string> = []
+  let mut seen: Set<string> = set {}
+  let mut exact: Set<string> = set {}
+  let mut index = 1
+  while index < lines.length {
+    let path = lines[index]
+    if path == "" && index + 1 == lines.length { break }
+    let folded = portablePath(path)?
+    if seen.contains(folded) { return Err("duplicate/case-aliased payload repository input: {path}") }
+    seen.add(folded)
+    exact.add(path)
+    paths.push(path)
+    if paths.length > 1024 { return Err("payload repository input list exceeds 1024 files") }
+    index += 1
+  }
+  if paths.length == 0 { return Err("payload repository input list is empty") }
+  paths.sort()
+  if text != "topaz.core-kit-payload-inputs/v1\n{paths.join("\n")}\n" {
+    return Err("payload repository input list must be sorted, with one path per line and a final LF")
+  }
+  requiredInputs(exact)?
+  let mut records: Array<PayloadFile> = []
+  for path in paths {
+    requireRegularInput(root, path)?
+    records.push(describe(root, path)?)
+  }
+  Ok(records)
+}
+
+export function payloadFiles(directory: string, executable: string, recorded: bool) -> Result<Array<PayloadFile>, string> {
+  let mut paths: Array<string> = []
+  let mut seen: Set<string> = set {}
+  let mut hasExecutable = false
+  let mut hasManifest = false
+  for entry in files.list(directory)? {
+    let folded = portableName(entry.name)?
+    if seen.contains(folded) { return Err("duplicate/case-aliased payload filename: {entry.name}") }
+    seen.add(folded)
+    if entry.kind != "file" { return Err("payload directory must contain only regular files: {entry.name}") }
+    if folded == MANIFEST_NAME {
+      if entry.name != MANIFEST_NAME { return Err("payload manifest must be named exactly payload.json") }
+      if !recorded { return Err("payload.json already exists; refusing to replace recorded evidence") }
+      hasManifest = true
+      continue
+    }
+    if entry.name == executable { hasExecutable = true }
+    paths.push(entry.name)
+    if paths.length > 256 { return Err("payload directory exceeds 256 recorded files") }
+  }
+  if recorded && !hasManifest { return Err("payload.json is missing") }
+  if !hasExecutable { return Err("payload executable is missing: {executable}") }
+  paths.sort()
+  let mut records: Array<PayloadFile> = []
+  for path in paths {
+    let record = describe(directory, path)?
+    if path == executable && record.bytes == 0 { return Err("payload executable is empty") }
+    records.push(record)
+  }
+  Ok(records)
+}
+
+function validDigest(text: string) -> bool {
+  if text.byteLength() != 64 { return false }
+  for byte in text.encodeUtf8().toArray() {
+    if !((byte >= 48 && byte <= 57) || (byte >= 97 && byte <= 102)) { return false }
+  }
+  true
+}
+
+export function compareRecords(expected: Array<PayloadFile>, actual: Array<PayloadFile>, label: string) -> Result<(), string> {
+  if expected.length != actual.length { return Err("{label} file count differs from payload.json") }
+  let mut index = 0
+  while index < actual.length {
+    let before = expected[index]
+    let now = actual[index]
+    if before.path != now.path { return Err("{label} file list differs from payload.json at {now.path}") }
+    if before.bytes < 0 || before.bytes > 536870912 || !validDigest(before.sha256) {
+      return Err("invalid recorded size or SHA-256 for {label}: {before.path}")
+    }
+    if before.bytes != now.bytes || before.sha256 != now.sha256 {
+      return Err("{label} bytes differ from payload.json: {now.path}")
+    }
+    index += 1
+  }
+  Ok(())
+}

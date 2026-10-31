@@ -1,0 +1,180 @@
+import std.bytes { Bytes }
+import std.fs as files
+import std.json as json
+import src.payload_files { repositoryFiles, requireRegularInput }
+
+export const CATALOG_PATH = "core-kit/downloads.data"
+export const CATALOG_SCHEMA = "topaz.core-kit-downloads/v1"
+export const MAX_ARCHIVE_BYTES = 536870912
+export const MAX_EXECUTABLE_BYTES = 268435456
+
+export record Download {
+  target: string,
+  repository: string,
+  tag: string,
+  sourceCommit: string,
+  inputSetSha256: string,
+  assetName: string,
+  assetBytes: int,
+  assetSha256: string,
+  executableBytes: int,
+  executableSha256: string,
+}
+
+function targetName(target: string) -> Result<(), string> {
+  match target {
+    case "x86_64-unknown-linux-gnu" | "aarch64-unknown-linux-gnu" |
+      "x86_64-pc-windows-msvc" | "aarch64-pc-windows-msvc" |
+      "x86_64-apple-darwin" | "aarch64-apple-darwin" => Ok(())
+    case _ => Err("download target is outside the supported platform names")
+  }
+}
+
+function component(text: string, label: string) -> Result<string, string> {
+  let bytes = text.encodeUtf8()
+  if bytes.length() == 0 || bytes.length() > 128 || text.endsWith(".") {
+    return Err("{label} must be a portable name of 1 to 128 ASCII bytes")
+  }
+  let mut folded: Array<int> = []
+  let mut index = 0
+  while index < bytes.length() {
+    let byte = bytes.get(index) ?? 0
+    let alphanumeric = (byte >= 65 && byte <= 90) || (byte >= 97 && byte <= 122) ||
+      (byte >= 48 && byte <= 57)
+    if !alphanumeric && (index == 0 || (byte != 46 && byte != 95 && byte != 45)) {
+      return Err("{label} contains an unsupported character")
+    }
+    folded.push(if byte >= 65 && byte <= 90 { byte + 32 } else { byte })
+    index += 1
+  }
+  let lower = Bytes.fromArray(folded)?
+  lower.decodeUtf8()
+}
+
+export function validatePublication(repository: string, tag: string, sourceCommit: string) -> Result<(), string> {
+  let parts = repository.split("/")
+  if parts.length != 2 { return Err("release repository must be owner/name") }
+  component(parts[0], "repository owner")?
+  component(parts[1], "repository name")?
+  if component(tag, "release tag")? == "latest" {
+    return Err("download catalogue must pin a named release rather than latest")
+  }
+  hexadecimal(sourceCommit, 40, "source commit")
+}
+
+function hexadecimal(text: string, length: int, label: string) -> Result<(), string> {
+  let bytes = text.encodeUtf8()
+  if bytes.length() != length { return Err("{label} must contain {length} lowercase hexadecimal characters") }
+  for byte in bytes.toArray() {
+    if !((byte >= 48 && byte <= 57) || (byte >= 97 && byte <= 102)) {
+      return Err("{label} must use lowercase hexadecimal")
+    }
+  }
+  Ok(())
+}
+
+function positiveDecimal(text: string, maximum: int, label: string) -> Result<int, string> {
+  let bytes = text.encodeUtf8()
+  if bytes.length() == 0 || bytes.length() > 10 || (bytes.get(0) ?? 0) == 48 {
+    return Err("{label} must be a positive canonical decimal integer")
+  }
+  let mut value = 0
+  for byte in bytes.toArray() {
+    if byte < 48 || byte > 57 { return Err("{label} contains a nondecimal character") }
+    let digit = byte - 48
+    if value > (maximum - digit) / 10 { return Err("{label} exceeds {maximum} bytes") }
+    value = value * 10 + digit
+  }
+  if value <= 0 || value > maximum { return Err("{label} exceeds its supported byte range") }
+  Ok(value)
+}
+
+function validate(entry: Download) -> Result<(), string> {
+  targetName(entry.target)?
+  validatePublication(entry.repository, entry.tag, entry.sourceCommit)?
+  hexadecimal(entry.inputSetSha256, 64, "input-set digest")?
+  hexadecimal(entry.assetSha256, 64, "archive digest")?
+  hexadecimal(entry.executableSha256, 64, "executable digest")?
+  if entry.assetName != "topaz-core-kit-{entry.target}.tar.gz" {
+    return Err("release asset name must be the fixed target-specific tar.gz name")
+  }
+  positiveDecimal("{entry.assetBytes}", MAX_ARCHIVE_BYTES, "archive size")?
+  positiveDecimal("{entry.executableBytes}", MAX_EXECUTABLE_BYTES, "executable size")?
+  Ok(())
+}
+
+function line(entry: Download) -> string {
+  "{entry.target}|{entry.repository}|{entry.tag}|{entry.sourceCommit}|{entry.inputSetSha256}|{entry.assetName}|{entry.assetBytes}|{entry.assetSha256}|{entry.executableBytes}|{entry.executableSha256}"
+}
+
+export function encode(entries: Array<Download>) -> Result<string, string> {
+  if entries.length > 6 { return Err("download catalogue may contain at most six platform rows") }
+  let mut names: Array<string> = []
+  let mut rows: Map<string, string> = map {}
+  for entry in entries {
+    validate(entry)?
+    if rows.containsKey(entry.target) { return Err("download catalogue repeats a target") }
+    rows.insert(entry.target, line(entry))
+    names.push(entry.target)
+  }
+  names.sort()
+  let mut lines = [CATALOG_SCHEMA]
+  for name in names { lines.push(rows.getOr(name, "")) }
+  Ok("{lines.join("\n")}\n")
+}
+
+export function parse(text: string) -> Result<Array<Download>, string> {
+  if text.byteLength() == 0 || text.byteLength() > 65536 || !text.endsWith("\n") {
+    return Err("download catalogue must be nonempty, LF terminated and no larger than 64 KiB")
+  }
+  for byte in text.encodeUtf8().toArray() {
+    if byte != 10 && (byte < 32 || byte > 126) {
+      return Err("download catalogue must use printable ASCII and LF line endings")
+    }
+  }
+  let lines = text.split("\n")
+  if lines[0] != CATALOG_SCHEMA || lines.length > 8 {
+    return Err("download catalogue has an unsupported schema or too many rows")
+  }
+  let mut entries: Array<Download> = []
+  let mut index = 1
+  while index + 1 < lines.length {
+    let fields = lines[index].split("|")
+    if fields.length != 10 { return Err("download catalogue rows must contain exactly ten fields") }
+    let entry = Download {
+      target: fields[0], repository: fields[1], tag: fields[2], sourceCommit: fields[3],
+      inputSetSha256: fields[4], assetName: fields[5],
+      assetBytes: positiveDecimal(fields[6], MAX_ARCHIVE_BYTES, "archive size")?,
+      assetSha256: fields[7],
+      executableBytes: positiveDecimal(fields[8], MAX_EXECUTABLE_BYTES, "executable size")?,
+      executableSha256: fields[9],
+    }
+    validate(entry)?
+    entries.push(entry)
+    index += 1
+  }
+  if text != encode(entries)? {
+    return Err("download catalogue must use sorted unique target rows and one final LF")
+  }
+  Ok(entries)
+}
+
+export function load(root: string) -> Result<Array<Download>, string> {
+  requireRegularInput(root, CATALOG_PATH)?
+  parse(files.readText("{root}/{CATALOG_PATH}")?)
+}
+
+export function select(entries: Array<Download>, target: string) -> Result<Download, string> {
+  targetName(target)?
+  for entry in entries { if entry.target == target { return Ok(entry) } }
+  Err("no verified Core Kit download is recorded for {target}; use ./bootstrap or bootstrap.cmd to build this checkout")
+}
+
+export function inputSetId(root: string) -> Result<string, string> {
+  // The catalogue is transport metadata added after the artifact exists.
+  // Including its final archive hash among the artifact's own inputs would
+  // create a self-reference. repositoryFiles enforces its exclusion.
+  let records = repositoryFiles(root)?
+  let canonical = json.stringify(records)?
+  Ok(canonical.encodeUtf8().sha256().toHex())
+}

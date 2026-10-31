@@ -1,0 +1,14 @@
+[package]
+name = "topaz_seed_compiler"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license-file.workspace = true
+publish = false
+
+[lib]
+test = false
+doctest = false
+
+[dependencies]
+topaz_rt = { workspace = true }

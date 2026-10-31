@@ -1,0 +1,211 @@
+export const USAGE = """
+Topaz Core Kit
+
+  topaz-core-kit help
+  topaz-core-kit --version
+  topaz-core-kit hash <file>
+  topaz-core-kit kit verify
+  topaz-core-kit kit build [--out-dir <directory>]
+  topaz-core-kit kit build-id
+  topaz-core-kit kit refresh [--check]
+  topaz-core-kit kit install --archive <file>
+  topaz-core-kit kit install --check
+  topaz-core-kit kit binary-info --file <executable> [--other <executable>]
+  topaz-core-kit kit payload-assemble --build-dir <directory> --recipe <repository-file> --out-dir <new-directory>
+  topaz-core-kit kit payload-compare --payload-dir <directory> --other <directory>
+  topaz-core-kit kit payload-promote --payload-dir <directory> --other <directory> --out-dir <new-directory>
+  topaz-core-kit kit payload-pack --payload-dir <directory> --other <directory> --out-dir <new-directory> --repository <owner/name> --tag <release> --source-commit <commit>
+  topaz-core-kit kit payload-record --target <rust-target> --payload-dir <directory>
+  topaz-core-kit kit payload-verify --payload-dir <directory>
+  topaz-core-kit check --root <project>
+  topaz-core-kit build --root <project> --out-dir <directory>
+  topaz-core-kit check --source <file>
+  topaz-core-kit emit-rust --source <file> --out <file>
+  topaz-core-kit request --root <project> --out <file>
+  topaz-core-kit request --source <file> --out <file>
+  topaz-core-kit build --source <file> --out-dir <directory>
+
+check, emit-rust and build accept exactly one of --root, --source and
+--request. Project mode reads topaz.toml and resolves local modules using
+the canonical compiler. request saves a complete source snapshot.
+"""
+
+export record Command {
+  name: string,
+  source: string,
+  root: string,
+  requestPath: string,
+  output: string,
+  target: string,
+  recipe: string,
+  other: string,
+  destination: string,
+  repository: string,
+  tag: string,
+  sourceCommit: string,
+}
+
+function usageError(message: string) -> Result<Command, string> {
+  Err("{message}\n\n{USAGE}")
+}
+
+function emptyCommand(name: string) -> Command {
+  Command {
+    name: name, source: "", root: "", requestPath: "", output: "", target: "",
+    recipe: "", other: "", destination: "", repository: "", tag: "", sourceCommit: "",
+  }
+}
+
+function parseDistribution(args: Array<string>) -> Result<Command, string> {
+  let name = args[1]
+  let allowed = if name == "binary-info" { ["--file", "--other"] }
+    else if name == "payload-assemble" { ["--build-dir", "--recipe", "--out-dir"] }
+    else if name == "payload-promote" { ["--payload-dir", "--other", "--out-dir"] }
+    else if name == "payload-pack" {
+      ["--payload-dir", "--other", "--out-dir", "--repository", "--tag", "--source-commit"]
+    }
+    else { ["--payload-dir", "--other"] }
+  let mut values: Map<string, string> = map {}
+  let mut index = 2
+  while index < args.length {
+    let option = args[index]
+    let mut admitted = false
+    for expected in allowed { if option == expected { admitted = true } }
+    if !admitted { return usageError("unknown {name} option `{option}`") }
+    if index + 1 >= args.length || args[index + 1] == "" {
+      return usageError("{option} requires a nonempty value")
+    }
+    if values.containsKey(option) { return usageError("{option} was specified more than once") }
+    values.insert(option, args[index + 1])
+    index += 2
+  }
+  for option in allowed {
+    if name == "binary-info" && option == "--other" { continue }
+    if !values.containsKey(option) { return usageError("{name} requires {option}") }
+  }
+  Ok(Command {
+    ...emptyCommand("kit-{name}"),
+    source: values.getOr(if name == "binary-info" { "--file" } else { "--build-dir" }, ""),
+    output: values.getOr(if name == "payload-assemble" { "--out-dir" } else { "--payload-dir" }, ""),
+    recipe: values.getOr("--recipe", "").replace("\\", "/"),
+    other: values.getOr("--other", ""),
+    destination: values.getOr("--out-dir", ""), repository: values.getOr("--repository", ""),
+    tag: values.getOr("--tag", ""), sourceCommit: values.getOr("--source-commit", ""),
+  })
+}
+
+function parseKit(args: Array<string>) -> Result<Command, string> {
+  if args.length >= 2 && (args[1] == "binary-info" || args[1] == "payload-assemble" ||
+    args[1] == "payload-compare" || args[1] == "payload-promote" || args[1] == "payload-pack") {
+    return parseDistribution(args)
+  }
+  if args.length >= 2 && (args[1] == "verify" || args[1] == "build-id") {
+    let name = args[1]
+    if args.length != 2 { return usageError("kit {name} accepts no arguments") }
+    return Ok(emptyCommand("kit-{name}"))
+  }
+  if args.length >= 2 && args[1] == "install" {
+    if args.length == 3 && args[2] == "--check" { return Ok(emptyCommand("kit-install-check")) }
+    if args.length == 4 && args[2] == "--archive" && args[3] != "" {
+      return Ok(Command { ...emptyCommand("kit-install"), source: args[3] })
+    }
+    return usageError("kit install requires either --archive <file> or --check; use install-core-kit for an explicit download")
+  }
+  if args.length >= 2 && args[1] == "refresh" {
+    if args.length == 2 { return Ok(emptyCommand("kit-refresh")) }
+    if args.length == 3 && args[2] == "--check" { return Ok(emptyCommand("kit-refresh-check")) }
+    return usageError("kit refresh accepts only an optional --check")
+  }
+  if args.length >= 2 && args[1] == "build" {
+    if args.length == 2 { return Ok(emptyCommand("kit-build")) }
+    if args.length != 4 || args[2] != "--out-dir" || args[3] == "" {
+      return usageError("kit build accepts only an optional --out-dir <directory>")
+    }
+    return Ok(Command { ...emptyCommand("kit-build"), output: args[3] })
+  }
+  if args.length < 2 || (args[1] != "payload-record" && args[1] != "payload-verify") {
+    return usageError("kit requires verify, build, build-id, refresh, install, binary-info or a payload command")
+  }
+  let name = args[1]
+  let mut output = ""
+  let mut target = ""
+  let mut index = 2
+  while index < args.length {
+    let option = args[index]
+    if option != "--payload-dir" && option != "--target" {
+      return usageError("unknown {name} option `{option}`")
+    }
+    if index + 1 >= args.length || args[index + 1] == "" {
+      return usageError("{option} requires a nonempty value")
+    }
+    if option == "--target" {
+      if name == "payload-verify" { return usageError("payload-verify reads its target from payload.json") }
+      if target != "" { return usageError("--target was specified more than once") }
+      target = args[index + 1]
+    } else {
+      if output != "" { return usageError("--payload-dir was specified more than once") }
+      output = args[index + 1]
+    }
+    index += 2
+  }
+  if output == "" { return usageError("{name} requires --payload-dir") }
+  if name == "payload-record" && target == "" { return usageError("payload-record requires --target") }
+  Ok(Command { ...emptyCommand("kit-{name}"), output: output, target: target })
+}
+
+export function parse(args: Array<string>) -> Result<Command, string> {
+  let name = if args.length == 0 { "help" } else { args[0] }
+  if name == "help" || name == "--help" || name == "--version" {
+    if args.length > 1 { return usageError("{name} accepts no arguments") }
+    return Ok(emptyCommand(name))
+  }
+  if name == "hash" {
+    if args.length != 2 || args[1] == "" { return usageError("hash requires exactly one file path") }
+    return Ok(Command { ...emptyCommand(name), source: args[1] })
+  }
+  if name == "kit" { return parseKit(args) }
+  if name != "check" && name != "emit-rust" && name != "request" && name != "build" {
+    return usageError("unknown command `{name}`")
+  }
+  let mut source = ""
+  let mut root = ""
+  let mut requestPath = ""
+  let mut output = ""
+  let mut index = 1
+  while index < args.length {
+    let option = args[index]
+    if option != "--source" && option != "--root" && option != "--request" && option != "--out" && option != "--out-dir" {
+      return usageError("unknown option `{option}`")
+    }
+    if index + 1 >= args.length || args[index + 1] == "" {
+      return usageError("{option} requires a nonempty value")
+    }
+    let value = args[index + 1]
+    if option == "--source" {
+      if source != "" { return usageError("--source was specified more than once") }
+      source = value
+    } else if option == "--root" {
+      if root != "" { return usageError("--root was specified more than once") }
+      root = value
+    } else if option == "--request" {
+      if requestPath != "" { return usageError("--request was specified more than once") }
+      requestPath = value
+    } else {
+      if name == "check" { return usageError("check does not accept an output option") }
+      if (name == "build") != (option == "--out-dir") {
+        return usageError("use --out-dir for build, and --out for emit-rust or request")
+      }
+      if output != "" { return usageError("the output was specified more than once") }
+      output = value
+    }
+    index += 2
+  }
+  let modes = (if source != "" { 1 } else { 0 }) +
+    (if root != "" { 1 } else { 0 }) + (if requestPath != "" { 1 } else { 0 })
+  if modes != 1 { return usageError("choose exactly one of --source, --root and --request") }
+  if name == "request" && requestPath != "" {
+    return usageError("request creates a source snapshot from --source or --root")
+  }
+  if name != "check" && output == "" { return usageError("{name} requires an explicit output path") }
+  Ok(Command { ...emptyCommand(name), source: source, root: root, requestPath: requestPath, output: output })
+}

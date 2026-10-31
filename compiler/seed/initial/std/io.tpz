@@ -1,0 +1,3 @@
+export function writeLine(line: string) -> () { __stdWriteLine(line) }
+export let readStdin = __stdReadStdin
+export let open = __stdOpen

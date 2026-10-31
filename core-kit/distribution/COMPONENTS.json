@@ -1,0 +1,166 @@
+{
+  "compilerSourceSetId": "sha256:17d598ebcb0dea65195aba8c0b3ab20f94003a7f343714f7b1df25d790cdacd5",
+  "nativePackages": [
+    {
+      "name": "topaz-core-kit-native",
+      "policyReferences": [
+        "LICENSE-COMPONENTS.txt",
+        "core-kit/UPSTREAM-PORT.md"
+      ],
+      "role": "local-native-adapter",
+      "sourcePaths": [
+        "compiler/core-kit-native/Cargo.toml",
+        "core-kit/native"
+      ],
+      "version": "0.1.0"
+    },
+    {
+      "name": "topaz_diag",
+      "policyReferences": [
+        "LICENSE-COMPONENTS.txt",
+        "compiler/seed/runtime.json",
+        "core-kit/UPSTREAM-PORT.md"
+      ],
+      "role": "public-seed-runtime",
+      "sourcePaths": [
+        "compiler/crates/topaz_diag"
+      ],
+      "version": "5.21.1"
+    },
+    {
+      "name": "topaz_host_native",
+      "policyReferences": [
+        "LICENSE-COMPONENTS.txt",
+        "core-kit/UPSTREAM-PORT.md"
+      ],
+      "role": "public-native-host",
+      "sourcePaths": [
+        "compiler/crates/topaz_host_native"
+      ],
+      "version": "5.21.1"
+    },
+    {
+      "name": "topaz_host_none",
+      "policyReferences": [
+        "LICENSE-COMPONENTS.txt",
+        "compiler/seed/runtime.json",
+        "core-kit/UPSTREAM-PORT.md"
+      ],
+      "role": "public-seed-runtime",
+      "sourcePaths": [
+        "compiler/crates/topaz_host_none"
+      ],
+      "version": "5.21.1"
+    },
+    {
+      "name": "topaz_product_runtime",
+      "policyReferences": [
+        "LICENSE-COMPONENTS.txt",
+        "compiler/seed/runtime.json",
+        "core-kit/UPSTREAM-PORT.md"
+      ],
+      "role": "public-seed-runtime",
+      "sourcePaths": [
+        "compiler/crates/topaz_product_runtime"
+      ],
+      "version": "5.21.1"
+    },
+    {
+      "name": "topaz_rt",
+      "policyReferences": [
+        "LICENSE-COMPONENTS.txt",
+        "compiler/seed/runtime.json",
+        "core-kit/UPSTREAM-PORT.md"
+      ],
+      "role": "public-seed-runtime",
+      "sourcePaths": [
+        "compiler/crates/topaz_rt"
+      ],
+      "version": "5.21.1"
+    },
+    {
+      "name": "topaz_seed_compiler",
+      "policyReferences": [
+        "LICENSE-COMPONENTS.txt",
+        "SOURCE-COMPONENTS.json",
+        "core-kit/UPSTREAM-PORT.md"
+      ],
+      "role": "canonical-generated-compiler",
+      "sourcePaths": [
+        "compiler/crates/topaz_seed_compiler",
+        "compiler/generated/native/compiler.rs",
+        "compiler/generated/native/compiler.json",
+        "compiler/crates/topaz_self_frontend/topaz"
+      ],
+      "version": "5.21.1"
+    },
+    {
+      "name": "topaz_syntax",
+      "policyReferences": [
+        "LICENSE-COMPONENTS.txt",
+        "compiler/seed/runtime.json",
+        "core-kit/UPSTREAM-PORT.md"
+      ],
+      "role": "public-seed-runtime",
+      "sourcePaths": [
+        "compiler/crates/topaz_syntax"
+      ],
+      "version": "5.21.1"
+    },
+    {
+      "name": "topaz_value",
+      "policyReferences": [
+        "LICENSE-COMPONENTS.txt",
+        "compiler/seed/runtime.json",
+        "core-kit/UPSTREAM-PORT.md"
+      ],
+      "role": "public-seed-runtime",
+      "sourcePaths": [
+        "compiler/crates/topaz_value"
+      ],
+      "version": "5.21.1"
+    }
+  ],
+  "pendingReview": [
+    "The historical SOURCE-COMPONENTS.json describes its published snapshot. The newer local CLI/native additions need an authoritative component policy record before release readiness is asserted.",
+    "LICENSE-COMPONENTS.txt refers to GENERATED-OUTPUT-NOTICE.txt for generated application output. That file is absent from this checkout. No replacement terms are invented here.",
+    "Platform runtime files and their notices, tested support scope and independent complete release reproduction remain platform-specific release review work."
+  ],
+  "platformRuntimeScope": "Each release recipe classifies observed imported libraries as system dependencies or checked-in runtime mappings. A successful header or dependency comparison is not native execution or a minimum operating-system support measurement.",
+  "reconstructionOnlyPackages": [
+    {
+      "name": "topaz_seed",
+      "policyReferences": [
+        "LICENSE-COMPONENTS.txt",
+        "compiler/seed/runtime.json",
+        "core-kit/UPSTREAM-PORT.md"
+      ],
+      "role": "Standalone no-capability seed runner, absent from the native executable dependency closure",
+      "sourcePath": "compiler/crates/topaz_seed",
+      "version": "5.21.1"
+    }
+  ],
+  "rustStandardLibrary": {
+    "notice": "core-kit/distribution/RUST-STDLIB-NOTICES.html",
+    "provenance": "core-kit/distribution/RUST-STDLIB-PROVENANCE.json",
+    "version": "1.96.0"
+  },
+  "schema": "topaz.core-kit-components/v1",
+  "scope": "Descriptive Core Kit composition and existing policy references. This record makes no new license grant and does not certify distribution readiness.",
+  "thirdPartyScope": {
+    "explanation": "The inherited files retain the broader website distribution inventory and original texts. They are preserved as inherited notices rather than claimed to be the minimal Core Kit link graph. Cargo.lock has no registry packages; Rust standard-library and platform runtime components are considered separately.",
+    "inheritedWebsiteInventory": [
+      "THIRD-PARTY-NOTICES.md",
+      "THIRD-PARTY-LICENSES.txt"
+    ],
+    "unicodeNotice": "NOTICE"
+  },
+  "topazCli": {
+    "policyReferences": [
+      "LICENSE-COMPONENTS.txt",
+      "core-kit/UPSTREAM-PORT.md"
+    ],
+    "role": "Topaz-authored command, project, build, maintenance and distribution policy",
+    "sourcePath": "core-kit/cli/src"
+  }
+}

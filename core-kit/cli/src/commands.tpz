@@ -1,0 +1,163 @@
+import std.fs as files
+import std.io as io
+import std.json as json
+import src.arguments { Command, USAGE }
+import src.binary_info as binaryInfo
+import src.contracts { Capture, Compile, CompilerRequest, Native, Process, Provider, VERSION }
+import src.kit_build { buildKit }
+import src.installation as installation
+import src.native_build { build }
+import src.payload { recordPayload, verifyPayload }
+import src.project { Project, PROJECT_REQUEST_SCHEMA, decodeSnapshot, encodeSnapshot, prepare }
+import src.project_manifest { ProjectConfig }
+import src.refresh { refresh }
+import src.release_payload as releasePayload
+import src.release_package as releasePackage
+import src.requests { encode, fromSource, fromText }
+import src.responses { completed, rustSource }
+import src.verification { verify }
+
+function closedFacts(query: string) -> Result<string, string> {
+  Err("source facts are incomplete; use --root for a project or provide a complete saved request")
+}
+
+record Input {
+  request: CompilerRequest,
+  provide: Provider,
+  project: Option<Project>,
+  configuration: Option<ProjectConfig>,
+}
+
+function selectInput(command: Command, repositoryRoot: string, native: Native) -> Result<Input, string> {
+  if command.root != "" {
+    let project = prepare(command.root, repositoryRoot,
+      (root: string, path: string) => native("inspect-rooted", [root, path]))?
+    return Ok(Input {
+      request: project.request, provide: project.provide,
+      project: Some(project), configuration: Some(project.configuration),
+    })
+  }
+  if command.source != "" {
+    return Ok(Input {
+      request: fromSource(command.source, repositoryRoot)?, provide: closedFacts,
+      project: None, configuration: None,
+    })
+  }
+  let text = files.readText(command.requestPath)?
+  if text.byteLength() > 134217728 { return Err("saved request exceeds 128 MiB") }
+  let document = match json.parse(text) {
+    case Ok(value) => value
+    case Err(error) => return Err("invalid saved request JSON at {error.line}:{error.column}: {error.message}")
+  }
+  let schema = match document.get("schema") {
+    case Some(value) => match value.asString() {
+      case Some(value) => value
+      case None => ""
+    }
+    case None => ""
+  }
+  if schema == PROJECT_REQUEST_SCHEMA {
+    let saved = decodeSnapshot(text)?
+    let request = fromText(json.stringify(saved.request)?)?
+    return Ok(Input {
+      request: request, provide: closedFacts,
+      project: None, configuration: Some(saved.configuration),
+    })
+  }
+  Ok(Input { request: fromText(text)?, provide: closedFacts, project: None, configuration: None })
+}
+
+export function execute(
+  command: Command,
+  repositoryRoot: string,
+  compile: Compile,
+  process: Process,
+  native: Native,
+  capture: Capture,
+) -> Result<int, string> {
+  if command.name == "help" || command.name == "--help" {
+    io.writeLine(USAGE)
+    return Ok(0)
+  }
+  if command.name == "--version" {
+    io.writeLine(VERSION)
+    return Ok(0)
+  }
+  if command.name == "hash" {
+    let bytes = files.readBytes(command.source)?
+    io.writeLine(bytes.sha256().toHex())
+    return Ok(0)
+  }
+  if command.name == "kit-verify" { return verify(repositoryRoot) }
+  if command.name == "kit-build-id" {
+    io.writeLine(native("generated-cli-sha256", [])?)
+    return Ok(0)
+  }
+  if command.name == "kit-install" { return installation.install(repositoryRoot, command.source, native, capture) }
+  if command.name == "kit-install-check" { return installation.checkInstalled(repositoryRoot, native) }
+  if command.name == "kit-build" {
+    return buildKit(repositoryRoot, command.output, compile, process, native, capture)
+  }
+  if command.name == "kit-refresh" || command.name == "kit-refresh-check" {
+    return refresh(repositoryRoot, command.name == "kit-refresh-check", compile, native)
+  }
+  if command.name == "kit-binary-info" { return binaryInfo.inspect(command.source, command.other, native) }
+  if command.name == "kit-payload-assemble" {
+    return releasePayload.assemble(repositoryRoot, command.source, command.recipe, command.output, native)
+  }
+  if command.name == "kit-payload-compare" {
+    return releasePayload.compare(repositoryRoot, command.output, command.other, native)
+  }
+  if command.name == "kit-payload-promote" {
+    return releasePayload.promote(repositoryRoot, command.output, command.other, command.destination, native, capture)
+  }
+  if command.name == "kit-payload-pack" {
+    return releasePackage.pack(repositoryRoot, command.output, command.other, command.destination,
+      command.repository, command.tag, command.sourceCommit, native, capture)
+  }
+  if command.name == "kit-payload-record" {
+    return recordPayload(repositoryRoot, command.output, command.target)
+  }
+  if command.name == "kit-payload-verify" {
+    return verifyPayload(repositoryRoot, command.output)
+  }
+  let selected = selectInput(command, repositoryRoot, native)?
+  let terminal = if command.name == "check" || command.name == "request" { "typed" } else { "rust-source" }
+  let input = encode(selected.request, terminal)?
+  if command.name == "request" {
+    let saved = match selected.project {
+      case Some(project) => {
+        // The unchanged core discovers the module graph through the Topaz
+        // provider. Save the resulting closed facts and the package grants.
+        completed(compile(input, selected.provide)?, "typed")?
+        encodeSnapshot(project)?
+      }
+      case None => input
+    }
+    native("mkdir-parent", [command.output])?
+    files.writeText(command.output, "{saved}\n")?
+    io.writeLine("closed compiler request: {command.output}")
+    return Ok(0)
+  }
+  let response = match compile(input, selected.provide) {
+    case Ok(text) => completed(text, terminal)?
+    case Err(message) => {
+      if command.source != "" && message.contains("source facts are incomplete") {
+        return Err("{message}\nsource mode supports one file with bundled std modules; use --root for local imports")
+      }
+      return Err(message)
+    }
+  }
+  if command.name == "check" {
+    io.writeLine("check completed")
+    return Ok(0)
+  }
+  let source = rustSource(response)?
+  if command.name == "emit-rust" {
+    native("mkdir-parent", [command.output])?
+    files.writeText(command.output, source)?
+    io.writeLine("generated Rust: {command.output}")
+    return Ok(0)
+  }
+  build(source, command.output, repositoryRoot, process, native, capture, selected.configuration)
+}

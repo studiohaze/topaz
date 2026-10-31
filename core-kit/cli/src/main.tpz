@@ -1,0 +1,15 @@
+import src.arguments { parse }
+import src.commands { execute }
+import src.contracts { Capture, Compile, Native, Process }
+
+// The adapter supplies capabilities; all command and build policy lives here.
+export function run(
+  args: Array<string>,
+  repositoryRoot: string,
+  compile: Compile,
+  process: Process,
+  native: Native,
+  capture: Capture,
+) -> Result<int, string> {
+  execute(parse(args)?, repositoryRoot, compile, process, native, capture)
+}

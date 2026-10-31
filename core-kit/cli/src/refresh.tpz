@@ -1,0 +1,252 @@
+import std.fs as files
+import std.io as io
+import std.json as json
+import src.contracts { COMPILER_SOURCE_SET, Compile, Native }
+import src.refresh_inputs { prepareRefresh, validationRequest }
+import src.refresh_inventory { RefreshFile, prepareInventories }
+import src.responses { completed }
+import src.verification { validateRecordedInputs }
+
+const BACKUP_ROOT = "out/core-kit-refresh"
+const MARKER = "topaz.core-kit-refresh-backups/v1\n"
+
+record ReceiptFile derives JSON {
+  path: string,
+  before: string,
+  after: string,
+  beforeSha256: string,
+  afterSha256: string,
+}
+
+record Receipt derives JSON {
+  schema: string,
+  compilerSourceSetId: string,
+  state: string,
+  files: Array<ReceiptFile>,
+}
+
+function closedFacts(query: string) -> Result<string, string> {
+  Err("refreshed CLI inputs are incomplete")
+}
+
+function changedFiles(plan: Array<RefreshFile>) -> Array<RefreshFile> {
+  let mut changed: Array<RefreshFile> = []
+  for file in plan { if file.before != file.after { changed.push(file) } }
+  changed
+}
+
+function samePlan(left: Array<RefreshFile>, right: Array<RefreshFile>) -> bool {
+  if left.length != right.length { return false }
+  let mut index = 0
+  while index < left.length {
+    if left[index].path != right[index].path ||
+      left[index].before != right[index].before || left[index].after != right[index].after {
+      return false
+    }
+    index += 1
+  }
+  true
+}
+
+function backupRoot(root: string, native: Native) -> Result<string, string> {
+  // Refuse links in the fixed backup path before creating a missing suffix.
+  let mut current = root
+  let mut missing = false
+  for part in BACKUP_ROOT.split("/") {
+    if !missing {
+      let mut found = false
+      for entry in files.list(current)? {
+        if entry.name == part {
+          if entry.kind != "directory" { return Err("refresh backup path must use real directories") }
+          found = true
+        }
+      }
+      missing = !found
+    }
+    current = "{current}/{part}"
+  }
+  let output = native("mkdir", [current])?
+  let entries = files.list(output)?
+  if entries.length == 0 {
+    files.writeText("{output}/.topaz-core-kit-refresh", MARKER)?
+  } else {
+    let mut marker = false
+    for entry in entries {
+      if entry.name == ".topaz-core-kit-refresh" && entry.kind == "file" { marker = true }
+    }
+    if !marker || files.readText("{output}/.topaz-core-kit-refresh")? != MARKER {
+      return Err("refresh backup directory is not owned by Core Kit")
+    }
+  }
+  Ok(output)
+}
+
+function newBackup(base: string, native: Native) -> Result<string, string> {
+  let mut names: Set<string> = set {}
+  for entry in files.list(base)? { names.add(entry.name) }
+  let mut sequence = 1
+  while names.contains("run-{sequence}") { sequence += 1 }
+  if sequence > 10000 { return Err("refresh backup directory has too many retained runs") }
+  native("mkdir-new", ["{base}/run-{sequence}"])
+}
+
+function writeReceipt(directory: string, receipt: Receipt, state: string) -> Result<(), string> {
+  files.writeText("{directory}/refresh.json", "{json.stringify(Receipt { ...receipt, state: state })?}\n")
+}
+
+function stage(directory: string, changed: Array<RefreshFile>) -> Result<Receipt, string> {
+  let mut records: Array<ReceiptFile> = []
+  let mut index = 0
+  for file in changed {
+    let before = "{index}.before"
+    let after = "{index}.after"
+    files.writeText("{directory}/{before}", file.before)?
+    files.writeText("{directory}/{after}", file.after)?
+    records.push(ReceiptFile {
+      path: file.path, before: before, after: after,
+      beforeSha256: file.before.encodeUtf8().sha256().toHex(),
+      afterSha256: file.after.encodeUtf8().sha256().toHex(),
+    })
+    index += 1
+  }
+  let receipt = Receipt {
+    schema: "topaz.core-kit-refresh/v1", compilerSourceSetId: COMPILER_SOURCE_SET,
+    state: "prepared", files: records,
+  }
+  writeReceipt(directory, receipt, "prepared")?
+  Ok(receipt)
+}
+
+// Copy-file replaces one file through a private sibling. The group is not a
+// crash-atomic filesystem transaction. Backups and the receipt survive an
+// interruption, and a failed operation attempts to restore only its own bytes.
+function restore(root: string, directory: string, attempted: Array<int>, changed: Array<RefreshFile>, native: Native) -> Result<(), string> {
+  let mut failures: Array<string> = []
+  let mut index = attempted.length
+  while index > 0 {
+    index -= 1
+    let position = attempted[index]
+    let file = changed[position]
+    match files.readText("{root}/{file.path}") {
+      case Ok(current) => {
+        if current == file.before { continue }
+        if current != file.after {
+          failures.push("{file.path} changed outside this refresh; preserved it")
+          continue
+        }
+        match native("copy-file", ["{directory}/{position}.before", "{root}/{file.path}"]) {
+          case Ok(_) => ()
+          case Err(error) => failures.push("{file.path}: {error}")
+        }
+      }
+      case Err(error) => failures.push("{file.path}: {error}")
+    }
+  }
+  if failures.length != 0 { return Err(failures.join("\n")) }
+  Ok(())
+}
+
+record Replacement {
+  attempted: Array<int>,
+  failure: Option<string>,
+}
+
+function replaceFiles(root: string, directory: string, changed: Array<RefreshFile>, native: Native) -> Replacement {
+  let mut attempted: Array<int> = []
+  let mut index = 0
+  for file in changed {
+    let current = match files.readText("{root}/{file.path}") {
+      case Ok(text) => text
+      case Err(error) => return Replacement { attempted: attempted, failure: Some(error) }
+    }
+    if current != file.before {
+      return Replacement { attempted: attempted, failure: Some("metadata changed while refresh was running: {file.path}") }
+    }
+    attempted.push(index)
+    match native("copy-file", ["{directory}/{index}.after", "{root}/{file.path}"]) {
+      case Ok(_) => ()
+      case Err(error) => return Replacement { attempted: attempted, failure: Some(error) }
+    }
+    index += 1
+  }
+  Replacement { attempted: attempted, failure: None }
+}
+
+function applyLocked(root: string, base: string, plan: Array<RefreshFile>, changed: Array<RefreshFile>, native: Native) -> Result<int, string> {
+  let fresh = prepareInventories(root, prepareRefresh(root)?)?
+  if !samePlan(plan, fresh) { return Err("inputs changed while preparing refresh; no metadata was replaced") }
+  let directory = newBackup(base, native)?
+  let receipt = stage(directory, changed)?
+  // The backup exists before any repository file is replaced.
+  writeReceipt(directory, receipt, "applying")?
+  let replacement = replaceFiles(root, directory, changed, native)
+  let applied = match replacement.failure {
+    case Some(error) => Err(error)
+    case None => validateRecordedInputs(root)
+  }
+  match applied {
+    case Ok(_) => {
+      match writeReceipt(directory, receipt, "applied") {
+        case Ok(_) => ()
+        case Err(error) => return Err("metadata was refreshed but its completion receipt could not be saved: {error}\nBackups remain in {directory}")
+      }
+      io.writeLine("Refreshed {changed.length} repository metadata files.")
+      io.writeLine("Previous bytes and refresh receipt retained in {directory}")
+      Ok(0)
+    }
+    case Err(error) => {
+      let restored = restore(root, directory, replacement.attempted, changed, native)
+      let state = match restored {
+        case Ok(_) => "rolled-back"
+        case Err(_) => "recovery-required"
+      }
+      let saved = writeReceipt(directory, receipt, state)
+      let details = match restored {
+        case Ok(_) => "Replaced metadata was restored."
+        case Err(message) => "Some metadata needs recovery:\n{message}"
+      }
+      let receiptStatus = match saved {
+        case Ok(_) => ""
+        case Err(message) => "\nCannot update refresh receipt: {message}"
+      }
+      Err("{error}\n{details}\nBackups remain in {directory}{receiptStatus}")
+    }
+  }
+}
+
+export function refresh(root: string, checkOnly: bool, compile: Compile, native: Native) -> Result<int, string> {
+  let cli = prepareRefresh(root)?
+  let plan = prepareInventories(root, cli)?
+  // A source edit must pass the unchanged compiler before it becomes a new
+  // recorded snapshot. This performs no Cargo build or core regeneration.
+  let request = validationRequest(cli.requestText)?
+  completed(compile(request, closedFacts)?, "typed")?
+  let changed = changedFiles(plan)
+  if changed.length == 0 {
+    io.writeLine("CLI snapshot and inventories match {cli.sourceCount} source modules.")
+    return Ok(0)
+  }
+  if checkOnly {
+    let mut paths: Array<string> = []
+    for file in changed { paths.push(file.path) }
+    return Err("CLI snapshot or inventories need refresh:\n{paths.join("\n")}\nRun kit refresh to update these metadata files.")
+  }
+  let base = backupRoot(root, native)?
+  let lock = "{base}/lock"
+  match native("mkdir-new", [lock]) {
+    case Ok(_) => ()
+    case Err(message) => return Err("cannot acquire the refresh lock: {message}\nIf an earlier process was interrupted, inspect its receipt and backups before removing {lock}")
+  }
+  let result = applyLocked(root, base, plan, changed, native)
+  let unlock = native("rmdir-empty", [lock])
+  match unlock {
+    case Ok(_) => result
+    case Err(message) => {
+      let prior = match result {
+        case Ok(_) => "Metadata refresh completed."
+        case Err(error) => error
+      }
+      Err("{prior}\nCould not release the refresh lock: {message}\nInspect {lock} before the next refresh.")
+    }
+  }
+}

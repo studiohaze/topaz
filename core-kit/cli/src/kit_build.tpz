@@ -1,0 +1,85 @@
+import std.fs as files
+import std.io as io
+import src.contracts { Capture, Compile, Native, Process }
+import src.kit_inputs { prepare }
+import src.responses { completed, rustSource }
+import src.toolchain { checkToolchain }
+
+const MARKER = "topaz-core-kit.kit-build/v1\n"
+
+function prepareOutput(output: string) -> Result<(), string> {
+  let entries = files.list(output)?
+  if entries.length == 0 { return Ok(()) }
+  let mut managed = false
+  for entry in entries {
+    if entry.kind == "symlink" {
+      return Err("Kit output must not contain symlinks: {entry.name}")
+    }
+    if entry.name == ".topaz-core-kit-kit-build" && entry.kind == "file" {
+      managed = true
+    }
+  }
+  if !managed || files.readText("{output}/.topaz-core-kit-kit-build")? != MARKER {
+    return Err("Kit output must be empty or contain a previous kit build; refusing to overwrite another project")
+  }
+  Ok(())
+}
+
+function closedFacts(query: string) -> Result<string, string> {
+  Err("CLI source facts are incomplete; update its explicit source and directory mappings")
+}
+
+export function buildKit(
+  repositoryRoot: string,
+  requestedOutput: string,
+  compile: Compile,
+  process: Process,
+  native: Native,
+  capture: Capture,
+) -> Result<int, string> {
+  let target = checkToolchain(repositoryRoot, native, capture)?
+  let input = prepare(repositoryRoot)?
+  let requested = if requestedOutput == "" {
+    "{repositoryRoot}/out/core-kit-build"
+  } else {
+    requestedOutput
+  }
+  let output = native("mkdir", [requested])?
+  prepareOutput(output)?
+  files.writeText("{output}/.topaz-core-kit-kit-build", MARKER)?
+  files.writeText("{output}/cli.request.json", "{input}\n")?
+
+  io.writeLine("Compiling the local Topaz CLI")
+  let response = compile(input, closedFacts)?
+  files.writeText("{output}/cli.response.json", "{response}\n")?
+  let generated = rustSource(completed(response, "rust-source")?)?
+  let generatedPath = "{output}/generated_cli.rs"
+  files.writeText(generatedPath, generated)?
+
+  io.writeLine("Linking Core Kit with the public runtime")
+  let code = process(
+    "cargo",
+    [
+      "build", "--manifest-path", "{repositoryRoot}/compiler/Cargo.toml",
+      "-p", "topaz-core-kit-native", "--bin", "topaz-core-kit",
+      "--features", "native-cli", "--release", "--frozen",
+      "--message-format=short", "--target", target.target,
+      "--target-dir", "{repositoryRoot}/compiler/target",
+    ],
+    "{repositoryRoot}/compiler",
+    [
+      "RUSTUP_TOOLCHAIN=1.96.0", "RUSTUP_AUTO_INSTALL=0", "CARGO_NET_OFFLINE=true",
+      "TOPAZ_CORE_KIT_ROOT={repositoryRoot}",
+      "TOPAZ_CORE_KIT_GENERATED_CLI={generatedPath}",
+    ],
+  )?
+  if code != 0 { return Ok(code) }
+  let binary = "topaz-core-kit{target.executableSuffix}"
+  native("copy-file", [
+    "{repositoryRoot}/compiler/target/{target.target}/release/{binary}",
+    "{output}/{binary}",
+  ])?
+  io.writeLine("Core Kit built at {output}/{binary}")
+  io.writeLine("Keep the executable inside its checkout or set TOPAZ_CORE_KIT_ROOT to that checkout")
+  Ok(0)
+}

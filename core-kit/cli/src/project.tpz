@@ -1,0 +1,105 @@
+import std.fs as files
+import std.json as json
+import src.contracts {
+  COMPILER_SOURCE_SET, EXCHANGE_SCHEMA, CompilerRequest, HostFact, PackageFacts, Provider,
+}
+import src.project_manifest { ProjectConfig, parseManifest, validateConfiguration }
+import src.project_sources { Inspect, SourceState, inspectPath, orderedFacts, provide }
+import src.requests { standardModules }
+
+export record Project {
+  request: CompilerRequest,
+  provide: Provider,
+  facts: Array<HostFact>,
+  configuration: ProjectConfig,
+  root: string,
+}
+
+export function prepare(rootPath: string, repositoryRoot: string, inspect: Inspect) -> Result<Project, string> {
+  let location = inspectPath(rootPath, "", inspect)?
+  if location.status != "present" || location.kind != "directory" {
+    return Err("--root must identify an existing project directory")
+  }
+  let manifest = inspectPath(location.path, "topaz.toml", inspect)?
+  if manifest.status != "present" || manifest.kind != "file" {
+    return Err("project topaz.toml must be a readable file inside the project root")
+  }
+  let configuration = parseManifest(files.readText(manifest.path)?)?
+  let modules = standardModules(repositoryRoot)?
+  let mut moduleBytes = 0
+  for module in modules { moduleBytes += module.source.byteLength() }
+  if moduleBytes > 16777216 { return Err("bundled standard modules exceed 16 MiB") }
+  let facts: Array<HostFact> = []
+  let state = SourceState {
+    root: location.path,
+    inspect: inspect,
+    facts: facts,
+    indexes: map {},
+    totals: [0, moduleBytes],
+  }
+  let request = CompilerRequest {
+    schema: EXCHANGE_SCHEMA,
+    producer: "topaz-stage1",
+    compilerSourceSetId: COMPILER_SOURCE_SET,
+    terminal: "typed",
+    entry: configuration.entry, root: "", source: "", sourceId: configuration.entry,
+    languageMode: "topaz-5.21", profile: "",
+    facts: [],
+    package: PackageFacts {
+      buildRole: "standalone",
+      externModules: [], externReplayModules: [], externReplayErrors: [],
+      generatedStdModules: modules,
+    },
+    maxSourceFacts: 4096,
+    maxTotalSourceBytes: 16777216,
+    maxAstNodes: 1000000,
+    maxAstDepth: 512,
+    maxRawTokens: 2000000,
+    maxLayoutTokens: 2000000,
+    maxHirNodes: 1000000,
+    maxLoweredNodes: 2000000,
+    maxDiagnostics: 10000,
+    maxGeneratedRustBytes: 134217728,
+    maxFactRounds: 16384,
+  }
+  Ok(Project {
+    request: request,
+    provide: (query: string) => provide(query, state),
+    facts: facts,
+    configuration: configuration,
+    root: location.path,
+  })
+}
+
+// Call the compiler with project.provide before saving. The core discovers
+// imports and requests facts, so no CLI-specific import parser is needed.
+export function snapshot(project: Project) -> Result<CompilerRequest, string> {
+  Ok(CompilerRequest { ...project.request, facts: orderedFacts(project.facts)? })
+}
+
+export const PROJECT_REQUEST_SCHEMA = "topaz.core-kit.project-request/v1"
+
+export record ProjectSnapshot derives JSON {
+  schema: string,
+  request: CompilerRequest,
+  configuration: ProjectConfig,
+}
+
+export function encodeSnapshot(project: Project) -> Result<string, string> {
+  json.stringify(ProjectSnapshot {
+    schema: PROJECT_REQUEST_SCHEMA,
+    request: snapshot(project)?,
+    configuration: project.configuration,
+  })
+}
+
+export function decodeSnapshot(text: string) -> Result<ProjectSnapshot, string> {
+  if text.byteLength() > 134217728 { return Err("project request exceeds 128 MiB") }
+  let saved = json.parseAs<ProjectSnapshot>(text)?
+  if saved.schema != PROJECT_REQUEST_SCHEMA { return Err("unsupported project request schema") }
+  validateConfiguration(saved.configuration)?
+  if saved.request.root != "" || saved.request.entry != saved.configuration.entry {
+    return Err("project request entry does not match its saved configuration")
+  }
+  Ok(saved)
+}

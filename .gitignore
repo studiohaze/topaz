@@ -1,0 +1,4 @@
+/compiler/target/
+/out/
+/dist/*
+!/dist/README.md

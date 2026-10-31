@@ -1,0 +1,90 @@
+import std.fs as files
+import std.io as io
+import std.json as json
+import src.contracts { Capture, Native, Process }
+import src.project_manifest { ProjectConfig, validateConfiguration }
+import src.toolchain { checkToolchain }
+
+const MARKER = "topaz-core-kit.native-build/v1\n"
+
+function prepareOutput(output: string) -> Result<(), string> {
+  let entries = files.list(output)?
+  if entries.length == 0 { return Ok(()) }
+  let mut managed = false
+  for entry in entries {
+    if entry.kind == "symlink" {
+      return Err("build output must not contain symlinks: {entry.name}")
+    }
+    if entry.name == ".topaz-core-kit-build" { managed = true }
+  }
+  if !managed || files.readText("{output}/.topaz-core-kit-build")? != MARKER {
+    return Err("--out-dir must be empty or contain a previous Core Kit build; refusing to overwrite another project")
+  }
+  Ok(())
+}
+
+function cargoManifest(repositoryRoot: string) -> Result<string, string> {
+  // JSON string escaping is valid for these TOML basic string path values.
+  let runtime = json.stringify("{repositoryRoot}/compiler/crates/topaz_rt")?
+  let host = json.stringify("{repositoryRoot}/compiler/crates/topaz_host_native")?
+  let product = json.stringify("{repositoryRoot}/compiler/crates/topaz_product_runtime")?
+  Ok("[package]\nname = \"topaz-core-kit-program\"\nversion = \"0.1.0\"\nedition = \"2024\"\nrust-version = \"1.96.0\"\npublish = false\n\n[workspace]\n\n[profile.release]\ncodegen-units = 1\n\n[[bin]]\nname = \"topaz-core-kit-program\"\npath = \"main.rs\"\n\n[dependencies]\ntopaz_rt = \{ path = {runtime} \}\ntopaz_host_native = \{ path = {host} \}\ntopaz_product_runtime = \{ path = {product} \}\n")
+}
+
+function rustRoots(roots: Array<string>) -> Result<string, string> {
+  let mut values: Array<string> = []
+  for root in roots {
+    // Portable manifest paths contain no control characters. JSON quoting for
+    // the remaining quote/backslash characters is also valid Rust quoting.
+    values.push("String::from({json.stringify(root)?})")
+  }
+  Ok(values.join(", "))
+}
+
+function capabilitySource(configuration: Option<ProjectConfig>, repositoryRoot: string) -> Result<string, string> {
+  match configuration {
+    case None => files.readText("{repositoryRoot}/core-kit/cli/templates/capabilities.rs")
+    case Some(project) => {
+      validateConfiguration(project)?
+      let reads = rustRoots(project.readRoots)?
+      let writes = rustRoots(project.writeRoots)?
+      // Grant roots are relative to the application's launch directory. No
+      // build-machine path is embedded in the generated native executable.
+      Ok("pub fn host() -> Result<topaz_host_native::NativeHost, String> \{\n    let root = std::env::current_dir().map_err(|e| format!(\"cannot resolve application working directory: \{e\}\"))?;\n    Ok(topaz_host_native::NativeHost::with_fs_capabilities(root, &[{reads}], &[{writes}]))\n\}\n")
+    }
+  }
+}
+
+export function build(
+  generated: string,
+  output: string,
+  repositoryRoot: string,
+  process: Process,
+  native: Native,
+  capture: Capture,
+  configuration: Option<ProjectConfig>,
+) -> Result<int, string> {
+  let target = checkToolchain(repositoryRoot, native, capture)?
+  native("mkdir", [output])?
+  prepareOutput(output)?
+  let manifest = cargoManifest(repositoryRoot)?
+  let runner = files.readText("{repositoryRoot}/core-kit/cli/templates/program.rs")?
+  let lock = files.readText("{repositoryRoot}/core-kit/cli/templates/program.lock")?
+  let capabilities = capabilitySource(configuration, repositoryRoot)?
+  files.writeText("{output}/.topaz-core-kit-build", MARKER)?
+  files.writeText("{output}/generated.rs", generated)?
+  files.writeText("{output}/main.rs", runner)?
+  files.writeText("{output}/capabilities.rs", capabilities)?
+  files.writeText("{output}/Cargo.toml", manifest)?
+  files.writeText("{output}/Cargo.lock", lock)?
+  io.writeLine("building native program in {output}")
+  let code = process(
+    "cargo",
+    ["build", "--manifest-path", "Cargo.toml", "--release", "--frozen", "--message-format=short", "--target", target.target, "--target-dir", "target"],
+    output,
+    ["RUSTUP_TOOLCHAIN=1.96.0", "RUSTUP_AUTO_INSTALL=0", "CARGO_NET_OFFLINE=true"],
+  )?
+  if code != 0 { return Ok(code) }
+  io.writeLine("native program built at {output}/target/{target.target}/release/topaz-core-kit-program{target.executableSuffix}")
+  Ok(0)
+}

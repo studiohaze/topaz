@@ -1,0 +1,218 @@
+import std.fs as files
+import src.contracts { COMPILER_SOURCE_SET }
+import src.payload_files { portablePath, requireRegularInput, requiredInputs }
+import src.refresh_inputs { PreparedCli }
+import src.verification { parseInventory }
+
+export const DESCRIPTOR = "core-kit/cli/REQUEST.json"
+export const INITIAL = "core-kit/cli/initial/request.json"
+export const INPUT_LIST = "core-kit/payload-inputs.data"
+export const INVENTORY = "core-kit/verify-core.data"
+
+export record RefreshFile {
+  path: string,
+  before: string,
+  after: string,
+}
+
+function readText(root: string, path: string) -> Result<string, string> {
+  requireRegularInput(root, path)?
+  let text = files.readText("{root}/{path}")?
+  if text.byteLength() > 134217728 { return Err("maintenance input exceeds 128 MiB: {path}") }
+  Ok(text)
+}
+
+function digest(root: string, path: string) -> Result<string, string> {
+  requireRegularInput(root, path)?
+  let bytes = files.readBytes("{root}/{path}")?
+  if bytes.length() > 536870912 { return Err("maintenance input exceeds 512 MiB: {path}") }
+  Ok(bytes.sha256().toHex())
+}
+
+function checkDigest(root: string, path: string, expected: string) -> Result<(), string> {
+  if digest(root, path)? != expected {
+    return Err("protected input differs; kit refresh cannot update its recorded hash: {path}")
+  }
+  Ok(())
+}
+
+function under(path: string, directory: string) -> bool {
+  path.startsWith("{directory}/")
+}
+
+function mutableInput(path: string) -> bool {
+  path == DESCRIPTOR || path == INITIAL || path == INPUT_LIST ||
+    path == "core-kit/cli/topaz.toml" || path == "core-kit/cli/data/input.txt" ||
+    under(path, "core-kit/cli/src") || under(path, "core-kit/cli/std") ||
+    under(path, "core-kit/cli/templates") || under(path, "core-kit/distribution") ||
+    under(path, "examples/core-kit")
+}
+
+function requireDirectory(root: string, path: string) -> Result<(), string> {
+  portablePath(path)?
+  let mut parent = root
+  for part in path.split("/") {
+    let mut found = false
+    for entry in files.list(parent)? {
+      if entry.name == part {
+        if entry.kind != "directory" { return Err("maintenance directory must not be a symlink or another file kind: {path}") }
+        found = true
+      }
+    }
+    if !found { return Err("maintenance directory is missing: {path}") }
+    parent = "{parent}/{part}"
+  }
+  Ok(())
+}
+
+// Only these explicitly selected trees are walked. Cargo caches, outputs and
+// unrelated Git files do not become build inputs merely by existing nearby.
+function walkFiles(root: string, directory: string) -> Result<Array<string>, string> {
+  requireDirectory(root, directory)?
+  let mut directories = [directory]
+  let mut paths: Array<string> = []
+  let mut aliases: Set<string> = set {}
+  let mut index = 0
+  while index < directories.length {
+    let current = directories[index]
+    if current.split("/").length > 32 { return Err("maintenance tree exceeds 32 path segments") }
+    let entries = files.list("{root}/{current}")?
+    if entries.length > 1024 { return Err("maintenance directory exceeds 1024 entries") }
+    for entry in entries {
+      if entry.name.contains("/") { return Err("maintenance directory returned an invalid entry name") }
+      let path = "{current}/{entry.name}"
+      let alias = portablePath(path)?
+      if aliases.contains(alias) { return Err("case-aliased maintenance input: {path}") }
+      aliases.add(alias)
+      if entry.kind == "directory" {
+        directories.push(path)
+      } else if entry.kind == "file" {
+        paths.push(path)
+      } else {
+        return Err("maintenance input must use regular files and directories: {path}")
+      }
+      if aliases.length > 2048 || paths.length > 1024 {
+        return Err("maintenance tree exceeds its file or directory budget")
+      }
+    }
+    index += 1
+  }
+  paths.sort()
+  Ok(paths)
+}
+
+function sortedUnique(paths: Array<string>) -> Result<Array<string>, string> {
+  let mut output: Array<string> = []
+  let mut seen: Map<string, string> = map {}
+  for path in paths {
+    let alias = portablePath(path)?
+    if seen.containsKey(alias) {
+      if seen.getOr(alias, "") != path { return Err("case-aliased maintenance input: {path}") }
+      continue
+    }
+    seen.insert(alias, path)
+    output.push(path)
+  }
+  if output.length > 1024 { return Err("maintenance input set exceeds 1024 files") }
+  output.sort()
+  Ok(output)
+}
+
+function existingPayloadPaths(text: string) -> Result<Array<string>, string> {
+  if text.byteLength() == 0 || text.byteLength() > 1048576 {
+    return Err("payload input list must contain at most 1 MiB")
+  }
+  let lines = text.split("\n")
+  if lines[0] != "topaz.core-kit-payload-inputs/v1" { return Err("unsupported payload input list") }
+  let mut paths: Array<string> = []
+  let mut index = 1
+  while index < lines.length {
+    if lines[index] == "" && index + 1 == lines.length { break }
+    paths.push(lines[index])
+    index += 1
+  }
+  let sorted = sortedUnique(paths)?
+  if sorted.length != paths.length || text != "topaz.core-kit-payload-inputs/v1\n{sorted.join("\n")}\n" {
+    return Err("payload input list must be sorted, unique and LF terminated")
+  }
+  let mut exact: Set<string> = set {}
+  for path in paths { exact.add(path) }
+  requiredInputs(exact)?
+  Ok(paths)
+}
+
+export function prepareInventories(root: string, cli: PreparedCli) -> Result<Array<RefreshFile>, string> {
+  let inventoryBefore = readText(root, INVENTORY)?
+  let inventory = parseInventory(inventoryBefore)?
+  let payloadBefore = readText(root, INPUT_LIST)?
+  let payloadPaths = existingPayloadPaths(payloadBefore)?
+  let mut protectedLines: Array<string> = []
+  let mut inputPaths: Array<string> = []
+  for file in inventory.files {
+    if file.kind == "compiler_source" {
+      checkDigest(root, "compiler/crates/topaz_self_frontend/topaz/{file.path}", file.digest)?
+      checkDigest(root, "compiler/seed/initial/topaz/{file.path}", file.digest)?
+      protectedLines.push("{file.kind}|{file.path}|{file.digest}")
+    } else if file.kind == "snapshot_file" {
+      checkDigest(root, file.path, file.digest)?
+      protectedLines.push("{file.kind}|{file.path}|{file.digest}")
+    } else if !mutableInput(file.path) {
+      checkDigest(root, file.path, file.digest)?
+      inputPaths.push(file.path)
+    }
+  }
+  for path in [DESCRIPTOR, INITIAL, INPUT_LIST, "core-kit/cli/topaz.toml", "core-kit/cli/data/input.txt"] {
+    inputPaths.push(path)
+  }
+  for path in cli.sourcePaths { inputPaths.push(path) }
+  for path in cli.standardPaths { inputPaths.push(path) }
+  for directory in ["core-kit/cli/templates", "core-kit/distribution", "examples/core-kit"] {
+    for path in walkFiles(root, directory)? { inputPaths.push(path) }
+  }
+  let inputs = sortedUnique(inputPaths)?
+
+  let dynamicTrees = [
+    "core-kit/cli/src", "core-kit/cli/std", "core-kit/cli/templates",
+    "core-kit/native", "core-kit/fixtures", "core-kit/distribution", "examples/core-kit",
+  ]
+  let mut updatedPayload: Array<string> = []
+  for path in payloadPaths {
+    let mut dynamic = false
+    for directory in dynamicTrees { if under(path, directory) { dynamic = true } }
+    if !dynamic { updatedPayload.push(path) }
+  }
+  for path in inputs { updatedPayload.push(path) }
+  for directory in dynamicTrees {
+    for path in walkFiles(root, directory)? { updatedPayload.push(path) }
+  }
+  let payload = sortedUnique(updatedPayload)?
+  let mut exact: Set<string> = set {}
+  for path in payload {
+    requireRegularInput(root, path)?
+    exact.add(path)
+  }
+  requiredInputs(exact)?
+  let payloadAfter = "topaz.core-kit-payload-inputs/v1\n{payload.join("\n")}\n"
+
+  let mut replacements: Map<string, string> = map {}
+  replacements.insert(DESCRIPTOR, cli.descriptorText)
+  replacements.insert(INITIAL, cli.requestText)
+  replacements.insert(INPUT_LIST, payloadAfter)
+  let mut rows: Array<string> = []
+  for path in inputs {
+    let hash = match replacements.get(path) {
+      case Some(text) => text.encodeUtf8().sha256().toHex()
+      case None => digest(root, path)?
+    }
+    rows.push("input_file|{path}|{hash}")
+  }
+  protectedLines.sort()
+  let inventoryAfter = "# Generated by topaz-core-kit kit refresh. Canonical and snapshot hashes are preserved.\nformat|topaz.core-kit-inputs/v2\ncompiler_source_set|{COMPILER_SOURCE_SET}\ncompiler_sources|{inventory.compilerCount}\nsnapshot_files|{inventory.snapshotCount}\ninput_files|{inputs.length}\n{rows.join("\n")}\n{protectedLines.join("\n")}\n"
+  parseInventory(inventoryAfter)?
+  Ok([
+    RefreshFile { path: DESCRIPTOR, before: readText(root, DESCRIPTOR)?, after: cli.descriptorText },
+    RefreshFile { path: INITIAL, before: readText(root, INITIAL)?, after: cli.requestText },
+    RefreshFile { path: INPUT_LIST, before: payloadBefore, after: payloadAfter },
+    RefreshFile { path: INVENTORY, before: inventoryBefore, after: inventoryAfter },
+  ])
+}

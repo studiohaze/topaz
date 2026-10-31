@@ -1,0 +1,16 @@
+[package]
+name = "topaz-core-kit"
+version = "0.1.0"
+language = "5.21"
+entry = "src/main.tpz"
+
+[build]
+target = "native"
+deterministic = true
+
+[dependencies]
+std = "5.21"
+
+[capabilities.fs]
+read = ["."]
+write = ["."]

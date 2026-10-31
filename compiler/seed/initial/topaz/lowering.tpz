@@ -1,0 +1,2978 @@
+import std.json as jsonBoundary
+
+import literal { IntegerLiteralInput, decodeIntegerLiteral, floatLiteralBits, decodeDurationMilliseconds }
+import length { LengthLiteralInput, decodeLength }
+import stage1_types {
+  LoweringOutput,
+  STAGE1_EXCHANGE_SCHEMA,
+  STAGE1_IR_SCHEMA,
+  Stage1Module,
+  Stage1Operation,
+  Stage1Response,
+  compilerProvenance,
+}
+import types {
+  LowerBridgeRequest,
+  decodeLowerBridgeRequest,
+  PreviewAstNode,
+  PreviewImportEdge,
+  PreviewCallArgument,
+  PreviewCallEvaluation,
+  PreviewModuleResult,
+  PreviewResolvedDeclaration,
+  PreviewResolvedReference,
+  PreviewTypeAtom,
+  PreviewTypedCall,
+  PreviewTypedCapture,
+  PreviewTypedNode,
+}
+
+// Prepared Lispex rules are runtime handles, so lowering preserves their resolved identity.
+const LISPEX_RULE_HANDLE_PREFIX = "topaz.lispex-rule-handle/v1:"
+
+record LowerKindPlan {
+  name: string,
+  tag: string,
+  roleName: string,
+  runtimeLeaf: string,
+}
+
+function lowerKind(
+  name: string,
+  tagName: string,
+  roleName: string,
+  runtimeLeaf: string,
+) -> LowerKindPlan {
+  LowerKindPlan {
+    name: name,
+    tag: tagName,
+    roleName: roleName,
+    runtimeLeaf: runtimeLeaf,
+  }
+}
+
+function statementKind(name: string, tagName: string) -> LowerKindPlan {
+  lowerKind(name, tagName, "statement", "")
+}
+
+function expressionKind(name: string, tagName: string) -> LowerKindPlan {
+  lowerKind(name, tagName, "expression", "")
+}
+
+function runtimeExpressionKind(
+  name: string,
+  tagName: string,
+  runtimeLeaf: string,
+) -> LowerKindPlan {
+  lowerKind(name, tagName, "expression", runtimeLeaf)
+}
+
+function patternKind(name: string, tagName: string) -> LowerKindPlan {
+  lowerKind(name, tagName, "pattern", "pattern")
+}
+
+function lowerKindPlan(kind: string) -> LowerKindPlan {
+  match kind {
+    case "program" => lowerKind("module", "module", "module-initialization", "")
+    case "block" => expressionKind("expression/block", "block")
+    case "string-part/text" => runtimeExpressionKind("expression/string-text", "string-text", "string")
+    case "parameter" => lowerKind("binding/parameter", "parameter", "binding", "")
+    case "lambda-parameter" => lowerKind("binding/parameter", "parameter", "binding", "")
+    case "function-declaration" => lowerKind("function", "function", "declaration", "")
+    case "statement/import" => statementKind("import", "import")
+    case "statement/export" => statementKind("export", "export")
+    case "statement/function" => statementKind("function", "function")
+    case "statement/type-alias" => statementKind("type-alias", "type-alias")
+    case "statement/enum" => statementKind("enum", "enum")
+    case "statement/record" => statementKind("record", "record")
+    case "statement/newtype" => statementKind("newtype", "newtype")
+    case "statement/impl" => statementKind("implementation", "implementation")
+    case "statement/protocol" => statementKind("protocol", "protocol")
+    case "statement/let" => statementKind("let", "let")
+    case "statement/const" => statementKind("constant", "constant")
+    case "statement/assign" => statementKind("assignment", "assignment")
+    case "statement/return" => statementKind("return", "return")
+    case "statement/defer" => lowerKind("defer", "defer", "cleanup", "")
+    case "statement/using" => statementKind("using", "using")
+    case "statement/while" => statementKind("while", "while")
+    case "statement/break" => statementKind("break", "break")
+    case "statement/continue" => statementKind("continue", "continue")
+    case "statement/expression" => statementKind("expression/block", "expression-statement")
+    case "expression/integer" => expressionKind("expression/integer", "integer")
+    case "expression/float" => expressionKind("expression/float", "float")
+    case "expression/length" => expressionKind("expression/length", "length")
+    case "expression/duration" => expressionKind("expression/duration", "duration")
+    case "expression/boolean" => expressionKind("expression/boolean", "boolean")
+    case "expression/null" => expressionKind("expression/null", "null")
+    case "expression/unit" => expressionKind("expression/unit", "unit")
+    case "expression/string" => runtimeExpressionKind("expression/string", "string", "string")
+    case "expression/template" => runtimeExpressionKind("expression/string", "string", "template")
+    case "expression/identifier" => expressionKind("expression/identifier", "identifier")
+    case "expression/placeholder" => expressionKind("expression/placeholder", "placeholder")
+    case "expression/parenthesized" => expressionKind("expression/parenthesized", "parenthesized")
+    case "expression/block" => expressionKind("expression/block", "block-expression")
+    case "expression/if" => expressionKind("expression/if", "if")
+    case "expression/match" => expressionKind("expression/match", "match")
+    case "expression/for" => expressionKind("expression/for", "for")
+    case "expression/loop" => expressionKind("expression/loop", "loop")
+    case "expression/concurrent" => runtimeExpressionKind("expression/concurrent", "concurrent", "concurrent")
+    case "expression/call" => runtimeExpressionKind("expression/call", "call", "call")
+    case "expression/member" => runtimeExpressionKind("expression/member", "member", "member")
+    case "expression/index" => runtimeExpressionKind("expression/index", "index", "collection")
+    case "expression/optional-access" => runtimeExpressionKind("expression/optional-member", "optional-member", "member")
+    case "expression/try" => runtimeExpressionKind("expression/result-propagation", "result-propagation", "result")
+    case "expression/unary" => runtimeExpressionKind("expression/unary", "unary", "unary")
+    case "expression/binary" => runtimeExpressionKind("expression/binary", "binary", "binary")
+    case "expression/range" => runtimeExpressionKind("expression/range", "range", "range")
+    case "expression/compose" => runtimeExpressionKind("expression/compose", "compose", "callable")
+    case "expression/pipe" => runtimeExpressionKind("expression/pipeline", "pipeline", "callable")
+    case "expression/lambda" => runtimeExpressionKind("expression/lambda", "lambda", "callable")
+    case "expression/record-literal" => runtimeExpressionKind("expression/record-literal", "record-literal", "record")
+    case "expression/record-update" => runtimeExpressionKind("expression/record-update", "record-update", "record")
+    case "expression/array" => runtimeExpressionKind("expression/array", "array", "array")
+    case "expression/set" => runtimeExpressionKind("expression/set", "set", "set")
+    case "expression/map" => runtimeExpressionKind("expression/map", "map", "map")
+    case "expression/comprehension" => runtimeExpressionKind("expression/comprehension", "comprehension", "collection")
+    case "pattern/or" => patternKind("pattern/alternatives", "alternatives")
+    case "pattern/binding" => patternKind("pattern/binding", "binding")
+    case "pattern/wildcard" => patternKind("pattern/wildcard", "wildcard")
+    case "pattern/literal" => patternKind("pattern/literal", "literal")
+    case "pattern/range" => patternKind("pattern/range", "range")
+    case "pattern/typed" => patternKind("pattern/typed-binding", "typed-binding")
+    case "pattern/constructor" => patternKind("pattern/constructor", "constructor")
+    case "pattern/list" => patternKind("pattern/list", "list")
+    case "pattern/record" => patternKind("pattern/record", "record")
+    case "pattern/nominal-record" => patternKind("pattern/nominal-record", "nominal-record")
+    case _ => lowerKind("", "", "", "")
+  }
+}
+
+function admittedRole(
+  plan: LowerKindPlan,
+  sourceKind: string,
+  insideProtocol: bool,
+  parentKind: string,
+) -> string {
+  if insideProtocol && sourceKind != "statement/protocol" {
+    return ""
+  }
+  if sourceKind == "function-declaration" && parentKind != "impl-method" {
+    return ""
+  }
+  plan.roleName
+}
+
+function roleIdentity(roleName: string) -> string {
+  match roleName {
+    case "module-initialization" => "ModuleInitialization"
+    case "statement" => "Statement"
+    case "expression" => "Expression"
+    case "pattern" => "Pattern"
+    case "binding" => "Binding"
+    case "declaration" => "Declaration"
+    case "cleanup" => "Cleanup"
+    case _ => "Unknown"
+  }
+}
+
+function operationId(
+  module: string,
+  sourceOrdinal: int,
+  roleName: string,
+  tagName: string,
+  lo: int,
+  hi: int,
+) -> string {
+  "op:{module}:{sourceOrdinal}:{lo}:{hi}:{roleIdentity(roleName)}:{tagName}"
+}
+
+function sourceText(source: Bytes, lo: int, hi: int) -> string {
+  match source.slice(lo, hi).decodeUtf8() {
+    case Ok(value) => value
+    case Err(_) => ""
+  }
+}
+
+function attribute(
+  names: Array<string>,
+  values: Array<string>,
+  wanted: string,
+) -> string {
+  let mut index = 0
+  while index < names.length {
+    match names.get(index) {
+      case Some(name) => if name == wanted {
+        return match values.get(index) {
+          case Some(value) => value
+          case None => ""
+        }
+      }
+      case None => ()
+    }
+    index += 1
+  }
+  ""
+}
+
+function childText(
+  nodes: Array<PreviewAstNode>,
+  childIndexes: Map<string, int>,
+  parent: int,
+  field: string,
+  source: Bytes,
+) -> string {
+  match childIndexes.get("{parent}:{field}") {
+    case Some(index) => match nodes.get(index) {
+      case Some(node) => return sourceText(source, node.lo, node.hi)
+      case None => ()
+    }
+    case None => ()
+  }
+  ""
+}
+
+
+function flatUnparen(nodes:Array<PreviewAstNode>,indexes:Map<string,int>,start:int)->int {
+  let mut i=start
+  while nodes[i].kind == "expression/parenthesized" {
+    i=match indexes.get("{i}:operand") {case Some(v)=>v;case None=>return -1}
+  }
+  i
+}
+function flatScalarInput(nodes:Array<PreviewAstNode>,indexes:Map<string,int>,start:int,source:Bytes,kind:string)->Option<IntegerLiteralInput> {
+  let mut i=flatUnparen(nodes,indexes,start)
+  if i < 0 {return None}
+  let value=nodes[i]
+  let mut negative=false
+  if value.kind == "expression/unary" {
+    let op=attribute(value.attributeNames,value.attributeValues,"operator")
+    if op != "minus" && !(op == "plus" && kind == "expression/integer") {return None}
+    negative=op == "minus"
+    i=match indexes.get("{i}:operand") {case Some(v)=>flatUnparen(nodes,indexes,v);case None=>return None}
+  }
+  if i < 0 || nodes[i].kind != kind {return None}
+  Some(IntegerLiteralInput {spelling:sourceText(source,nodes[i].lo,nodes[i].hi),negative:negative})
+}
+function flatLengthInput(nodes:Array<PreviewAstNode>,indexes:Map<string,int>,start:int,source:Bytes)->Option<LengthLiteralInput> {
+  match flatScalarInput(nodes,indexes,start,source,"expression/length") {
+    case Some(input)=>Some(LengthLiteralInput {spelling:input.spelling,negative:input.negative})
+    case None=>None
+  }
+}
+function scalarLiteralAncestor(nodes:Array<PreviewAstNode>,indexes:Map<string,int>,start:int,source:Bytes,kind:string)->bool {
+  let mut parent=nodes[start].parent
+  while parent >= 0 {
+    let node=nodes[parent]
+    if node.kind != "expression/parenthesized" && node.kind != "expression/unary" {return false}
+    match flatScalarInput(nodes,indexes,parent,source,kind) {case Some(_)=>return true;case None=>()}
+    parent=node.parent
+  }
+  false
+}
+function foldedScalarAncestor(nodes:Array<PreviewAstNode>,indexes:Map<string,int>,start:int,source:Bytes)->bool {
+  scalarLiteralAncestor(nodes,indexes,start,source,"expression/length") || scalarLiteralAncestor(nodes,indexes,start,source,"expression/integer")
+}
+function lengthDetail(nodes:Array<PreviewAstNode>,indexes:Map<string,int>,start:int,source:Bytes)->string {
+  let input=match flatLengthInput(nodes,indexes,start,source) {case Some(v)=>v;case None=>return "invalid:Length literal shape"}
+  match decodeLength(input.spelling,input.negative) {case Ok(value)=>"{value.unit}:{value.ticks}";case Err(message)=>"invalid:{message}"}
+}
+function integerDetail(nodes:Array<PreviewAstNode>,indexes:Map<string,int>,start:int,source:Bytes)->string {
+  let input=match flatScalarInput(nodes,indexes,start,source,"expression/integer") {case Some(v)=>v;case None=>return "invalid:integer literal shape"}
+  match decodeIntegerLiteral(input.spelling,input.negative) {case Some(value)=>"{value}";case None=>"invalid:integer literal is out of range"}
+}
+function detail(
+  nodes: Array<PreviewAstNode>,
+  childIndexes: Map<string, int>,
+  nodeIndex: int,
+  node: PreviewAstNode,
+  source: Bytes,
+) -> string {
+  match node.kind {
+    case "expression/integer" => attribute(
+      node.attributeNames,
+      node.attributeValues,
+      "valueDecimal",
+    )
+    case "expression/float" => floatLiteralBits(sourceText(source, node.lo, node.hi))
+    case "expression/duration" => decodeDurationMilliseconds(sourceText(source, node.lo, node.hi)) ?? "invalid:duration"
+    case "expression/boolean" => attribute(
+      node.attributeNames,
+      node.attributeValues,
+      "value",
+    )
+    case "expression/identifier" => sourceText(source, node.lo, node.hi)
+    case "string-part/text" => attribute(node.attributeNames,node.attributeValues,"cooked")
+    case "statement/assign" => attribute(
+      node.attributeNames,
+      node.attributeValues,
+      "operator",
+    )
+    case "expression/string" => if sourceText(
+      source,
+      node.lo,
+      node.hi,
+    ).startsWith("\"\"\"") {
+      "multiline"
+    } else {
+      "single-line"
+    }
+    case "expression/template" => {
+      let tag = childText(nodes, childIndexes, nodeIndex, "tag", source)
+      if sourceText(source, node.lo, node.hi).startsWith("{tag}\"\"\"") {
+        "{tag}|multiline"
+      } else {
+        "{tag}|single-line"
+      }
+    }
+    case "parameter" => childText(nodes, childIndexes, nodeIndex, "name", source)
+    case "lambda-parameter" => childText(nodes, childIndexes, nodeIndex, "name", source)
+    case "function-declaration" => childText(nodes, childIndexes, nodeIndex, "name", source)
+    case "statement/impl" => {
+      let name = childText(nodes, childIndexes, nodeIndex, "name", source)
+      let target = childText(nodes, childIndexes, nodeIndex, "target", source)
+      if target == "" { name } else { "{name}<{target}>" }
+    }
+    case "statement/protocol" => childText(
+      nodes,
+      childIndexes,
+      nodeIndex,
+      "name",
+      source,
+    )
+    case "expression/member" => childText(nodes, childIndexes, nodeIndex, "field", source)
+    case "expression/pipe" => childText(nodes, childIndexes, nodeIndex, "field", source)
+    case "expression/optional-access" => childText(
+      nodes,
+      childIndexes,
+      nodeIndex,
+      "field",
+      source,
+    )
+    case "pattern/binding" => sourceText(source, node.lo, node.hi)
+    case "pattern/typed" => childText(nodes, childIndexes, nodeIndex, "name", source)
+    case "pattern/constructor" => childText(nodes, childIndexes, nodeIndex, "name", source)
+    case "pattern/nominal-record" => childText(nodes, childIndexes, nodeIndex, "name", source)
+    case "expression/range" => attribute(
+      node.attributeNames,
+      node.attributeValues,
+      "inclusive",
+    )
+    case "pattern/range" => attribute(
+      node.attributeNames,
+      node.attributeValues,
+      "inclusive",
+    )
+    case "expression/comprehension" => attribute(
+      node.attributeNames,
+      node.attributeValues,
+      "collection",
+    )
+    case "expression/unary" => attribute(
+      node.attributeNames,
+      node.attributeValues,
+      "operator",
+    )
+    case "expression/binary" => attribute(
+      node.attributeNames,
+      node.attributeValues,
+      "operator",
+    )
+    case _ => ""
+  }
+}
+
+function representationForType(value: string) -> string {
+  match value {
+    case "int" => "i64"
+    case "float" => "f64"
+    case "bool" => "bool"
+    case "unit" => "unit"
+    case "Bytes" => "bytes-handle"
+    case "ByteBuffer" => "byte-buffer-handle"
+    case _ => if value == "" { "" } else { "boxed" }
+  }
+}
+
+function spanKey(moduleIndex: int, lo: int, hi: int) -> string {
+  "{moduleIndex}:{lo}:{hi}"
+}
+
+function projectReferenceIdentity(reference: PreviewResolvedReference) -> string {
+  if reference.targetModule != "" && reference.targetName != "" {
+    return "{reference.targetModule}::{reference.targetName}"
+  }
+  if reference.targetModuleIndex >= 0 &&
+    reference.targetLo >= 0 &&
+    reference.targetHi >= reference.targetLo {
+    return "source:{reference.targetModuleIndex}:{reference.targetLo}:{reference.targetHi}"
+  }
+  "builtin::{reference.name}"
+}
+
+// References by span. Operations project their reference identity from it,
+// and the type fills and defer captures follow a reference to its declaration.
+function indexReferences(
+  values: Array<PreviewResolvedReference>,
+) -> Map<string, PreviewResolvedReference> {
+  let mut references: Map<string, PreviewResolvedReference> = map {}
+  for value in values {
+    references.insert(spanKey(value.moduleIndex, value.lo, value.hi), value)
+  }
+  references
+}
+
+// The reference at a span when it names a declaration in the program.
+function referenceTargetAt(
+  references: Map<string, PreviewResolvedReference>,
+  moduleIndex: int,
+  lo: int,
+  hi: int,
+) -> Option<PreviewResolvedReference> {
+  match references.get(spanKey(moduleIndex, lo, hi)) {
+    case Some(found) => if found.targetModuleIndex >= 0 { Some(found) } else { None }
+    case None => None
+  }
+}
+
+// Resolver import edges grouped by importing module, each group in edge order.
+function indexImportEdges(values: Array<PreviewImportEdge>) -> Map<string, Array<string>> {
+  let mut edges: Map<string, Array<string>> = map {}
+  for value in values {
+    match edges.get(value.from) {
+      case Some(group) => {
+        let mut target = group
+        target.push(value.to)
+      }
+      case None => edges.insert(value.from, [value.to])
+    }
+  }
+  edges
+}
+
+function indexModuleIdentities(values: Array<PreviewModuleResult>) -> Map<string, int> {
+  let mut indexes: Map<string, int> = map {}
+  let mut index = 0
+  for value in values {
+    indexes.insert(value.identity, index)
+    index += 1
+  }
+  indexes
+}
+
+function indexDeclarationsBySpan(
+  values: Array<PreviewResolvedDeclaration>,
+) -> Map<string, PreviewResolvedDeclaration> {
+  let mut declarations: Map<string, PreviewResolvedDeclaration> = map {}
+  for value in values {
+    declarations.insert(spanKey(value.moduleIndex, value.lo, value.hi), value)
+  }
+  declarations
+}
+
+function declarationNameKey(moduleIndex: int, namespace: string, name: string) -> string {
+  "{moduleIndex}:{namespace}:{name}"
+}
+
+function indexDeclarationsByName(
+  values: Array<PreviewResolvedDeclaration>,
+) -> Map<string, PreviewResolvedDeclaration> {
+  let mut declarations: Map<string, PreviewResolvedDeclaration> = map {}
+  for value in values {
+    declarations.insert(declarationNameKey(value.moduleIndex, value.namespace, value.name), value)
+  }
+  declarations
+}
+
+function importEdgesOf(edges: Map<string, Array<string>>, identity: string) -> Array<string> {
+  match edges.get(identity) {
+    case Some(found) => found
+    case None => []
+  }
+}
+
+function referenceIdentity(
+  references: Map<string, PreviewResolvedReference>,
+  moduleIndex: int,
+  lo: int,
+  hi: int,
+) -> string {
+  match references.get(spanKey(moduleIndex, lo, hi)) {
+    case Some(found) => projectReferenceIdentity(found)
+    case None => ""
+  }
+}
+
+function mutableBinding(
+  nodes: Array<PreviewAstNode>,
+  node: PreviewAstNode,
+) -> bool {
+  if node.kind != "pattern/binding" || node.parent < 0 {
+    return false
+  }
+  match nodes.get(node.parent) {
+    case Some(parent) => parent.kind == "statement/let" && attribute(
+        parent.attributeNames,
+        parent.attributeValues,
+        "mutable",
+      ) == "true"
+    case None => false
+  }
+}
+
+function bindingStorage(kind: string) -> string {
+  if kind == "parameter" || kind == "lambda-parameter" {
+    return "parameter"
+  }
+  if kind == "statement/const" ||
+    kind == "statement/function" ||
+    kind == "function-declaration" {
+    return "module"
+  }
+  if kind == "pattern/binding" || kind == "pattern/typed" {
+    return "local"
+  }
+  if kind == "statement/using" {
+    return "local"
+  }
+  ""
+}
+
+record LowerBindingSource {
+  name: string,
+  lo: int,
+  hi: int,
+}
+
+function emptyBindingSource() -> LowerBindingSource {
+  LowerBindingSource {
+    name: "",
+    lo: 0,
+    hi: 0,
+  }
+}
+
+function bindingSourceAt(
+  nodes: Array<PreviewAstNode>,
+  index: int,
+  source: Bytes,
+) -> LowerBindingSource {
+  match nodes.get(index) {
+    case Some(node) => LowerBindingSource {
+      name: sourceText(source, node.lo, node.hi),
+      lo: node.lo,
+      hi: node.hi,
+    }
+    case None => emptyBindingSource()
+  }
+}
+
+function bindingSourceFor(
+  nodes: Array<PreviewAstNode>,
+  childIndexes: Map<string, int>,
+  nodeIndex: int,
+  node: PreviewAstNode,
+  effectiveKind: string,
+  source: Bytes,
+) -> LowerBindingSource {
+  if effectiveKind == "pattern/binding" && node.kind == "identifier" {
+    return bindingSourceAt(nodes, nodeIndex, source)
+  }
+  if node.kind == "pattern/binding" {
+    return LowerBindingSource {
+      name: sourceText(source, node.lo, node.hi),
+      lo: node.lo,
+      hi: node.hi,
+    }
+  }
+  let nameParent = if node.kind == "pattern/typed" ||
+    node.kind == "parameter" ||
+    node.kind == "lambda-parameter" ||
+    node.kind == "function-declaration" ||
+    node.kind == "statement/const" ||
+    node.kind == "statement/using" {
+    nodeIndex
+  } else if node.kind == "statement/function" {
+    match childIndexes.get("{nodeIndex}:declaration") {
+      case Some(index) => index
+      case None => return emptyBindingSource()
+    }
+  } else {
+    return emptyBindingSource()
+  }
+  match childIndexes.get("{nameParent}:name") {
+    case Some(index) => bindingSourceAt(nodes, index, source)
+    case None => emptyBindingSource()
+  }
+}
+
+record LowerControlPlan {
+  kind: string,
+  ownsTarget: bool,
+}
+
+function lowerControl(kind: string, ownsTarget: bool) -> LowerControlPlan {
+  LowerControlPlan {
+    kind: kind,
+    ownsTarget: ownsTarget,
+  }
+}
+
+function controlPlan(kind: string) -> LowerControlPlan {
+  match kind {
+    case "expression/if" => lowerControl("branch", true)
+    case "expression/match" => lowerControl("match", true)
+    case "expression/for" => lowerControl("loop", true)
+    case "expression/loop" => lowerControl("loop", true)
+    case "statement/while" => lowerControl("loop", true)
+    case "statement/break" => lowerControl("break", false)
+    case "statement/continue" => lowerControl("continue", false)
+    case "statement/return" => lowerControl("return", false)
+    case "statement/defer" => lowerControl("cleanup", false)
+    case "expression/try" => lowerControl("propagate", false)
+    case "expression/concurrent" => lowerControl("concurrent", true)
+    case _ => lowerControl("", false)
+  }
+}
+
+function loopControlTarget(
+  context: ModuleLoweringContext,
+  node: PreviewAstNode,
+  astIndex: int,
+) -> string {
+  if node.kind != "statement/break" && node.kind != "statement/continue" {
+    return ""
+  }
+  let label = childText(
+    context.module.ast,
+    context.state.childIndexes,
+    astIndex,
+    "label",
+    context.state.source,
+  )
+  let mut ancestorIndex = node.parent
+  while ancestorIndex >= 0 {
+    match context.module.ast.get(ancestorIndex) {
+      case Some(ancestor) => {
+        let loopKind = ancestor.kind == "expression/loop" ||
+          ancestor.kind == "expression/for" ||
+          ancestor.kind == "statement/while"
+        let target = if label == "" {
+          loopKind
+        } else {
+          ancestor.kind == "expression/loop" && childText(
+            context.module.ast,
+            context.state.childIndexes,
+            ancestorIndex,
+            "label",
+            context.state.source,
+          ) == label
+        }
+        if target {
+          match context.state.operationIndexByAst.get(ancestorIndex) {
+            case Some(operationIndex) => return operationParentId(
+              context,
+              operationIndex,
+            )
+            case None => return ""
+          }
+        }
+        ancestorIndex = ancestor.parent
+      }
+      case None => return ""
+    }
+  }
+  ""
+}
+
+function runtimeLeaf(kindLeaf: string, callTarget: string) -> string {
+  if callTarget.startsWith("builtin::") || callTarget.startsWith("std.") ||
+    callTarget.startsWith(LISPEX_RULE_HANDLE_PREFIX) {
+    return callTarget
+  }
+  kindLeaf
+}
+
+record LowerCallPlan {
+  targetIdentity: string,
+  calleeKind: string,
+  method: string,
+  methodClass: string,
+  optional: bool,
+  shadowFirst: bool,
+  stageMethod: string,
+  arguments: Array<string>,
+  evaluations: Array<string>,
+}
+
+function callArgumentRows(values: Array<PreviewCallArgument>) -> Array<string> {
+  let mut rows: Array<string> = []
+  for argument in values {
+    let sourceIndex = match argument.sourceIndex {
+      case Some(index) => index
+      case None => -1
+    }
+    rows.push(
+      "{argument.bindingKind}|{argument.bindingName}|{sourceIndex}|{argument.lo}|{argument.hi}",
+    )
+  }
+  rows
+}
+
+function callEvaluationRows(values: Array<PreviewCallEvaluation>) -> Array<string> {
+  let mut rows: Array<string> = []
+  for evaluation in values {
+    rows.push("{evaluation.kind}|{evaluation.argumentIndex}")
+  }
+  rows
+}
+
+function projectCall(value: PreviewTypedCall) -> LowerCallPlan {
+  LowerCallPlan {
+    targetIdentity: value.targetIdentity,
+    calleeKind: value.calleeKind,
+    method: value.method,
+    methodClass: value.methodClass,
+    optional: value.optional,
+    shadowFirst: value.shadowFirst,
+    stageMethod: value.stageMethod,
+    arguments: callArgumentRows(value.arguments),
+    evaluations: callEvaluationRows(value.evaluations),
+  }
+}
+
+function emptyCallPlan() -> LowerCallPlan {
+  LowerCallPlan {
+    targetIdentity: "",
+    calleeKind: "",
+    method: "",
+    methodClass: "",
+    optional: false,
+    shadowFirst: false,
+    stageMethod: "",
+    arguments: [],
+    evaluations: [],
+  }
+}
+
+function indexCallPlans(values: Array<PreviewTypedCall>) -> Map<string, LowerCallPlan> {
+  let mut plans: Map<string, LowerCallPlan> = map {}
+  for value in values {
+    plans.insert(spanKey(value.moduleIndex, value.lo, value.hi), projectCall(value))
+  }
+  plans
+}
+
+function callPlanFor(
+  plans: Map<string, LowerCallPlan>,
+  moduleIndex: int,
+  lo: int,
+  hi: int,
+) -> LowerCallPlan {
+  match plans.get(spanKey(moduleIndex, lo, hi)) {
+    case Some(found) => found
+    case None => emptyCallPlan()
+  }
+}
+
+record LowerTypePlan {
+  semanticType: string,
+  representation: string,
+  runtimeType: string,
+  atoms: Array<PreviewTypeAtom>,
+}
+
+function projectLowerType(value: Array<PreviewTypeAtom>) -> LowerTypePlan {
+  let semanticType = match value.get(0) {
+    case Some(found) => if found.name != "" { found.name } else { found.kind }
+    case None => ""
+  }
+  let runtimeType = if value.length == 0 {
+    ""
+  } else {
+    match jsonBoundary.stringify(value) {
+      case Ok(found) => found
+      case Err(_) => ""
+    }
+  }
+  LowerTypePlan {
+    semanticType: semanticType,
+    representation: representationForType(semanticType),
+    runtimeType: runtimeType,
+    atoms: value,
+  }
+}
+
+record LowerTypedNodePlan {
+  nodeKind: string,
+  typePlan: LowerTypePlan,
+}
+
+function projectTypedNode(value: PreviewTypedNode) -> LowerTypedNodePlan {
+  LowerTypedNodePlan {
+    nodeKind: value.nodeKind,
+    typePlan: projectLowerType(value.typeValue),
+  }
+}
+
+function emptyTypedNodePlan() -> LowerTypedNodePlan {
+  LowerTypedNodePlan {
+    nodeKind: "",
+    typePlan: projectLowerType([]),
+  }
+}
+
+function unitTypeAtom() -> PreviewTypeAtom {
+  PreviewTypeAtom {
+    parent: -1,
+    field: "root",
+    index: 0,
+    edgeName: "",
+    kind: "primitive",
+    name: "unit",
+    value: "",
+    identity: "",
+    origin: "",
+  }
+}
+
+function contextualLowerTypePlan(
+  kind: string,
+  parentKind: string,
+  observed: LowerTypePlan,
+) -> LowerTypePlan {
+  if kind == "expression/for" && parentKind == "statement/expression" {
+    return LowerTypePlan {
+      semanticType: "unit",
+      representation: representationForType("unit"),
+      runtimeType: observed.runtimeType,
+      atoms: [unitTypeAtom()],
+    }
+  }
+  observed
+}
+
+function typedPatternLowerTypePlan(
+  context: ModuleLoweringContext,
+  node: PreviewAstNode,
+  astIndex: int,
+  observed: LowerTypePlan,
+) -> LowerTypePlan {
+  if node.kind != "pattern/typed" {
+    return observed
+  }
+  let nameIndex = match context.state.childIndexes.get("{astIndex}:name") {
+    case Some(found) => found
+    case None => return observed
+  }
+  let nameNode = match context.module.ast.get(nameIndex) {
+    case Some(found) => found
+    case None => return observed
+  }
+  let binding = typedNodePlanFor(
+    context.input.typedNodePlans,
+    context.moduleIndex,
+    nameNode.lo,
+    nameNode.hi,
+  )
+  if binding.nodeKind != "binding" || binding.typePlan.runtimeType == "" {
+    return observed
+  }
+  LowerTypePlan {
+    semanticType: binding.typePlan.runtimeType,
+    representation: binding.typePlan.representation,
+    runtimeType: binding.typePlan.runtimeType,
+    atoms: binding.typePlan.atoms,
+  }
+}
+
+function unknownTypeAtom() -> PreviewTypeAtom {
+  PreviewTypeAtom {
+    parent: -1,
+    field: "root",
+    index: 0,
+    edgeName: "",
+    kind: "unknown",
+    name: "",
+    value: "",
+    identity: "",
+    origin: "",
+  }
+}
+
+record LowerDeclarationSite {
+  moduleIndex: int,
+  lo: int,
+  hi: int,
+}
+
+// A reference names its declaration; a selected import is followed to the
+// module-scope declaration it imports, through re-exporting imports too.
+function declarationSite(
+  input: LoweringInput,
+  reference: PreviewResolvedReference,
+  namespace: string,
+) -> LowerDeclarationSite {
+  let mut site = LowerDeclarationSite {
+    moduleIndex: reference.targetModuleIndex,
+    lo: reference.targetLo,
+    hi: reference.targetHi,
+  }
+  let mut hops = 0
+  while hops < input.modules.length {
+    let declaration = match input.declarationsBySpan.get(spanKey(site.moduleIndex, site.lo, site.hi)) {
+      case Some(found) => found
+      case None => return site
+    }
+    if declaration.declarationKind != "selected-import" {
+      return site
+    }
+    let moduleIndex = match input.moduleIndexes.get(declaration.targetModule) {
+      case Some(found) => found
+      case None => return site
+    }
+    match input.declarationsByName.get(
+      declarationNameKey(moduleIndex, namespace, declaration.targetName),
+    ) {
+      case Some(found) => {
+        site = LowerDeclarationSite { moduleIndex: moduleIndex, lo: found.lo, hi: found.hi }
+      }
+      case None => return site
+    }
+    hops += 1
+  }
+  site
+}
+
+// The checker's binding type of a declaration, else its declaration type.
+function declaredTypeEntry(
+  context: ModuleLoweringContext,
+  moduleIndex: int,
+  lo: int,
+  hi: int,
+) -> Option<Array<PreviewTypeAtom>> {
+  match context.input.declaredTypes.get(declaredTypeKey("binding", moduleIndex, lo, hi)) {
+    case Some(found) => return Some(found)
+    case None => ()
+  }
+  context.input.declaredTypes.get(declaredTypeKey("declaration", moduleIndex, lo, hi))
+}
+
+// Appends the subtree of `atoms` rooted at `root` to `output`, re-rooted under
+// `parent`. Preorder keeps a subtree contiguous: it ends at the first atom
+// whose parent precedes the root.
+function appendTypeAtomSubtree(
+  output: Array<PreviewTypeAtom>,
+  atoms: Array<PreviewTypeAtom>,
+  root: int,
+  parent: int,
+  field: string,
+  index: int,
+  edgeName: string,
+) -> () {
+  let base = output.length
+  let mut target = output
+  let mut position = root
+  let mut scanning = true
+  while scanning {
+    match atoms.get(position) {
+      case Some(atom) => if position == root {
+        target.push(PreviewTypeAtom {
+          ...atom,
+          parent: parent,
+          field: field,
+          index: index,
+          edgeName: edgeName,
+        })
+        position += 1
+      } else if atom.parent < root {
+        scanning = false
+      } else {
+        target.push(PreviewTypeAtom { ...atom, parent: atom.parent - root + base })
+        position += 1
+      }
+      case None => {
+        scanning = false
+      }
+    }
+  }
+}
+
+// A structural record type's field, as its own atom list.
+function recordFieldAtoms(
+  atoms: Array<PreviewTypeAtom>,
+  fieldName: string,
+) -> Array<PreviewTypeAtom> {
+  let output: Array<PreviewTypeAtom> = []
+  match atoms.get(0) {
+    case Some(root) => if root.kind != "record" {
+      return output
+    }
+    case None => return output
+  }
+  let mut position = 0
+  for atom in atoms {
+    if atom.parent == 0 && atom.field == "fields" && atom.edgeName == fieldName {
+      appendTypeAtomSubtree(output, atoms, position, -1, "root", 0, "")
+      return output
+    }
+    position += 1
+  }
+  output
+}
+
+function stringIndex(values: Array<string>, wanted: string) -> int {
+  let mut index = 0
+  for value in values {
+    if value == wanted {
+      return index
+    }
+    index += 1
+  }
+  -1
+}
+
+// A generic record's declared field type with its type parameters replaced by
+// the arguments of the nominal type the pattern matched.
+function substituteRecordArguments(
+  declared: Array<PreviewTypeAtom>,
+  typeParameters: Array<string>,
+  nominal: Array<PreviewTypeAtom>,
+) -> Array<PreviewTypeAtom> {
+  if typeParameters.length == 0 {
+    return declared
+  }
+  let mut argumentRoots: Array<int> = []
+  let mut position = 0
+  for atom in nominal {
+    if atom.parent == 0 && atom.field == "arguments" {
+      argumentRoots.push(position)
+    }
+    position += 1
+  }
+  let output: Array<PreviewTypeAtom> = []
+  let mut mapped: Array<int> = []
+  for atom in declared {
+    let parent = if atom.parent < 0 {
+      -1
+    } else {
+      match mapped.get(atom.parent) {
+        case Some(found) => found
+        case None => -1
+      }
+    }
+    let parameter = if atom.kind == "rigid" {
+      stringIndex(typeParameters, atom.name)
+    } else {
+      -1
+    }
+    mapped.push(output.length)
+    match argumentRoots.get(parameter) {
+      case Some(argumentRoot) => appendTypeAtomSubtree(
+        output,
+        nominal,
+        argumentRoot,
+        parent,
+        atom.field,
+        atom.index,
+        atom.edgeName,
+      )
+      case None => {
+        let mut target = output
+        target.push(PreviewTypeAtom { ...atom, parent: parent })
+      }
+    }
+  }
+  output
+}
+
+// A nominal record's declared field type, found through the pattern head's
+// reference to the record declaration.
+function nominalRecordFieldAtoms(
+  context: ModuleLoweringContext,
+  patternIndex: int,
+  nominal: Array<PreviewTypeAtom>,
+  fieldName: string,
+) -> Array<PreviewTypeAtom> {
+  let nameNode = match context.state.childIndexes.get("{patternIndex}:name") {
+    case Some(index) => match context.module.ast.get(index) {
+      case Some(found) => found
+      case None => return []
+    }
+    case None => return []
+  }
+  let reference = match referenceTargetAt(
+    context.input.referencesBySpan,
+    context.moduleIndex,
+    nameNode.lo,
+    nameNode.hi,
+  ) {
+    case Some(found) => found
+    case None => return []
+  }
+  let site = declarationSite(context.input, reference, "type")
+  let declaring = match context.input.modules.get(site.moduleIndex) {
+    case Some(found) => found
+    case None => return []
+  }
+  let source = if site.moduleIndex == context.moduleIndex {
+    context.state.source
+  } else {
+    (declaring.source).encodeUtf8()
+  }
+  let mut recordIndex = -1
+  let mut recordHi = -1
+  let mut typeParameters: Array<string> = []
+  let mut fieldIndex = -1
+  let mut fieldMatches = false
+  let mut typeLo = -1
+  let mut typeHi = -1
+  let mut index = 0
+  for node in declaring.ast {
+    if recordIndex < 0 {
+      if node.lo == site.lo && node.hi == site.hi &&
+        node.field == "name" && astParentKind(declaring.ast, node.parent) == "statement/record" {
+        recordIndex = node.parent
+        match declaring.ast.get(node.parent) {
+          case Some(record) => {
+            recordHi = record.hi
+          }
+          case None => return []
+        }
+      }
+    } else if node.lo > recordHi {
+      break
+    } else if node.parent == recordIndex && node.field == "typeParameters" {
+      typeParameters.push(sourceText(source, node.lo, node.hi))
+    } else if node.parent == recordIndex && node.field == "fields" {
+      fieldIndex = index
+      fieldMatches = false
+    } else if node.parent == fieldIndex && node.field == "name" {
+      fieldMatches = sourceText(source, node.lo, node.hi) == fieldName
+    } else if node.parent == fieldIndex && node.field == "type" && fieldMatches {
+      typeLo = node.lo
+      typeHi = node.hi
+      break
+    }
+    index += 1
+  }
+  if typeLo < 0 {
+    return []
+  }
+  let declared = typedNodePlanFor(
+    context.input.typedNodePlans,
+    site.moduleIndex,
+    typeLo,
+    typeHi,
+  )
+  substituteRecordArguments(declared.typePlan.atoms, typeParameters, nominal)
+}
+
+// A shorthand record pattern field binds its name to the field's type, which
+// the checker records only on the enclosing record pattern.
+function recordShorthandType(
+  context: ModuleLoweringContext,
+  node: PreviewAstNode,
+) -> Array<PreviewTypeAtom> {
+  let field = match context.module.ast.get(node.parent) {
+    case Some(found) => found
+    case None => return []
+  }
+  let pattern = match context.module.ast.get(field.parent) {
+    case Some(found) => found
+    case None => return []
+  }
+  let fieldName = sourceText(context.state.source, node.lo, node.hi)
+  let patternType = typedNodePlanFor(
+    context.input.typedNodePlans,
+    context.moduleIndex,
+    pattern.lo,
+    pattern.hi,
+  ).typePlan.atoms
+  let rootKind = match patternType.get(0) {
+    case Some(root) => root.kind
+    case None => ""
+  }
+  if rootKind == "record" {
+    recordFieldAtoms(patternType, fieldName)
+  } else if rootKind == "nominal-record" && pattern.kind == "pattern/nominal-record" {
+    nominalRecordFieldAtoms(context, field.parent, patternType, fieldName)
+  } else {
+    []
+  }
+}
+
+// A value identifier the checker leaves untyped (a forward reference such as
+// `() => config`) has the type of the binding it names.
+function forwardReferenceType(
+  context: ModuleLoweringContext,
+  node: PreviewAstNode,
+) -> Array<PreviewTypeAtom> {
+  match referenceTargetAt(context.input.referencesBySpan, context.moduleIndex, node.lo, node.hi) {
+    case Some(reference) => if reference.namespace == "value" {
+      let site = declarationSite(context.input, reference, "value")
+      match declaredTypeEntry(context, site.moduleIndex, site.lo, site.hi) {
+        case Some(found) => found
+        case None => []
+      }
+    } else {
+      []
+    }
+    case None => []
+  }
+}
+
+// Fills the full type of an operation the checker left untyped where lowering
+// can name it exactly: a value identifier and a shorthand record pattern field.
+// Only the atoms carry it; `semanticType` and `representation` stay the
+// checker's, because target facts pair every nominal `semanticType` with a
+// checker node at the same span.
+function untypedLowerTypePlan(
+  context: ModuleLoweringContext,
+  node: PreviewAstNode,
+  recordShorthand: bool,
+  observed: LowerTypePlan,
+) -> LowerTypePlan {
+  if observed.semanticType != "" {
+    return observed
+  }
+  let atoms = if node.kind == "expression/identifier" {
+    forwardReferenceType(context, node)
+  } else if recordShorthand {
+    recordShorthandType(context, node)
+  } else {
+    return observed
+  }
+  if atoms.length == 0 {
+    return observed
+  }
+  LowerTypePlan { ...observed, atoms: atoms }
+}
+
+function indexTypedNodePlans(
+  values: Array<PreviewTypedNode>,
+) -> Map<string, LowerTypedNodePlan> {
+  let mut plans: Map<string, LowerTypedNodePlan> = map {}
+  for value in values {
+    plans.insert(spanKey(value.moduleIndex, value.lo, value.hi), projectTypedNode(value))
+  }
+  plans
+}
+
+function declaredTypeKey(nodeKind: string, moduleIndex: int, lo: int, hi: int) -> string {
+  "{nodeKind}:{moduleIndex}:{lo}:{hi}"
+}
+
+// Binding and declaration types keyed by checker node kind, because one span
+// can carry both and the span-only plan index keeps whichever came last.
+function indexDeclaredTypes(
+  values: Array<PreviewTypedNode>,
+) -> Map<string, Array<PreviewTypeAtom>> {
+  let mut types: Map<string, Array<PreviewTypeAtom>> = map {}
+  for value in values {
+    if value.nodeKind == "binding" || value.nodeKind == "declaration" {
+      types.insert(
+        declaredTypeKey(value.nodeKind, value.moduleIndex, value.lo, value.hi),
+        value.typeValue,
+      )
+    }
+  }
+  types
+}
+
+function typedNodePlanFor(
+  plans: Map<string, LowerTypedNodePlan>,
+  moduleIndex: int,
+  lo: int,
+  hi: int,
+) -> LowerTypedNodePlan {
+  match plans.get(spanKey(moduleIndex, lo, hi)) {
+    case Some(found) => found
+    case None => emptyTypedNodePlan()
+  }
+}
+
+function hasString(values: Array<string>, wanted: string) -> bool {
+  for value in values {
+    if value == wanted {
+      return true
+    }
+  }
+  false
+}
+
+function transparentAstKind(kind: string) -> bool {
+  kind == "identifier" ||
+    kind.startsWith("type/") ||
+    kind == "array-element/spread" ||
+    kind == "call-argument/named" ||
+    kind == "call-argument/spread" ||
+    kind == "comprehension-clause/for" ||
+    kind == "comprehension-clause/if" ||
+    kind == "concurrent-arm" ||
+    kind == "enum-variant" ||
+    kind == "field-initializer" ||
+    kind == "function-declaration" ||
+    kind == "function-type-parameter" ||
+    kind == "impl-method" ||
+    kind == "import-item" ||
+    kind == "import-spec" ||
+    kind == "list-pattern/rest" ||
+    kind == "map-entry" ||
+    kind == "match-case" ||
+    kind == "match-case-return" ||
+    kind == "module-path" ||
+    kind == "record-field-declaration" ||
+    kind == "record-pattern-field" ||
+    kind == "record-type-field" ||
+    kind == "string-part/interpolation" ||
+    kind == "template-tag"
+}
+
+function operandLabelSegment(
+  nodes: Array<PreviewAstNode>,
+  childIndexes: Map<string, int>,
+  astIndex: int,
+  node: PreviewAstNode,
+  source: Bytes,
+) -> string {
+  let segment = "{node.field}:{node.index}"
+  if !transparentAstKind(node.kind) {
+    return segment
+  }
+  let name = childText(nodes, childIndexes, astIndex, "name", source)
+  if name == "" {
+    "{node.kind}[{node.index}]/{segment}"
+  } else {
+    "{node.kind}[{node.index}]={name}/{segment}"
+  }
+}
+
+function indexOperandLabel(
+  context: ModuleLoweringContext,
+  node: PreviewAstNode,
+  astIndex: int,
+) -> () {
+  let segment = operandLabelSegment(
+    context.module.ast,
+    context.state.childIndexes,
+    astIndex,
+    node,
+    context.state.source,
+  )
+  let label = if node.parent < 0 {
+    segment
+  } else {
+    match context.module.ast.get(node.parent) {
+      case Some(parent) => if transparentAstKind(parent.kind) {
+        match context.state.operandLabelsByAst.get(node.parent) {
+          case Some(prefix) => "{prefix}/{segment}"
+          case None => segment
+        }
+      } else {
+        segment
+      }
+      case None => segment
+    }
+  }
+  let mut labels = context.state.operandLabelsByAst
+  labels.push(label)
+  ()
+}
+
+function astParentKind(nodes: Array<PreviewAstNode>, parent: int) -> string {
+  if parent < 0 {
+    return ""
+  }
+  match nodes.get(parent) {
+    case Some(value) => value.kind
+    case None => ""
+  }
+}
+
+function namedChildHi(
+  nodes: Array<PreviewAstNode>,
+  childIndexes: Map<string, int>,
+  parent: int,
+  field: string,
+  fallback: int,
+) -> int {
+  match childIndexes.get("{parent}:{field}") {
+    case Some(index) => match nodes.get(index) {
+      case Some(value) => return value.hi
+      case None => ()
+    }
+    case None => ()
+  }
+  fallback
+}
+
+function appendAstOperation(
+  operands: Array<string>,
+  operandLabels: Array<string>,
+  operationIndexByAst: Array<int>,
+  operandLabelsByAst: Array<string>,
+  operations: Array<Stage1Operation>,
+  astIndex: int,
+  parentOperationIndex: int,
+) -> () {
+  let operationIndex = match operationIndexByAst.get(astIndex) {
+    case Some(value) => value
+    case None => -1
+  }
+  if operationIndex < 0 || operationIndex == parentOperationIndex {
+    return
+  }
+  match operations.get(operationIndex) {
+    case Some(operation) => if !hasString(operands, operation.id) {
+      let mut target = operands
+      target.push(operation.id)
+      let mut labels = operandLabels
+      labels.push(match operandLabelsByAst.get(astIndex) {
+        case Some(value) => value
+        case None => ""
+      })
+    }
+    case None => ()
+  }
+}
+
+function rebuildComprehensionOperands(
+  nodes: Array<PreviewAstNode>,
+  childIndexes: Map<string, int>,
+  comprehensionChildIndexes: Map<string, Array<int>>,
+  operationIndexByAst: Array<int>,
+  operandLabelsByAst: Array<string>,
+  operations: Array<Stage1Operation>,
+  comprehensionAstIndex: int,
+) -> () {
+  let parentOperationIndex = match operationIndexByAst.get(
+    comprehensionAstIndex,
+  ) {
+    case Some(value) => value
+    case None => -1
+  }
+  if parentOperationIndex < 0 {
+    return
+  }
+  let parent = match operations.get(parentOperationIndex) {
+    case Some(value) => value
+    case None => return
+  }
+  let mut operands = parent.operands
+  let mut operandLabels = parent.operandLabels
+  match comprehensionChildIndexes.get("{comprehensionAstIndex}") {
+    case Some(children) => for childIndex in children {
+      match nodes.get(childIndex) {
+        case Some(child) => if child.kind == "comprehension-clause/for" {
+          for wanted in ["iterator", "pattern"] {
+            match childIndexes.get("{childIndex}:{wanted}") {
+              case Some(grandchildIndex) => appendAstOperation(
+                  operands,
+                  operandLabels,
+                  operationIndexByAst,
+                  operandLabelsByAst,
+                  operations,
+                  grandchildIndex,
+                  parentOperationIndex,
+                )
+              case None => ()
+            }
+          }
+        } else if child.kind == "comprehension-clause/if" {
+          match childIndexes.get("{childIndex}:condition") {
+            case Some(grandchildIndex) => appendAstOperation(
+                operands,
+                operandLabels,
+                operationIndexByAst,
+                operandLabelsByAst,
+                operations,
+                grandchildIndex,
+                parentOperationIndex,
+              )
+            case None => ()
+          }
+        } else {
+          appendAstOperation(
+            operands,
+            operandLabels,
+            operationIndexByAst,
+            operandLabelsByAst,
+            operations,
+            childIndex,
+            parentOperationIndex,
+          )
+        }
+        case None => ()
+      }
+    }
+    case None => ()
+  }
+  ()
+}
+
+function rebuildForOperands(
+  nodes: Array<PreviewAstNode>,
+  childIndexes: Map<string, int>,
+  operationIndexByAst: Array<int>,
+  operandLabelsByAst: Array<string>,
+  operations: Array<Stage1Operation>,
+  forAstIndex: int,
+) -> () {
+  let parentOperationIndex = match operationIndexByAst.get(forAstIndex) {
+    case Some(value) => value
+    case None => -1
+  }
+  if parentOperationIndex < 0 {
+    return
+  }
+  let parent = match operations.get(parentOperationIndex) {
+    case Some(value) => value
+    case None => return
+  }
+  let mut operands = parent.operands
+  let mut operandLabels = parent.operandLabels
+  for wanted in ["iterator", "pattern", "body"] {
+    match childIndexes.get("{forAstIndex}:{wanted}") {
+      case Some(childIndex) => {
+        appendAstOperation(
+          operands,
+          operandLabels,
+          operationIndexByAst,
+          operandLabelsByAst,
+          operations,
+          childIndex,
+          parentOperationIndex,
+        )
+      }
+      case None => ()
+    }
+  }
+  ()
+}
+
+function emptyResponse(request: LowerBridgeRequest) -> Stage1Response {
+  Stage1Response {
+    schema: STAGE1_EXCHANGE_SCHEMA,
+    status: request.frontEndStatus,
+    frontEnd: request.frontEnd,
+    loweredModules: [],
+    loweredOperations: [],
+    generatedRust: "",
+    unsupported: [],
+    provenance: compilerProvenance(
+      request.sourceSetId,
+      request.producer,
+      request.producerStage,
+    ),
+  }
+}
+
+record LoweringInput {
+  modules: Array<PreviewModuleResult>,
+  capturesByModule: Array<Array<PreviewTypedCapture>>,
+  references: Array<PreviewResolvedReference>,
+  referencesBySpan: Map<string, PreviewResolvedReference>,
+  importEdges: Map<string, Array<string>>,
+  moduleIndexes: Map<string, int>,
+  declarationsBySpan: Map<string, PreviewResolvedDeclaration>,
+  declarationsByName: Map<string, PreviewResolvedDeclaration>,
+  typedNodePlans: Map<string, LowerTypedNodePlan>,
+  declaredTypes: Map<string, Array<PreviewTypeAtom>>,
+  callPlans: Map<string, LowerCallPlan>,
+}
+
+
+record SpecialOperandRebuild {
+  astIndex: int,
+  comprehension: bool,
+}
+
+record DeferredOperand {
+  parentIndex: int,
+  operationIndex: int,
+  astIndex: int,
+}
+
+record ModuleLoweringState {
+  operationIds: Array<string>,
+  operationIdCounts: Map<string, int>,
+  deferredOperands: Array<DeferredOperand>,
+  functionDefaultOperands: Map<int, Array<DeferredOperand>>,
+  operationIndexByAst: Array<int>,
+  childIndexes: Map<string, int>,
+  comprehensionChildIndexes: Map<string, Array<int>>,
+  closureOperationIndexes: Map<int, Map<int, int>>,
+  protocolScopes: Array<bool>,
+  operandLabelsByAst: Array<string>,
+  specialOperandRebuilds: Array<SpecialOperandRebuild>,
+  captureBoundaryIndexes: Array<int>,
+  namespaceImports: Map<string, LowerBindingSource>,
+  source: Bytes,
+}
+
+record ModuleLoweringContext {
+  request: LowerBridgeRequest,
+  input: LoweringInput,
+  output: LoweringOutput,
+  module: PreviewModuleResult,
+  moduleIndex: int,
+  state: ModuleLoweringState,
+}
+
+record LowerBindingPlan {
+  name: string,
+  mutable: bool,
+  storage: string,
+  declarationIdentity: string,
+}
+
+function emptyBindingPlan() -> LowerBindingPlan {
+  LowerBindingPlan {
+    name: "",
+    mutable: false,
+    storage: "",
+    declarationIdentity: "",
+  }
+}
+
+function bindingPlanFor(
+  context: ModuleLoweringContext,
+  node: PreviewAstNode,
+  astIndex: int,
+  effectiveKind: string,
+) -> LowerBindingPlan {
+  let source = bindingSourceFor(
+    context.module.ast,
+    context.state.childIndexes,
+    astIndex,
+    node,
+    effectiveKind,
+    context.state.source,
+  )
+  if source.name == "" {
+    return emptyBindingPlan()
+  }
+  let resolved = referenceIdentity(
+    context.input.referencesBySpan,
+    context.moduleIndex,
+    source.lo,
+    source.hi,
+  )
+  LowerBindingPlan {
+    name: source.name,
+    mutable: mutableBinding(context.module.ast, node),
+    storage: bindingStorage(effectiveKind),
+    declarationIdentity: if resolved == "" {
+      "source:{context.moduleIndex}:{source.lo}:{source.hi}"
+    } else {
+      resolved
+    },
+  }
+}
+
+record LowerNodePlan {
+  admitted: bool,
+  roleName: string,
+  kindName: string,
+  operationHi: int,
+  parentOperationIndex: int,
+  parentId: string,
+  id: string,
+  typePlan: LowerTypePlan,
+  declaredType: Array<PreviewTypeAtom>,
+  call: LowerCallPlan,
+  binding: LowerBindingPlan,
+  control: LowerControlPlan,
+  controlTarget: string,
+  runtimeLeaf: string,
+}
+
+function groupCaptures(
+  moduleCount: int,
+  values: Array<PreviewTypedCapture>,
+) -> Array<Array<PreviewTypedCapture>> {
+  let mut groups: Array<Array<PreviewTypedCapture>> = []
+  let mut moduleIndex = 0
+  while moduleIndex < moduleCount {
+    let group: Array<PreviewTypedCapture> = []
+    groups.push(group)
+    moduleIndex += 1
+  }
+  for value in values {
+    if value.moduleIndex >= 0 && value.moduleIndex < moduleCount {
+      match groups.get(value.moduleIndex) {
+        case Some(group) => {
+          let mut target = group
+          target.push(value)
+        }
+        case None => ()
+      }
+    }
+  }
+  groups
+}
+
+function decodeLoweringInput(request: LowerBridgeRequest) -> Result<LoweringInput, string> {
+  let modules = request.modules
+  let references = request.references
+  let typedNodes = request.typedNodes
+  let typedCalls = request.typedCalls
+  Ok(LoweringInput {
+    modules: modules,
+    capturesByModule: groupCaptures(modules.length, request.typedCaptures),
+    references: references,
+    referencesBySpan: indexReferences(references),
+    importEdges: indexImportEdges(request.edges),
+    moduleIndexes: indexModuleIdentities(modules),
+    declarationsBySpan: indexDeclarationsBySpan(request.moduleDeclarations),
+    declarationsByName: indexDeclarationsByName(request.moduleDeclarations),
+    typedNodePlans: indexTypedNodePlans(typedNodes),
+    declaredTypes: indexDeclaredTypes(typedNodes),
+    callPlans: indexCallPlans(typedCalls),
+  })
+}
+
+function emptyLoweringOutput() -> LoweringOutput {
+  LoweringOutput {
+    modules: [],
+    operations: [],
+    unsupported: [],
+  }
+}
+
+record LowerAstChildIndexes {
+  named: Map<string, int>,
+  comprehension: Map<string, Array<int>>,
+}
+
+function indexAstChildren(nodes: Array<PreviewAstNode>) -> LowerAstChildIndexes {
+  let mut indexes: Map<string, int> = map {}
+  let mut comprehension: Map<string, Array<int>> = map {}
+  let mut index = 0
+  for child in nodes {
+    if child.parent >= 0 {
+      let key = "{child.parent}:{child.field}"
+      match indexes.get(key) {
+        case Some(_) => ()
+        case None => indexes.insert(key, index)
+      }
+      match nodes.get(child.parent) {
+        case Some(parent) => if parent.kind == "expression/comprehension" {
+          let parentKey = "{child.parent}"
+          match comprehension.get(parentKey) {
+            case Some(group) => {
+              let mut target = group
+              target.push(index)
+            }
+            case None => comprehension.insert(parentKey, [index])
+          }
+        }
+        case None => ()
+      }
+    }
+    index += 1
+  }
+  LowerAstChildIndexes {
+    named: indexes,
+    comprehension: comprehension,
+  }
+}
+
+function moduleLoweringContext(
+  request: LowerBridgeRequest,
+  input: LoweringInput,
+  output: LoweringOutput,
+  module: PreviewModuleResult,
+  moduleIndex: int,
+) -> ModuleLoweringContext {
+  let childIndexes = indexAstChildren(module.ast)
+  ModuleLoweringContext {
+    request: request,
+    input: input,
+    output: output,
+    module: module,
+    moduleIndex: moduleIndex,
+    state: ModuleLoweringState {
+      operationIds: [],
+      operationIdCounts: map {},
+      deferredOperands: [],
+      functionDefaultOperands: map {},
+      operationIndexByAst: [],
+      childIndexes: childIndexes.named,
+      comprehensionChildIndexes: childIndexes.comprehension,
+      closureOperationIndexes: map {},
+      protocolScopes: [],
+      operandLabelsByAst: [],
+      specialOperandRebuilds: [],
+      captureBoundaryIndexes: [],
+      namespaceImports: map {},
+      source: (module.source).encodeUtf8(),
+    },
+  }
+}
+
+function operationParentIndex(context: ModuleLoweringContext, parent: int) -> int {
+  if parent < 0 {
+    return -1
+  }
+  match context.state.operationIndexByAst.get(parent) {
+    case Some(value) => value
+    case None => -1
+  }
+}
+
+function nodeOperationParentIndex(
+  context: ModuleLoweringContext,
+  node: PreviewAstNode,
+) -> int {
+  if node.field == "default" && node.parent >= 0 {
+    match context.module.ast.get(node.parent) {
+      case Some(parent) => if parent.kind == "parameter" {
+        return operationParentIndex(context, parent.parent)
+      }
+      case None => ()
+    }
+  }
+  operationParentIndex(context, node.parent)
+}
+
+function operationParentId(context: ModuleLoweringContext, index: int) -> string {
+  if index < 0 {
+    return ""
+  }
+  match context.output.operations.get(index) {
+    case Some(value) => value.id
+    case None => ""
+  }
+}
+
+// Reserve the identity before any parent, operand or capture can refer to it.
+// Also reserve suffixed identities: a capture base can contain its parent's suffix.
+function reserveOperationId(context: ModuleLoweringContext, base: string) -> string {
+  let mut counts = context.state.operationIdCounts
+  let mut count = match counts.get(base) {
+    case Some(value) => value + 1
+    case None => 1
+  }
+  let mut id = if count == 1 { base } else { "{base}#{count}" }
+  while counts.containsKey(id) {
+    count += 1
+    id = "{base}#{count}"
+  }
+  counts.insert(base, count)
+  counts.insert(id, 1)
+  id
+}
+
+function planLowerNode(
+  context: ModuleLoweringContext,
+  node: PreviewAstNode,
+  astIndex: int,
+  insideProtocol: bool,
+) -> LowerNodePlan {
+  let typedNodePlan = typedNodePlanFor(
+    context.input.typedNodePlans,
+    context.moduleIndex,
+    node.lo,
+    node.hi,
+  )
+  let contextualEnumVariant = node.kind == "pattern/binding" &&
+    typedNodePlan.nodeKind == "pattern"
+  let recordShorthand = node.kind == "identifier" &&
+    node.field == "name" && node.parent >= 0 &&
+    astParentKind(context.module.ast, node.parent) == "record-pattern-field" &&
+    !context.state.childIndexes.containsKey("{node.parent}:pattern")
+  let bareListRest = node.kind == "list-pattern/rest" &&
+    !context.state.childIndexes.containsKey("{astIndex}:binding")
+  let bareCaseReturn = node.kind == "match-case-return" &&
+    !context.state.childIndexes.containsKey("{astIndex}:value")
+  let foldedLength=flatLengthInput(context.module.ast,context.state.childIndexes,astIndex,context.state.source)
+  let effectiveKind = if foldedScalarAncestor(context.module.ast,context.state.childIndexes,astIndex,context.state.source) { "" }
+  else if foldedLength != None { "expression/length" }
+  else if flatScalarInput(context.module.ast,context.state.childIndexes,astIndex,context.state.source,"expression/integer") != None { "expression/integer" }
+  else if contextualEnumVariant {
+    "pattern/constructor"
+  } else if recordShorthand {
+    "pattern/binding"
+  } else if bareListRest {
+    "pattern/wildcard"
+  } else if bareCaseReturn {
+    "expression/unit"
+  } else {
+    node.kind
+  }
+  let parentKind = astParentKind(context.module.ast, node.parent)
+  let kindPlan = lowerKindPlan(effectiveKind)
+  let roleName = admittedRole(kindPlan, node.kind, insideProtocol, parentKind)
+  let parentOperationIndex = nodeOperationParentIndex(context, node)
+  if roleName == "" || kindPlan.name == "" {
+    return LowerNodePlan {
+      admitted: false,
+      roleName: roleName,
+      kindName: kindPlan.name,
+      operationHi: node.hi,
+      parentOperationIndex: parentOperationIndex,
+      parentId: "",
+      id: "",
+      typePlan: projectLowerType([]),
+      declaredType: [],
+      call: emptyCallPlan(),
+      binding: emptyBindingPlan(),
+      control: controlPlan(""),
+      controlTarget: "",
+      runtimeLeaf: "",
+    }
+  }
+  let operationHi = if node.kind == "function-declaration" &&
+    parentKind == "impl-method" {
+    namedChildHi(context.module.ast, context.state.childIndexes, astIndex, "name", node.hi)
+  } else {
+    node.hi
+  }
+  let foundCall = callPlanFor(
+    context.input.callPlans,
+    context.moduleIndex,
+    node.lo,
+    node.hi,
+  )
+  let baseId = operationId(
+    context.module.identity,
+    context.module.sourceOrdinal,
+    roleName,
+    kindPlan.tag,
+    node.lo,
+    operationHi,
+  )
+  let id = reserveOperationId(context, baseId)
+  let control = controlPlan(node.kind)
+  LowerNodePlan {
+    admitted: true,
+    roleName: roleName,
+    kindName: if kindPlan.name == "binding/parameter" && attribute(
+      node.attributeNames,
+      node.attributeValues,
+      "variadic",
+    ) == "true" {
+      "binding/variadic-parameter"
+    } else {
+      kindPlan.name
+    },
+    operationHi: operationHi,
+    parentOperationIndex: parentOperationIndex,
+    parentId: operationParentId(context, parentOperationIndex),
+    id: id,
+    typePlan: untypedLowerTypePlan(
+      context,
+      node,
+      recordShorthand,
+      typedPatternLowerTypePlan(
+        context,
+        node,
+        astIndex,
+        contextualLowerTypePlan(
+          effectiveKind,
+          parentKind,
+          if bareCaseReturn { projectLowerType([unitTypeAtom()]) } else { typedNodePlan.typePlan },
+        ),
+      ),
+    ),
+    declaredType: declaredTypeFor(context, node, astIndex),
+    call: foundCall,
+    binding: if contextualEnumVariant {
+      emptyBindingPlan()
+    } else {
+      bindingPlanFor(context, node, astIndex, effectiveKind)
+    },
+    control: control,
+    controlTarget: if control.ownsTarget {
+      id
+    } else {
+      loopControlTarget(context, node, astIndex)
+    },
+    runtimeLeaf: kindPlan.runtimeLeaf,
+  }
+}
+
+function operationReferenceIdentity(
+  context: ModuleLoweringContext,
+  node: PreviewAstNode,
+  astIndex: int,
+) -> string {
+  let identityIndex = if node.kind == "pattern/nominal-record" {
+    match context.state.childIndexes.get("{astIndex}:name") {
+      case Some(index) => index
+      case None => astIndex
+    }
+  } else {
+    astIndex
+  }
+  match context.module.ast.get(identityIndex) {
+    case Some(identityNode) => referenceIdentity(
+      context.input.referencesBySpan,
+      context.moduleIndex,
+      identityNode.lo,
+      identityNode.hi,
+    )
+    case None => ""
+  }
+}
+
+function declaredTypeAt(
+  context: ModuleLoweringContext,
+  nodeKind: string,
+  astIndex: int,
+) -> Array<PreviewTypeAtom> {
+  match context.module.ast.get(astIndex) {
+    case Some(found) => match context.input.declaredTypes.get(
+      declaredTypeKey(nodeKind, context.moduleIndex, found.lo, found.hi),
+    ) {
+      case Some(value) => value
+      case None => []
+    }
+    case None => []
+  }
+}
+
+function declaredChildType(
+  context: ModuleLoweringContext,
+  parent: int,
+  field: string,
+  nodeKind: string,
+) -> Array<PreviewTypeAtom> {
+  match context.state.childIndexes.get("{parent}:{field}") {
+    case Some(index) => declaredTypeAt(context, nodeKind, index)
+    case None => []
+  }
+}
+
+function declaredLetType(
+  context: ModuleLoweringContext,
+  astIndex: int,
+) -> Array<PreviewTypeAtom> {
+  let patternIndex = match context.state.childIndexes.get("{astIndex}:pattern") {
+    case Some(found) => found
+    case None => return []
+  }
+  let pattern = match context.module.ast.get(patternIndex) {
+    case Some(found) => found
+    case None => return []
+  }
+  let annotated = pattern.kind == "pattern/typed" ||
+    context.state.childIndexes.containsKey("{astIndex}:type")
+  if !annotated {
+    return []
+  }
+  if pattern.kind != "pattern/typed" && pattern.kind != "pattern/binding" {
+    return []
+  }
+  if context.state.childIndexes.containsKey("{patternIndex}:name") {
+    declaredChildType(context, patternIndex, "name", "binding")
+  } else {
+    declaredTypeAt(context, "binding", patternIndex)
+  }
+}
+
+// Declared types come from the checker's binding and declaration nodes:
+// parameters, function signatures, and annotated let/const bindings.
+function declaredTypeFor(
+  context: ModuleLoweringContext,
+  node: PreviewAstNode,
+  astIndex: int,
+) -> Array<PreviewTypeAtom> {
+  match node.kind {
+    case "parameter" => declaredChildType(context, astIndex, "name", "binding")
+    case "lambda-parameter" => declaredChildType(context, astIndex, "name", "binding")
+    case "function-declaration" => declaredChildType(
+      context,
+      astIndex,
+      "name",
+      "declaration",
+    )
+    case "statement/function" => match context.state.childIndexes.get(
+      "{astIndex}:declaration",
+    ) {
+      case Some(index) => declaredChildType(context, index, "name", "declaration")
+      case None => []
+    }
+    case "statement/const" => if context.state.childIndexes.containsKey(
+      "{astIndex}:type",
+    ) {
+      declaredChildType(context, astIndex, "name", "binding")
+    } else {
+      []
+    }
+    case "statement/let" => declaredLetType(context, astIndex)
+    case _ => []
+  }
+}
+
+// Each source-written call type argument is an independent single-root tree.
+// Argument order and nested type edges are preserved.
+function callTypeArgumentsFor(context: ModuleLoweringContext, call: PreviewAstNode, callIndex: int) -> Array<Array<PreviewTypeAtom>> {
+  let mut result: Array<Array<PreviewTypeAtom>> = []
+  let mut index = callIndex + 1
+  while index < context.module.ast.length {
+    let node = context.module.ast[index]
+    if node.lo >= call.hi { break }
+    if node.parent == callIndex && node.field == "typeArguments" {
+      let plan = typedNodePlanFor(context.input.typedNodePlans, context.moduleIndex, node.lo, node.hi)
+      result.push(plan.typePlan.atoms)
+    }
+    index += 1
+  }
+  result
+}
+
+record LowerImportPlan {
+  module: string,
+  bindings: Array<string>,
+}
+
+function emptyImportPlan() -> LowerImportPlan {
+  LowerImportPlan {
+    module: "",
+    bindings: [],
+  }
+}
+
+function importBindingRow(
+  context: ModuleLoweringContext,
+  kind: string,
+  sourceName: string,
+  boundIndex: int,
+) -> string {
+  match context.module.ast.get(boundIndex) {
+    case Some(bound) => {
+      let boundName = sourceText(context.state.source, bound.lo, bound.hi)
+      "{kind}|{sourceName}|{boundName}|{bound.lo}|{bound.hi}"
+    }
+    case None => ""
+  }
+}
+
+// Namespace import aliases by bound name, for defer captures of `alias.member`.
+function recordNamespaceImport(context: ModuleLoweringContext, boundIndex: int) -> () {
+  let bound = bindingSourceAt(context.module.ast, boundIndex, context.state.source)
+  if bound.name != "" {
+    let mut imports = context.state.namespaceImports
+    imports.insert(bound.name, bound)
+  }
+}
+
+// The import subtree follows its statement in preorder, so one forward scan
+// collects the module path segments and every bound name.
+function importPlanFor(
+  context: ModuleLoweringContext,
+  node: PreviewAstNode,
+  astIndex: int,
+) -> LowerImportPlan {
+  if node.kind != "statement/import" {
+    return emptyImportPlan()
+  }
+  let itemIndex = match context.state.childIndexes.get("{astIndex}:import") {
+    case Some(found) => found
+    case None => return emptyImportPlan()
+  }
+  let pathIndex = match context.state.childIndexes.get("{itemIndex}:path") {
+    case Some(found) => found
+    case None => return emptyImportPlan()
+  }
+  let mut segments: Array<string> = []
+  let mut bindings: Array<string> = []
+  let mut lastSegment = -1
+  let mut aliasIndex = -1
+  let mut index = astIndex + 1
+  let mut scanning = true
+  while scanning {
+    match context.module.ast.get(index) {
+      case Some(found) => if found.lo < node.lo || found.hi > node.hi {
+        scanning = false
+      } else {
+        if found.parent == pathIndex && found.field == "segments" {
+          segments.push(sourceText(context.state.source, found.lo, found.hi))
+          lastSegment = index
+        } else if found.parent == itemIndex && found.field == "alias" {
+          aliasIndex = index
+        } else if found.parent == itemIndex && found.field == "specs" {
+          let sourceName = childText(
+            context.module.ast,
+            context.state.childIndexes,
+            index,
+            "name",
+            context.state.source,
+          )
+          let boundIndex = match context.state.childIndexes.get("{index}:alias") {
+            case Some(alias) => alias
+            case None => match context.state.childIndexes.get("{index}:name") {
+              case Some(name) => name
+              case None => -1
+            }
+          }
+          if boundIndex >= 0 {
+            bindings.push(importBindingRow(context, "selected-import", sourceName, boundIndex))
+          }
+        }
+        index += 1
+      }
+      case None => {
+        scanning = false
+      }
+    }
+  }
+  if bindings.length == 0 {
+    let boundIndex = if aliasIndex >= 0 { aliasIndex } else { lastSegment }
+    if boundIndex >= 0 {
+      bindings.push(importBindingRow(context, "namespace-import", "", boundIndex))
+      recordNamespaceImport(context, boundIndex)
+    }
+  }
+  LowerImportPlan {
+    module: segments.join("."),
+    bindings: bindings,
+  }
+}
+
+// A type declaration's checked signature accompanies its declaration
+// operation. Consumers can instantiate field/payload types without source text.
+function appendNominalType(
+  output: Array<PreviewTypeAtom>,
+  atoms: Array<PreviewTypeAtom>,
+  parent: int,
+  field: string,
+  index: int,
+  name: string,
+) -> () {
+  let offset = output.length
+  let mut target = output
+  for atom in atoms {
+    target.push(PreviewTypeAtom {
+      ...atom,
+      parent: if atom.parent < 0 { parent } else { atom.parent + offset },
+      field: if atom.parent < 0 { field } else { atom.field },
+      index: if atom.parent < 0 { index } else { atom.index },
+      edgeName: if atom.parent < 0 { name } else { atom.edgeName },
+    })
+  }
+  ()
+}
+
+function typeDefinitionFor(
+  context: ModuleLoweringContext,
+  declaration: PreviewAstNode,
+  declarationIndex: int,
+) -> Array<PreviewTypeAtom> {
+  let kind = match declaration.kind {
+    case "statement/record" => "nominal-record"
+    case "statement/enum" => "enum"
+    case "statement/newtype" => "newtype"
+    case "statement/type-alias" => "alias"
+    case _ => return []
+  }
+  let name = childText(context.module.ast, context.state.childIndexes,
+    declarationIndex, "name", context.state.source)
+  let mut output = [PreviewTypeAtom {
+    parent: -1, field: "root", index: 0, edgeName: "", kind: kind,
+    name: name, value: "", identity: "{context.module.identity}::{name}",
+    origin: context.module.identity,
+  }]
+  let mut variantIndex = -1
+  let mut variantAtom = -1
+  let mut fieldIndex = -1
+  let mut fieldName = ""
+  let mut fieldOrdinal = 0
+  let mut index = declarationIndex + 1
+  while index < context.module.ast.length {
+    let node = context.module.ast[index]
+    if node.lo >= declaration.hi { break }
+    if node.parent == declarationIndex && node.field == "typeParameters" {
+      let parameter = sourceText(context.state.source, node.lo, node.hi)
+      output.push(PreviewTypeAtom {
+        parent: 0, field: "typeParameters", index: node.index, edgeName: "",
+        kind: "type-parameter", name: parameter, value: "", identity: "", origin: "",
+      })
+    } else if node.parent == declarationIndex && node.kind == "enum-variant" {
+      variantIndex = index
+      variantAtom = output.length
+      let variantName = childText(context.module.ast, context.state.childIndexes,
+        index, "name", context.state.source)
+      output.push(PreviewTypeAtom {
+        parent: 0, field: "variants", index: node.index, edgeName: variantName,
+        kind: "variant", name: variantName, value: "", identity: "", origin: "",
+      })
+    } else if node.parent == declarationIndex && node.kind == "record-field-declaration" {
+      fieldIndex = index
+      fieldOrdinal = node.index
+      fieldName = childText(context.module.ast, context.state.childIndexes,
+        index, "name", context.state.source)
+    } else if (node.parent == fieldIndex && node.field == "type") ||
+      (node.parent == variantIndex && node.field == "payload") ||
+      (node.parent == declarationIndex && (node.field == "base" ||
+        (kind == "alias" && node.field == "type"))) {
+      let plan = typedNodePlanFor(context.input.typedNodePlans,
+        context.moduleIndex, node.lo, node.hi)
+      if node.field == "payload" {
+        appendNominalType(output, plan.typePlan.atoms, variantAtom, "payload", node.index, "")
+      } else if node.field == "base" || (kind == "alias" && node.field == "type") {
+        appendNominalType(output, plan.typePlan.atoms, 0, "base", 0, "")
+      } else {
+        appendNominalType(output, plan.typePlan.atoms, 0, "fields", fieldOrdinal, fieldName)
+      }
+    }
+    index += 1
+  }
+  output
+}
+
+function lowerNodeOperation(
+  context: ModuleLoweringContext,
+  node: PreviewAstNode,
+  astIndex: int,
+  plan: LowerNodePlan,
+) -> Stage1Operation {
+  let importPlan = importPlanFor(context, node, astIndex)
+  Stage1Operation {
+    schema: STAGE1_IR_SCHEMA,
+    id: plan.id,
+    module: context.module.identity,
+    lo: node.lo,
+    hi: plan.operationHi,
+    parentId: plan.parentId,
+    role: plan.roleName,
+    kind: plan.kindName,
+    literalSourceMap: if node.kind == "string-part/text" { attribute(node.attributeNames,node.attributeValues,"sourceMap") } else { "" },
+    literalEncoding: "checked-values/v1",
+    detail: if plan.kindName == "expression/length" { lengthDetail(context.module.ast,context.state.childIndexes,astIndex,context.state.source) } else if plan.kindName == "expression/integer" { integerDetail(context.module.ast,context.state.childIndexes,astIndex,context.state.source) } else { detail(
+      context.module.ast,
+      context.state.childIndexes,
+      astIndex,
+      node,
+      context.state.source,
+    ) },
+    operands: [],
+    operandLabels: [],
+    semanticType: plan.typePlan.semanticType,
+    representation: plan.typePlan.representation,
+    referenceIdentity: operationReferenceIdentity(context, node, astIndex),
+    bindingName: plan.binding.name,
+    bindingMutable: plan.binding.mutable,
+    bindingStorage: plan.binding.storage,
+    declarationIdentity: plan.binding.declarationIdentity,
+    controlKind: plan.control.kind,
+    controlTarget: plan.controlTarget,
+    cleanupIds: if node.kind == "statement/defer" { [plan.id] } else { [] },
+    callTarget: plan.call.targetIdentity,
+    callCalleeKind: plan.call.calleeKind,
+    callMethod: plan.call.method,
+    callMethodClass: plan.call.methodClass,
+    callOptional: plan.call.optional,
+    callShadowFirst: plan.call.shadowFirst,
+    callStageMethod: plan.call.stageMethod,
+    callArguments: plan.call.arguments,
+    callEvaluations: plan.call.evaluations,
+    runtimeLeaf: runtimeLeaf(plan.runtimeLeaf, plan.call.targetIdentity),
+    generatedNameSeed: plan.id,
+    semanticTypeAtoms: plan.typePlan.atoms,
+    declaredTypeAtoms: plan.declaredType,
+    callTypeArguments: if node.kind == "expression/call" { callTypeArgumentsFor(context, node, astIndex) } else { [] },
+    typeDefinition: typeDefinitionFor(context, node, astIndex),
+    importModule: importPlan.module,
+    importBindings: importPlan.bindings,
+    sourceOrdinal: context.module.sourceOrdinal,
+  }
+}
+
+function indexClosureOperation(
+  context: ModuleLoweringContext,
+  node: PreviewAstNode,
+  operationIndex: int,
+) -> () {
+  if node.kind == "expression/lambda" || node.kind == "function-declaration" {
+    let mut indexes = context.state.closureOperationIndexes
+    match indexes.get(node.lo) {
+      case Some(found) => {
+        let mut byEnd = found
+        byEnd.insert(node.hi, operationIndex)
+      }
+      case None => {
+        let mut byEnd: Map<int, int> = map {}
+        byEnd.insert(node.hi, operationIndex)
+        indexes.insert(node.lo, byEnd)
+      }
+    }
+  }
+}
+
+function indexSpecialOperandRebuild(
+  context: ModuleLoweringContext,
+  node: PreviewAstNode,
+  astIndex: int,
+) -> () {
+  if node.kind == "expression/comprehension" || node.kind == "expression/for" {
+    let mut rebuilds = context.state.specialOperandRebuilds
+    rebuilds.push(SpecialOperandRebuild {
+      astIndex: astIndex,
+      comprehension: node.kind == "expression/comprehension",
+    })
+  }
+}
+
+function appendUnadmittedNode(
+  context: ModuleLoweringContext,
+  node: PreviewAstNode,
+  parentOperationIndex: int,
+) -> () {
+  let mut indexes = context.state.operationIndexByAst
+  indexes.push(parentOperationIndex)
+  indexClosureOperation(context, node, parentOperationIndex)
+}
+
+function appendUnsupportedNode(
+  context: ModuleLoweringContext,
+  node: PreviewAstNode,
+  parentOperationIndex: int,
+) -> () {
+  appendUnadmittedNode(context, node, parentOperationIndex)
+  if !transparentAstKind(node.kind) {
+    let marker = "{context.module.identity}:{node.kind}"
+    if !hasString(context.output.unsupported, marker) {
+      let mut unsupported = context.output.unsupported
+      unsupported.push(marker)
+    }
+  }
+}
+
+function indexProtocolScope(
+  context: ModuleLoweringContext,
+  node: PreviewAstNode,
+) -> bool {
+  let insideProtocol = if node.parent < 0 {
+    false
+  } else {
+    match context.state.protocolScopes.get(node.parent) {
+      case Some(value) => value
+      case None => false
+    }
+  }
+  let mut scopes = context.state.protocolScopes
+  scopes.push(insideProtocol || node.kind == "statement/protocol")
+  insideProtocol
+}
+
+function appendModuleNode(
+  context: ModuleLoweringContext,
+  node: PreviewAstNode,
+  astIndex: int,
+) -> Result<(), string> {
+  let insideProtocol = indexProtocolScope(context, node)
+  indexOperandLabel(context, node, astIndex)
+  let plan = planLowerNode(context, node, astIndex, insideProtocol)
+  if !plan.admitted {
+    // A signed scalar literal is represented by the enclosing exact value.
+    // Its consumed syntax children share that operation, without a refusal.
+    if insideProtocol || foldedScalarAncestor(
+      context.module.ast, context.state.childIndexes, astIndex, context.state.source,
+    ) {
+      appendUnadmittedNode(context, node, plan.parentOperationIndex)
+    } else {
+      appendUnsupportedNode(context, node, plan.parentOperationIndex)
+    }
+    return Ok(())
+  }
+  if context.output.operations.length >= context.request.maxLoweredNodes {
+    return Err("Stage 1 lowering operation count exceeds {context.request.maxLoweredNodes}")
+  }
+  let mut operations = context.output.operations
+  operations.push(lowerNodeOperation(context, node, astIndex, plan))
+  let mut ids = context.state.operationIds
+  ids.push(plan.id)
+  let operationIndex = operations.length - 1
+  let mut indexes = context.state.operationIndexByAst
+  indexes.push(operationIndex)
+  appendAdmittedOperand(
+    context,
+    operationIndex,
+    plan.parentOperationIndex,
+    astIndex,
+  )
+  indexClosureOperation(context, node, operationIndex)
+  indexSpecialOperandRebuild(context, node, astIndex)
+  if node.kind == "statement/defer" || node.kind == "expression/concurrent" {
+    let mut boundaries = context.state.captureBoundaryIndexes
+    boundaries.push(operationIndex)
+  }
+  Ok(())
+}
+
+function appendModuleNodes(context: ModuleLoweringContext) -> Result<(), string> {
+  let mut astIndex = 0
+  for node in context.module.ast {
+    appendModuleNode(context, node, astIndex)?
+    astIndex += 1
+  }
+  Ok(())
+}
+
+function appendOperand(
+  parent: Stage1Operation,
+  operationId: string,
+  label: string,
+) -> () {
+  let mut operands = parent.operands
+  operands.push(operationId)
+  let mut labels = parent.operandLabels
+  labels.push(label)
+}
+
+function operandLabelAt(context: ModuleLoweringContext, astIndex: int) -> string {
+  match context.state.operandLabelsByAst.get(astIndex) {
+    case Some(value) => value
+    case None => ""
+  }
+}
+
+function deferFunctionDefault(
+  context: ModuleLoweringContext,
+  parentIndex: int,
+  operationIndex: int,
+  astIndex: int,
+) -> () {
+  let deferred = DeferredOperand {
+    parentIndex: parentIndex,
+    operationIndex: operationIndex,
+    astIndex: astIndex,
+  }
+  let mut defaults = context.state.functionDefaultOperands
+  match defaults.get(parentIndex) {
+    case Some(group) => {
+      let mut target = group
+      target.push(deferred)
+    }
+    case None => defaults.insert(parentIndex, [deferred])
+  }
+  ()
+}
+
+function appendFunctionDefaults(
+  context: ModuleLoweringContext,
+  parent: Stage1Operation,
+  parentIndex: int,
+) -> () {
+  match context.state.functionDefaultOperands.get(parentIndex) {
+    case Some(defaults) => for deferred in defaults {
+      match context.module.ast.get(deferred.astIndex) {
+        case Some(node) => match context.output.operations.get(deferred.operationIndex) {
+          case Some(operation) => appendOperand(
+            parent,
+            operation.id,
+            "{operandLabelAt(context, node.parent)}/{operandLabelAt(context, deferred.astIndex)}",
+          )
+          case None => ()
+        }
+        case None => ()
+      }
+    }
+    case None => ()
+  }
+  ()
+}
+
+function appendAdmittedOperand(
+  context: ModuleLoweringContext,
+  operationIndex: int,
+  parentIndex: int,
+  astIndex: int,
+) -> () {
+  if parentIndex < 0 {
+    return
+  }
+  match context.output.operations.get(operationIndex) {
+    case Some(operation) => match context.output.operations.get(parentIndex) {
+      case Some(parent) => if parent.kind == "expression/comprehension" ||
+        parent.kind == "expression/for" {
+        ()
+      } else {
+        let field = match context.module.ast.get(astIndex) {
+          case Some(node) => node.field
+          case None => ""
+        }
+        if parent.kind == "function" && field == "default" {
+          deferFunctionDefault(context, parentIndex, operationIndex, astIndex)
+        } else if parent.kind == "let" && operation.role == "pattern" {
+          let mut deferred = context.state.deferredOperands
+          deferred.push(DeferredOperand {
+            parentIndex: parentIndex,
+            operationIndex: operationIndex,
+            astIndex: astIndex,
+          })
+        } else {
+          if parent.kind == "function" && field == "body" {
+            appendFunctionDefaults(context, parent, parentIndex)
+          }
+          appendOperand(
+            parent,
+            operation.id,
+            operandLabelAt(context, astIndex),
+          )
+        }
+      }
+      case None => ()
+    }
+    case None => ()
+  }
+}
+
+function appendDeferredOperands(context: ModuleLoweringContext) -> () {
+  for deferred in context.state.deferredOperands {
+    match context.output.operations.get(deferred.parentIndex) {
+      case Some(parent) => match context.output.operations.get(deferred.operationIndex) {
+        case Some(operation) => appendOperand(
+          parent,
+          operation.id,
+          operandLabelAt(context, deferred.astIndex),
+        )
+        case None => ()
+      }
+      case None => ()
+    }
+  }
+  ()
+}
+
+function rebuildSpecialOperands(context: ModuleLoweringContext) -> () {
+  for rebuild in context.state.specialOperandRebuilds {
+    if rebuild.comprehension {
+      rebuildComprehensionOperands(
+        context.module.ast,
+        context.state.childIndexes,
+        context.state.comprehensionChildIndexes,
+        context.state.operationIndexByAst,
+        context.state.operandLabelsByAst,
+        context.output.operations,
+        rebuild.astIndex,
+      )
+    } else {
+      rebuildForOperands(
+        context.module.ast,
+        context.state.childIndexes,
+        context.state.operationIndexByAst,
+        context.state.operandLabelsByAst,
+        context.output.operations,
+        rebuild.astIndex,
+      )
+    }
+  }
+  ()
+}
+
+function captureOperation(
+  context: ModuleLoweringContext,
+  capture: PreviewTypedCapture,
+  parentId: string,
+  id: string,
+) -> Stage1Operation {
+  let typePlan = projectLowerType(capture.typeValue)
+  Stage1Operation {
+    schema: STAGE1_IR_SCHEMA,
+    id: id,
+    module: context.module.identity,
+    lo: capture.referenceLo,
+    hi: capture.referenceHi,
+    parentId: parentId,
+    role: "binding",
+    kind: "binding/capture",
+    detail: "",
+    operands: [],
+    operandLabels: [],
+    semanticType: typePlan.semanticType,
+    representation: typePlan.representation,
+    referenceIdentity: "",
+    bindingName: capture.name,
+    bindingMutable: false,
+    bindingStorage: "captured",
+    declarationIdentity: "source:{capture.moduleIndex}:{capture.declarationLo}:{capture.declarationHi}",
+    controlKind: "",
+    controlTarget: "",
+    cleanupIds: [],
+    callTarget: "",
+    callCalleeKind: "",
+    callMethod: "",
+    callMethodClass: "",
+    callOptional: false,
+    callShadowFirst: false,
+    callStageMethod: "",
+    callArguments: [],
+    callEvaluations: [],
+    runtimeLeaf: "",
+    generatedNameSeed: id,
+    semanticTypeAtoms: typePlan.atoms,
+    declaredTypeAtoms: [],
+    callTypeArguments: [],
+    typeDefinition: [],
+    importModule: "",
+    importBindings: [],
+    sourceOrdinal: context.module.sourceOrdinal,
+  }
+}
+
+function appendModuleCapture(
+  context: ModuleLoweringContext,
+  capture: PreviewTypedCapture,
+) -> Result<(), string> {
+  let closureIndex = match context.state.closureOperationIndexes.get(capture.closureLo) {
+    case Some(byEnd) => match byEnd.get(capture.closureHi) {
+      case Some(found) => found
+      case None => -1
+    }
+    case None => -1
+  }
+  if closureIndex < 0 {
+    return Err("Stage 1 capture `{capture.name}` has no lowered closure parent")
+  }
+  let parentId = match context.output.operations.get(closureIndex) {
+    case Some(value) => value.id
+    case None => return Err("Stage 1 capture parent is out of range")
+  }
+  let writes = match context.input.referencesBySpan.get(spanKey(
+    context.moduleIndex,
+    capture.referenceLo,
+    capture.referenceHi,
+  )) {
+    case Some(reference) => reference.role == "write"
+    case None => false
+  }
+  pushCaptureOperation(context, capture, parentId, writes)
+}
+
+function pushCaptureOperation(
+  context: ModuleLoweringContext,
+  capture: PreviewTypedCapture,
+  parentId: string,
+  writes: bool,
+) -> Result<(), string> {
+  if context.output.operations.length >= context.request.maxLoweredNodes {
+    return Err("Stage 1 lowering operation count exceeds {context.request.maxLoweredNodes}")
+  }
+  let captureId = operationId(
+    context.module.identity,
+    context.module.sourceOrdinal,
+    "binding",
+    "capture",
+    capture.referenceLo,
+    capture.referenceHi,
+  )
+  let id = reserveOperationId(context, "{captureId}:parent:{parentId}")
+  let mut operations = context.output.operations
+  operations.push(Stage1Operation {
+    ...captureOperation(context, capture, parentId, id),
+    bindingMutable: writes,
+  })
+  let mut ids = context.state.operationIds
+  ids.push(id)
+  Ok(())
+}
+
+function boundaryCapture(
+  context: ModuleLoweringContext,
+  reference: PreviewResolvedReference,
+  cleanup: Stage1Operation,
+  declarationLo: int,
+  declarationHi: int,
+  name: string,
+  atoms: Array<PreviewTypeAtom>,
+) -> PreviewTypedCapture {
+  PreviewTypedCapture {
+    moduleIndex: context.moduleIndex,
+    closureLo: cleanup.lo,
+    closureHi: cleanup.hi,
+    referenceLo: reference.lo,
+    referenceHi: reference.hi,
+    declarationLo: declarationLo,
+    declarationHi: declarationHi,
+    name: name,
+    typeValue: atoms,
+    ambient: false,
+  }
+}
+
+// The checker's closure capture rule applied to a deferred action or a
+// concurrent future: a value reference whose declaration in the module lies
+// outside it, and a namespace member through the module's import alias.
+function boundaryCaptureFor(
+  context: ModuleLoweringContext,
+  reference: PreviewResolvedReference,
+  cleanup: Stage1Operation,
+) -> Option<PreviewTypedCapture> {
+  if reference.role == "namespace-member" {
+    let alias = match reference.name.split(".").get(0) {
+      case Some(found) => found
+      case None => return None
+    }
+    if alias == reference.name {
+      return None
+    }
+    return match context.state.namespaceImports.get(alias) {
+      case Some(bound) => Some(boundaryCapture(
+        context,
+        reference,
+        cleanup,
+        bound.lo,
+        bound.hi,
+        bound.name,
+        [unknownTypeAtom()],
+      ))
+      case None => None
+    }
+  }
+  if reference.targetModuleIndex != reference.moduleIndex {
+    return None
+  }
+  if reference.targetLo >= cleanup.lo && reference.targetHi <= cleanup.hi {
+    return None
+  }
+  let atoms = match declaredTypeEntry(
+    context,
+    reference.targetModuleIndex,
+    reference.targetLo,
+    reference.targetHi,
+  ) {
+    case Some(found) => found
+    case None => {
+      let observed = typedNodePlanFor(
+        context.input.typedNodePlans,
+        context.moduleIndex,
+        reference.lo,
+        reference.hi,
+      )
+      if observed.nodeKind != "expression" {
+        return None
+      }
+      observed.typePlan.atoms
+    }
+  }
+  Some(boundaryCapture(
+    context,
+    reference,
+    cleanup,
+    reference.targetLo,
+    reference.targetHi,
+    reference.name,
+    atoms,
+  ))
+}
+
+// Deferred actions and concurrent arms carry their lexical environment;
+// each reference retains the declaration identity and its write effect.
+function appendBoundaryCaptures(context: ModuleLoweringContext) -> Result<(), string> {
+  if context.state.captureBoundaryIndexes.length == 0 {
+    return Ok(())
+  }
+  let mut references: Array<PreviewResolvedReference> = []
+  for reference in context.input.references {
+    if reference.moduleIndex == context.moduleIndex && reference.namespace == "value" {
+      references.push(reference)
+    }
+  }
+  references.sortBy((reference) => reference.hi)
+  references.sortBy((reference) => reference.lo)
+  for operationIndex in context.state.captureBoundaryIndexes {
+    let cleanup = match context.output.operations.get(operationIndex) {
+      case Some(found) => found
+      case None => return Err("Stage 1 capture boundary is out of range")
+    }
+    for reference in references {
+      if reference.lo >= cleanup.lo && reference.hi <= cleanup.hi {
+        match boundaryCaptureFor(context, reference, cleanup) {
+          case Some(capture) => pushCaptureOperation(
+            context,
+            capture,
+            cleanup.id,
+            reference.role == "write",
+          )?
+          case None => ()
+        }
+      }
+    }
+  }
+  Ok(())
+}
+
+function appendModuleCaptures(context: ModuleLoweringContext) -> Result<(), string> {
+  match context.input.capturesByModule.get(context.moduleIndex) {
+    case Some(captures) => for capture in captures {
+      appendModuleCapture(context, capture)?
+    }
+    case None => ()
+  }
+  Ok(())
+}
+
+function lowerModule(context: ModuleLoweringContext) -> Result<Stage1Module, string> {
+  appendModuleNodes(context)?
+  appendDeferredOperands(context)
+  rebuildSpecialOperands(context)
+  appendModuleCaptures(context)?
+  appendBoundaryCaptures(context)?
+  Ok(Stage1Module {
+    schema: STAGE1_IR_SCHEMA,
+    identity: context.module.identity,
+    path: context.module.path,
+    sourceOrdinal: context.module.sourceOrdinal,
+    initializationOrdinal: context.moduleIndex,
+    entry: context.module.entry,
+    extern: context.module.extern,
+    operationIds: context.state.operationIds,
+    generatedStd: context.module.generatedStd,
+    languageMode: context.request.languageMode,
+    importEdges: importEdgesOf(context.input.importEdges, context.module.identity),
+  })
+}
+
+function lowerModules(
+  request: LowerBridgeRequest,
+  input: LoweringInput,
+) -> Result<LoweringOutput, string> {
+  let output = emptyLoweringOutput()
+  let mut moduleIndex = 0
+  let mut modules = output.modules
+  for module in input.modules {
+    let context = moduleLoweringContext(request, input, output, module, moduleIndex)
+    modules.push(lowerModule(context)?)
+    moduleIndex += 1
+  }
+  Ok(output)
+}
+
+function loweredResponse(
+  request: LowerBridgeRequest,
+  output: LoweringOutput,
+) -> Stage1Response {
+  Stage1Response {
+    schema: STAGE1_EXCHANGE_SCHEMA,
+    status: if output.unsupported.length > 0 { "unsupported" } else { "completed" },
+    frontEnd: request.frontEnd,
+    loweredModules: output.modules,
+    loweredOperations: output.operations,
+    generatedRust: "",
+    unsupported: output.unsupported,
+    provenance: compilerProvenance(
+      request.sourceSetId,
+      request.producer,
+      request.producerStage,
+    ),
+  }
+}
+
+export function lowerStep(requestBytes: Bytes) -> Result<Bytes, string> {
+  let request = decodeLowerBridgeRequest(requestBytes.decodeUtf8()?)?
+  let response = if request.frontEndStatus != "completed" {
+    emptyResponse(request)
+  } else {
+    loweredResponse(request, lowerValue(request)?)
+  }
+  Ok((jsonBoundary.stringify(response)?).encodeUtf8())
+}
+
+// Typed handoff used by the Rust emitter; the legacy byte adapter stays outside.
+export function lowerValue(request: LowerBridgeRequest) -> Result<LoweringOutput, string> {
+  lowerModules(request, decodeLoweringInput(request)?)
+}

@@ -1,0 +1,169 @@
+import std.json { JSONValue }
+import std.toml as toml
+
+export record ProjectConfig derives JSON {
+  name: string,
+  entry: string,
+  readRoots: Array<string>,
+  writeRoots: Array<string>,
+}
+
+function objectKeys(value: JSONValue, label: string) -> Result<Array<string>, string> {
+  match value.keys() {
+    case Some(keys) => Ok(keys)
+    case None => Err("{label} must be a TOML table")
+  }
+}
+
+function knownKeys(value: JSONValue, allowed: Array<string>, label: string) -> Result<(), string> {
+  for key in objectKeys(value, label)? {
+    let mut found = false
+    for name in allowed { if key == name { found = true } }
+    if !found { return Err("unsupported {label} field `{key}`") }
+  }
+  Ok(())
+}
+
+function required(value: JSONValue, key: string, label: string) -> Result<JSONValue, string> {
+  match value.get(key) {
+    case Some(found) => Ok(found)
+    case None => Err("{label} requires `{key}`")
+  }
+}
+
+function stringValue(value: JSONValue, label: string) -> Result<string, string> {
+  match value.asString() {
+    case Some(text) => if text == "" { Err("{label} must not be empty") } else { Ok(text) }
+    case None => Err("{label} must be a string")
+  }
+}
+
+// Manifest paths name portable logical locations. Physical containment is
+// checked separately against the caller-selected project root.
+export function relativePath(path: string, allowRoot: bool) -> Result<string, string> {
+  if allowRoot && path == "." { return Ok(path) }
+  if path == "" || path.byteLength() > 4096 || path.contains("\\") || path.contains(":") {
+    return Err("project paths must be nonempty relative paths using forward slashes: {path}")
+  }
+  let parts = path.split("/")
+  if parts.length > 128 { return Err("project path has too many segments") }
+  for part in parts {
+    if part == "" || part == "." || part == ".." {
+      return Err("project paths must not contain empty, dot or parent segments: {path}")
+    }
+    for byte in part.encodeUtf8().toArray() {
+      if byte < 32 || byte == 127 { return Err("project paths must not contain control characters") }
+    }
+  }
+  Ok(path)
+}
+
+function capabilityRoots(table: JSONValue, key: string) -> Result<Array<string>, string> {
+  let value = match table.get(key) {
+    case Some(found) => found
+    case None => return Ok([])
+  }
+  let values = match value.asArray() {
+    case Some(found) => found
+    case None => return Err("capabilities.fs.{key} must be an array of relative paths")
+  }
+  if values.length > 256 { return Err("capabilities.fs.{key} exceeds 256 roots") }
+  let mut output: Array<string> = []
+  let mut seen: Set<string> = set {}
+  for value in values {
+    let path = relativePath(stringValue(value, "capabilities.fs.{key}")?, true)?
+    if seen.contains(path) { return Err("duplicate capabilities.fs.{key} path `{path}`") }
+    seen.add(path)
+    output.push(path)
+  }
+  output.sort()
+  Ok(output)
+}
+
+export function parseManifest(source: string) -> Result<ProjectConfig, string> {
+  if source.byteLength() > 1048576 { return Err("topaz.toml exceeds 1 MiB") }
+  let document = toml.parse(source)?
+  let root = document.toJson()
+  knownKeys(root, ["package", "build", "dependencies", "capabilities"], "topaz.toml")?
+  let package = required(root, "package", "topaz.toml")?
+  knownKeys(package, ["name", "version", "language", "entry"], "package")?
+  let name = stringValue(required(package, "name", "package")?, "package.name")?
+  stringValue(required(package, "version", "package")?, "package.version")?
+  let language = stringValue(required(package, "language", "package")?, "package.language")?
+  if language != "5.21" { return Err("Core Kit requires package.language = \"5.21\"") }
+  let entry = relativePath(stringValue(required(package, "entry", "package")?, "package.entry")?, false)?
+  if !entry.endsWith(".tpz") { return Err("package.entry must name a .tpz source file") }
+
+  match root.get("build") {
+    case Some(build) => {
+      knownKeys(build, ["target", "deterministic"], "build")?
+      match build.get("target") {
+        case Some(value) => if stringValue(value, "build.target")? != "native" {
+          return Err("Core Kit project builds require build.target = \"native\"")
+        }
+        case None => ()
+      }
+      match build.get("deterministic") {
+        case Some(value) => match value.asBool() {
+          case Some(true) => ()
+          case _ => return Err("Core Kit requires build.deterministic = true when specified")
+        }
+        case None => ()
+      }
+    }
+    case None => ()
+  }
+
+  match root.get("dependencies") {
+    case Some(dependencies) => {
+      for dependency in objectKeys(dependencies, "dependencies")? {
+        if dependency != "std" {
+          return Err("dependency `{dependency}` requires a package resolver; Core Kit project mode accepts local modules and the bundled std dependency")
+        }
+        let version = stringValue(required(dependencies, dependency, "dependencies")?, "dependencies.std")?
+        if version != "5.21" { return Err("Core Kit requires dependencies.std = \"5.21\"") }
+      }
+    }
+    case None => ()
+  }
+
+  let mut readRoots: Array<string> = []
+  let mut writeRoots: Array<string> = []
+  match root.get("capabilities") {
+    case Some(capabilities) => {
+      knownKeys(capabilities, ["fs"], "capabilities")?
+      match capabilities.get("fs") {
+        case Some(fs) => {
+          knownKeys(fs, ["read", "write"], "capabilities.fs")?
+          readRoots = capabilityRoots(fs, "read")?
+          writeRoots = capabilityRoots(fs, "write")?
+        }
+        case None => ()
+      }
+    }
+    case None => ()
+  }
+  let configuration = ProjectConfig { name: name, entry: entry, readRoots: readRoots, writeRoots: writeRoots }
+  validateConfiguration(configuration)?
+  Ok(configuration)
+}
+
+// A saved project request carries these grants independently of a manifest
+// on disk. Validate them again when that portable snapshot is replayed.
+export function validateConfiguration(configuration: ProjectConfig) -> Result<(), string> {
+  if configuration.name == "" || configuration.name.byteLength() > 256 {
+    return Err("project package name must contain 1..256 bytes")
+  }
+  relativePath(configuration.entry, false)?
+  if !configuration.entry.endsWith(".tpz") { return Err("project entry must name a .tpz source file") }
+  for roots in [configuration.readRoots, configuration.writeRoots] {
+    if roots.length > 256 { return Err("project filesystem grants exceed 256 roots") }
+    let mut seen: Set<string> = set {}
+    for root in roots {
+      relativePath(root, true)?
+      if seen.contains(root) { return Err("duplicate project filesystem grant `{root}`") }
+      seen.add(root)
+    }
+  }
+  Ok(())
+}

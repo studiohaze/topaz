@@ -1,0 +1,196 @@
+import types { PreviewTypeAtom }
+
+// The single representation table. Every emission decision about how a
+// value is carried in Rust goes through `reprOfAtom`; later batches add rows
+// here (string, arrays, records ...) instead of branching per operation.
+//
+//   primitive int   -> i64
+//   primitive float -> f64
+//   primitive bool  -> bool
+//   primitive unit  -> ()
+//   literal int / float / bool -> the primitive's row (a literal type is a
+//                     value of its primitive at runtime)
+//   constructor Range<int> -> (i64, i64, bool, i64), endpoints/inclusive/step
+//   variadic parameter T -> Vec<representation(T)> at the function ABI;
+//                     the body owns one shared Value array until B7
+//   captured mutable copy value T -> Rc<Cell<representation(T)>>
+//   captured mutable boxed value -> Rc<RefCell<Value>>
+//   nominal-record -> Value::NominalRecord (immutable shared fields; shallow update)
+//   enum -> Value::Enum (declaration identity, variant ordinal and payloads)
+//   newtype -> Value::Newtype (declaration identity and wrapped value)
+//   anything else   -> Value (the boxed carrier)
+export function reprOfAtom(atom: PreviewTypeAtom) -> string {
+  if atom.kind == "primitive" || (atom.kind == "literal" && atom.name != "string" && atom.name != "null") {
+    match atom.name {
+      case "int" => "i64"
+      case "float" => "f64"
+      case "bool" => "bool"
+      case "unit" => "unit"
+      case _ => "value"
+    }
+  } else {
+    "value"
+  }
+}
+
+export function reprAt(atoms: Array<PreviewTypeAtom>, position: int) -> string {
+  let atom = atoms[position]
+  if atom.kind == "constructor" && atom.name == "Range" {
+    for child in atoms {
+      if child.parent == position && child.field == "arguments" && child.index == 0 &&
+        child.kind == "primitive" && child.name == "int" {
+        return "range"
+      }
+    }
+  }
+  reprOfAtom(atom)
+}
+
+// `none` marks an operation that carries no checked type at all.
+export function reprOf(atoms: Array<PreviewTypeAtom>) -> string {
+  if atoms.length == 0 {
+    "none"
+  } else {
+    reprAt(atoms, 0)
+  }
+}
+
+// The representation of a signature slot below a `function` atom root:
+// `parameters[i]` or `result[0]`.
+export function slotRepr(atoms: Array<PreviewTypeAtom>, field: string, index: int) -> string {
+  let mut found = "none"
+  let mut position = 0
+  for atom in atoms {
+    if atom.parent == 0 && atom.field == field && atom.index == index {
+      found = reprAt(atoms, position)
+    }
+    position += 1
+  }
+  found
+}
+
+export function variadicRepr(element: string) -> string { "vec:{element}" }
+
+export function rustType(repr: string) -> string {
+  if repr.startsWith("vec:") { return "Vec<{rustType(repr.slice(4, repr.scalars().length))}>" }
+  match repr {
+    case "i64" => "i64"
+    case "f64" => "f64"
+    case "bool" => "bool"
+    case "unit" => "()"
+    case "range" => "(i64, i64, bool, i64)"
+    case _ => "Value"
+  }
+}
+
+export function isCopyRepr(repr: string) -> bool {
+  repr == "i64" || repr == "f64" || repr == "bool" || repr == "unit" || repr == "range"
+}
+
+// Code without one pair of outer parentheses when they enclose all of it
+// (string literals inside are skipped), for positions where Rust needs none.
+export function bare(code: string) -> string {
+  if code == "()" || !code.startsWith("(") || !code.endsWith(")") {
+    return code
+  }
+  let mut depth = 0
+  let mut inString = false
+  let mut escaped = false
+  let mut index = 0
+  let last = code.scalars().length - 1
+  for scalar in code.scalars() {
+    if inString {
+      if escaped {
+        escaped = false
+      } else if scalar == "\\" {
+        escaped = true
+      } else if scalar == "\"" {
+        inString = false
+      }
+    } else if scalar == "\"" {
+      inString = true
+    } else if scalar == "(" {
+      depth += 1
+    } else if scalar == ")" {
+      depth -= 1
+      if depth == 0 && index != last {
+        return code
+      }
+    }
+    index += 1
+  }
+  code.slice(1, last)
+}
+
+// Box boundary: a typed value entering a `Value` slot.
+export function boxed(code: string, repr: string) -> string {
+  if repr.startsWith("vec:") { return "Value::array(({code}).into_iter().map(|__v| {boxed("__v", repr.slice(4, repr.scalars().length))}).collect())" }
+  match repr {
+    case "i64" => "Value::Int({bare(code)})"
+    case "f64" => "Value::Float({bare(code)})"
+    case "bool" => "Value::Bool({bare(code)})"
+    case "unit" => "\{ let _: () = {code}; Value::Unit \}"
+    case "range" => "\{ let (lo, hi, inclusive, step) = {code}; Value::Range \{ lo, hi, inclusive, step \} \}"
+    case _ => code
+  }
+}
+
+// Unbox boundary: a `Value` entering a typed slot. The checker proves the
+// runtime kind; the shared leaf still faults (never panics) if it differs.
+export function unboxed(code: string, repr: string, span: string) -> string {
+  match repr {
+    case "i64" => "native_unbox_int({bare(code)}, {span})?"
+    case "f64" => "native_unbox_float({bare(code)}, {span})?"
+    case "bool" => "native_unbox_bool({bare(code)}, {span})?"
+    case "unit" => "\{ let _: Value = {code}; \}"
+    case "range" => "match {code} \{ Value::Range \{ lo, hi, inclusive, step \} => (lo, hi, inclusive, step), __other => return Err(fault(codes::GUARD_TYPE, format!(\"native array element expected `Range<int>`, found `\{\}` (internal: unreachable on a checked build)\", __other.kind()), {span})) \}"
+    case _ => code
+  }
+}
+
+export function coerce(code: string, from: string, to: string, span: string) -> Result<string, string> {
+  if from == to || to == "none" {
+    Ok(code)
+  } else if from == "none" {
+    Err("unsupported: type untyped value into {to}")
+  } else if to == "value" {
+    Ok(boxed(code, from))
+  } else if from == "value" {
+    Ok(unboxed(code, to, span))
+  } else if to == "unit" {
+    Ok("\{ let _ = {code}; \}")
+  } else {
+    Err("unsupported: type representation {from} as {to}")
+  }
+}
+
+// A captured mutable local shares storage with every closure and defer.
+// Scalar cells retain their Rust type; boxed cells retain Value sharing.
+export function sharedInit(code: string, repr: string) -> string {
+  if isCopyRepr(repr) {
+    "Rc::new(std::cell::Cell::new({bare(code)}))"
+  } else {
+    "Rc::new(std::cell::RefCell::new({bare(code)}))"
+  }
+}
+
+export function sharedRead(name: string, repr: string) -> string {
+  // End the borrow before surrounding code calls another closure or writes.
+  if isCopyRepr(repr) { "{name}.get()" } else { "\{ let __value = {name}.borrow().clone(); __value \}" }
+}
+
+export function sharedWrite(name: string, code: string, repr: string) -> string {
+  if isCopyRepr(repr) { "{name}.set({bare(code)});" } else { "\{ let __value = {bare(code)}; *{name}.borrow_mut() = __value; \}" }
+}
+
+export function parameterGuard(value: string, repr: string, span: string) -> string {
+  let fault = "return Err(fault(codes::GUARD_TYPE, \"argument does not match parameter type (§6)\", {span}))"
+  match repr {
+    case "i64" => "match {value} \{ Value::Int(__v) => __v, _ => {fault} \}"
+    case "f64" => "match {value} \{ Value::Float(__v) => __v, _ => {fault} \}"
+    case "bool" => "match {value} \{ Value::Bool(__v) => __v, _ => {fault} \}"
+    case "unit" => "match {value} \{ Value::Unit => (), _ => {fault} \}"
+    case "range" => "match {value} \{ Value::Range \{ lo, hi, inclusive, step \} => (lo, hi, inclusive, step), _ => {fault} \}"
+    case _ => value
+  }
+}

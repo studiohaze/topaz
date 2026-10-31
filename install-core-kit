@@ -1,0 +1,88 @@
+#!/bin/sh
+# Obtain one pinned native Kit. Whole-payload and installation policy is Topaz.
+set -eu
+_kit_root=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
+. "$_kit_root/core-kit/downloads.sh"
+
+_kit_archive_source=
+case "$#" in
+  0) ;;
+  1)
+    case "$1" in
+      --help|-h)
+        printf '%s\n' 'Install the Core Kit release selected by this checkout.' \
+          'Usage' '  ./install-core-kit [--archive FILE]' \
+          'Requires tar, head, and sha256sum or shasum. Downloads also require curl.' \
+          'The optional archive is still checked against the pinned catalogue.' \
+          'For an entirely local source build, use ./bootstrap.'
+        exit 0 ;;
+      *) printf '%s\n' 'Use ./install-core-kit [--archive FILE].' >&2; exit 2 ;;
+    esac ;;
+  2)
+    [ "$1" = --archive ] && [ -n "$2" ] || { printf '%s\n' 'Use ./install-core-kit [--archive FILE].' >&2; exit 2; }
+    _kit_archive_source=$2 ;;
+  *) printf '%s\n' 'Use ./install-core-kit [--archive FILE].' >&2; exit 2 ;;
+esac
+
+_kit_host_target
+_kit_load_download
+_kit_choose_hash_tool
+command -v tar >/dev/null 2>&1 || _kit_fail 'Install tar to read the pinned release archive.'
+command -v head >/dev/null 2>&1 || _kit_fail 'Install head to bound the first-stage file copy.'
+if [ -z "$_kit_archive_source" ]; then
+  command -v curl >/dev/null 2>&1 || _kit_fail 'Install curl to download the pinned release, or use --archive FILE.'
+else
+  [ -f "$_kit_archive_source" ] && [ ! -L "$_kit_archive_source" ] ||
+    _kit_fail 'The supplied archive must be a regular file without a symlink.'
+fi
+
+umask 077
+_kit_temporary=$(mktemp -d "${TMPDIR:-/tmp}/topaz-core-kit.XXXXXXXX")
+_kit_temporary=$(CDPATH= cd -- "$_kit_temporary" && pwd -P)
+_kit_archive="$_kit_temporary/asset.tar.gz"
+_kit_candidate="$_kit_temporary/$_kit_executable"
+_kit_cleanup() {
+  _kit_cleanup_status=$?
+  trap - 0 HUP INT TERM
+  rm -f "$_kit_archive" "$_kit_candidate" "$_kit_temporary/download.status" \
+    "$_kit_temporary/extract.status" 2>/dev/null || :
+  rmdir "$_kit_temporary" 2>/dev/null || :
+  exit "$_kit_cleanup_status"
+}
+trap _kit_cleanup 0
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
+if [ -n "$_kit_archive_source" ]; then
+  head -c "$((_kit_asset_bytes + 1))" < "$_kit_archive_source" > "$_kit_archive"
+else
+  _kit_url="https://github.com/$_kit_repository/releases/download/$_kit_tag/$_kit_asset"
+  printf 'Downloading %s for %s\n' "$_kit_tag" "$_kit_target"
+  (
+    if curl --disable --fail --location --silent --show-error --proto '=https' --proto-redir '=https' \
+      --connect-timeout 30 --speed-limit 1 --speed-time 60 \
+      --max-filesize "$_kit_asset_bytes" --url "$_kit_url"; then _kit_code=0; else _kit_code=$?; fi
+    printf '%s\n' "$_kit_code" > "$_kit_temporary/download.status"
+  ) | head -c "$((_kit_asset_bytes + 1))" > "$_kit_archive"
+  [ -f "$_kit_temporary/download.status" ] || _kit_fail 'The release download did not finish.'
+  IFS= read -r _kit_code < "$_kit_temporary/download.status"
+  [ "$_kit_code" = 0 ] || _kit_fail 'The release download failed. Existing local installations were preserved.'
+fi
+_kit_check_file "$_kit_archive" "$_kit_asset_bytes" "$_kit_asset_sha"
+
+# Only write tar stdout to our private file. Archive paths are never extracted
+# by this adapter. The verified Kit owns complete archive parsing and staging.
+(
+  if tar -xOzf "$_kit_archive" "$_kit_executable"; then _kit_code=0; else _kit_code=$?; fi
+  printf '%s\n' "$_kit_code" > "$_kit_temporary/extract.status"
+) | head -c "$((_kit_exe_bytes + 1))" > "$_kit_candidate"
+[ -f "$_kit_temporary/extract.status" ] || _kit_fail 'The first-stage extraction did not finish.'
+IFS= read -r _kit_code < "$_kit_temporary/extract.status"
+[ "$_kit_code" = 0 ] || _kit_fail 'The selected executable could not be read from the archive.'
+_kit_check_file "$_kit_candidate" "$_kit_exe_bytes" "$_kit_exe_sha"
+chmod 700 "$_kit_candidate"
+TOPAZ_CORE_KIT_ROOT=$_kit_root
+export TOPAZ_CORE_KIT_ROOT
+if "$_kit_candidate" kit install --archive "$_kit_archive"; then _kit_code=0; else _kit_code=$?; fi
+exit "$_kit_code"

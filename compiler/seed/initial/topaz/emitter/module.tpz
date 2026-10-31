@@ -1,0 +1,661 @@
+import emitter.rust_text { rustStr }
+import emitter.emit {
+  Bind,
+  FnInfo,
+  ModInfo,
+  Ctx,
+  Code,
+  pushBind,
+  restoreScope,
+  newCell,
+  modBind,
+  paramsOf,
+  argumentGuard,
+  defaultValues,
+  restArgument,
+  emitExpr,
+  emitStatement,
+  emitImplementation,
+  into,
+  has,
+}
+import emitter.exports { projectExports, hasExplicitMain }
+import emitter.ir { Table, buildTable, patternBindings, opAt, child, children, refusal, spanOf, declarationSpan, rustName }
+import emitter.repr { reprOf, slotRepr, rustType, isCopyRepr, boxed, bare }
+import stage1_types { Stage1Module, Stage1Operation, LoweringOutput }
+
+// The emitted-crate contract every Topaz program crate exposes (the same
+// items the reference crate's `emitted.rs` defines). This emitter names
+// nominal values by their defining-module identity in every language mode, so
+// the runtime context projects host-returned std.lispex values to the same
+// identities (the Rust emitter selects this context from 5.20 on).
+const CONTRACT = """
+pub fn run_with_host(host: Rc<dyn Host>) -> RunOutcome \{
+    run_with_host_and_input(host, Vec::new(), String::new())
+\}
+
+pub fn run_with_host_and_input(host: Rc<dyn Host>, args: Vec<String>, stdin: String) -> RunOutcome \{
+    let cx = RtCx::new_module_stable(host);
+    let __topaz_args = Value::array(args.into_iter().map(Value::str).collect());
+    let __topaz_stdin = Value::str(stdin);
+    match block_on(entry(cx, __topaz_args, __topaz_stdin)) \{
+        Ok(value) => RunOutcome::Completed(value),
+        Err(error) => RunOutcome::Faulted(error),
+    \}
+\}
+
+pub fn call_export_with_host(host: Rc<dyn Host>, name: &str, args: Vec<Value>) -> RunOutcome \{
+    call_export_with_host_and_input(host, name, args, Vec::new(), String::new())
+\}
+
+pub fn call_export_with_host_until(
+    host: Rc<dyn Host>,
+    name: &str,
+    args: Vec<Value>,
+    deadline: std::time::Instant,
+) -> Result<RunOutcome, DeadlineExceeded> \{
+    let outcome = block_on_until(deadline, call_export_with_host_future(host, name, args))?;
+    Ok(match outcome \{
+        Ok(value) => RunOutcome::Completed(value),
+        Err(error) => RunOutcome::Faulted(error),
+    \})
+\}
+
+pub fn call_export_with_host_future(
+    host: Rc<dyn Host>,
+    name: &str,
+    args: Vec<Value>,
+) -> CallFuture \{
+    let cx = RtCx::new_module_stable(host);
+    let __span = Span::new(FileId(0), 0, 0);
+    let name = name.to_string();
+    Box::pin(async move \{
+        __topaz_call_export(cx, &name, args, __span).await
+    \})
+\}
+
+pub fn call_export_with_host_and_input(
+    host: Rc<dyn Host>,
+    name: &str,
+    args: Vec<Value>,
+    _program_args: Vec<String>,
+    _stdin: String,
+) -> RunOutcome \{
+    let cx = RtCx::new_module_stable(host);
+    let __span = Span::new(FileId(0), 0, 0);
+    match block_on(__topaz_call_export(cx, name, args, __span)) \{
+        Ok(value) => RunOutcome::Completed(value),
+        Err(error) => RunOutcome::Faulted(error),
+    \}
+\}
+
+pub fn call_export_json_with_host(host: Rc<dyn Host>, name: &str, args_json: &str) -> String \{
+    call_export_json_with_host_and_input(host, name, args_json, Vec::new(), String::new())
+\}
+
+pub fn call_export_json_with_host_and_input(
+    host: Rc<dyn Host>,
+    name: &str,
+    args_json: &str,
+    program_args: Vec<String>,
+    stdin: String,
+) -> String \{
+    let args = match canonical_abi_decode_args(args_json) \{
+        Ok(args) => args,
+        Err(error) => return canonical_abi_error(&error),
+    \};
+    match call_export_with_host_and_input(host, name, args, program_args, stdin) \{
+        RunOutcome::Completed(value) => canonical_abi_completed(&value),
+        RunOutcome::Faulted(error) => canonical_abi_faulted(&error),
+    \}
+\}
+
+async fn __topaz_exports(cx: RtCx) -> Result<Value, RtError> \{
+    let (_, __exports) = __topaz_initialize(cx).await?;
+    Ok(__exports)
+\}
+
+async fn __topaz_call_export(cx: RtCx, name: &str, args: Vec<Value>, span: Span) -> Result<Value, RtError> \{
+    let __exports = __topaz_exports(cx.clone()).await?;
+    let __callee = member_value_required(&__exports, name, span)?;
+    call_value(__callee, args, cx, span).await
+\}
+"""
+
+const CELL_HELPER = """
+fn __cell_get<T: Copy>(cell: &std::cell::Cell<Option<T>>, name: &str, span: Span) -> Result<T, RtError> \{
+    cell.get().ok_or_else(|| fault(codes::GUARD_UNBOUND, format!("`\{name\}` is not bound"), span))
+\}
+"""
+
+const CONST_HELPER = """
+fn __cg<T>(result: Result<T, RtError>, span: Span) -> Result<T, RtError> \{
+    result.map_err(|error| \{
+        if error.is_fault() \{
+            fault(codes::GUARD_TYPE, format!("constant expression error: \{\}", error.message), span)
+        \} else \{
+            error
+        \}
+    \})
+\}
+"""
+
+record Item {
+  decl: Stage1Operation,
+  exported: bool,
+}
+
+function itemsOf(table: Table, root: Stage1Operation) -> Result<Array<Item>, string> {
+  let mut items: Array<Item> = []
+  for id in root.operands {
+    let item = opAt(table, id)?
+    if item.kind == "export" {
+      items.push(Item { decl: child(table, item, "item")?, exported: true })
+    } else {
+      items.push(Item { decl: item, exported: false })
+    }
+  }
+  Ok(items)
+}
+
+record ImportRow {
+  kind: string,
+  source: string,
+  bound: string,
+}
+
+function importRows(op: Stage1Operation) -> Result<Array<ImportRow>, string> {
+  let mut rows: Array<ImportRow> = []
+  for row in op.importBindings {
+    let parts = row.split("|")
+    if parts.length != 5 {
+      return Err(refusal("import row {row}", op))
+    }
+    rows.push(ImportRow { kind: parts[0], source: parts[1], bound: parts[2] })
+  }
+  Ok(rows)
+}
+
+function fnKey(ctx: Ctx) -> int {
+  ctx.fns.length
+}
+
+// Module-level names become cells or function entries before any body is
+// emitted, so a function may name a binding declared later in its module.
+function registerModule(ctx: Ctx, module: Stage1Module, root: Stage1Operation) -> Result<ModInfo, string> {
+  let mut binds: Array<Bind> = []
+  let mut exported: Array<string> = []
+  for item in itemsOf(ctx.table, root)? {
+    let decl = item.decl
+    if decl.kind == "function" {
+      let params = paramsOf(ctx, decl, decl.declaredTypeAtoms)?
+      let ret = slotRepr(decl.declaredTypeAtoms, "result", 0)
+      if ret == "none" {
+        return Err(refusal("function result type", decl))
+      }
+      let number = fnKey(ctx)
+      let info = FnInfo {
+        id: decl.id,
+        name: decl.bindingName,
+        body: "__b{number}",
+        adapter: "__v{number}",
+        cell: newCell(ctx, "value"),
+        paramNames: params.names,
+        paramReprs: params.reprs,
+        paramSpans: params.spans,
+        defaultIds: params.defaultIds,
+        variadic: params.variadic,
+        retRepr: ret,
+      }
+      let mut fns = ctx.fns
+      fns.insert(decl.id, info)
+      binds.push(Bind { name: decl.bindingName, kind: "fn", rust: decl.id, repr: "value", mutable: false })
+      if item.exported {
+        exported.push(decl.bindingName)
+      }
+    } else if decl.kind == "let" {
+      let pattern = child(ctx.table, decl, "pattern")?
+      for binding in patternBindings(ctx.table, pattern)? {
+        let declared = reprOf(binding.semanticTypeAtoms)
+        let repr = if declared == "none" { "value" } else { declared }
+        binds.push(Bind { name: binding.bindingName, kind: "global", rust: newCell(ctx, repr), repr: repr, mutable: binding.bindingMutable })
+        if item.exported { exported.push(binding.bindingName) }
+      }
+    } else if decl.kind == "constant" {
+      let declared = reprOf(decl.declaredTypeAtoms)
+      let repr = if declared != "none" {
+        declared
+      } else {
+        let value = child(ctx.table, decl, "value")?
+        reprOf(value.semanticTypeAtoms)
+      }
+      if repr == "none" {
+        return Err(refusal("binding type {decl.bindingName}", decl))
+      }
+      binds.push(Bind { name: decl.bindingName, kind: "global", rust: newCell(ctx, repr), repr: repr, mutable: false })
+      if item.exported {
+        exported.push(decl.bindingName)
+      }
+    } else if decl.kind == "import" {
+      for row in importRows(decl)? {
+        if row.kind == "namespace-import" {
+          binds.push(Bind { name: row.bound, kind: "namespace", rust: decl.importModule, repr: "value", mutable: false })
+        } else if row.kind == "selected-import" {
+          let target = match ctx.mods.get(decl.importModule) {
+            case Some(found) => found
+            case None => return Err(refusal("import of {decl.importModule}", decl))
+          }
+          match modBind(target, row.source) {
+            case Some(bind) => if bind.kind == "fn" {
+              binds.push(Bind { ...bind, name: row.bound })
+            } else if has(target.exports, row.source) {
+              binds.push(Bind { name: row.bound, kind: "global", rust: newCell(ctx, "value"), repr: "value", mutable: false })
+            }
+            case None => ()
+          }
+        } else {
+          return Err(refusal("import form {row.kind}", decl))
+        }
+      }
+    }
+  }
+  let info = ModInfo { identity: module.identity, cell: newCell(ctx, "value"), binds: binds, exports: exported, generatedStd: module.generatedStd }
+  let mut mods = ctx.mods
+  mods.insert(module.identity, info)
+  Ok(info)
+}
+
+function enterModule(ctx: Ctx, info: ModInfo) -> () {
+  restoreScope(ctx, 0)
+  for bind in info.binds {
+    pushBind(ctx, bind)
+  }
+  ()
+}
+
+function findBind(info: ModInfo, name: string, op: Stage1Operation) -> Result<Bind, string> {
+  match modBind(info, name) {
+    case Some(bind) => Ok(bind)
+    case None => Err(refusal("module binding {name}", op))
+  }
+}
+
+function fnOf(ctx: Ctx, key: string, op: Stage1Operation) -> Result<FnInfo, string> {
+  match ctx.fns.get(key) {
+    case Some(info) => Ok(info)
+    case None => Err(refusal("ir function {key}", op))
+  }
+}
+
+// The boxed value of a module binding, for export records.
+function exportValue(ctx: Ctx, bind: Bind, op: Stage1Operation) -> Result<string, string> {
+  let name = rustStr(bind.name)
+  if bind.kind == "fn" {
+    let info = fnOf(ctx, bind.rust, op)?
+    Ok("top_cell_value(&g.{info.cell}, {name})?")
+  } else if bind.kind == "global" && isCopyRepr(bind.repr) {
+    Ok(boxed("__cell_get(&g.{bind.rust}, {name}, Span::new(FileId(0), 0, 0))?", bind.repr))
+  } else if bind.kind == "global" {
+    Ok("top_cell_value(&g.{bind.rust}, {name})?")
+  } else {
+    Err(refusal("export of {bind.kind} binding {bind.name}", op))
+  }
+}
+
+function exportRecord(ctx: Ctx, info: ModInfo, root: Stage1Operation) -> Result<string, string> {
+  let mut fields: Array<string> = []
+  for name in info.exports {
+    let bind = findBind(info, name, root)?
+    fields.push("({rustStr(name)}.to_string(), {exportValue(ctx, bind, root)?})")
+  }
+  Ok("Value::record([{fields.join(", ")}])")
+}
+
+// The typed body function and the boxed adapter of one module function.
+function emitFunction(ctx: Ctx, info: FnInfo, modInfo: ModInfo) -> Result<(), string> {
+  let decl = opAt(ctx.table, info.id)?
+  enterModule(ctx, modInfo)
+  let fnCtx = Ctx { ...ctx, fnRet: info.retRepr, inConst: false, atModuleTop: false, loops: [], defers: [] }
+  let defaults = defaultValues(ctx, info.defaultIds, info.variadic)?
+  let mut params: Array<string> = []
+  let mut entry: Array<string> = []
+  let mut position = 0
+  for name in info.paramNames {
+    let rust = rustName(name)
+    params.push(", {rust}: {rustType(info.paramReprs[position])}")
+    let repr = if info.paramReprs[position].startsWith("vec:") { "value" } else { info.paramReprs[position] }
+    if repr == "value" && info.paramReprs[position].startsWith("vec:") {
+      entry.push("let {rust} = {boxed(rust, info.paramReprs[position])};")
+    }
+    pushBind(ctx, Bind { name: name, kind: "local", rust: rust, repr: repr, mutable: false })
+    position += 1
+  }
+  let body = emitExpr(fnCtx, child(ctx.table, decl, "body")?)?
+  let result = if body.repr == "never" {
+    body.rs
+  } else {
+    "Ok({bare(into(body, info.retRepr, decl)?)})"
+  }
+  let mut items = ctx.items
+  items.push(
+    "async fn {info.body}(cx: RtCx, g: Rc<__G>{params.join("")}) -> Result<{rustType(info.retRepr)}, RtError> \{\n    let _ = &cx;\n    let _ = &g;\n    {entry.join(" ")}\n    {result}\n\}\n",
+  )
+  let mut prologue: Array<string> = []
+  let mut passed: Array<string> = ["cx", "g"]
+  if info.paramNames.length > 0 {
+    prologue.push("let mut __args = args.into_iter();")
+  } else {
+    prologue.push("let _ = args;")
+  }
+  position = 0
+  for name in info.paramNames {
+    let value = if info.paramReprs[position].startsWith("vec:") {
+      restArgument(info.paramReprs[position], info.paramSpans[position])
+    } else { argumentGuard("__args.next().expect(\"arity checked at the call site\")", info.paramReprs[position], info.paramSpans[position]) }
+    prologue.push("let __a{position} = {value};")
+    passed.push("__a{position}")
+    position += 1
+  }
+  let mut quoted = quotedAll(info.paramNames)
+  if info.variadic { let _ = quoted.pop() }
+  let returned = boxed("{info.body}({passed.join(", ")}).await?", info.retRepr)
+  items.push(
+    "fn {info.adapter}(g: &Rc<__G>) -> Value \{\n    let __cap_g = g.clone();\n    Value::Closure(Rc::new(EmittedClosure \{ call: move |cx: RtCx, args: Vec<Value>| -> CallFuture \{ let g = __cap_g.clone(); Box::pin(async move \{ {prologue.join(" ")} Ok({bare(returned)}) \}) \}, params: &[{quoted.join(", ")}], defaults: {defaults}, variadic: {info.variadic} \}))\n\}\n",
+  )
+  Ok(())
+}
+
+function quotedAll(names: Array<string>) -> Array<string> {
+  let mut out: Array<string> = []
+  for name in names {
+    out.push(rustStr(name))
+  }
+  out
+}
+
+function importsOf(items: Array<Item>) -> Array<Item> {
+  let mut out: Array<Item> = []
+  for item in items {
+    if item.decl.kind == "import" {
+      out.push(item)
+    }
+  }
+  out
+}
+
+record ModuleCode {
+  lines: Array<string>,
+  tail: string,
+}
+
+// A module's top-level code in execution order: hoisted constants, value
+// imports, then its items (functions bind positionally).
+function emitModuleInit(
+  ctx: Ctx,
+  module: Stage1Module,
+  root: Stage1Operation,
+  info: ModInfo,
+) -> Result<ModuleCode, string> {
+  enterModule(ctx, info)
+  let topCtx = Ctx { ...ctx, fnRet: "", inConst: false, atModuleTop: true }
+  let constCtx = Ctx { ...topCtx, inConst: true }
+  let items = itemsOf(ctx.table, root)?
+  let mut lines: Array<string> = []
+  for item in items {
+    if item.decl.kind == "constant" {
+      lines.push(emitStatement(constCtx, item.decl)?)
+    }
+  }
+  for item in importsOf(items) {
+    let target = match ctx.mods.get(item.decl.importModule) {
+      case Some(found) => found
+      case None => return Err(refusal("import of {item.decl.importModule}", item.decl))
+    }
+    for row in importRows(item.decl)? {
+      if row.kind == "selected-import" {
+        match modBind(info, row.bound) {
+          case Some(bind) => if bind.kind == "global" {
+            let read = "member_value_required(&top_cell_get(&g.{target.cell}, {rustStr(target.identity)}, {spanOf(item.decl)})?, {rustStr(row.source)}, {spanOf(item.decl)})?"
+            lines.push("top_cell_set(&g.{bind.rust}, {read});")
+          }
+          case None => ()
+        }
+      }
+    }
+  }
+  let mut tail = "Value::Unit"
+  for item in items {
+    if item.decl.kind == "implementation" { lines.push(emitImplementation(topCtx, item.decl)?) }
+  }
+  let mut position = 0
+  for item in items {
+    let decl = item.decl
+    let last = position == items.length - 1
+    if decl.kind == "function" {
+      let declared = fnOf(ctx, decl.id, decl)?
+      lines.push("top_cell_set(&g.{declared.cell}, {declared.adapter}(&g));")
+    } else if has(["constant", "import", "type-alias", "record", "enum", "newtype", "protocol", "implementation"], decl.kind) {
+      ()
+    } else if decl.kind == "expression/block" && module.entry && last {
+      let expression = child(ctx.table, decl, "value")?
+      // Module-level for remains a statement at the last item as well.
+      if expression.kind == "expression/for" {
+        lines.push(emitStatement(topCtx, decl)?)
+      } else {
+        let value = emitExpr(topCtx, expression)?
+        tail = bare(into(value, "value", decl)?)
+      }
+    } else {
+      lines.push(emitStatement(topCtx, decl)?)
+    }
+    position += 1
+  }
+  Ok(ModuleCode { lines: lines, tail: tail })
+}
+
+function chainTo(modules: Array<Stage1Module>, edges: Array<Array<string>>, entry: string, target: string) -> string {
+  let mut queue: Array<string> = [entry]
+  let mut previous: Map<string, string> = map {}
+  let mut head = 0
+  while head < queue.length {
+    let current = queue[head]
+    head += 1
+    if current == target {
+      let mut chain: Array<string> = [current]
+      let mut at = current
+      while previous.containsKey(at) {
+        at = previous.get(at) ?? ""
+        chain.push(at)
+      }
+      chain.reverse()
+      return "import chain: " + chain.join(" -> ")
+    }
+    for edge in edges {
+      if edge[0] == current && !previous.containsKey(edge[1]) && edge[1] != entry {
+        previous.insert(edge[1], current)
+        queue.push(edge[1])
+      }
+    }
+  }
+  "imported from `{entry}`"
+}
+
+function sortedModules(output: LoweringOutput) -> Array<Stage1Module> {
+  let mut out: Array<Stage1Module> = []
+  let mut ordinal = 0
+  while out.length < output.modules.length {
+    for module in output.modules {
+      if module.initializationOrdinal == ordinal {
+        out.push(module)
+      }
+    }
+    ordinal += 1
+    if ordinal > output.modules.length + 1 {
+      return out
+    }
+  }
+  out
+}
+
+export function emitProgram(output: LoweringOutput) -> Result<string, string> {
+  let table = buildTable(output)
+  let ctx = Ctx {
+    table: table,
+    scope: [],
+    fns: map {},
+    mods: map {},
+    cellDecls: [],
+    items: [],
+    fnRet: "",
+    inConst: false,
+    atModuleTop: false,
+    loops: [],
+    defers: [],
+  }
+  let modules = sortedModules(output)
+  if modules.length != output.modules.length {
+    return Err("unsupported: module initialization order")
+  }
+  let mut roots: Array<Stage1Operation> = []
+  let mut infos: Array<ModInfo> = []
+  let mut entryIndex = -1
+  let mut position = 0
+  for module in modules {
+    if module.extern {
+      return Err("unsupported: extern module {module.identity}")
+    }
+    if module.operationIds.length == 0 {
+      return Err("unsupported: empty module {module.identity}")
+    }
+    let root = opAt(table, module.operationIds[0])?
+    roots.push(root)
+    infos.push(registerModule(ctx, module, root)?)
+    if module.entry {
+      entryIndex = position
+    }
+    position += 1
+  }
+  if entryIndex < 0 {
+    return Err("unsupported: no entry module")
+  }
+  let entryModule = modules[entryIndex]
+  let entryRoot = roots[entryIndex]
+  let entryInfo = infos[entryIndex]
+
+  // Import edges in module source order, for the initialization-fault chain.
+  let mut edges: Array<Array<string>> = []
+  let mut ordinal = 0
+  while ordinal < modules.length {
+    let mut index = 0
+    for module in modules {
+      if module.sourceOrdinal == ordinal {
+        for id in roots[index].operands {
+          let item = opAt(table, id)?
+          if item.kind == "import" {
+            edges.push([module.identity, item.importModule])
+          }
+        }
+      }
+      index += 1
+    }
+    ordinal += 1
+  }
+
+  position = 0
+  for module in modules {
+    for bind in infos[position].binds {
+      if bind.kind == "fn" {
+        let declaration = opAt(table, bind.rust)?
+        if declaration.module != module.identity {
+          continue
+        }
+        emitFunction(ctx, fnOf(ctx, bind.rust, roots[position])?, infos[position])?
+      }
+    }
+    position += 1
+  }
+
+  let mut body: Array<string> = []
+  position = 0
+  for module in modules {
+    let code = emitModuleInit(ctx, module, roots[position], infos[position])?
+    if module.entry {
+      for line in code.lines {
+        body.push("    {line}")
+      }
+      body.push("    let __topaz_init_value = {code.tail};")
+    } else {
+      let record = exportRecord(ctx, infos[position], roots[position])?
+      let suffix = "(during initialization of module `{module.identity}`; {chainTo(modules, edges, entryModule.identity, module.identity)})"
+      body.push("    match (async \{")
+      for line in code.lines {
+        body.push("        {line}")
+      }
+      body.push("        top_cell_set(&g.{infos[position].cell}, {record});")
+      body.push("        Ok::<(), RtError>(())")
+      body.push("    \}).await \{ Ok(()) => \{\}, Err(__e) => return Err(RtError \{ code: __e.code, message: format!(\"\{\} \{\}\", __e.message, {rustStr(suffix)}), span: __e.span \}), \}")
+    }
+    position += 1
+  }
+
+  let facts = projectExports(table, entryRoot)?
+  let explicitMain = hasExplicitMain(facts)
+  let mut entryValue = "__topaz_init_value"
+  let mut mainSpan = "Span::new(FileId(0), 0, 0)"
+  if explicitMain {
+    let bind = findBind(entryInfo, "main", entryRoot)?
+    let info = fnOf(ctx, bind.rust, entryRoot)?
+    mainSpan = declarationSpan(opAt(table, info.id)?)
+    entryValue = "top_cell_get(&g.{info.cell}, \"main\", {mainSpan})?"
+  }
+  let record = exportRecord(ctx, entryInfo, entryRoot)?
+  let exportNames = quotedAll(entryInfo.exports).join(", ")
+
+  let mut out: Array<string> = []
+  out.push("// @generated by the Topaz self emitter; do not edit.\n")
+  out.push("#![allow(non_snake_case)]\n")
+  out.push("use std::rc::Rc;\nuse topaz_rt::*;\n\n")
+  let mode = table.languageMode.replace("topaz-", "V").replace(".", "_")
+  out.push("fn member_value(v: &Value, name: &str, span: Span) -> Result<Option<Value>, RtError> \{ member_value_with_version(v, name, span, LangVersion::{mode}) \}\n")
+  out.push("fn member_value_required(v: &Value, name: &str, span: Span) -> Result<Value, RtError> \{ member_value(v, name, span)?.ok_or_else(|| no_member_fault(v, name, span)) \}\n")
+  out.push("fn bind_receiver_builtin(v: Value, name: &str, span: Span) -> Result<Value, RtError> \{ bind_receiver_builtin_with_version(v, name, span, LangVersion::{mode}) \}\n")
+  out.push("pub const TOPAZ_EXPLICIT_MAIN: bool = {explicitMain};\n\n")
+  out.push("pub fn topaz_export_names() -> &'static [&'static str] \{\n    &[{exportNames}]\n\}\n")
+  out.push(CONTRACT)
+  let bodyText = body.join("\n")
+  let itemText = ctx.items.join("\n")
+  let mut fields: Array<string> = []
+  let mut inits: Array<string> = []
+  if bodyText.contains("g.methods") || itemText.contains("g.methods") {
+    fields.push("    methods: std::cell::RefCell<std::collections::HashMap<(String, String), Value>>,\n")
+    inits.push("methods: Default::default()")
+  }
+  if bodyText.contains("g.protocols") || itemText.contains("g.protocols") {
+    fields.push("    protocols: std::cell::RefCell<std::collections::HashMap<(String, String, String, String), Value>>,\n")
+    inits.push("protocols: Default::default()")
+  }
+  for decl in ctx.cellDecls {
+    let parts = decl.split("|")
+    fields.push("    {parts[0]},\n")
+    inits.push("{parts[0].split(":")[0]}: {parts[1]}")
+  }
+  out.push("\nstruct __G \{\n{fields.join("")}\}\n\n")
+  if bodyText.contains("__cell_get(") || itemText.contains("__cell_get(") || record.contains("__cell_get(") {
+    out.push(CELL_HELPER)
+  }
+  if bodyText.contains("__cg(") || itemText.contains("__cg(") {
+    out.push(CONST_HELPER)
+  }
+  out.push("\n")
+  out.push(itemText)
+  if explicitMain {
+    out.push("\nasync fn entry(cx: RtCx, __topaz_args: Value, __topaz_stdin: Value) -> Result<Value, RtError> \{\n    let (__topaz_entry_value, _) = __topaz_initialize(cx.clone()).await?;\n    call_value(__topaz_entry_value, vec![__topaz_args, __topaz_stdin], cx, {mainSpan}).await\n\}\n")
+  } else {
+    out.push("\nasync fn entry(cx: RtCx, __topaz_args: Value, __topaz_stdin: Value) -> Result<Value, RtError> \{\n    let _ = (&__topaz_args, &__topaz_stdin);\n    let (__topaz_entry_value, _) = __topaz_initialize(cx).await?;\n    Ok(__topaz_entry_value)\n\}\n")
+  }
+  out.push("\nasync fn __topaz_initialize(cx: RtCx) -> Result<(Value, Value), RtError> \{\n    let _ = &cx;\n")
+  out.push("    let g = Rc::new(__G \{ {inits.join(", ")} \});\n    let _ = &g;\n")
+  out.push(bodyText)
+  out.push("\n    let __topaz_entry_value = {entryValue};\n    Ok((__topaz_entry_value, {record}))\n\}\n")
+  Ok(out.join(""))
+}

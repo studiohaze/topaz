@@ -1,0 +1,200 @@
+import std.fs as files
+import std.json as json
+import src.contracts {
+  COMPILER_SOURCE_SET, CompilerRequest, HostFact, PackageFacts, StandardModule,
+}
+import src.requests { fromFile }
+
+record SourceMapping derives JSON {
+  logicalPath: string,
+  path: string,
+}
+
+record StandardMapping derives JSON {
+  identity: string,
+  path: string,
+  sourceFile: string,
+}
+
+record Descriptor derives JSON {
+  schema: string,
+  requestFile: string,
+  compilerSourceSetId: string,
+  sourceFiles: Array<SourceMapping>,
+  standardModules: Array<StandardMapping>,
+}
+
+record CoreManifest derives JSON {
+  schema: string,
+  sourceSetId: string,
+  generatedRustSha256: string,
+}
+
+function relativePath(path: string) -> Result<(), string> {
+  if path == "" || path.byteLength() > 4096 || path.contains("\\") || path.contains(":") {
+    return Err("CLI input mapping must use a relative slash-delimited path: {path}")
+  }
+  for segment in path.split("/") {
+    if segment == "" || segment == "." || segment == ".." {
+      return Err("CLI input mapping must not contain empty or traversal segments: {path}")
+    }
+    for byte in segment.encodeUtf8().toArray() {
+      if byte < 32 || byte == 127 {
+        return Err("CLI input mapping contains a control character")
+      }
+    }
+  }
+  Ok(())
+}
+
+// The selected checkout is the anchor. Every mapped component below it must
+// be a regular file or directory, so input mappings cannot follow symlinks.
+function repositoryFile(root: string, path: string) -> Result<string, string> {
+  relativePath(path)?
+  let parts = path.split("/")
+  let mut parent = root
+  let mut index = 0
+  while index < parts.length {
+    let name = parts[index]
+    let expected = if index + 1 == parts.length { "file" } else { "directory" }
+    let mut found = false
+    for entry in files.list(parent)? {
+      if entry.name != name { continue }
+      if entry.kind != expected {
+        return Err("CLI input must be a regular file inside the checkout: {path}")
+      }
+      found = true
+    }
+    if !found { return Err("CLI input is missing: {path}") }
+    parent = "{parent}/{name}"
+    index += 1
+  }
+  Ok(parent)
+}
+
+function readInput(root: string, path: string) -> Result<string, string> {
+  let text = files.readText(repositoryFile(root, path)?)?
+  // The public read API returns a full buffer. This is an admission bound,
+  // not a claim that allocation was bounded before the file was read.
+  if text.byteLength() > 67108864 { return Err("CLI input exceeds 64 MiB: {path}") }
+  Ok(text)
+}
+
+function checkCore(root: string) -> Result<(), string> {
+  let manifest = json.parseAs<CoreManifest>(readInput(root, "compiler/generated/native/compiler.json")?)?
+  if manifest.schema != "topaz.native-compiler/v1" || manifest.sourceSetId != COMPILER_SOURCE_SET {
+    return Err("kit build requires the canonical compiler identified by this Kit")
+  }
+  let path = repositoryFile(root, "compiler/generated/native/compiler.rs")?
+  let bytes = files.readBytes(path)?
+  if "sha256:{bytes.sha256().toHex()}" != manifest.generatedRustSha256 {
+    return Err("canonical generated compiler differs from its manifest")
+  }
+  Ok(())
+}
+
+export function prepare(repositoryRoot: string) -> Result<string, string> {
+  checkCore(repositoryRoot)?
+  let descriptor = json.parseAs<Descriptor>(readInput(repositoryRoot, "core-kit/cli/REQUEST.json")?)?
+  if descriptor.schema != "topaz.note.core-kit-cli-request/v2" ||
+    descriptor.compilerSourceSetId != COMPILER_SOURCE_SET {
+    return Err("CLI descriptor does not identify this canonical compiler")
+  }
+  let initial = fromFile(repositoryFile(repositoryRoot, descriptor.requestFile)?)?
+  if initial.producer != "topaz-stage1" || initial.terminal != "rust-source" {
+    return Err("CLI bootstrap input must be a Stage 1 rust-source request")
+  }
+  if descriptor.sourceFiles.length == 0 || descriptor.sourceFiles.length > initial.maxSourceFacts {
+    return Err("CLI source mapping must be nonempty and fit its declared source budget")
+  }
+
+  let mut sources: Map<string, string> = map {}
+  let mut mappedBytes = 0
+  for mapping in descriptor.sourceFiles {
+    relativePath(mapping.logicalPath)?
+    if sources.containsKey(mapping.logicalPath) {
+      return Err("duplicate CLI source mapping: {mapping.logicalPath}")
+    }
+    let source = readInput(repositoryRoot, mapping.path)?
+    mappedBytes += source.byteLength()
+    if mappedBytes > initial.maxTotalSourceBytes || mappedBytes > 67108864 {
+      return Err("current CLI source bytes exceed the request budget")
+    }
+    sources.insert(mapping.logicalPath, source)
+  }
+  if !sources.containsKey(initial.entry) { return Err("CLI entry has no explicit source mapping") }
+
+  let mut used: Set<string> = set {}
+  let mut facts: Array<HostFact> = []
+  let mut sourceCount = 0
+  let mut sourceBytes = 0
+  for fact in initial.facts {
+    if fact.kind != "read-source" {
+      facts.push(fact)
+      continue
+    }
+    if fact.mountId != "root" || fact.status != "present" {
+      return Err("initial CLI read-source facts must be present in the root mount")
+    }
+    if !sources.containsKey(fact.logicalPath) || used.contains(fact.logicalPath) {
+      return Err("CLI read-source facts and source mappings must correspond exactly")
+    }
+    used.add(fact.logicalPath)
+    sourceCount += 1
+    let source = sources.getOr(fact.logicalPath, "")
+    sourceBytes += source.byteLength()
+    if sourceBytes > initial.maxTotalSourceBytes || sourceBytes > 67108864 {
+      return Err("current CLI source bytes exceed the request budget")
+    }
+    facts.push(HostFact { ...fact, source: source })
+  }
+  if sourceCount != descriptor.sourceFiles.length {
+    return Err("CLI source mapping contains a file with no read-source fact")
+  }
+
+  if descriptor.standardModules.length > 1024 { return Err("too many CLI standard module mappings") }
+  let mut standards: Map<string, StandardModule> = map {}
+  let mut standardPaths: Set<string> = set {}
+  for mapping in descriptor.standardModules {
+    relativePath(mapping.path)?
+    if !mapping.identity.startsWith("std.") || mapping.identity == "std.lispex" {
+      return Err("unsupported CLI standard module: {mapping.identity}")
+    }
+    if standards.containsKey(mapping.identity) || standardPaths.contains(mapping.path) {
+      return Err("duplicate CLI standard module identity or path")
+    }
+    let source = readInput(repositoryRoot, mapping.sourceFile)?
+    mappedBytes += source.byteLength()
+    if mappedBytes > initial.maxTotalSourceBytes || mappedBytes > 67108864 {
+      return Err("current CLI and standard module bytes exceed the request budget")
+    }
+    standards.insert(mapping.identity, StandardModule {
+      identity: mapping.identity, path: mapping.path, source: source,
+    })
+    standardPaths.add(mapping.path)
+  }
+  let mut modules: Array<StandardModule> = []
+  let mut identities: Set<string> = set {}
+  for module in initial.package.generatedStdModules {
+    if !standards.containsKey(module.identity) || identities.contains(module.identity) {
+      return Err("CLI standard module mappings and initial modules must correspond exactly")
+    }
+    let mapped = standards.getOr(module.identity, module)
+    if mapped.path != module.path { return Err("CLI standard module path differs: {module.identity}") }
+    identities.add(module.identity)
+    sourceBytes += mapped.source.byteLength()
+    if sourceBytes > initial.maxTotalSourceBytes || sourceBytes > 67108864 {
+      return Err("current CLI and standard module bytes exceed the request budget")
+    }
+    modules.push(mapped)
+  }
+  if modules.length != descriptor.standardModules.length {
+    return Err("CLI standard mapping contains an unused module")
+  }
+  let request = CompilerRequest {
+    ...initial,
+    facts: facts,
+    package: PackageFacts { ...initial.package, generatedStdModules: modules },
+  }
+  json.stringify(request)
+}

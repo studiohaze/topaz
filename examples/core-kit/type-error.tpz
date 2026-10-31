@@ -1,0 +1,2 @@
+// Negative smoke fixture: check must fail and emit-rust must not write output.
+let value: int = "this must be rejected"
