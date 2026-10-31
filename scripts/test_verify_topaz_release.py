@@ -70,14 +70,17 @@ class VerifierReachesRealChecks(unittest.TestCase):
         self.openssl_runs = []
         real_run = subprocess.run
 
+        # OpenSSL 3.0 reports a failed verification on stdout and 3.5 on
+        # stderr, so both streams are kept for the assertion.
         def recording_run(command, **kwargs):
+            kwargs["stdout"] = subprocess.PIPE
             kwargs["stderr"] = subprocess.PIPE
             try:
                 completed = real_run(command, **kwargs)
             except subprocess.CalledProcessError as error:
-                self.openssl_runs.append((command, error.returncode, error.stderr))
+                self.openssl_runs.append((command, error.returncode, (error.output or b"") + (error.stderr or b"")))
                 raise
-            self.openssl_runs.append((command, completed.returncode, completed.stderr))
+            self.openssl_runs.append((command, completed.returncode, (completed.stdout or b"") + (completed.stderr or b"")))
             return completed
 
         v.subprocess = types.SimpleNamespace(run=recording_run, DEVNULL=subprocess.DEVNULL,
