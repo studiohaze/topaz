@@ -44,5 +44,8 @@ $env:CARGO_ENCODED_RUSTFLAGS = "--remap-path-prefix=$root=/topaz-core-kit$separa
 
 'Source path recipe: checkout -> /topaz-core-kit; generated CLI -> /topaz-core-kit/generated/cli.rs.'
 'Changing compiler flags can rebuild the core dependency even when canonical self-regeneration is disabled.'
+# Windows PowerShell 5.1 turns redirected native stderr into error records.
+# Cargo progress uses stderr, so only the exit status decides the result.
+$ErrorActionPreference = 'Continue'
 & "$root\bootstrap.cmd" --out $out
 exit $LASTEXITCODE
