@@ -8,13 +8,13 @@ canonical public compiler, generated compiler Rust, seed inputs, public runtime
 and source build materials. Platform executables belong in named GitHub
 Releases and the checkout's ignored installation cache.
 
-The catalogue lists release archives for `x86_64-pc-windows-msvc` and
+The catalogue lists release archives for `aarch64-apple-darwin`,
+`x86_64-apple-darwin`, `x86_64-pc-windows-msvc` and
 `x86_64-unknown-linux-gnu` on the `core-kit-5.21.1` GitHub Release. Their
 release recipes set `releaseReady`, and each archive was reproduced from two
-separate checkouts. The macOS recipes are in place and their rows follow
-their own reproduced builds. An installation request without a matching
-target fails before a network request and points to the independent source
-bootstrap. [Release build record](VALIDATION.md#release-builds-for-windows-and-linux-x86-64)
+separate checkouts. An installation request without a matching target fails
+before a network request and points to the independent source bootstrap.
+[Release build record](VALIDATION.md#release-builds)
 
 The READMEs describe the completed product and its intended `studiohaze/topaz`
 home. This page and [VALIDATION.md](VALIDATION.md) record actual availability
@@ -95,7 +95,8 @@ Release recipes for Windows x86-64, Linux x86-64 and both macOS targets set
 companions plus a per-target build record, and states the imports and
 minimum platform measured from its release executable. Windows requires the
 Visual C++ 2015-2022 x64 runtime and Windows 10 or later. Linux requires
-glibc 2.34 or later. The Linux and Windows development recipes remain
+glibc 2.34 or later. macOS requires 11.0 or later on Apple silicon and 10.12
+or later on Intel. The Linux and Windows development recipes remain
 `releaseReady` false for development assembly and comparison.
 `core-kit/repro-build.sh` and `core-kit/repro-build.ps1` build with fixed
 source-path mappings, so builds in different checkout locations produce the
@@ -178,14 +179,16 @@ the process PATH. [Installation receipt and host details](validation-pr16-no-bui
 
 ## Remaining release work
 
-- macOS aarch64 and x86_64 archives built with `repro-build.sh` from the
-  release source commit, then their catalogue rows.
 - Windows first installation on a separate clean machine, such as Windows
   Sandbox or a VM, including one without the Visual C++ runtime to confirm
   the stated prerequisite. The recorded run used a source copy without
   build tools on the build host.
-- Execution on the oldest stated platforms. Windows 10 and glibc 2.34 hosts
-  have not been run.
+- Execution on the oldest stated platforms. Windows 10, glibc 2.34 and
+  macOS 11.0 and 10.12 hosts have not been run. The macOS x86-64 archive ran
+  under Rosetta 2, not on an Intel Mac.
+- Windows installation from a deeply nested checkout. When a file path under
+  `out/core-kit-installed` grows past 260 characters, installation stops with
+  a path-not-found error.
 - Publication of the named release assets, then confirming the uploaded
   lengths and digests against the catalogue rows.
 

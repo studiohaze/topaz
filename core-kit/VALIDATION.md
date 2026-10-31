@@ -4,7 +4,7 @@ PR numbers and merge commits in this record identify change sets in the
 development history before Core Kit was published here. Those commits are
 not part of this repository's history.
 
-## Release builds for Windows and Linux x86-64
+## Release builds
 
 The catalogue rows for `core-kit-5.21.1` were packed from source commit
 `4811032c6faa8b725c2143c73ee64a941e0cd2b5`. Its payload input set has 324
@@ -29,6 +29,8 @@ toolchain and environment.
 | --- | ---: | --- | ---: | --- |
 | `x86_64-pc-windows-msvc` | 145,312,768 | `ea18ffe08803e6da13d9b478e078f3b19361f35c7bb07e6f51260fcf575a6edb` | 148,174,395 | `2958dfca411200c8ad0864c2105393263deea327e044658b7ce9618b16b1bf78` |
 | `x86_64-unknown-linux-gnu` | 100,370,720 | `5a9e2fa9f9528632021213ea2ec57353dbef7545c142bbac7684490bf92293db` | 103,228,634 | `8056151eb0425306329c3b39f1b5243fc31a1755f9a7e006ea235eaf0b17c170` |
+| `aarch64-apple-darwin` | 72,526,304 | `2d523a73fe6ebfe7f0b27e0e8da7c1a137e5e65bdc539654acba1af1d4c0643c` | 75,381,389 | `cd01a47a8250d033bb3722132e93508f378301cbc5e943e673d2ea60680cfab8` |
+| `x86_64-apple-darwin` | 94,217,152 | `097d87f7fd2a95e3ff92d21a4435e7dee316c8c5a8b0dc5fcb893c15495ec9bb` | 97,074,436 | `31f98b30ab7592aeea6b309a2ccec73a90a611c499da783de517f43d01a38200` |
 
 Every build linked the same 2,114,898-byte generated CLI Rust with SHA-256
 `654a196520bfee7ea62788e6cc40ac283abdef6fca0c69f73b007d7dc5564b64`.
@@ -109,10 +111,24 @@ embed that checkout's path.
 
 ### macOS
 
-The macOS release recipes and build records are part of the same input set.
-The macOS archives are built with `core-kit/repro-build.sh` from the same
-source commit and are listed when their rows are added. Archives packed
-before these recipes and records existed are not catalogued.
+Both macOS targets were built on one Apple M1 host with macOS 27.0.1
+(26A434), Command Line Tools 26.6, the macOS 26.5 SDK and ld-1267. The builds
+shared the existing Cargo home, which supplies no package sources. The
+`x86_64-apple-darwin` builds, checks and installation ran under Rosetta 2
+with a separate x86-64 Rust installation. No Intel Mac was used.
+
+- `cmp` and `kit binary-info` found identical executables for each target.
+  Neither checkout path nor the home directory appears in them.
+- Both executables import only `/usr/lib/libSystem.B.dylib`. The aarch64
+  executable declares minimum macOS 11.0 and the x86-64 executable 10.12.
+- Each Kit passed `smoke.sh --native-build`, `verify-core.sh`, `kit verify`
+  and `kit refresh --check` in both checkouts.
+- First installation used a source copy of the source commit with the macOS
+  rows added to its catalogue. `install-core-kit --archive`,
+  `topaz --version`, the example project and source checks and
+  `kit install --check` passed for both targets.
+- A Windows source copy with all four rows installed the Windows archive and
+  passed the same checks, so the complete catalogue is accepted.
 
 ## CLI, installation recovery and native adapter
 
