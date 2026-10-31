@@ -43,6 +43,13 @@ INPUTS = {
     SEED: (f"{SITE}/{SEED}", 1926265),
     "compiler.rs": (RAW_URL, CORE_SIZE),
 }
+# The two checks relate published bytes to each other. They say nothing about
+# what the CLI executes, so the attestation says so explicitly.
+CHECKS = ["official-binary-compressed-and-uncompressed-match-signed-list",
+          "public-seed-compiler-rust-equals-pinned-public-repository-file"]
+NOT_ESTABLISHED = ["official-cli-links-the-public-compiler-rust",
+                   "official-cli-behaves-like-the-public-core",
+                   "official-cli-rebuilds-from-this-repository"]
 
 
 def require(ok, message):
@@ -113,13 +120,8 @@ def verify(directory, download):
                          "member": MEMBER, "publicRepository": "studiohaze/topaz",
                          "commit": COMMIT, "publicPath": PUBLIC_FILE, "publicUrl": RAW_URL,
                          "bytes": CORE_SIZE, "sha256": PINS["compiler.rs"], "byteComparison": "equal"},
-        "checks": ["official-binary-compressed-and-uncompressed-match-signed-list",
-                   "public-seed-compiler-rust-equals-pinned-public-repository-file"],
-        # The two checks relate published bytes to each other. They say nothing
-        # about what the CLI executes, so the attestation says so explicitly.
-        "notEstablished": ["official-cli-links-the-public-compiler-rust",
-                           "official-cli-behaves-like-the-public-core",
-                           "official-cli-rebuilds-from-this-repository"],
+        "checks": list(CHECKS),
+        "notEstablished": list(NOT_ESTABLISHED),
     }
 
 
