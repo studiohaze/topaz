@@ -1,0 +1,47 @@
+name: Verify published Topaz release bytes
+on:
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  verify:
+    if: github.event.repository.visibility == 'public' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    outputs:
+      predicate: ${{ steps.check.outputs.predicate }}
+      subject: ${{ steps.check.outputs.subject }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - id: check
+        name: Verify pinned release and public compiler materials
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/verify-topaz-release.py > "$RUNNER_TEMP/predicate.json"
+          jq . "$RUNNER_TEMP/predicate.json"
+          printf 'predicate=%s\n' "$(jq -c . "$RUNNER_TEMP/predicate.json")" >> "$GITHUB_OUTPUT"
+          printf 'subject=sha256:%s\n' "$(jq -er .subject.sha256 "$RUNNER_TEMP/predicate.json")" >> "$GITHUB_OUTPUT"
+
+  attest:
+    needs: verify
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - name: Attest the static checks for the verified CLI digest
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4
+        with:
+          subject-name: topaz-linux-x86_64
+          subject-digest: ${{ needs.verify.outputs.subject }}
+          predicate-type: https://github.com/studiohaze/topaz/attestations/static-release-bytes/v1
+          predicate: ${{ needs.verify.outputs.predicate }}
+          create-storage-record: false
