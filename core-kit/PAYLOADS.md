@@ -240,7 +240,11 @@ exclusion rather than silently admitting a self-referential list.
 3. Upload the exact archive bytes as the named asset on that GitHub Release.
    Do not repack it with another tar or gzip tool.
 4. Review the generated row, confirm the uploaded asset's byte count and
-   SHA-256, and add the row to the source checkout's catalogue in target order.
+   SHA-256, and add the row to the catalogue in target order. The catalogue
+   is not a payload input, so this lands in a commit after the source commit.
+   The source commit's own catalogue never lists the archives packed from it.
+   Keep the release tag on the source commit for rebuilding, and tell people
+   to install from a later commit that carries the rows.
 5. Exercise first-run installation from the final checkout and asset on its
    native target, then retain that result with the release evidence.
 
