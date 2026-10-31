@@ -269,7 +269,8 @@ complete native payload reproduction.
 Use `./install-core-kit` or `.\install-core-kit.cmd` for the archive selected
 by `core-kit/downloads.data`. `--archive <file>` supplies that exact pinned
 archive offline. Download installation is separate from the source bootstrap
-and introduces no release dependency into this build path.
+and introduces no release dependency into this build path. The current
+catalogue lists no archives, so the source bootstrap is the available path.
 
 The initial OS adapter checks the catalogue, archive and candidate executable
 before its first execution. Topaz then validates the full payload and current

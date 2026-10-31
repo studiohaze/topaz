@@ -10,14 +10,15 @@ configuration, file contents, directory entries and physical path information.
 The repository includes a small project with two source modules.
 
 ```sh
-./topaz check --root examples/core-kit/project
-./topaz emit-rust --root examples/core-kit/project --out out/project.rs
-./topaz request --root examples/core-kit/project --out out/project.request.json
-./topaz build --root examples/core-kit/project --out-dir out/project-native
+./out/core-kit-bootstrap/topaz-core-kit check --root examples/core-kit/project
+./out/core-kit-bootstrap/topaz-core-kit emit-rust --root examples/core-kit/project --out out/project.rs
+./out/core-kit-bootstrap/topaz-core-kit request --root examples/core-kit/project --out out/project.request.json
+./out/core-kit-bootstrap/topaz-core-kit build --root examples/core-kit/project --out-dir out/project-native
 ```
 
-Use `.\topaz.cmd` with the same options on Windows. A newly built development
-Kit accepts these commands through its executable path as well.
+On Windows, pass the same options to
+`.\out\core-kit-bootstrap\topaz-core-kit.exe`. An installed Kit accepts them
+through the root `topaz` or `topaz.cmd` launcher.
 
 A project manifest declares its entry explicitly.
 
@@ -96,10 +97,10 @@ and records the returned facts with the project configuration. It writes a
 compiler request and the filesystem grants from the manifest.
 
 ```sh
-./topaz request --root examples/core-kit/project --out out/project.request.json
-./topaz check --request out/project.request.json
-./topaz emit-rust --request out/project.request.json --out out/replayed-project.rs
-./topaz build --request out/project.request.json --out-dir out/replayed-project
+./out/core-kit-bootstrap/topaz-core-kit request --root examples/core-kit/project --out out/project.request.json
+./out/core-kit-bootstrap/topaz-core-kit check --request out/project.request.json
+./out/core-kit-bootstrap/topaz-core-kit emit-rust --request out/project.request.json --out out/replayed-project.rs
+./out/core-kit-bootstrap/topaz-core-kit build --request out/project.request.json --out-dir out/replayed-project
 ```
 
 The snapshot uses logical paths and a deterministic fact order. It does not

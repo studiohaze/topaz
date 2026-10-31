@@ -1,14 +1,22 @@
 # Topaz examples
 
-These examples work with the public compiler through Core Kit. Run commands
-from the repository root after installing the matching Kit or building one
-from source. The [getting-started guide](../README.md#get-started) describes
-both paths.
+These examples work with the public compiler through Core Kit. Build the Kit
+from this checkout first, as described in the
+[source build guide](../README.md#build-the-kit-from-source). Run the commands
+below from the repository root.
 
-Use `./topaz` on Linux or macOS and `.\topaz.cmd` on Windows for an installed
-Kit. For a source build, substitute the executable reported by bootstrap,
-such as `./out/core-kit-bootstrap/topaz-core-kit` or
-`.\out\core-kit-bootstrap\topaz-core-kit.exe`.
+The commands call the bootstrap executable through a short variable.
+
+```sh
+kit=./out/core-kit-bootstrap/topaz-core-kit
+```
+
+```powershell
+$kit = '.\out\core-kit-bootstrap\topaz-core-kit.exe'
+```
+
+The root `topaz` and `topaz.cmd` launchers run an installed Kit. This checkout
+lists no platform archives, so use the executable built from source.
 
 ## Start with the Core Kit examples
 
@@ -21,26 +29,26 @@ such as `./out/core-kit-bootstrap/topaz-core-kit` or
 Check the standalone program and the project.
 
 ```sh
-./topaz check --source examples/core-kit/hello.tpz
-./topaz check --root examples/core-kit/project
+"$kit" check --source examples/core-kit/hello.tpz
+"$kit" check --root examples/core-kit/project
 ```
 
 ```powershell
-.\topaz.cmd check --source examples\core-kit\hello.tpz
-.\topaz.cmd check --root examples\core-kit\project
+& $kit check --source examples\core-kit\hello.tpz
+& $kit check --root examples\core-kit\project
 ```
 
 With the pinned Rust/Cargo toolchain and native linker installed, build either
 example as a native application.
 
 ```sh
-./topaz build --source examples/core-kit/hello.tpz --out-dir out/hello-native
-./topaz build --root examples/core-kit/project --out-dir out/project-native
+"$kit" build --source examples/core-kit/hello.tpz --out-dir out/hello-native
+"$kit" build --root examples/core-kit/project --out-dir out/project-native
 ```
 
 ```powershell
-.\topaz.cmd build --source examples\core-kit\hello.tpz --out-dir out\hello-native
-.\topaz.cmd build --root examples\core-kit\project --out-dir out\project-native
+& $kit build --source examples\core-kit\hello.tpz --out-dir out\hello-native
+& $kit build --root examples\core-kit\project --out-dir out\project-native
 ```
 
 The build reports the application executable's path. Run that executable to
@@ -54,9 +62,9 @@ filesystem grants.
 Generate Rust or save the complete input of a checked project.
 
 ```sh
-./topaz emit-rust --source examples/core-kit/hello.tpz --out out/hello.rs
-./topaz request --root examples/core-kit/project --out out/project.request.json
-./topaz check --request out/project.request.json
+"$kit" emit-rust --source examples/core-kit/hello.tpz --out out/hello.rs
+"$kit" request --root examples/core-kit/project --out out/project.request.json
+"$kit" check --request out/project.request.json
 ```
 
 The saved project request retains the compiler's source facts and project
@@ -68,7 +76,7 @@ The type-error fixture is expected to fail its check and produce a compiler
 diagnostic.
 
 ```sh
-./topaz check --source examples/core-kit/type-error.tpz
+"$kit" check --source examples/core-kit/type-error.tpz
 ```
 
 ## Language samples
@@ -85,8 +93,8 @@ are also checked in. Their source files can be passed to Core Kit's
 | Pipelines | [pipelines-placeholders.tpz](../docs/samples/language/pipelines-placeholders.tpz) | [pipelines-placeholders.stdout](../docs/samples/language/pipelines-placeholders.stdout) |
 
 ```sh
-./topaz check --source docs/samples/learn/first-program.tpz
-./topaz build --source docs/samples/learn/first-program.tpz --out-dir out/first-program
+"$kit" check --source docs/samples/learn/first-program.tpz
+"$kit" build --source docs/samples/learn/first-program.tpz --out-dir out/first-program
 ```
 
 The website's full CLI has its own command interface, including `topaz run`.
