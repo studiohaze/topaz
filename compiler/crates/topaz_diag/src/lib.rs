@@ -1,15 +1,8 @@
-//! Source spans, source maps, and diagnostics for the Topaz compiler.
+//! Source spans, source maps and diagnostics for Topaz.
 //!
-//! This crate owns [`FileId`], [`Span`], [`SourceFile`], [`SourceMap`],
-//! [`Diagnostic`], [`Label`], and [`Severity`] (CDR-001 §3, §5). It has
-//! no dependencies; every other crate in the workspace depends on it.
-//!
-//! Rendering rules for v0.1 (CDR-001 §5): line numbers are 1-based;
-//! columns are 1-based Unicode **scalar** counts computed from the
-//! UTF-8 source at render time (not grapheme/display-width); caret
-//! alignment over wide glyphs is best-effort until a future
-//! diagnostics CDR. The diagnostic model is data-oriented — the
-//! plain-text renderer in [`render`] is one consumer, not the model.
+//! Lines and Unicode scalar columns are 1-based. Byte offsets refer to UTF-8
+//! source. Caret alignment does not account for the display width of wide glyphs.
+//! Plain-text and JSON renderers consume the same diagnostic data.
 
 mod code;
 mod diagnostic;

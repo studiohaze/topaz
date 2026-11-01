@@ -181,6 +181,7 @@ compiler/seed/initial/std/bytes.tpz
 compiler/seed/initial/std/fs.tpz
 compiler/seed/initial/std/io.tpz
 compiler/seed/initial/std/json.tpz
+compiler/seed/initial/std/toml.tpz
 compiler/seed/initial/topaz/checker.tpz
 compiler/seed/initial/topaz/checker/bodies_captures.tpz
 compiler/seed/initial/topaz/checker/builtin_signatures.tpz

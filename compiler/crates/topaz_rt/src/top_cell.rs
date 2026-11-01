@@ -1,16 +1,7 @@
-//! §7 top-level forward-reference support for emitted code. A top-level
-//! `function` is bound POSITIONALLY (it is not hoisted: SPEC.md §7, the checker's
-//! forward pass, and the interpreter all bind it when its declaration executes),
-//! but a function BODY runs at CALL time and may name a top-level function declared
-//! LATER in the module. To lower that, each top-level (non-builtin-named) function
-//! binds a `TopCell` seeded UNINITIALIZED, `top_cell_set` at the declaration's
-//! position; a reference reads through `top_cell_get`, which faults `GUARD_UNBOUND`
-//! (the interpreter's `ExprKind::Ident` lookup miss, machine.rs) when the cell is
-//! still unfilled — so a forward call that races ahead of the callee's declaration
-//! faults `TPZ5002 "\`name\` is not bound"` byte-identically in BOTH engines, while
-//! a call after the declaration resolves. (Distinct from the block-local recursion
-//! `ImmCell`, which seeds `Value::Unit`; a top cell must distinguish "declared but
-//! not yet run" from a legitimate `Unit` value, hence `Option`.)
+//! Cells for top-level function references in generated programs.
+//! A declaration initializes its cell when execution reaches that declaration.
+//! Reading an uninitialized cell returns TPZ5002 at the identifier's span.
+//! Option distinguishes an uninitialized cell from a stored Unit value.
 
 use std::cell::RefCell;
 use std::rc::Rc;

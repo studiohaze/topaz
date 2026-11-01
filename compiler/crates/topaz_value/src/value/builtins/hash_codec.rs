@@ -913,19 +913,9 @@ pub fn builtin_codec_zstd_decompress(arg: Value, span: Span) -> Result<Value, Rt
     Ok(Value::Ok(Rc::new(Value::Bytes(Rc::from(out.as_slice())))))
 }
 
-// §15 (v5.4) the `Hash` builtin namespace — SHA-256, SHA-512 (FIPS 180-4) and
-// HMAC-SHA256 (RFC 2104), all IN-HOUSE pure-SAFE Rust (the workspace forbids
-// `unsafe_code`, and `topaz build` emits an OFFLINE, locked crate — a crypto
-// crate dependency would complicate that offline emitted-crate build). The hash
-// CORE below (`sha256`/`sha512`/`hmac_sha256` over `&[u8] -> [u8; N]`) is value-
-// free + deterministic; the three Topaz leaves pull their `Bytes` argument(s) and
-// call the SAME core, so the digest is byte-identical run≡build by construction.
-//
-// ★ CORRECTNESS is pinned to OFFICIAL test vectors (run≡build does NOT catch a
-// wrong-but-consistent hash): SHA-256("abc")/("") + SHA-512("abc") (FIPS 180-4)
-// and HMAC-SHA256 RFC 4231 Test Case 2 are asserted as unit tests below AND as
-// difftest fixtures, alongside a multi-block (>64/128 byte) input that exercises
-// the padding + block loop.
+// SHA256/SHA512 (FIPS180-4) and HMAC-SHA256 (RFC2104). The value wrappers
+// below share the same digest functions. These implementations use Rust
+// standard-library integer and byte operations.
 
 /// The SHA-256 round constants (FIPS 180-4 §4.2.2): the first 32 bits of the
 /// fractional parts of the cube roots of the first 64 primes.

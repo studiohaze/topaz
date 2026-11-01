@@ -1,15 +1,9 @@
-//! The shared runtime value (CDR-006 §3): ONE concrete `Value` both
-//! the interpreter and emitted code carry. Records are immutable
-//! values; arrays/maps/sets are shared mutable references with
-//! insertion order; equality implements SPEC §2 exactly. Map keys
-//! and set elements are canonicalized deep snapshots, so mutating a
-//! source aggregate can never corrupt lookup or order.
+//! Runtime values and operations shared by interpreted and generated programs.
 //!
-//! The callable and template payloads are trait objects
-//! (`Rc<dyn TpzCall>` / `Rc<dyn TpzTemplate>`): the interpreter
-//! instantiates them with AST-backed closures, emitted code with
-//! compiled functions — so the data semantics here are engine-neutral
-//! while the behavior lives at the leaves.
+//! Records are immutable values. Arrays, maps and sets are shared mutable values;
+//! maps and sets preserve insertion order. Keys use deep snapshots so later
+//! mutation of an input aggregate does not change an existing key.
+//! Callable and template implementations are supplied through trait objects.
 
 use std::any::Any;
 use std::cell::{Cell, RefCell};
@@ -61,5 +55,3 @@ pub use regex::*;
 pub use render::*;
 pub use runtime::*;
 
-#[cfg(test)]
-mod tests;

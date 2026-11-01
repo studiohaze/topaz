@@ -2,6 +2,8 @@ import stage1_types { Stage1Module, Stage1Operation, LoweringOutput }
 import types { PreviewTypeAtom }
 import std.bytes { Bytes }
 
+export record TypeImport { rootId: string, originalName: string }
+
 export record Table {
   languageMode: string,
   ops: Array<Stage1Operation>,
@@ -9,6 +11,14 @@ export record Table {
   captures: Map<string, Array<Stage1Operation>>,
   capturedBindings: Map<string, bool>,
   nominals: Map<string, Array<PreviewTypeAtom>>,
+  typeCandidates: Map<string, Array<Stage1Operation>>,
+  importCandidates: Map<string, Array<TypeImport>>,
+  lookupFallback: bool,
+}
+
+// Length prefixes keep module, scope and name distinct even in malformed IR.
+function lookupKey(module: string, scope: string, name: string) -> string {
+  "{module.encodeUtf8().length()}:{module}{scope.encodeUtf8().length()}:{scope}{name}"
 }
 
 export function buildTable(output: LoweringOutput) -> Table {
@@ -16,9 +26,16 @@ export function buildTable(output: LoweringOutput) -> Table {
   let mut captures: Map<string, Array<Stage1Operation>> = map {}
   let mut capturedBindings: Map<string, bool> = map {}
   let mut nominals: Map<string, Array<PreviewTypeAtom>> = map {}
+  let mut roots: Map<string, string> = map {}
   let mut position = 0
   for op in output.operations {
     index.insert(op.id, position)
+    if op.parentId == "" {
+      match roots.get(op.module) {
+        case Some(_) => ()
+        case None => { roots.insert(op.module, op.id) }
+      }
+    }
     if op.typeDefinition.length > 0 && op.kind != "type-alias" {
       nominals.insert(op.typeDefinition[0].identity, op.typeDefinition)
     }
@@ -33,12 +50,77 @@ export function buildTable(output: LoweringOutput) -> Table {
     }
     position += 1
   }
+  // These indices belong to this immutable operations snapshot, like `index`.
+  // Rebuilding a table after any module change also rebuilds every candidate.
+  let mut typeCandidates: Map<string, Array<Stage1Operation>> = map {}
+  let mut importCandidates: Map<string, Array<TypeImport>> = map {}
+  let mut lookupFallback = false
+  for op in output.operations {
+    if op.typeDefinition.length == 0 && op.kind != "import" { continue }
+    let mut parent = op.parentId
+    if parent != "" {
+      match index.get(parent) {
+        case Some(at) => {
+          let wrapper = output.operations[at]
+          if wrapper.kind == "export" { parent = wrapper.parentId }
+        }
+        // A malformed parent must fail at lookup time, in the old order.
+        case None => { lookupFallback = true; continue }
+      }
+    }
+    if op.typeDefinition.length > 0 {
+      let key = lookupKey(op.module, parent, op.typeDefinition[0].name)
+      let mut candidates = typeCandidates.get(key) ?? []
+      candidates.push(op)
+      typeCandidates.insert(key, candidates)
+    }
+    if op.kind == "import" {
+      for row in op.importBindings {
+        let parts = row.split("|")
+        if parts.length != 5 || parts[0] != "selected-import" { continue }
+        match roots.get(op.importModule) {
+          case Some(rootId) => {
+            let key = lookupKey(op.module, parent, parts[2])
+            let mut candidates = importCandidates.get(key) ?? []
+            candidates.push(TypeImport { rootId: rootId, originalName: parts[1] })
+            importCandidates.insert(key, candidates)
+          }
+          case None => ()
+        }
+      }
+      ()
+    }
+  }
   let languageMode = match output.modules.get(0) { case Some(module) => module.languageMode; case None => "topaz-5.20" }
-  Table { languageMode: languageMode, ops: output.operations, index: index, captures: captures, capturedBindings: capturedBindings, nominals: nominals }
+  Table {
+    languageMode: languageMode, ops: output.operations, index: index,
+    captures: captures, capturedBindings: capturedBindings, nominals: nominals,
+    typeCandidates: typeCandidates, importCandidates: importCandidates,
+    lookupFallback: lookupFallback,
+  }
 }
 
 // Find the runtime type name in its lexical scope, including selected imports.
 export function typeDeclaration(table: Table, originId: string, name: string) -> Result<Option<Stage1Operation>, string> {
+  if table.lookupFallback { return uncachedTypeDeclaration(table, originId, name) }
+  let origin = opAt(table, originId)?
+  let mut scope = origin.id
+  loop {
+    let key = lookupKey(origin.module, scope, name)
+    let declarations = table.typeCandidates.get(key) ?? []
+    if declarations.length > 0 { return Ok(Some(declarations[0])) }
+    for imported in table.importCandidates.get(key) ?? [] {
+      return typeDeclaration(table, imported.rootId, imported.originalName)
+    }
+    if scope == "" { break }
+    let owner = opAt(table, scope)?
+    scope = owner.parentId
+  }
+  Ok(None)
+}
+
+// Preserve deferred malformed-IR errors, including errors in other scopes.
+function uncachedTypeDeclaration(table: Table, originId: string, name: string) -> Result<Option<Stage1Operation>, string> {
   let origin = opAt(table, originId)?
   let mut scope = origin.id
   loop {

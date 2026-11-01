@@ -621,9 +621,8 @@ pub trait TpzCall: std::fmt::Debug {
     }
 }
 
-/// A §16 tagged-template value's behavior. v0.3 templates are inert
-/// (no execution; `sql` never text-inserts) — the trait only renders
-/// the stable diagnostic form (CDR-003 §8).
+/// Tagged-template type erasure and diagnostic rendering. This interface
+/// does not execute a template or interpolate it into a host query.
 pub trait TpzTemplate: std::fmt::Debug {
     fn as_any(&self) -> &dyn Any;
     /// Append the §2 reference rendering of this template.

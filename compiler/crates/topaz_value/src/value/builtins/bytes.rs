@@ -1,19 +1,8 @@
 use super::super::*;
 
-// ----------------------------------------------------------------------------
-// §8 (v5.4) the `Bytes` builtin namespace — the immutable byte-array + encoding
-// stdlib (UTF-8 / hex / base64), implemented PURELY (no crypto/encoding crate, no
-// host). Every codec routes through ONE shared leaf that the interpreter AND the
-// emitted Rust BOTH call by name, so a conversion is byte-identical run≡build by
-// construction (and, on a native decline → boxed, across all three columns). The
-// hex + base64 alphabets are RFC 4648 §8/§4 STANDARD (lowercase hex out; base64
-// with `+`/`/` and `=` padding). Decisions pinned here (and in the unit tests):
-//   * `decodeUtf8`/`fromHex`/`fromBase64` are FALLIBLE: a value-level `Err(string)`
-//     (NEVER a fault) so a program can recover from bad input. `encodeUtf8`/`toHex`/
-//     `toBase64`/`length` are total; `slice` CLAMPS (never faults, like `arr.slice`).
-//   * `fromHex` accepts BOTH cases, rejects an odd length / any non-hex digit.
-//   * `fromBase64` is STRICT RFC 4648: requires correct `=` padding to a multiple of
-//     4, rejects a non-alphabet char and non-zero padding bits.
+// UTF-8, lowercase hex and padded RFC4648 base64 conversions. Invalid data
+// returns a value-level error. Base64 rejects misplaced padding and nonzero
+// padding bits; byte slicing clamps its bounds.
 
 /// Pull the `Rc<[u8]>` out of a `Value::Bytes`, else a GUARD_TYPE fault. The checker
 /// proves the receiver is a `Bytes`, so this fault is the `--unchecked` backstop —
@@ -62,8 +51,7 @@ pub fn bytes_to_hex_into(out: &mut String, b: &[u8]) {
     }
 }
 
-/// §8 `Bytes.encodeUtf8(s) -> Bytes` — the string's UTF-8 bytes (Topaz strings ARE
-/// UTF-8, so this is total: it copies the string's byte representation).
+/// Construct an empty immutable byte sequence.
 pub fn builtin_bytes_empty(_span: Span) -> Result<Value, RtError> {
     Ok(Value::Bytes(Rc::from(Vec::new().as_slice())))
 }

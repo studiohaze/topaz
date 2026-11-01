@@ -214,7 +214,6 @@ export function stringLayout(bytes: Bytes, openingEnd: int, closing: int, lines:
     if b != 32 && b != 9 { return StringLayout { removed: removed, offending: offending } }
     at += 1
   }
-  if indent > 0 { removed.push(LiteralRange { lo: closeLine, hi: closing }) }
   for line in lines {
     if line >= closeLine || line < openingEnd + openingBreak { continue }
     let mut end = line
@@ -238,11 +237,9 @@ export function stringLayout(bytes: Bytes, openingEnd: int, closing: int, lines:
       if indent > 0 { removed.push(LiteralRange { lo: line, hi: line + indent }) }
     } else { offending.push(LiteralRange { lo: line, hi: end }) }
   }
+  // Keep removed ranges in source order for the cooking cursor.
+  if indent > 0 { removed.push(LiteralRange { lo: closeLine, hi: closing }) }
   StringLayout { removed: removed, offending: offending }
-}
-function removedEnd(layout: StringLayout, at: int) -> int {
-  for run in layout.removed { if run.lo <= at && at < run.hi { return run.hi } }
-  at
 }
 function textAttribute(name: string, value: string) -> PreviewAstAttribute {
   PreviewAstAttribute { name: name, kind: "string", value: value }
@@ -263,6 +260,7 @@ export function cookStringParts(bytes: Bytes, openingEnd: int, closing: int, mul
   }
   let layout = if multiline { stringLayout(bytes, openingEnd, closing, lines) } else { StringLayout { removed: [], offending: [] } }
   let mut result: Array<SyntaxNode> = []
+  let mut removedIndex = 0
   for part in parts {
     if part.kind != "string-part/text" { result.push(part); continue }
     let mut out: Array<string> = []
@@ -271,7 +269,9 @@ export function cookStringParts(bytes: Bytes, openingEnd: int, closing: int, mul
     let mut at = part.lo
     while at < part.hi {
       let start = at
-      let removed = removedEnd(layout, at).atMost(part.hi)
+      while removedIndex < layout.removed.length && layout.removed[removedIndex].hi <= at { removedIndex += 1 }
+      let nextRemoved = if removedIndex < layout.removed.length { layout.removed[removedIndex].lo } else { part.hi }
+      let removed = if nextRemoved <= at && removedIndex < layout.removed.length { layout.removed[removedIndex].hi.atMost(part.hi) } else { at }
       if removed > at {
         runs.push("{offset}:{offset}:{at}:{removed}")
         at = removed
@@ -290,9 +290,19 @@ export function cookStringParts(bytes: Bytes, openingEnd: int, closing: int, mul
           at += width
         }
       } else {
-        let width = if b < 128 { 1 } else if b < 224 { 2 } else if b < 240 { 3 } else { 4 }
-        at += width
-        value = slice(bytes, start, at)
+        // Copy unchanged UTF-8 once per run. Preserve every scalar's map entry:
+        // consumers also observe zero-width removals and escape boundaries.
+        while at < part.hi && at < nextRemoved {
+          let plain = byteAt(bytes, at)
+          if plain == 92 || (multiline && plain == 13 && byteAt(bytes, at + 1) == 10) { break }
+          let width = if plain < 128 { 1 } else if plain < 224 { 2 } else if plain < 240 { 3 } else { 4 }
+          let end = offset + width
+          runs.push("{offset}:{end}:{at}:{at + width}")
+          offset = end
+          at += width
+        }
+        out.push(slice(bytes, start, at))
+        continue
       }
       out.push(value)
       let end = offset + value.encodeUtf8().length()

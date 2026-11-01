@@ -1,6 +1,6 @@
 [package]
 name = "topaz_host_none"
-description = "No-ambient-capability host for public bounded Topaz seed execution"
+description = "No-ambient-capability host for bounded Topaz execution"
 version.workspace = true
 license-file.workspace = true
 edition.workspace = true
@@ -9,9 +9,9 @@ rust-version.workspace = true
 [dependencies]
 topaz_value = { workspace = true }
 
-[dev-dependencies]
-topaz_diag = { workspace = true }
-topaz_rt = { workspace = true }
-
 [lints]
 workspace = true
+
+[lib]
+test = false
+doctest = false

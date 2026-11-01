@@ -1,8 +1,5 @@
-//! "Did you mean …?" suggestions — edit-distance over a candidate name set.
-//!
-//! Shared by the checker (unknown member/field, TPZ5006) and the resolver
-//! (unknown export TPZ3009, unbound name TPZ5002) so every diagnostic suggests
-//! from ONE place. Pure string functions: no type-system or AST dependency.
+//! Name suggestions shared by the checker and resolver.
+//! Candidate ranking uses bounded optimal string alignment distance.
 
 /// Optimal string alignment distance (Levenshtein plus adjacent transpositions),
 /// so a single swapped pair like `lenght` ↔ `length` costs 1, not 2. Operates on

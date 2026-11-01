@@ -1,9 +1,5 @@
-//! The shared value core (CDR-006 §3) used by both execution engines. It
-//! provides runtime-stop identity, transcript comparison, the §2 data model,
-//! and the callable and template ABI.
-//!
-//! Zero third-party dependencies; no panics on any program-reachable
-//! path — a panic here is a bug in either engine equally.
+//! Shared runtime values, faults, builtin operations and callable interfaces.
+//! This crate has no third-party dependencies.
 
 pub mod lispex_application;
 pub mod transcript;

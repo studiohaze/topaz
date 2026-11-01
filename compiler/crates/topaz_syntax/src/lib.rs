@@ -1,9 +1,5 @@
-//! Token kinds and AST definitions for the Topaz language.
-//!
-//! Types only — no lexing or parsing logic lives here (CDR-001 §3).
-//! Tokens and the statement/expression/pattern/type AST nodes carry
-//! [`topaz_diag`] spans; supporting nodes recover their extent from
-//! their children (see `ast`).
+//! Tokens, AST nodes and literal decoding for Topaz.
+//! Nodes carry source spans from topaz_diag; lexing and parsing live elsewhere.
 
 pub mod ast;
 mod literal;

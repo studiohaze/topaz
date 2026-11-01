@@ -1378,14 +1378,8 @@ pub fn call_method(
             found
         }
         // §22 `arr.sorted()` — a NEW array sorted ascending in NATURAL order, NON-mutating
-        // (the receiver is unchanged; a fresh array always) and STABLE (equal elements keep
-        // their input order). Elements order through the SHARED `values_compare` leaf — so
-        // `int`/`string`/`float` AND order-comparable NOMINALs (record decl-order, enum
-        // variant-then-payload, newtype base) all sort, identically interp≡emit. The CHECKER
-        // now rejects a non-order-comparable element type statically (no more check-pass-
-        // then-fault), so a fault here is reachable only `--unchecked`: a non-orderable
-        // element (or a mix of distinct kinds) faults GUARD_COMPARE (TPZ5007), the SAME
-        // `cmp_guard` mapping `<` uses, at the first comparison that cannot decide.
+        // Stable ordering returns a fresh array. An unordered comparison,
+        // including NaN, returns TPZ5007 without changing the receiver.
         (Value::Array(items), "sorted") => {
             let [] = exact_args(args, call_span)?;
             let items = items.borrow();
@@ -1476,9 +1470,8 @@ pub fn call_method(
             }
         }
         // `sort()` — sort IN PLACE ascending, the SAME `values_compare`/`sort_values_stable`
-        // leaf `sorted` uses (so the order is byte-identical to `sorted`), written back into
-        // the cell. A non-order-comparable element faults GUARD_COMPARE (reachable only
-        // `--unchecked`; the checker rejects a non-orderable element). Returns Unit.
+        // Shares the stable ordering used by sorted. An unordered comparison
+        // returns TPZ5007 without changing the receiver. Returns Unit.
         (Value::Array(items), "sort") => {
             let [] = exact_args(args, call_span)?;
             // Snapshot, sort the copy, then write back — so a fault leaves the array
@@ -1725,10 +1718,8 @@ pub fn check_member_method_with_version(
     }
 }
 
-/// A §16 tagged-template value: tag + decoded literal parts + evaluated
-/// interpolations, plus the `p`-tag platform-normalized text. SHARED so both
-/// engines build and render it identically (CDR-006). Inert in v0.3 (no
-/// execution; only `p` normalizes, the other tags render the diagnostic form).
+/// Tagged literal parts and evaluated interpolations. The p tag also stores
+/// platform-normalized text; other tags use their diagnostic rendering.
 #[derive(Debug)]
 pub struct TemplateData {
     pub tag: String,

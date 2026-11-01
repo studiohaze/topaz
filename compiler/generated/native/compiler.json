@@ -1,7 +1,7 @@
 {
   "schema": "topaz.native-compiler/v1",
   "emitterStage": 1,
-  "sourceSetId": "sha256:17d598ebcb0dea65195aba8c0b3ab20f94003a7f343714f7b1df25d790cdacd5",
+  "sourceSetId": "sha256:4e7ee5fd9ddd3f4f0da7fcacbce5a59ce5786667180b12164d79cfff7ddd3afb",
   "sourceFiles": [
     {
       "path": "checker.tpz",
@@ -120,8 +120,8 @@
     },
     {
       "path": "emitter/ir.tpz",
-      "sha256": "sha256:4616927187fa0e388f65bdab359e907166631c042f3dfe18bc5793c4f5dad754",
-      "bytes": 6565
+      "sha256": "sha256:71278f24b344e6fa4b9b4fc81d9a0fcb628feec97f3b0d01717aebd677db7cbb",
+      "bytes": 9772
     },
     {
       "path": "emitter/module.tpz",
@@ -155,8 +155,8 @@
     },
     {
       "path": "literal.tpz",
-      "sha256": "sha256:b3e52c414ce3c677c2103835fef948d29f25623ea2d7af912b8e44abe5f473a8",
-      "bytes": 13291
+      "sha256": "sha256:e9887081f1a848d6e10434dab87c9efc283ee17302b8dd27764f13a27d2def77",
+      "bytes": 14052
     },
     {
       "path": "lowering.tpz",
@@ -254,16 +254,16 @@
       "bytes": 133510
     }
   ],
-  "runtimeSourceSetId": "sha256:85ed8d3b0571c34bc40c3ffd1be8bcda2a539d6c82c92b417c834507200d9c60",
+  "runtimeSourceSetId": "sha256:2133e35e25696b7c63224be91af88d98a5b0b6fd026aa7e2fed4ccfbe97cda54",
   "runtimeFiles": [
     {
       "path": "Cargo.lock",
-      "sha256": "sha256:2348a401f4e3fdde9371683ce0ef91cba2f0c828892d15d3f4ef4833d47a06e3",
+      "sha256": "sha256:cdb6931f7ac748c2b365ddff09a6c9c94dd35d35409105c3401e4e5a7a1deaaa",
       "bytes": 43833
     },
     {
       "path": "Cargo.toml",
-      "sha256": "sha256:ac60072867c6f73080bad817cad7047034bd0f96d08327e1c7164dc46f36caf4",
+      "sha256": "sha256:a212ff55e9210f314eeb6d261eb7bbe50f620512d7b09e28d31b0cd2ea0db804",
       "bytes": 6583
     },
     {
@@ -422,9 +422,14 @@
       "bytes": 10369
     },
     {
+      "path": "crates/topaz_product_runtime/src/tests/limits.rs",
+      "sha256": "sha256:dd2c822dd446b21f601dddd4ea52e1bb6dd66cf0ffd58254b3ef54c444f0280c",
+      "bytes": 861
+    },
+    {
       "path": "crates/topaz_product_runtime/src/tests/mod.rs",
-      "sha256": "sha256:02065cbddc1642e75bf4fc06da94fce69f2f65fe9610ccfbef423fa316671a60",
-      "bytes": 2850
+      "sha256": "sha256:c595e341e03a546896f93f2489ea0fd7c24d2d03274d8c5e4aeca67b225aaa2a",
+      "bytes": 2862
     },
     {
       "path": "crates/topaz_product_runtime/src/tests/operators.rs",
@@ -768,23 +773,16 @@
     }
   ],
   "sourceLanguage": "5.21",
-  "generatedRustSha256": "sha256:5f32cee07a1adea1c67ba8ac8fbd4f3ee4051f019a7856fcdb228740a1d4b8b1",
-  "emitterExecutableSha256": "sha256:bc2077c5467fba81210f641dd4c19c2d01db5a8f4def9bf6d32a81e11a378c2c",
-  "emitterToolchain": "rustc 1.96.0 (ac68faa20 2026-05-25)\nbinary: rustc\ncommit-hash: ac68faa20c58cbccd01ee7208bf3b6e93a7d7f96\ncommit-date: 2026-05-25\nhost: x86_64-pc-windows-msvc\nrelease: 1.96.0\nLLVM version: 22.1.2\n",
+  "generatedRustSha256": "sha256:53afe18d431ace25e2896dc4d1359f2976707ae9d7f1f04f85876874480ee703",
+  "emitterExecutableSha256": "sha256:1f0611b39ce9b0ce044b1b8d0d13c888b74409d547bdae824fd47b4ab3a5468d",
+  "emitterToolchain": "rustc 1.96.0 (ac68faa20 2026-05-25)\nbinary: rustc\ncommit-hash: ac68faa20c58cbccd01ee7208bf3b6e93a7d7f96\ncommit-date: 2026-05-25\nhost: x86_64-unknown-linux-gnu\nrelease: 1.96.0\nLLVM version: 22.1.2\n",
   "derivation": {
-    "sourceCommit": "1326694b5418d07ffd14102dd0fd19055143b3c9",
-    "route": "native C2 emits K Rust",
+    "route": "native C1 emits K Rust",
     "emitterSourceSetId": "sha256:17d598ebcb0dea65195aba8c0b3ab20f94003a7f343714f7b1df25d790cdacd5",
-    "emitterNativeLinkId": "sha256:a98831c6d5bdffcdfe77723f54d953b57572f2285d0a5212436c04b228fd9c9d",
-    "emitterRustSha256": "sha256:765b6f5c98090de6920a3359924f791bc8679f18702a5e887b5a56735dda29d8",
+    "emitterNativeLinkId": "sha256:8fc616a1e5b4687475feb005fc7816151eb6cc52bb15b5a9ca0449a41d4ca348",
+    "emitterRustSha256": "sha256:5f32cee07a1adea1c67ba8ac8fbd4f3ee4051f019a7856fcdb228740a1d4b8b1",
     "emitterRuntimeSourceSetId": "sha256:85ed8d3b0571c34bc40c3ffd1be8bcda2a539d6c82c92b417c834507200d9c60",
     "emitterOrigin": "native-stage1",
-    "bootstrapC1ReceiptSha256": null,
-    "transitionReceipt": {
-      "sha256": "sha256:d818f2be3313331525197c677f3690f7cfbfbb3f5f08a83b35389bf558063101",
-      "bytes": 3327526
-    },
-    "originalTransitionDisposition": "differs",
-    "originalGenerationRole": "R2"
+    "bootstrapC1ReceiptSha256": null
   }
 }

@@ -1,15 +1,6 @@
-//! §5 the rebinding cell for a captured-MUTABLE binding. A `let mut` that a
-//! closure captures becomes a shared `Rc<RefCell<Value>>` — the one-binding
-//! analog of the interpreter's whole-env `Rc<RefCell<Scope>>` capture, so a
-//! mutation made BEFORE, AFTER, or INSIDE a closure is visible everywhere the
-//! cell is shared (the interpreter's live-environment semantics).
-//!
-//! Every helper DROPS the `RefCell` borrow before it returns, so a borrow is
-//! never held across a `.await`, across another cell access, or to the end of
-//! the enclosing statement — which is the only way these could panic. The
-//! emitter composes `cell_get`/`cell_set` so the argument fully evaluates
-//! BEFORE the `borrow_mut` inside `cell_set`, giving the interpreter's
-//! read-then-write ordering for free.
+//! Shared cells for mutable bindings captured by generated closures.
+//! Each helper releases its RefCell borrow before returning. Callers evaluate
+//! a replacement value before cell_set acquires the mutable borrow.
 
 use std::cell::RefCell;
 use std::rc::Rc;

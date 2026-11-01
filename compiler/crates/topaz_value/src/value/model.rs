@@ -71,8 +71,7 @@ pub enum Value {
     /// Function value — an AST-backed closure (interpreter) or a
     /// compiled function (emitted), behind the callable ABI.
     Closure(Rc<dyn TpzCall>),
-    /// A §16 tagged-template value: not comparable; no execution
-    /// behavior in v0.3 (CDR-003 §8).
+    /// Tagged-template data with diagnostic rendering; not comparable.
     Template(Rc<dyn TpzTemplate>),
     /// A Form-A namespace binding (§17): a compile-time resolution
     /// object — valid only as a member-access head; never comparable,

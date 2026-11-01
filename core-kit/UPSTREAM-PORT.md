@@ -1,11 +1,6 @@
 # Public upstream port record
 
-The runtime and seed implementation here was ported from the Topaz
-development source at this commit.
-
-```text
-9a89a6201ac541fb4d36c13498586c81cb7b0aba
-```
+The runtime and seed implementation here accompanies Topaz 5.21.2.
 
 The development source is not public. Its existence is not a public license
 grant for all of its contents. This port uses the selected public seed scope

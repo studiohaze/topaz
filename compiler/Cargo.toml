@@ -15,7 +15,7 @@ members = [
 default-members = ["crates/topaz_seed", "crates/topaz_host_native"]
 
 [workspace.package]
-version = "5.21.1"
+version = "5.21.2"
 edition = "2024"
 rust-version = "1.96.0"
 license-file = "../LICENSE-COMPONENTS.txt"

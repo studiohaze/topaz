@@ -22,9 +22,9 @@ export record CapturedOutput derives JSON {
   stderr: string,
 }
 
-export const COMPILER_SOURCE_SET = "sha256:17d598ebcb0dea65195aba8c0b3ab20f94003a7f343714f7b1df25d790cdacd5"
+export const COMPILER_SOURCE_SET = "sha256:4e7ee5fd9ddd3f4f0da7fcacbce5a59ce5786667180b12164d79cfff7ddd3afb"
 export const EXCHANGE_SCHEMA = "topaz.compiler.stage1-exchange/v2"
-export const VERSION = "topaz-core-kit 0.1.0-dev (canonical Topaz 5.21.1)"
+export const VERSION = "topaz-core-kit 0.1.0-dev (canonical Topaz 5.21.2)"
 
 export record DirectoryEntry derives JSON {
   name: string,
