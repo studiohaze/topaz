@@ -26,6 +26,7 @@ def load_release():
 
 
 def v2_policy(release, record):
+    record.validate_policy()
     return {
         "predicateType": PREDICATE_TYPE,
         "cli": (record.name, record.pins[record.name]),
@@ -33,8 +34,8 @@ def v2_policy(release, record):
         "compilerRust": (release.PUBLIC_FILE, record.pins["compiler.rs"]),
         "version": record.version,
         "target": record.target,
-        "checks": list(release.CHECKS),
-        "notEstablished": list(release.NOT_ESTABLISHED),
+        "checks": list(record.checks),
+        "notEstablished": list(record.not_established),
     }
 
 
@@ -55,12 +56,15 @@ def check_result(result, release):
     predicate = statement.get("predicate", {})
     key = (predicate.get("version"), predicate.get("target"))
     require(key in release.RELEASES, f"unknown release version or target: {key!r}")
-    policy = v2_policy(release, release.RELEASES[key])
+    record = release.RELEASES[key]
+    policy = v2_policy(release, record)
 
     subjects = [(s.get("name"), s.get("digest", {}).get("sha256")) for s in statement.get("subject", [])]
     expected = [policy["cli"], policy["seed"], policy["compilerRust"]]
+    if record.has_link_check:
+        expected += [(name, record.pins[name]) for name in [record.product_link, record.seed_link]]
     require(sorted(subjects) == sorted(expected),
-            "subjects are not exactly the three verified files")
+            f"subjects are not exactly the {'five' if record.has_link_check else 'three'} verified files")
 
     require(predicate.get("verification") == "static-bytes-only", "verification is not static-bytes-only")
     require(predicate.get("version") == policy["version"] and predicate.get("target") == policy["target"],
@@ -75,6 +79,11 @@ def check_result(result, release):
             and compiler.get("seedArchiveSha256") == policy["seed"][1]
             and compiler.get("sha256") == policy["compilerRust"][1],
             "predicate digests do not match the subjects")
+    if record.has_link_check:
+        require(predicate.get("releaseCoreLink") == record.link_evidence(),
+                "releaseCoreLink does not match the verified release records")
+        require(compiler.get("commit") == record.commit and compiler.get("publicPath") == release.PUBLIC_FILE,
+                "link record public compiler identity mismatch")
 
 
 def check(results, release=None):

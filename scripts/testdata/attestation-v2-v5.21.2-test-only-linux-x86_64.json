@@ -29,6 +29,18 @@
             "digest": {
               "sha256": "297bf27ca381d30de9fc4ea7e3ca2eb23c9bbdee3181b7f650e9aa3ba60945ad"
             }
+          },
+          {
+            "name": "topaz-linux-x86_64.release-core-link.json",
+            "digest": {
+              "sha256": "4c06ce43fc7200e2e5369bedd5a778dac4d060cab22f64062f9f88c4cb9fe40f"
+            }
+          },
+          {
+            "name": "topaz-linux-x86_64.release-core-link.seed.json",
+            "digest": {
+              "sha256": "99ea9f4484a6ee3c87a993cef8a3f113447542c9e9c4ff961ebcab1fb93a59be"
+            }
           }
         ],
         "predicate": {
@@ -49,13 +61,27 @@
           },
           "checks": [
             "official-binary-compressed-and-uncompressed-match-signed-list",
-            "public-seed-compiler-rust-equals-pinned-public-repository-file"
+            "public-seed-compiler-rust-equals-pinned-public-repository-file",
+            "signed-release-core-links-match-executable-and-public-compiler"
           ],
           "notEstablished": [
             "official-cli-links-the-public-compiler-rust",
             "official-cli-behaves-like-the-public-core",
             "official-cli-rebuilds-from-this-repository"
-          ]
+          ],
+          "releaseCoreLink": {
+            "productRecord": {
+              "name": "topaz-linux-x86_64.release-core-link.json",
+              "sha256": "4c06ce43fc7200e2e5369bedd5a778dac4d060cab22f64062f9f88c4cb9fe40f"
+            },
+            "seedRecord": {
+              "name": "topaz-linux-x86_64.release-core-link.seed.json",
+              "sha256": "99ea9f4484a6ee3c87a993cef8a3f113447542c9e9c4ff961ebcab1fb93a59be"
+            },
+            "publicCommit": "2222222222222222222222222222222222222222",
+            "compilerRustSha256": "297bf27ca381d30de9fc4ea7e3ca2eb23c9bbdee3181b7f650e9aa3ba60945ad",
+            "executableSha256": "3436a5ae0500d62fa7f5f186e0e19cdad204624ac84462656f5f6ac6b3979b5a"
+          }
         }
       }
     }

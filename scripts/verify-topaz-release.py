@@ -15,6 +15,9 @@ from pathlib import Path
 
 MEMBER = "topaz-public/generated/compiler.rs"
 PUBLIC_FILE = "compiler/generated/native/compiler.rs"
+LINK_RECORD_CHECK = "signed-release-core-links-match-executable-and-public-compiler"
+LINK_NOT_ESTABLISHED = "official-cli-links-the-public-compiler-rust"
+SEED_LINK_CHECKSUMS = "release-core-link.seed.checksums.txt"
 
 
 @dataclass(frozen=True)
@@ -26,6 +29,38 @@ class Release:
     core_size: int
     pins: dict
     limits: dict
+    checks: tuple
+    not_established: tuple
+    link_target: str | None = None
+
+    @property
+    def has_link_check(self):
+        return LINK_RECORD_CHECK in self.checks
+
+    @property
+    def product_link(self):
+        return self.name + ".release-core-link.json"
+
+    @property
+    def seed_link(self):
+        return self.name + ".release-core-link.seed.json"
+
+    def validate_policy(self):
+        if self.has_link_check:
+            require(LINK_NOT_ESTABLISHED in self.not_established,
+                    "link-record check must keep official-cli-links-the-public-compiler-rust in notEstablished")
+            require(bool(self.link_target), "link-record check requires a link target")
+        else:
+            require(self.link_target is None, "link target requires a link-record check")
+
+    def link_evidence(self):
+        return {
+            "productRecord": {"name": self.product_link, "sha256": self.pins[self.product_link]},
+            "seedRecord": {"name": self.seed_link, "sha256": self.pins[self.seed_link]},
+            "publicCommit": self.commit,
+            "compilerRustSha256": self.pins["compiler.rs"],
+            "executableSha256": self.pins[self.name],
+        }
 
     @property
     def name(self):
@@ -61,6 +96,11 @@ RELEASES = {
         commit="05965dfc878c1fd581a203d38abf16c729d23abc",
         raw_size=109085408,
         core_size=13077120,
+        checks=("official-binary-compressed-and-uncompressed-match-signed-list",
+                "public-seed-compiler-rust-equals-pinned-public-repository-file"),
+        not_established=("official-cli-links-the-public-compiler-rust",
+                         "official-cli-behaves-like-the-public-core",
+                         "official-cli-rebuilds-from-this-repository"),
         pins={
             "topaz-release.pub": "796cd56440798d10d74f8bb98c4d89302bd20b7258469bd397fbdde5c6ccd0a4",
             "checksums.txt": "e0837f8a7301243062e9fed559438232d6ab5672d77bc551641892542e0343f9",
@@ -80,13 +120,6 @@ RELEASES = {
     ),
 }
 CURRENT_RELEASE = ("v5.21.1", "linux-x86_64")
-# The two checks relate published bytes to each other. They say nothing about
-# what the CLI executes, so the attestation says so explicitly.
-CHECKS = ["official-binary-compressed-and-uncompressed-match-signed-list",
-          "public-seed-compiler-rust-equals-pinned-public-repository-file"]
-NOT_ESTABLISHED = ["official-cli-links-the-public-compiler-rust",
-                   "official-cli-behaves-like-the-public-core",
-                   "official-cli-rebuilds-from-this-repository"]
 
 
 def require(ok, message):
@@ -106,9 +139,53 @@ def digest_stream(stream, limit, destination=None):
     return digest.hexdigest(), size
 
 
+def verify_signed_list(directory, filename):
+    subprocess.run(
+        ["openssl", "pkeyutl", "-verify", "-pubin", "-inkey", str(directory / "topaz-release.pub"),
+         "-rawin", "-in", str(directory / filename), "-sigfile", str(directory / (filename + ".sig"))],
+        check=True, stdout=subprocess.DEVNULL,
+    )
+    return (directory / filename).read_text(encoding="ascii").splitlines()
+
+
+def verify_list_entry(lines, filename, digest):
+    records = [line.split() for line in lines if line.split()[-1:] == [filename]]
+    require(records == [[digest, filename]], f"missing, duplicate or wrong signed record: {filename}")
+
+
+def verify_links(directory, release, signed_lines, cli_digest, cli_size):
+    verify_list_entry(signed_lines, release.product_link, release.pins[release.product_link])
+    seed_lines = verify_signed_list(directory, SEED_LINK_CHECKSUMS)
+    verify_list_entry(seed_lines, release.seed_link, release.pins[release.seed_link])
+    product = json.loads((directory / release.product_link).read_text(encoding="utf-8"))
+    followup = json.loads((directory / release.seed_link).read_text(encoding="utf-8"))
+    for record in [product, followup]:
+        require(record.get("schema") == "topaz.release-core-link/v1", "link record schema mismatch")
+        require(record.get("version") == release.version and record.get("target") == release.link_target,
+                "link record release or target mismatch")
+        require(record.get("subject") == {"name": release.name, "sha256": cli_digest, "bytes": cli_size},
+                "link record executable bytes or SHA-256 mismatch")
+        require(record.get("generatedRustSha256") == release.pins["compiler.rs"],
+                "link record compiler.rs SHA-256 mismatch with public repository")
+    require(product.get("publicKitCommit") is None and product.get("seedArchiveSha256") is None,
+            "product link must precede seed publication")
+    require(followup.get("publicKitCommit") == release.commit,
+            "link record public commit mismatch with pinned public repository commit")
+    require(followup.get("seedArchiveSha256") == release.pins[release.seed],
+            "link record seed archive SHA-256 mismatch")
+    require(followup.get("linkedProductRecordSha256") == release.pins[release.product_link],
+            "seed link does not match signed product link")
+    # The follow-up extends the signed product record; it cannot rewrite it.
+    for key, value in product.items():
+        if key not in {"seedSourceRevision", "seedArchiveSha256", "publicKitCommit"}:
+            require(followup.get(key) == value, f"seed link changed product field: {key}")
+    return release.link_evidence()
+
+
 def verify(directory, download, release=None):
     if release is None:
         release = RELEASES[CURRENT_RELEASE]
+    release.validate_policy()
     pins, inputs = release.pins, release.inputs
     name, seed_name = release.name, release.seed
     for filename, (url, limit) in inputs.items():
@@ -121,15 +198,9 @@ def verify(directory, download, release=None):
                 digest, _ = digest_stream(source, limit)
         require(digest == pins[filename], f"SHA-256 mismatch: {filename}")
 
-    subprocess.run(
-        ["openssl", "pkeyutl", "-verify", "-pubin", "-inkey", str(directory / "topaz-release.pub"),
-         "-rawin", "-in", str(directory / "checksums.txt"), "-sigfile", str(directory / "checksums.txt.sig")],
-        check=True, stdout=subprocess.DEVNULL,
-    )
-    signed_lines = (directory / "checksums.txt").read_text(encoding="ascii").splitlines()
+    signed_lines = verify_signed_list(directory, "checksums.txt")
     for filename in [name + ".gz", name]:
-        records = [line.split() for line in signed_lines if line.split()[-1:] == [filename]]
-        require(records == [[pins[filename], filename]], f"missing, duplicate or wrong signed record: {filename}")
+        verify_list_entry(signed_lines, filename, pins[filename])
 
     with gzip.open(directory / (name + ".gz"), "rb") as cli:
         digest, size = digest_stream(cli, release.raw_size)
@@ -145,7 +216,7 @@ def verify(directory, download, release=None):
                 require(chunk == from_git.read(len(chunk)), "seed and public compiler Rust differ")
             require(not from_git.read(1), "public compiler Rust has extra bytes")
 
-    return {
+    evidence = {
         "version": release.version, "target": release.target, "verification": "static-bytes-only",
         "subject": {"name": name, "sha256": digest, "bytes": size},
         "officialBinary": {"url": f"{release.site}/{name}", "compressedUrl": inputs[name + ".gz"][0],
@@ -161,14 +232,17 @@ def verify(directory, download, release=None):
                          "member": MEMBER, "publicRepository": "studiohaze/topaz",
                          "commit": release.commit, "publicPath": PUBLIC_FILE, "publicUrl": release.raw_url,
                          "bytes": release.core_size, "sha256": pins["compiler.rs"], "byteComparison": "equal"},
-        "checks": list(CHECKS),
-        "notEstablished": list(NOT_ESTABLISHED),
+        "checks": list(release.checks),
+        "notEstablished": list(release.not_established),
     }
+    if release.has_link_check:
+        evidence["releaseCoreLink"] = verify_links(directory, release, signed_lines, digest, size)
+    return evidence
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--inputs", type=Path, help="read the six inputs from this directory offline")
+    parser.add_argument("--inputs", type=Path, help="read the selected release's inputs from this directory offline")
     args = parser.parse_args()
     try:
         if args.inputs is not None:

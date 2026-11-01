@@ -9,6 +9,7 @@ the module is changed. The release pins in the script stay as they are.
 import gzip
 import hashlib
 import io
+import json
 import os
 import shutil
 import subprocess
@@ -20,7 +21,7 @@ from dataclasses import replace
 from pathlib import Path
 from unittest import mock
 
-from release_test_support import load, release_cases
+from release_test_support import fixture, load, release_cases
 
 
 def sha256(path):
@@ -60,8 +61,13 @@ class VerifierReachesRealChecks(unittest.TestCase):
         key = self.work / "signing-key.pem"
         openssl("genpkey", "-algorithm", "ed25519", "-out", str(key))
         openssl("pkey", "-in", str(key), "-pubout", "-out", str(self.work / "topaz-release.pub"))
+        self.signing_key = key
+        if self.record.has_link_check:
+            self.write_link_records(cli, compiler)
         checksums = "0" * 64 + "  topaz-other-target.gz\n" + "".join(
             f"{sha256(self.work / filename)}  {filename}\n" for filename in [name + ".gz", name])
+        if self.record.has_link_check:
+            checksums += f"{sha256(self.work / self.record.product_link)}  {self.record.product_link}\n"
         (self.work / "checksums.txt").write_text(checksums, encoding="ascii", newline="\n")
         openssl("pkeyutl", "-sign", "-inkey", str(key), "-rawin",
                 "-in", str(self.work / "checksums.txt"), "-out", str(self.work / "checksums.txt.sig"))
@@ -104,15 +110,41 @@ class VerifierReachesRealChecks(unittest.TestCase):
         if name in self.record.limits:
             self.record.limits[name] = (self.work / name).stat().st_size
 
-    def assert_one_signature_check(self, returncode_ok):
-        self.assertEqual(len(self.openssl_runs), 1)
-        command, returncode, _ = self.openssl_runs[0]
-        self.assertEqual(command[:3], ["openssl", "pkeyutl", "-verify"])
-        self.assertEqual(returncode == 0, returncode_ok)
+    def write_link_records(self, cli, compiler):
+        product = fixture(self.record.product_link)
+        product["subject"] = {"name": self.record.name, "sha256": hashlib.sha256(cli).hexdigest(), "bytes": len(cli)}
+        product["generatedRustSha256"] = hashlib.sha256(compiler).hexdigest()
+        self.write_json(self.record.product_link, product)
+        followup = product | {
+            "seedSourceRevision": product["productSourceRevision"],
+            "seedArchiveSha256": sha256(self.work / self.record.seed),
+            "publicKitCommit": self.record.commit,
+            "linkedProductRecordSha256": sha256(self.work / self.record.product_link),
+        }
+        self.write_json(self.record.seed_link, followup)
+        filename = self.verifier.SEED_LINK_CHECKSUMS
+        (self.work / filename).write_text(
+            f"{'0' * 64}  topaz-other-target.release-core-link.seed.json\n"
+            f"{sha256(self.work / self.record.seed_link)}  {self.record.seed_link}\n", encoding="ascii", newline="\n")
+        self.sign_list(filename)
+
+    def write_json(self, filename, value):
+        (self.work / filename).write_text(json.dumps(value, indent=2) + "\n", encoding="utf-8", newline="\n")
+
+    def sign_list(self, filename):
+        openssl("pkeyutl", "-sign", "-inkey", str(self.signing_key), "-rawin",
+                "-in", str(self.work / filename), "-out", str(self.work / (filename + ".sig")))
+
+    def assert_signature_checks(self, returncode_ok, count=None):
+        expected = count if count is not None else (2 if returncode_ok and self.record.has_link_check else 1)
+        self.assertEqual(len(self.openssl_runs), expected)
+        for command, returncode, _ in self.openssl_runs:
+            self.assertEqual(command[:3], ["openssl", "pkeyutl", "-verify"])
+            self.assertEqual(returncode == 0, returncode_ok)
 
     def test_intact_inputs_pass(self):
         evidence = self.verifier.verify(self.work, download=False, release=self.record)
-        self.assert_one_signature_check(returncode_ok=True)
+        self.assert_signature_checks(returncode_ok=True)
         self.assertEqual(evidence["subject"]["sha256"], self.record.pins[self.record.name])
         self.assertEqual(evidence["subject"]["bytes"], self.record.raw_size)
         self.assertEqual(evidence["version"], self.record.version)
@@ -123,7 +155,10 @@ class VerifierReachesRealChecks(unittest.TestCase):
                          f"https://raw.githubusercontent.com/studiohaze/topaz/{self.record.commit}/{self.verifier.PUBLIC_FILE}")
         self.assertEqual(evidence["compilerRust"]["seedUrl"],
                          f"https://topaz.ooo/dl/{self.record.version}/{self.record.seed}")
-        self.assertEqual(evidence["notEstablished"], self.verifier.NOT_ESTABLISHED)
+        self.assertEqual(evidence["checks"], list(self.record.checks))
+        self.assertEqual(evidence["notEstablished"], list(self.record.not_established))
+        if self.record.has_link_check:
+            self.assertEqual(evidence["releaseCoreLink"], self.record.link_evidence())
 
     def test_changed_signature_fails_in_ed25519_check(self):
         signature = self.work / "checksums.txt.sig"
@@ -131,7 +166,7 @@ class VerifierReachesRealChecks(unittest.TestCase):
         self.repin("checksums.txt.sig")
         with self.assertRaises(subprocess.CalledProcessError):
             self.verifier.verify(self.work, download=False, release=self.record)
-        self.assert_one_signature_check(returncode_ok=False)
+        self.assert_signature_checks(returncode_ok=False)
         self.assertIn(b"signature", self.openssl_runs[0][2].lower())
 
     def test_changed_seed_compiler_fails_byte_comparison(self):
@@ -140,7 +175,7 @@ class VerifierReachesRealChecks(unittest.TestCase):
         self.repin(self.record.seed)
         with self.assertRaisesRegex(ValueError, "seed and public compiler Rust differ"):
             self.verifier.verify(self.work, download=False, release=self.record)
-        self.assert_one_signature_check(returncode_ok=True)
+        self.assert_signature_checks(returncode_ok=True, count=1)
 
     def test_unpinned_change_fails_before_openssl(self):
         compiler = self.work / "compiler.rs"
@@ -155,7 +190,7 @@ class VerifierReachesRealChecks(unittest.TestCase):
         evidence = self.verifier.verify(self.work, download=False)
         self.assertEqual(evidence["version"], self.record.version)
         self.assertEqual(evidence["subject"]["sha256"], self.record.pins[self.record.name])
-        self.assert_one_signature_check(returncode_ok=True)
+        self.assert_signature_checks(returncode_ok=True)
 
     def test_each_input_limit_is_enforced_before_openssl(self):
         for filename, (_, size) in self.record.inputs.items():
@@ -190,7 +225,9 @@ class VerifierReachesRealChecks(unittest.TestCase):
         checksums = self.work / "checksums.txt"
         checksums.write_text(
             f"{self.record.pins[name + '.gz']}  {name}.gz\n"
-            f"{self.record.pins[name]}  {name}\n", encoding="ascii", newline="\n")
+            f"{self.record.pins[name]}  {name}\n" +
+            (f"{self.record.pins[self.record.product_link]}  {self.record.product_link}\n"
+             if self.record.has_link_check else ""), encoding="ascii", newline="\n")
         openssl("pkeyutl", "-sign", "-inkey", str(self.signing_key), "-rawin",
                 "-in", str(checksums), "-out", str(self.work / "checksums.txt.sig"))
         self.repin("checksums.txt")
@@ -198,13 +235,15 @@ class VerifierReachesRealChecks(unittest.TestCase):
 
         with self.assertRaisesRegex(ValueError, "decompressed CLI mismatch"):
             self.verifier.verify(self.work, download=False, release=self.record)
-        self.assert_one_signature_check(returncode_ok=True)
+        self.assertEqual(len(self.openssl_runs), 1)
+        self.assertEqual(self.openssl_runs[0][1], 0)
 
     def test_wrong_compiler_member_size_is_rejected(self):
         record = replace(self.record, core_size=self.record.core_size + 1)
         with self.assertRaisesRegex(ValueError, "invalid compiler member"):
             self.verifier.verify(self.work, download=False, release=record)
-        self.assert_one_signature_check(returncode_ok=True)
+        self.assertEqual(len(self.openssl_runs), 1)
+        self.assertEqual(self.openssl_runs[0][1], 0)
 
     def test_downloads_use_record_urls(self):
         urls = {f"https://topaz.ooo/dl/{self.record.version}/{name}": self.work / name
@@ -221,7 +260,7 @@ class VerifierReachesRealChecks(unittest.TestCase):
                 evidence = self.verifier.verify(Path(output), download=True, release=self.record)
         self.assertFalse(urls)
         self.assertEqual(evidence["version"], self.record.version)
-        self.assert_one_signature_check(returncode_ok=True)
+        self.assert_signature_checks(returncode_ok=True)
 
 
 def load_tests(loader, tests, pattern):

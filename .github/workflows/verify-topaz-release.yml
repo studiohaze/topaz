@@ -51,7 +51,11 @@ jobs:
           printf '%s' "$PREDICATE" | jq -er '
             "\(.subject.sha256)  \(.subject.name)",
             "\(.compilerRust.seedArchiveSha256)  \(.compilerRust.seedUrl | split("/") | last)",
-            "\(.compilerRust.sha256)  \(.compilerRust.publicPath)"' > "$RUNNER_TEMP/subjects.txt"
+            "\(.compilerRust.sha256)  \(.compilerRust.publicPath)",
+            (if .releaseCoreLink then
+              "\(.releaseCoreLink.productRecord.sha256)  \(.releaseCoreLink.productRecord.name)",
+              "\(.releaseCoreLink.seedRecord.sha256)  \(.releaseCoreLink.seedRecord.name)"
+             else empty end)' > "$RUNNER_TEMP/subjects.txt"
           cat "$RUNNER_TEMP/subjects.txt"
       - name: Attest the static checks for the verified files
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4

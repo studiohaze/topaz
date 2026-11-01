@@ -2,6 +2,7 @@
 
 import copy
 import unittest
+from dataclasses import replace
 
 from release_test_support import attestation, load, release_cases, statement
 
@@ -67,6 +68,45 @@ class AttestationAcceptance(unittest.TestCase):
                     results = attestation(record)
                     statement(results)["subject"] = copy.deepcopy(statement(attestation(other))["subject"])
                     self.rejects(results, "subjects are not exactly")
+
+    def test_link_check_does_not_change_historical_policy(self):
+        old, new = self.records[0], self.records[-1]
+        self.assertNotIn(self.release.LINK_RECORD_CHECK, old.checks)
+        self.assertIn(self.release.LINK_RECORD_CHECK, new.checks)
+        self.assertEqual(self.checker.check(attestation(old), self.release), 1)
+        results = attestation(old)
+        statement(results)["predicate"]["checks"] = list(new.checks)
+        self.rejects(results, "unexpected checks")
+        results = attestation(new)
+        statement(results)["predicate"]["checks"] = list(old.checks)
+        self.rejects(results, "unexpected checks")
+
+    def test_link_record_requires_the_linking_caveat(self):
+        for record in self.records:
+            if not record.has_link_check:
+                continue
+            self.assertIn("official-cli-links-the-public-compiler-rust", record.not_established)
+            changed = replace(record, not_established=tuple(
+                item for item in record.not_established if item != "official-cli-links-the-public-compiler-rust"))
+            self.release.RELEASES[(record.version, record.target)] = changed
+            # Even a predicate agreeing with the weakened record must fail.
+            results = attestation(record)
+            statement(results)["predicate"]["notEstablished"] = list(changed.not_established)
+            self.rejects(results, "link-record check must keep official-cli-links-the-public-compiler-rust")
+
+    def test_link_attestation_rejects_changed_evidence(self):
+        record = self.records[-1]
+        for field in ["productRecord", "seedRecord", "publicCommit", "compilerRustSha256", "executableSha256"]:
+            with self.subTest(field=field):
+                results = attestation(record)
+                statement(results)["predicate"]["releaseCoreLink"][field] = "changed"
+                self.rejects(results, "releaseCoreLink does not match")
+        results = attestation(record)
+        statement(results)["predicate"].pop("releaseCoreLink")
+        self.rejects(results, "releaseCoreLink does not match")
+        results = attestation(record)
+        statement(results)["predicate"]["compilerRust"]["commit"] = "0" * 40
+        self.rejects(results, "public compiler identity mismatch")
 
 
 if __name__ == "__main__":
