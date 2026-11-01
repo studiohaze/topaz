@@ -112,6 +112,7 @@ class VerifierReachesRealChecks(unittest.TestCase):
 
     def write_link_records(self, cli, compiler):
         product = fixture(self.record.product_link)
+        product.update(version=self.record.version, target=self.record.link_target)
         product["subject"] = {"name": self.record.name, "sha256": hashlib.sha256(cli).hexdigest(), "bytes": len(cli)}
         product["generatedRustSha256"] = hashlib.sha256(compiler).hexdigest()
         self.write_json(self.record.product_link, product)

@@ -6,7 +6,7 @@ import unittest
 from dataclasses import replace
 
 import test_verify_topaz_release as byte_tests
-from release_test_support import attestation, hypothetical_release, load, statement
+from release_test_support import attestation, hypothetical_release, load, release_cases, statement
 
 
 class LinkRecordChecks(byte_tests.VerifierReachesRealChecks):
@@ -128,13 +128,15 @@ class LinkRecordChecks(byte_tests.VerifierReachesRealChecks):
 
 
 def load_tests(loader, tests, pattern):
-    record = hypothetical_release(load("verify-topaz-release.py"))
     suite = unittest.TestSuite()
-    for name in sorted(LinkRecordChecks.__dict__):
-        if name.startswith("test_link_"):
-            case = LinkRecordChecks(name)
-            case.release_key = (record.version, record.target)
-            suite.addTest(case)
+    for record in release_cases(load("verify-topaz-release.py")):
+        if not record.has_link_check:
+            continue
+        for name in sorted(LinkRecordChecks.__dict__):
+            if name.startswith("test_link_"):
+                case = LinkRecordChecks(name)
+                case.release_key = (record.version, record.target)
+                suite.addTest(case)
     return suite
 
 

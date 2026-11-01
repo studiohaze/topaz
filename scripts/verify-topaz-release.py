@@ -118,8 +118,46 @@ RELEASES = {
             "topaz-bootstrap-seed-v5.21.1.tar.gz": 1926265,
         },
     ),
+    ("v5.21.2", "linux-x86_64"): Release(
+        version="v5.21.2",
+        target="linux-x86_64",
+        commit="6e8cb763f4c1be67e2ff79a1bf628182ceeab3db",
+        raw_size=109289360,
+        core_size=13118454,
+        checks=("official-binary-compressed-and-uncompressed-match-signed-list",
+                "public-seed-compiler-rust-equals-pinned-public-repository-file",
+                LINK_RECORD_CHECK),
+        not_established=("official-cli-links-the-public-compiler-rust",
+                         "official-cli-behaves-like-the-public-core",
+                         "official-cli-rebuilds-from-this-repository"),
+        link_target="x86_64-unknown-linux-gnu",
+        pins={
+            "topaz-release.pub": "796cd56440798d10d74f8bb98c4d89302bd20b7258469bd397fbdde5c6ccd0a4",
+            "checksums.txt": "d9132297f96fc482c80ad8aeb3b881e431b0fcfb229fa2f6ffa52dda65a66476",
+            "checksums.txt.sig": "883157f5efbb4cc4381925cbad409c3324475ff5bd00744267b729188386a1ad",
+            "topaz-linux-x86_64.gz": "5ea629306f81bbff4f3b4477f32544a73bfa269b336b2d0ecd8f778f702faf4d",
+            "topaz-bootstrap-seed-v5.21.2.tar.gz": "6ed5ca74e7f12c46775ebfdc819205ce6ce7e9eb7fd36a0f0a065c7cf03970a6",
+            "topaz-linux-x86_64.release-core-link.json": "264ebf13c5172877307766c8c7eaa095ed2631807ffa67faef450b0548ce5264",
+            "topaz-linux-x86_64.release-core-link.seed.json": "6980d79670c50049ecc5ef985da04c6bc1cb26bc1db0dbb544b05e29ca568bd9",
+            "release-core-link.seed.checksums.txt": "163721bed786c144eec35648e6ba823b2c7ab0759cf55a4bd4186162b882a846",
+            "release-core-link.seed.checksums.txt.sig": "7c100d9b5c1f219c239adfe1e8396841bfb6a534882e5fc3743f7ddca49ff929",
+            "compiler.rs": "53afe18d431ace25e2896dc4d1359f2976707ae9d7f1f04f85876874480ee703",
+            "topaz-linux-x86_64": "a2b33b2affe8eaaa22bbe9d4d8dca04349bcfc9026a70dc95e7d7d7a7e1cbcd8",
+        },
+        limits={
+            "topaz-release.pub": 113,
+            "checksums.txt": 2200,
+            "checksums.txt.sig": 64,
+            "topaz-linux-x86_64.gz": 41896976,
+            "topaz-bootstrap-seed-v5.21.2.tar.gz": 1932606,
+            "topaz-linux-x86_64.release-core-link.json": 2617,
+            "topaz-linux-x86_64.release-core-link.seed.json": 2854,
+            "release-core-link.seed.checksums.txt": 573,
+            "release-core-link.seed.checksums.txt.sig": 64,
+        },
+    ),
 }
-CURRENT_RELEASE = ("v5.21.1", "linux-x86_64")
+CURRENT_RELEASE = ("v5.21.2", "linux-x86_64")
 
 
 def require(ok, message):
