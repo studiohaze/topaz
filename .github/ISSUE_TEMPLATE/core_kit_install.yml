@@ -1,0 +1,33 @@
+name: Core Kit installation
+description: install-core-kit or the source bootstrap fails.
+labels: [core-kit]
+body:
+  - type: input
+    id: platform
+    attributes:
+      label: Platform
+      description: For example Windows 11 x64, Ubuntu 22.04 x64 or macOS 15 on Intel.
+    validations:
+      required: true
+  - type: input
+    id: commit
+    attributes:
+      label: Checkout
+      description: The output of `git rev-parse HEAD` in your checkout.
+    validations:
+      required: true
+  - type: input
+    id: command
+    attributes:
+      label: Command
+      description: For example `./install-core-kit`, `.\install-core-kit.cmd --archive <file>` or `./bootstrap`.
+    validations:
+      required: true
+  - type: textarea
+    id: output
+    attributes:
+      label: Output
+      description: The full output, unedited.
+      render: text
+    validations:
+      required: true
