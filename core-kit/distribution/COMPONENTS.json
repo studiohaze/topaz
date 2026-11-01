@@ -1,5 +1,5 @@
 {
-  "compilerSourceSetId": "sha256:17d598ebcb0dea65195aba8c0b3ab20f94003a7f343714f7b1df25d790cdacd5",
+  "compilerSourceSetId": "sha256:4e7ee5fd9ddd3f4f0da7fcacbce5a59ce5786667180b12164d79cfff7ddd3afb",
   "licenseAuthorizations": [
     {
       "date": "2026-10-26",
@@ -69,7 +69,7 @@
       "sourcePaths": [
         "compiler/crates/topaz_diag"
       ],
-      "version": "5.21.1"
+      "version": "5.21.2"
     },
     {
       "name": "topaz_host_native",
@@ -82,7 +82,7 @@
       "sourcePaths": [
         "compiler/crates/topaz_host_native"
       ],
-      "version": "5.21.1"
+      "version": "5.21.2"
     },
     {
       "name": "topaz_host_none",
@@ -95,7 +95,7 @@
       "sourcePaths": [
         "compiler/crates/topaz_host_none"
       ],
-      "version": "5.21.1"
+      "version": "5.21.2"
     },
     {
       "name": "topaz_product_runtime",
@@ -108,7 +108,7 @@
       "sourcePaths": [
         "compiler/crates/topaz_product_runtime"
       ],
-      "version": "5.21.1"
+      "version": "5.21.2"
     },
     {
       "name": "topaz_rt",
@@ -121,7 +121,7 @@
       "sourcePaths": [
         "compiler/crates/topaz_rt"
       ],
-      "version": "5.21.1"
+      "version": "5.21.2"
     },
     {
       "name": "topaz_seed_compiler",
@@ -137,7 +137,7 @@
         "compiler/generated/native/compiler.json",
         "compiler/crates/topaz_self_frontend/topaz"
       ],
-      "version": "5.21.1"
+      "version": "5.21.2"
     },
     {
       "name": "topaz_syntax",
@@ -150,7 +150,7 @@
       "sourcePaths": [
         "compiler/crates/topaz_syntax"
       ],
-      "version": "5.21.1"
+      "version": "5.21.2"
     },
     {
       "name": "topaz_value",
@@ -163,7 +163,7 @@
       "sourcePaths": [
         "compiler/crates/topaz_value"
       ],
-      "version": "5.21.1"
+      "version": "5.21.2"
     }
   ],
   "pendingReview": [
@@ -181,7 +181,7 @@
       ],
       "role": "Standalone no-capability seed runner, absent from the native executable dependency closure",
       "sourcePath": "compiler/crates/topaz_seed",
-      "version": "5.21.1"
+      "version": "5.21.2"
     }
   ],
   "rustStandardLibrary": {
