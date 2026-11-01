@@ -65,7 +65,7 @@ class VerifierReachesRealChecks(unittest.TestCase):
         (self.work / "checksums.txt").write_text(checksums, encoding="ascii", newline="\n")
         openssl("pkeyutl", "-sign", "-inkey", str(key), "-rawin",
                 "-in", str(self.work / "checksums.txt"), "-out", str(self.work / "checksums.txt.sig"))
-        key.unlink()
+        self.signing_key = key
         # The raw CLI is checked through the gzip stream, not read from disk.
         (self.work / name).unlink()
 
@@ -175,6 +175,30 @@ class VerifierReachesRealChecks(unittest.TestCase):
             with self.subTest(change=list(change)):
                 with self.assertRaisesRegex(ValueError, reason):
                     self.verifier.verify(self.work, download=False, release=replace(self.record, **change))
+
+    def test_changed_decompressed_cli_fails_digest_check(self):
+        name = self.record.name
+        archive = self.work / (name + ".gz")
+        cli = flip_byte(gzip.decompress(archive.read_bytes()))
+        self.assertEqual(len(cli), self.record.raw_size)
+        self.assertNotEqual(hashlib.sha256(cli).hexdigest(), self.record.pins[name])
+        archive.write_bytes(gzip.compress(cli, mtime=0))
+        self.repin(name + ".gz")
+
+        # Keep the signed raw digest and its pin: only the decompressed bytes
+        # disagree. The archive, checksum list and signature must all pass.
+        checksums = self.work / "checksums.txt"
+        checksums.write_text(
+            f"{self.record.pins[name + '.gz']}  {name}.gz\n"
+            f"{self.record.pins[name]}  {name}\n", encoding="ascii", newline="\n")
+        openssl("pkeyutl", "-sign", "-inkey", str(self.signing_key), "-rawin",
+                "-in", str(checksums), "-out", str(self.work / "checksums.txt.sig"))
+        self.repin("checksums.txt")
+        self.repin("checksums.txt.sig")
+
+        with self.assertRaisesRegex(ValueError, "decompressed CLI mismatch"):
+            self.verifier.verify(self.work, download=False, release=self.record)
+        self.assert_one_signature_check(returncode_ok=True)
 
     def test_wrong_compiler_member_size_is_rejected(self):
         record = replace(self.record, core_size=self.record.core_size + 1)
