@@ -12,7 +12,7 @@ The [root README](../README.md) introduces the product and its distribution.
 | [`cli/src/`](cli/src) | Commands, projects, compiler requests, diagnostics, builds, maintenance and payload policy in Topaz |
 | [`cli/initial/request.json`](cli/initial/request.json) | Complete initial input for compiling the CLI |
 | [`cli/REQUEST.json`](cli/REQUEST.json) | Explicit source and standard-module mappings |
-| [`cli/std/`](cli/std) | Additional public standard-module boundary declarations |
+| [`cli/std/`](cli/std) | Canonical seed exports and additional public standard-module boundary declarations |
 | [`cli/templates/`](cli/templates) | Native program entry, default capabilities and public runtime lockfile |
 | [`native/src/lib.rs`](native/src/lib.rs) | Canonical compiler callback and source-provider relay |
 | [`native/src/process.rs`](native/src/process.rs) | Child processes, terminal I/O and bounded output capture |

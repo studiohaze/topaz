@@ -151,9 +151,9 @@ try {
                 $archiveStream.Dispose()
             }
         }
-        Assert-TopazFileIdentity $archive $download.AssetBytes $download.AssetSha256
+        Assert-TopazFileIdentity $archive $download.AssetBytes $download.AssetSha256 -Kind Archive
         Read-TopazArchiveExecutable $tar $archive $candidate $download.ExecutableBytes $temporary
-        Assert-TopazFileIdentity $candidate $download.ExecutableBytes $download.ExecutableSha256
+        Assert-TopazFileIdentity $candidate $download.ExecutableBytes $download.ExecutableSha256 -Kind Executable
         $info = New-Object Diagnostics.ProcessStartInfo
         $info.FileName = $candidate
         $info.Arguments = ConvertTo-TopazWindowsArguments @('kit', 'install', '--archive', $archive)

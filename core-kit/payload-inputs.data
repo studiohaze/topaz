@@ -266,6 +266,10 @@ core-kit/cli/src/requests.tpz
 core-kit/cli/src/responses.tpz
 core-kit/cli/src/toolchain.tpz
 core-kit/cli/src/verification.tpz
+core-kit/cli/std/bytes.tpz
+core-kit/cli/std/fs.tpz
+core-kit/cli/std/io.tpz
+core-kit/cli/std/json.tpz
 core-kit/cli/std/toml.tpz
 core-kit/cli/templates/capabilities.rs
 core-kit/cli/templates/program.lock

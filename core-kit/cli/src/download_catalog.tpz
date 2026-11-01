@@ -167,7 +167,7 @@ export function load(root: string) -> Result<Array<Download>, string> {
 export function select(entries: Array<Download>, target: string) -> Result<Download, string> {
   targetName(target)?
   for entry in entries { if entry.target == target { return Ok(entry) } }
-  Err("no verified Core Kit download is recorded for {target}; use ./bootstrap or bootstrap.cmd to build this checkout")
+  Err("missing platform row: this checkout has no Core Kit archive for {target}; use ./bootstrap or bootstrap.cmd to build this checkout")
 }
 
 export function inputSetId(root: string) -> Result<string, string> {

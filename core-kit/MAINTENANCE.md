@@ -60,10 +60,13 @@ physical-containment facts and complete virtual directory listings. An added
 or removed helper module therefore does not require hand-editing embedded
 source strings or directory entries. The entry remains src/main.tpz.
 
-The four canonical standard boundary declarations come from the compiler seed
-input. Additional flat .tpz declarations under core-kit/cli/std become explicit
-standard mappings. The command rejects a replacement for a canonical standard
-name and does not admit std.lispex.
+Canonical standard boundary declarations come from the compiler seed input,
+identified by the standardModules entries in its REQUEST-PROVENANCE.json.
+Each module has one compiler input mapping, pointing to that seed file.
+Exports beneath core-kit/cli/std with the same name and bytes are recognized
+as copies of that module. A changed copy or case alias is rejected. Additional
+flat .tpz declarations become explicit standard mappings. The command does
+not admit std.lispex.
 
 Discovery is deterministic and bounded. Names must be portable repository
 paths without case aliases, reserved Windows names or symlinks. The source

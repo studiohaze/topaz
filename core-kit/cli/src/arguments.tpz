@@ -3,6 +3,7 @@ Topaz Core Kit
 
   topaz-core-kit help
   topaz-core-kit --version
+  topaz-core-kit version
   topaz-core-kit hash <file>
   topaz-core-kit kit verify
   topaz-core-kit kit build [--out-dir <directory>]
@@ -155,9 +156,9 @@ function parseKit(args: Array<string>) -> Result<Command, string> {
 
 export function parse(args: Array<string>) -> Result<Command, string> {
   let name = if args.length == 0 { "help" } else { args[0] }
-  if name == "help" || name == "--help" || name == "--version" {
+  if name == "help" || name == "--help" || name == "--version" || name == "version" {
     if args.length > 1 { return usageError("{name} accepts no arguments") }
-    return Ok(emptyCommand(name))
+    return Ok(emptyCommand(if name == "version" { "--version" } else { name }))
   }
   if name == "hash" {
     if args.length != 2 || args[1] == "" { return usageError("hash requires exactly one file path") }
