@@ -1,0 +1,40 @@
+name: Bug report
+description: Something in Topaz or Core Kit doesn't work as documented.
+labels: [bug]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: The output of `topaz version` or `topaz-core-kit --version`.
+    validations:
+      required: true
+  - type: input
+    id: platform
+    attributes:
+      label: Platform
+      description: For example Windows 11 x64, Ubuntu 24.04 x64 or macOS 15 on Apple silicon.
+    validations:
+      required: true
+  - type: textarea
+    id: program
+    attributes:
+      label: Smallest program that shows it
+      description: Paste the source, or the command you ran.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: What happened
+      description: The output or the error message, unedited.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
