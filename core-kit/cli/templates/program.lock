@@ -12,25 +12,25 @@ dependencies = [
 
 [[package]]
 name = "topaz_diag"
-version = "5.21.1"
+version = "5.21.2"
 
 [[package]]
 name = "topaz_host_native"
-version = "5.21.1"
+version = "5.21.2"
 dependencies = [
  "topaz_value",
 ]
 
 [[package]]
 name = "topaz_product_runtime"
-version = "5.21.1"
+version = "5.21.2"
 dependencies = [
  "topaz_value",
 ]
 
 [[package]]
 name = "topaz_rt"
-version = "5.21.1"
+version = "5.21.2"
 dependencies = [
  "topaz_diag",
  "topaz_product_runtime",
@@ -39,14 +39,14 @@ dependencies = [
 
 [[package]]
 name = "topaz_syntax"
-version = "5.21.1"
+version = "5.21.2"
 dependencies = [
  "topaz_diag",
 ]
 
 [[package]]
 name = "topaz_value"
-version = "5.21.1"
+version = "5.21.2"
 dependencies = [
  "topaz_diag",
  "topaz_syntax",
