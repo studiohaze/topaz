@@ -16,7 +16,7 @@ class LinkRecordChecks(byte_tests.VerifierReachesRealChecks):
         self.write_json(filename, record)
         self.repin(filename)
         # Re-sign the enclosing list so failures reach the semantic check.
-        list_name = ("checksums.txt" if filename == self.record.product_link
+        list_name = ("checksums.txt" if filename == self.record.product_link or self.verifier.content_identity_release(self.record.version)
                      else self.verifier.SEED_LINK_CHECKSUMS)
         path = self.work / list_name
         lines = [line for line in path.read_text(encoding="ascii").splitlines()
@@ -26,6 +26,7 @@ class LinkRecordChecks(byte_tests.VerifierReachesRealChecks):
         self.sign_list(list_name)
         self.repin(list_name)
         self.repin(list_name + ".sig")
+        self.resign_seed_inventory()
 
     def rejects_link(self, filename, change, reason):
         self.change_link(filename, change)
@@ -71,7 +72,7 @@ class LinkRecordChecks(byte_tests.VerifierReachesRealChecks):
 
     def test_link_missing_duplicate_and_wrong_signed_entries(self):
         for filename, list_name in [(self.record.product_link, "checksums.txt"),
-                                    (self.record.seed_link, self.verifier.SEED_LINK_CHECKSUMS)]:
+                                    (self.record.seed_link, "checksums.txt" if self.verifier.content_identity_release(self.record.version) else self.verifier.SEED_LINK_CHECKSUMS)]:
             path = self.work / list_name
             original = path.read_text(encoding="ascii")
             entry = f"{self.record.pins[filename]}  {filename}\n"
@@ -90,13 +91,14 @@ class LinkRecordChecks(byte_tests.VerifierReachesRealChecks):
             self.repin(list_name + ".sig")
 
     def test_link_changed_seed_signature_fails_in_ed25519(self):
-        filename = self.verifier.SEED_LINK_CHECKSUMS + ".sig"
+        unified = self.verifier.content_identity_release(self.record.version)
+        filename = ("checksums.txt" if unified else self.verifier.SEED_LINK_CHECKSUMS) + ".sig"
         path = self.work / filename
         path.write_bytes(byte_tests.flip_byte(path.read_bytes()))
         self.repin(filename)
         with self.assertRaises(subprocess.CalledProcessError):
             self.verifier.verify(self.work, download=False, release=self.record)
-        self.assertEqual([result[1] == 0 for result in self.openssl_runs], [True, False])
+        self.assertEqual([result[1] == 0 for result in self.openssl_runs], [False] if unified else [True, False])
 
     def test_link_wrong_product_record_hash(self):
         self.rejects_link(self.record.seed_link, lambda r: r.update(linkedProductRecordSha256="0" * 64),
