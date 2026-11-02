@@ -68,6 +68,8 @@ class VerifierReachesRealChecks(unittest.TestCase):
             f"{sha256(self.work / filename)}  {filename}\n" for filename in [name + ".gz", name])
         if self.record.has_link_check:
             checksums += f"{sha256(self.work / self.record.product_link)}  {self.record.product_link}\n"
+        if self.verifier.content_identity_release(self.record.version):
+            checksums += self.signed_seed_inventory()
         (self.work / "checksums.txt").write_text(checksums, encoding="ascii", newline="\n")
         openssl("pkeyutl", "-sign", "-inkey", str(key), "-rawin",
                 "-in", str(self.work / "checksums.txt"), "-out", str(self.work / "checksums.txt.sig"))
@@ -113,6 +115,9 @@ class VerifierReachesRealChecks(unittest.TestCase):
     def write_link_records(self, cli, compiler):
         product = fixture(self.record.product_link)
         product.update(version=self.record.version, target=self.record.link_target)
+        if self.verifier.content_identity_release(self.record.version):
+            product.update(schema="topaz.release-core-link/v2",
+                           productSourceRevision=self.record.source_identity)
         product["subject"] = {"name": self.record.name, "sha256": hashlib.sha256(cli).hexdigest(), "bytes": len(cli)}
         product["generatedRustSha256"] = hashlib.sha256(compiler).hexdigest()
         self.write_json(self.record.product_link, product)
@@ -129,6 +134,37 @@ class VerifierReachesRealChecks(unittest.TestCase):
             f"{sha256(self.work / self.record.seed_link)}  {self.record.seed_link}\n", encoding="ascii", newline="\n")
         self.sign_list(filename)
 
+    def signed_seed_inventory(self):
+        def member(name):
+            path = self.work / name
+            return {"name": name, "size": path.stat().st_size, "sha256": sha256(path)}
+        seed = {"schema": "topaz.bootstrap-seed/v2", "version": self.record.version,
+                "sourceRevision": self.record.source_identity, "archive": member(self.record.seed)}
+        self.write_json("bootstrap-seed.json", seed)
+        links = [member(self.record.seed_link)]
+        for target in ["linux-aarch64", "macos-x86_64", "macos-aarch64", "windows-x86_64.exe"]:
+            links.append({"name": "topaz-" + target + ".release-core-link.seed.json",
+                          "size": 1, "sha256": "a" * 64})
+        self.write_json("manifest.json", {"schema": "topaz.release-manifest/v6",
+            "version": self.record.version, "sourceSha": self.record.source_identity,
+            "bootstrapSeed": {"schema": seed["schema"], "sourceArchive": member(self.record.seed),
+                              "manifest": member("bootstrap-seed.json"), "links": links}})
+        members = [member(self.record.seed), member("bootstrap-seed.json"), member("manifest.json"), *links]
+        return "".join(f'{m["sha256"]}  {m["name"]}\n' for m in members)
+
+    def resign_seed_inventory(self):
+        if not self.verifier.content_identity_release(self.record.version):
+            return
+        entries = self.signed_seed_inventory()
+        names = {line.split()[1] for line in entries.splitlines()}
+        file = self.work / "checksums.txt"
+        kept = [line for line in file.read_text(encoding="ascii").splitlines()
+                if line.split()[-1] not in names]
+        file.write_text("\n".join(kept) + "\n" + entries, encoding="ascii", newline="\n")
+        self.sign_list("checksums.txt")
+        for name in ["bootstrap-seed.json", "manifest.json", "checksums.txt", "checksums.txt.sig"]:
+            self.repin(name)
+
     def write_json(self, filename, value):
         (self.work / filename).write_text(json.dumps(value, indent=2) + "\n", encoding="utf-8", newline="\n")
 
@@ -137,7 +173,7 @@ class VerifierReachesRealChecks(unittest.TestCase):
                 "-in", str(self.work / filename), "-out", str(self.work / (filename + ".sig")))
 
     def assert_signature_checks(self, returncode_ok, count=None):
-        expected = count if count is not None else (2 if returncode_ok and self.record.has_link_check else 1)
+        expected = count if count is not None else (2 if returncode_ok and self.record.has_link_check and not self.verifier.content_identity_release(self.record.version) else 1)
         self.assertEqual(len(self.openssl_runs), expected)
         for command, returncode, _ in self.openssl_runs:
             self.assertEqual(command[:3], ["openssl", "pkeyutl", "-verify"])
@@ -174,6 +210,7 @@ class VerifierReachesRealChecks(unittest.TestCase):
         compiler = (self.work / "compiler.rs").read_bytes()
         self.write_seed(flip_byte(compiler, len(compiler) // 2))
         self.repin(self.record.seed)
+        self.resign_seed_inventory()
         with self.assertRaisesRegex(ValueError, "seed and public compiler Rust differ"):
             self.verifier.verify(self.work, download=False, release=self.record)
         self.assert_signature_checks(returncode_ok=True, count=1)
@@ -233,6 +270,7 @@ class VerifierReachesRealChecks(unittest.TestCase):
                 "-in", str(checksums), "-out", str(self.work / "checksums.txt.sig"))
         self.repin("checksums.txt")
         self.repin("checksums.txt.sig")
+        self.resign_seed_inventory()
 
         with self.assertRaisesRegex(ValueError, "decompressed CLI mismatch"):
             self.verifier.verify(self.work, download=False, release=self.record)

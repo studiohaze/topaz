@@ -1,0 +1,132 @@
+{
+  "schema": "topaz.public-release-verifier-data/v1",
+  "currentRelease": [
+    "v5.21.3",
+    "linux-x86_64"
+  ],
+  "publicKeys": {
+    "796cd56440798d10d74f8bb98c4d89302bd20b7258469bd397fbdde5c6ccd0a4": {
+      "format": "PEM SubjectPublicKeyInfo",
+      "digest": "SHA-256"
+    }
+  },
+  "releases": [
+    {
+      "version": "v5.21.1",
+      "target": "linux-x86_64",
+      "commit": "05965dfc878c1fd581a203d38abf16c729d23abc",
+      "raw_size": 109085408,
+      "core_size": 13077120,
+      "checks": [
+        "official-binary-compressed-and-uncompressed-match-signed-list",
+        "public-seed-compiler-rust-equals-pinned-public-repository-file"
+      ],
+      "not_established": [
+        "official-cli-links-the-public-compiler-rust",
+        "official-cli-behaves-like-the-public-core",
+        "official-cli-rebuilds-from-this-repository"
+      ],
+      "pins": {
+        "topaz-release.pub": "796cd56440798d10d74f8bb98c4d89302bd20b7258469bd397fbdde5c6ccd0a4",
+        "checksums.txt": "e0837f8a7301243062e9fed559438232d6ab5672d77bc551641892542e0343f9",
+        "checksums.txt.sig": "768d1e01e06dcbe5d771b7079038e88f63d9a5f17b327e379fc54f3ea15ad64c",
+        "topaz-linux-x86_64.gz": "632df3fa2dbc0a390d2401c9d429b51d92ae3094e7265d370dcf6420f52cbb2c",
+        "topaz-linux-x86_64": "1f0611b39ce9b0ce044b1b8d0d13c888b74409d547bdae824fd47b4ab3a5468d",
+        "topaz-bootstrap-seed-v5.21.1.tar.gz": "cf6a09b66fa5197472808fc01388e799b394686fb705b8e977cc39962583e974",
+        "compiler.rs": "5f32cee07a1adea1c67ba8ac8fbd4f3ee4051f019a7856fcdb228740a1d4b8b1"
+      },
+      "limits": {
+        "topaz-release.pub": 4096,
+        "checksums.txt": 65536,
+        "checksums.txt.sig": 1024,
+        "topaz-linux-x86_64.gz": 41839790,
+        "topaz-bootstrap-seed-v5.21.1.tar.gz": 1926265
+      }
+    },
+    {
+      "version": "v5.21.2",
+      "target": "linux-x86_64",
+      "commit": "6e8cb763f4c1be67e2ff79a1bf628182ceeab3db",
+      "raw_size": 109289360,
+      "core_size": 13118454,
+      "checks": [
+        "official-binary-compressed-and-uncompressed-match-signed-list",
+        "public-seed-compiler-rust-equals-pinned-public-repository-file",
+        "signed-release-core-links-match-executable-and-public-compiler"
+      ],
+      "not_established": [
+        "official-cli-links-the-public-compiler-rust",
+        "official-cli-behaves-like-the-public-core",
+        "official-cli-rebuilds-from-this-repository"
+      ],
+      "link_target": "x86_64-unknown-linux-gnu",
+      "pins": {
+        "topaz-release.pub": "796cd56440798d10d74f8bb98c4d89302bd20b7258469bd397fbdde5c6ccd0a4",
+        "checksums.txt": "d9132297f96fc482c80ad8aeb3b881e431b0fcfb229fa2f6ffa52dda65a66476",
+        "checksums.txt.sig": "883157f5efbb4cc4381925cbad409c3324475ff5bd00744267b729188386a1ad",
+        "topaz-linux-x86_64.gz": "5ea629306f81bbff4f3b4477f32544a73bfa269b336b2d0ecd8f778f702faf4d",
+        "topaz-bootstrap-seed-v5.21.2.tar.gz": "6ed5ca74e7f12c46775ebfdc819205ce6ce7e9eb7fd36a0f0a065c7cf03970a6",
+        "topaz-linux-x86_64.release-core-link.json": "264ebf13c5172877307766c8c7eaa095ed2631807ffa67faef450b0548ce5264",
+        "topaz-linux-x86_64.release-core-link.seed.json": "6980d79670c50049ecc5ef985da04c6bc1cb26bc1db0dbb544b05e29ca568bd9",
+        "release-core-link.seed.checksums.txt": "163721bed786c144eec35648e6ba823b2c7ab0759cf55a4bd4186162b882a846",
+        "release-core-link.seed.checksums.txt.sig": "7c100d9b5c1f219c239adfe1e8396841bfb6a534882e5fc3743f7ddca49ff929",
+        "compiler.rs": "53afe18d431ace25e2896dc4d1359f2976707ae9d7f1f04f85876874480ee703",
+        "topaz-linux-x86_64": "a2b33b2affe8eaaa22bbe9d4d8dca04349bcfc9026a70dc95e7d7d7a7e1cbcd8"
+      },
+      "limits": {
+        "topaz-release.pub": 113,
+        "checksums.txt": 2200,
+        "checksums.txt.sig": 64,
+        "topaz-linux-x86_64.gz": 41896976,
+        "topaz-bootstrap-seed-v5.21.2.tar.gz": 1932606,
+        "topaz-linux-x86_64.release-core-link.json": 2617,
+        "topaz-linux-x86_64.release-core-link.seed.json": 2854,
+        "release-core-link.seed.checksums.txt": 573,
+        "release-core-link.seed.checksums.txt.sig": 64
+      }
+    },
+    {
+      "version": "v5.21.3",
+      "target": "linux-x86_64",
+      "commit": "f3807a34248e81f0b523fa21e98b1b7ea91324d4",
+      "raw_size": 109423280,
+      "core_size": 13118454,
+      "checks": [
+        "official-binary-compressed-and-uncompressed-match-signed-list",
+        "public-seed-compiler-rust-equals-pinned-public-repository-file",
+        "signed-release-core-links-match-executable-and-public-compiler"
+      ],
+      "not_established": [
+        "official-cli-links-the-public-compiler-rust",
+        "official-cli-behaves-like-the-public-core",
+        "official-cli-rebuilds-from-this-repository"
+      ],
+      "link_target": "x86_64-unknown-linux-gnu",
+      "pins": {
+        "topaz-release.pub": "796cd56440798d10d74f8bb98c4d89302bd20b7258469bd397fbdde5c6ccd0a4",
+        "checksums.txt": "918859fdb3e9e4cf041ff0d09b1eb824fdcd0090771d8314cb2a340dab43a922",
+        "checksums.txt.sig": "849a7cfa2f2b4f3d972b58a712bc6f4e592ce17ee3e91820f69babcf1207e638",
+        "topaz-linux-x86_64.gz": "9c6ee0bfba8858f1595d7af2c09138a5a94fe523059b94d3ca310b21642fd02b",
+        "topaz-bootstrap-seed-v5.21.3.tar.gz": "e2c7546f3ecb77668ab7008d71ce68de79f2f50d8525d8cbaa65ba369619bdfb",
+        "bootstrap-seed.json": "2a8e7b9a04e2d4abfad4f14c98f6c9d45d30fec8ad9c8363dab8e940d9ad8450",
+        "manifest.json": "06b935355721ffc21416ede79960eb28d57372ccbab61eb452ca189b57cd9dbf",
+        "topaz-linux-x86_64.release-core-link.json": "460e4c615059d1401dfa9ab4370bf6fadf8a2251665e80a0c6b171191d9c55c4",
+        "topaz-linux-x86_64.release-core-link.seed.json": "0971d1bb82394033dc7829733e3c3701806c6055d3451368ecc0eda6b6450a70",
+        "compiler.rs": "53afe18d431ace25e2896dc4d1359f2976707ae9d7f1f04f85876874480ee703",
+        "topaz-linux-x86_64": "b6c3f574b78c558b526196fa04f5d835c9fe1df59d07397dbf4e5d279a3e1665"
+      },
+      "limits": {
+        "topaz-release.pub": 113,
+        "checksums.txt": 2961,
+        "checksums.txt.sig": 64,
+        "topaz-linux-x86_64.gz": 41926258,
+        "topaz-bootstrap-seed-v5.21.3.tar.gz": 1935119,
+        "bootstrap-seed.json": 29264,
+        "manifest.json": 8054,
+        "topaz-linux-x86_64.release-core-link.json": 2648,
+        "topaz-linux-x86_64.release-core-link.seed.json": 2916
+      },
+      "source_identity": "sha256:7f64036ca18568554565b6cc4b9c615f30646a98af05e05cfdc968378c3e1505"
+    }
+  ]
+}

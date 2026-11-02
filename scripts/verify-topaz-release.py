@@ -20,6 +20,77 @@ LINK_NOT_ESTABLISHED = "official-cli-links-the-public-compiler-rust"
 SEED_LINK_CHECKSUMS = "release-core-link.seed.checksums.txt"
 
 
+"""Public content identities for release records from Topaz 5.21.3."""
+import re
+
+
+def content_identity_release(version):
+    match = re.fullmatch(r"v?(\d+)\.(\d+)\.(\d+)", version)
+    return bool(match and tuple(map(int, match.groups())) >= (5, 21, 3))
+
+
+def verify_public_link_sources(product, followup, release):
+    if not content_identity_release(release.version):
+        return
+    expected = release.source_identity
+    if not isinstance(expected, str) or not re.fullmatch(r"sha256:[a-f0-9]{64}", expected):
+        raise ValueError("release requires its pinned public content identity")
+    if product.get("productSourceRevision") != expected or followup.get("seedSourceRevision") != expected:
+        raise ValueError("link record public content identity mismatch")
+    def visit(item):
+        if isinstance(item, str):
+            for commit in re.findall(r"(?<![a-f0-9])[a-f0-9]{40}(?![a-f0-9])", item):
+                if commit != release.commit:
+                    raise ValueError("link record contains a non-public commit identifier")
+        elif isinstance(item, dict):
+            for value in item.values():
+                visit(value)
+        elif isinstance(item, list):
+            for value in item:
+                visit(value)
+    visit(product)
+    visit(followup)
+
+
+def verify_release_seed(directory, release, signed_lines):
+    if not content_identity_release(release.version):
+        return
+    import hashlib
+    import json
+    names = [release.seed, "bootstrap-seed.json", "manifest.json", release.seed_link]
+    for name in names:
+        digest = hashlib.sha256((directory / name).read_bytes()).hexdigest()
+        records = [line.split() for line in signed_lines if line.split()[-1:] == [name]]
+        if records != [[digest, name]]:
+            raise ValueError(f"missing, duplicate or wrong signed record: {name}")
+    manifest = json.loads((directory / "manifest.json").read_text(encoding="utf-8"))
+    seed = json.loads((directory / "bootstrap-seed.json").read_text(encoding="utf-8"))
+    descriptor = manifest.get("bootstrapSeed", {})
+    members = [descriptor.get("sourceArchive", {}), descriptor.get("manifest", {}), *descriptor.get("links", [])]
+    expected_links = {"topaz-" + target + ".release-core-link.seed.json" for target in
+                      ["linux-x86_64", "linux-aarch64", "macos-x86_64", "macos-aarch64", "windows-x86_64.exe"]}
+    if (manifest.get("schema") != "topaz.release-manifest/v6" or manifest.get("version") != release.version
+            or manifest.get("sourceSha") != release.source_identity
+            or descriptor.get("schema") != "topaz.bootstrap-seed/v2"
+            or len(members) != 7 or {m.get("name") for m in members[2:]} != expected_links
+            or members[0].get("name") != release.seed or members[1].get("name") != "bootstrap-seed.json"):
+        raise ValueError("release manifest seed inventory differs")
+    for member in members:
+        records = [line.split() for line in signed_lines if line.split()[-1:] == [member.get("name")]]
+        if records != [[member.get("sha256"), member.get("name")]]:
+            raise ValueError("manifest seed member absent from signed list")
+        if member["name"] in names:
+            data = (directory / member["name"]).read_bytes()
+            if len(data) != member.get("size") or hashlib.sha256(data).hexdigest() != member.get("sha256"):
+                raise ValueError("manifest seed member bytes differ")
+    if (seed.get("schema") != "topaz.bootstrap-seed/v2" or seed.get("version") != release.version
+            or seed.get("sourceRevision") != release.source_identity
+            or seed.get("archive", {}).get("name") != release.seed
+            or seed["archive"].get("sha256") != members[0]["sha256"]
+            or seed["archive"].get("size") != members[0]["size"]):
+        raise ValueError("seed provenance differs from signed release manifest")
+
+
 @dataclass(frozen=True)
 class Release:
     version: str
@@ -32,6 +103,7 @@ class Release:
     checks: tuple
     not_established: tuple
     link_target: str | None = None
+    source_identity: str | None = None
 
     @property
     def has_link_check(self):
@@ -57,6 +129,7 @@ class Release:
         return {
             "productRecord": {"name": self.product_link, "sha256": self.pins[self.product_link]},
             "seedRecord": {"name": self.seed_link, "sha256": self.pins[self.seed_link]},
+            **({"sourceIdentity": self.source_identity} if content_identity_release(self.version) else {}),
             "publicCommit": self.commit,
             "compilerRustSha256": self.pins["compiler.rs"],
             "executableSha256": self.pins[self.name],
@@ -80,84 +153,35 @@ class Release:
 
     @property
     def inputs(self):
-        urls = {name: f"{self.site}/{name}" for name in self.limits}
+        urls = {name: f"{self.site}/{name}" for name in self.limits if not (content_identity_release(self.version) and name in {SEED_LINK_CHECKSUMS, SEED_LINK_CHECKSUMS + ".sig"})}
         urls["topaz-release.pub"] = "https://topaz.ooo/dl/topaz-release.pub"
         return {name: (url, self.limits[name]) for name, url in urls.items()} | {
             "compiler.rs": (self.raw_url, self.core_size),
         }
 
 
-# Keep issued releases here when CURRENT_RELEASE advances. PEM hashes cover
-# exact published PEM bytes; seed pins are separate from signed CLI checksums.
-RELEASES = {
-    ("v5.21.1", "linux-x86_64"): Release(
-        version="v5.21.1",
-        target="linux-x86_64",
-        commit="05965dfc878c1fd581a203d38abf16c729d23abc",
-        raw_size=109085408,
-        core_size=13077120,
-        checks=("official-binary-compressed-and-uncompressed-match-signed-list",
-                "public-seed-compiler-rust-equals-pinned-public-repository-file"),
-        not_established=("official-cli-links-the-public-compiler-rust",
-                         "official-cli-behaves-like-the-public-core",
-                         "official-cli-rebuilds-from-this-repository"),
-        pins={
-            "topaz-release.pub": "796cd56440798d10d74f8bb98c4d89302bd20b7258469bd397fbdde5c6ccd0a4",
-            "checksums.txt": "e0837f8a7301243062e9fed559438232d6ab5672d77bc551641892542e0343f9",
-            "checksums.txt.sig": "768d1e01e06dcbe5d771b7079038e88f63d9a5f17b327e379fc54f3ea15ad64c",
-            "topaz-linux-x86_64.gz": "632df3fa2dbc0a390d2401c9d429b51d92ae3094e7265d370dcf6420f52cbb2c",
-            "topaz-linux-x86_64": "1f0611b39ce9b0ce044b1b8d0d13c888b74409d547bdae824fd47b4ab3a5468d",
-            "topaz-bootstrap-seed-v5.21.1.tar.gz": "cf6a09b66fa5197472808fc01388e799b394686fb705b8e977cc39962583e974",
-            "compiler.rs": "5f32cee07a1adea1c67ba8ac8fbd4f3ee4051f019a7856fcdb228740a1d4b8b1",
-        },
-        limits={
-            "topaz-release.pub": 4096,
-            "checksums.txt": 65536,
-            "checksums.txt.sig": 1024,
-            "topaz-linux-x86_64.gz": 41839790,
-            "topaz-bootstrap-seed-v5.21.1.tar.gz": 1926265,
-        },
-    ),
-    ("v5.21.2", "linux-x86_64"): Release(
-        version="v5.21.2",
-        target="linux-x86_64",
-        commit="6e8cb763f4c1be67e2ff79a1bf628182ceeab3db",
-        raw_size=109289360,
-        core_size=13118454,
-        checks=("official-binary-compressed-and-uncompressed-match-signed-list",
-                "public-seed-compiler-rust-equals-pinned-public-repository-file",
-                LINK_RECORD_CHECK),
-        not_established=("official-cli-links-the-public-compiler-rust",
-                         "official-cli-behaves-like-the-public-core",
-                         "official-cli-rebuilds-from-this-repository"),
-        link_target="x86_64-unknown-linux-gnu",
-        pins={
-            "topaz-release.pub": "796cd56440798d10d74f8bb98c4d89302bd20b7258469bd397fbdde5c6ccd0a4",
-            "checksums.txt": "d9132297f96fc482c80ad8aeb3b881e431b0fcfb229fa2f6ffa52dda65a66476",
-            "checksums.txt.sig": "883157f5efbb4cc4381925cbad409c3324475ff5bd00744267b729188386a1ad",
-            "topaz-linux-x86_64.gz": "5ea629306f81bbff4f3b4477f32544a73bfa269b336b2d0ecd8f778f702faf4d",
-            "topaz-bootstrap-seed-v5.21.2.tar.gz": "6ed5ca74e7f12c46775ebfdc819205ce6ce7e9eb7fd36a0f0a065c7cf03970a6",
-            "topaz-linux-x86_64.release-core-link.json": "264ebf13c5172877307766c8c7eaa095ed2631807ffa67faef450b0548ce5264",
-            "topaz-linux-x86_64.release-core-link.seed.json": "6980d79670c50049ecc5ef985da04c6bc1cb26bc1db0dbb544b05e29ca568bd9",
-            "release-core-link.seed.checksums.txt": "163721bed786c144eec35648e6ba823b2c7ab0759cf55a4bd4186162b882a846",
-            "release-core-link.seed.checksums.txt.sig": "7c100d9b5c1f219c239adfe1e8396841bfb6a534882e5fc3743f7ddca49ff929",
-            "compiler.rs": "53afe18d431ace25e2896dc4d1359f2976707ae9d7f1f04f85876874480ee703",
-            "topaz-linux-x86_64": "a2b33b2affe8eaaa22bbe9d4d8dca04349bcfc9026a70dc95e7d7d7a7e1cbcd8",
-        },
-        limits={
-            "topaz-release.pub": 113,
-            "checksums.txt": 2200,
-            "checksums.txt.sig": 64,
-            "topaz-linux-x86_64.gz": 41896976,
-            "topaz-bootstrap-seed-v5.21.2.tar.gz": 1932606,
-            "topaz-linux-x86_64.release-core-link.json": 2617,
-            "topaz-linux-x86_64.release-core-link.seed.json": 2854,
-            "release-core-link.seed.checksums.txt": 573,
-            "release-core-link.seed.checksums.txt.sig": 64,
-        },
-    ),
-}
-CURRENT_RELEASE = ("v5.21.2", "linux-x86_64")
+# Issued release identities and public-key fingerprints are release data.
+def load_release_data():
+    data = json.loads((Path(__file__).parent / "topaz-releases.json").read_text(encoding="utf-8"))
+    if data.get("schema") != "topaz.public-release-verifier-data/v1":
+        raise ValueError("unsupported release verifier data")
+    releases = {}
+    for fields in data["releases"]:
+        fields = dict(fields)
+        fields["checks"] = tuple(fields["checks"])
+        fields["not_established"] = tuple(fields["not_established"])
+        release = Release(**fields)
+        key = (release.version, release.target)
+        if key in releases or release.pins["topaz-release.pub"] not in data["publicKeys"]:
+            raise ValueError("duplicate release or unregistered release public key")
+        releases[key] = release
+    current = tuple(data["currentRelease"])
+    if current not in releases:
+        raise ValueError("current release is absent from release data")
+    return releases, current
+
+
+RELEASES, CURRENT_RELEASE = load_release_data()
 
 
 def require(ok, message):
@@ -193,12 +217,12 @@ def verify_list_entry(lines, filename, digest):
 
 def verify_links(directory, release, signed_lines, cli_digest, cli_size):
     verify_list_entry(signed_lines, release.product_link, release.pins[release.product_link])
-    seed_lines = verify_signed_list(directory, SEED_LINK_CHECKSUMS)
+    seed_lines = signed_lines if content_identity_release(release.version) else verify_signed_list(directory, SEED_LINK_CHECKSUMS)
     verify_list_entry(seed_lines, release.seed_link, release.pins[release.seed_link])
     product = json.loads((directory / release.product_link).read_text(encoding="utf-8"))
     followup = json.loads((directory / release.seed_link).read_text(encoding="utf-8"))
     for record in [product, followup]:
-        require(record.get("schema") == "topaz.release-core-link/v1", "link record schema mismatch")
+        require(record.get("schema") == ("topaz.release-core-link/v2" if content_identity_release(release.version) else "topaz.release-core-link/v1"), "link record schema mismatch")
         require(record.get("version") == release.version and record.get("target") == release.link_target,
                 "link record release or target mismatch")
         require(record.get("subject") == {"name": release.name, "sha256": cli_digest, "bytes": cli_size},
@@ -217,6 +241,7 @@ def verify_links(directory, release, signed_lines, cli_digest, cli_size):
     for key, value in product.items():
         if key not in {"seedSourceRevision", "seedArchiveSha256", "publicKitCommit"}:
             require(followup.get(key) == value, f"seed link changed product field: {key}")
+    verify_public_link_sources(product, followup, release)
     return release.link_evidence()
 
 
@@ -239,6 +264,8 @@ def verify(directory, download, release=None):
     signed_lines = verify_signed_list(directory, "checksums.txt")
     for filename in [name + ".gz", name]:
         verify_list_entry(signed_lines, filename, pins[filename])
+
+    verify_release_seed(directory, release, signed_lines)
 
     with gzip.open(directory / (name + ".gz"), "rb") as cli:
         digest, size = digest_stream(cli, release.raw_size)
@@ -266,7 +293,7 @@ def verify(directory, download, release=None):
                            "publicKeyUrl": inputs["topaz-release.pub"][0],
                            "publicKeyPemSha256": pins["topaz-release.pub"], "signatureAlgorithm": "Ed25519"},
         "compilerRust": {"seedUrl": inputs[seed_name][0], "seedArchiveSha256": pins[seed_name],
-                         "seedTrust": "release-specific digest pinned in verifier",
+                         "seedTrust": ("signed release checksum list" if content_identity_release(release.version) else "release-specific digest pinned in verifier"),
                          "member": MEMBER, "publicRepository": "studiohaze/topaz",
                          "commit": release.commit, "publicPath": PUBLIC_FILE, "publicUrl": release.raw_url,
                          "bytes": release.core_size, "sha256": pins["compiler.rs"], "byteComparison": "equal"},
