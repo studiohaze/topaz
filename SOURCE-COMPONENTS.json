@@ -2,7 +2,7 @@
   "schema": "topaz.reader-source-components/v1",
   "license": "Apache-2.0; third-party terms identified in the accompanying notices",
   "snapshot": {
-    "version": "v5.21.2",
+    "version": "v5.21.3",
     "sourceFiles": [
       {
         "source": "BINARY-LICENSE.txt",
@@ -30,6 +30,226 @@
         "mode": "100644",
         "bytes": 4472,
         "sha256": "c8b3a162f69b116bb0742e535e427f919b0651b8487cd9c4f57d699fc05a9eae",
+        "component": "topaz-standard-library-tools",
+        "origin": "authorized-public-source",
+        "license": "Apache-2.0"
+      },
+      {
+        "source": "compiler/crates/topaz_resolve/src/std/typeset/admission.tpz",
+        "destination": "compiler/crates/topaz_resolve/src/std/typeset/admission.tpz",
+        "mode": "100644",
+        "bytes": 1879,
+        "sha256": "b1245a9ab561b20913cb81c42d38df038bf90c0f936f3f937cc257c4f0eba97f",
+        "component": "topaz-standard-library-tools",
+        "origin": "authorized-public-source",
+        "license": "Apache-2.0"
+      },
+      {
+        "source": "compiler/crates/topaz_resolve/src/std/typeset/atlas_breaks.tpz",
+        "destination": "compiler/crates/topaz_resolve/src/std/typeset/atlas_breaks.tpz",
+        "mode": "100644",
+        "bytes": 3527,
+        "sha256": "896bfdddfc88be4607a2aea776e023c87c5ed9e9d932ea0504ecfeaf5aaba87c",
+        "component": "topaz-standard-library-tools",
+        "origin": "authorized-public-source",
+        "license": "Apache-2.0"
+      },
+      {
+        "source": "compiler/crates/topaz_resolve/src/std/typeset/breaks.tpz",
+        "destination": "compiler/crates/topaz_resolve/src/std/typeset/breaks.tpz",
+        "mode": "100644",
+        "bytes": 4938,
+        "sha256": "fc0c2844f7a05d2a92ed84d0631e27a50d4b09bab8ff0c0ea2452173f3a722e0",
+        "component": "topaz-standard-library-tools",
+        "origin": "authorized-public-source",
+        "license": "Apache-2.0"
+      },
+      {
+        "source": "compiler/crates/topaz_resolve/src/std/typeset/cost.tpz",
+        "destination": "compiler/crates/topaz_resolve/src/std/typeset/cost.tpz",
+        "mode": "100644",
+        "bytes": 1489,
+        "sha256": "a0aa7f1086ea548d3fd508650ea7e42028e607f674d28b412baa849f722cb66e",
+        "component": "topaz-standard-library-tools",
+        "origin": "authorized-public-source",
+        "license": "Apache-2.0"
+      },
+      {
+        "source": "compiler/crates/topaz_resolve/src/std/typeset/greedy.tpz",
+        "destination": "compiler/crates/topaz_resolve/src/std/typeset/greedy.tpz",
+        "mode": "100644",
+        "bytes": 1810,
+        "sha256": "85b85e99407f15ad33ead2deb9ec848a526adb3689379de9882f58a6c4757bb9",
+        "component": "topaz-standard-library-tools",
+        "origin": "authorized-public-source",
+        "license": "Apache-2.0"
+      },
+      {
+        "source": "compiler/crates/topaz_resolve/src/std/typeset/knuth_plass.tpz",
+        "destination": "compiler/crates/topaz_resolve/src/std/typeset/knuth_plass.tpz",
+        "mode": "100644",
+        "bytes": 2706,
+        "sha256": "a2694fb96b5a8bd8bea9a04ef1e5cc92dd9036241a6755223945b09355845f82",
+        "component": "topaz-standard-library-tools",
+        "origin": "authorized-public-source",
+        "license": "Apache-2.0"
+      },
+      {
+        "source": "compiler/crates/topaz_resolve/src/std/typeset/length.tpz",
+        "destination": "compiler/crates/topaz_resolve/src/std/typeset/length.tpz",
+        "mode": "100644",
+        "bytes": 189,
+        "sha256": "dd3f2373a3977be8cb505238fb287470aa01be3253929ab88ee93164a1e0c029",
+        "component": "topaz-standard-library-tools",
+        "origin": "authorized-public-source",
+        "license": "Apache-2.0"
+      },
+      {
+        "source": "compiler/crates/topaz_resolve/src/std/typeset/line.tpz",
+        "destination": "compiler/crates/topaz_resolve/src/std/typeset/line.tpz",
+        "mode": "100644",
+        "bytes": 2008,
+        "sha256": "9cc05c92f2d3fc294cefe705b36fc3d7ee411ce91c35b322dd396915eaf9507a",
+        "component": "topaz-standard-library-tools",
+        "origin": "authorized-public-source",
+        "license": "Apache-2.0"
+      },
+      {
+        "source": "compiler/crates/topaz_resolve/src/std/typeset/locale.tpz",
+        "destination": "compiler/crates/topaz_resolve/src/std/typeset/locale.tpz",
+        "mode": "100644",
+        "bytes": 5659,
+        "sha256": "097586a22a50945af813ee0d43a81632c0259db27b650f9c3c8777ab9f2e03c5",
+        "component": "topaz-standard-library-tools",
+        "origin": "authorized-public-source",
+        "license": "Apache-2.0"
+      },
+      {
+        "source": "compiler/crates/topaz_resolve/src/std/typeset/measure.tpz",
+        "destination": "compiler/crates/topaz_resolve/src/std/typeset/measure.tpz",
+        "mode": "100644",
+        "bytes": 4728,
+        "sha256": "e12a19b4d73671f8379613f6ce43c81d8d5ffa4f05f57af41900c4003266db22",
+        "component": "topaz-standard-library-tools",
+        "origin": "authorized-public-source",
+        "license": "Apache-2.0"
+      },
+      {
+        "source": "compiler/crates/topaz_resolve/src/std/typeset/model.tpz",
+        "destination": "compiler/crates/topaz_resolve/src/std/typeset/model.tpz",
+        "mode": "100644",
+        "bytes": 3438,
+        "sha256": "254dfa51a37ae41377697b49ae4c2d0a7b626e74d23a2d5c7fe8268850c25926",
+        "component": "topaz-standard-library-tools",
+        "origin": "authorized-public-source",
+        "license": "Apache-2.0"
+      },
+      {
+        "source": "compiler/crates/topaz_resolve/src/std/typeset/paragraph.tpz",
+        "destination": "compiler/crates/topaz_resolve/src/std/typeset/paragraph.tpz",
+        "mode": "100644",
+        "bytes": 5039,
+        "sha256": "c18361e0b4f9cbe4dbaa965893f718311c7027eca00d8ad4d0620b1e1b7d1984",
+        "component": "topaz-standard-library-tools",
+        "origin": "authorized-public-source",
+        "license": "Apache-2.0"
+      },
+      {
+        "source": "compiler/crates/topaz_resolve/src/std/typeset/spacing.tpz",
+        "destination": "compiler/crates/topaz_resolve/src/std/typeset/spacing.tpz",
+        "mode": "100644",
+        "bytes": 4679,
+        "sha256": "4ef307ae6d38251abff4689debc78c26db9486227a1c7a5101e37f919b4e6792",
+        "component": "topaz-standard-library-tools",
+        "origin": "authorized-public-source",
+        "license": "Apache-2.0"
+      },
+      {
+        "source": "compiler/crates/topaz_resolve/src/std/typeset/uax14.tpz",
+        "destination": "compiler/crates/topaz_resolve/src/std/typeset/uax14.tpz",
+        "mode": "100644",
+        "bytes": 7453,
+        "sha256": "2e604a18c6012bbeb7972f578e35b66c8be6db84d1247ef8c0310b495a4370f4",
+        "component": "topaz-standard-library-tools",
+        "origin": "authorized-public-source",
+        "license": "Apache-2.0"
+      },
+      {
+        "source": "compiler/crates/topaz_resolve/src/std/typeset/unicode/alphabetic.tpz",
+        "destination": "compiler/crates/topaz_resolve/src/std/typeset/unicode/alphabetic.tpz",
+        "mode": "100644",
+        "bytes": 10903,
+        "sha256": "a047ce648cef1e6908af53eb96b9c396c5b1fc96533041c300272446d1b424a8",
+        "component": "topaz-standard-library-tools",
+        "origin": "authorized-public-source",
+        "license": "Apache-2.0"
+      },
+      {
+        "source": "compiler/crates/topaz_resolve/src/std/typeset/unicode/category.tpz",
+        "destination": "compiler/crates/topaz_resolve/src/std/typeset/unicode/category.tpz",
+        "mode": "100644",
+        "bytes": 47685,
+        "sha256": "362b3cc5db075feb594debd5e42075f4cb3f97f69ae342d768ff98a3deb6b8b0",
+        "component": "topaz-standard-library-tools",
+        "origin": "authorized-public-source",
+        "license": "Apache-2.0"
+      },
+      {
+        "source": "compiler/crates/topaz_resolve/src/std/typeset/unicode/east_asian.tpz",
+        "destination": "compiler/crates/topaz_resolve/src/std/typeset/unicode/east_asian.tpz",
+        "mode": "100644",
+        "bytes": 2094,
+        "sha256": "f156910b064da298e78bfe760eb3f148c88b3f38eb50653985fedc048e2ece91",
+        "component": "topaz-standard-library-tools",
+        "origin": "authorized-public-source",
+        "license": "Apache-2.0"
+      },
+      {
+        "source": "compiler/crates/topaz_resolve/src/std/typeset/unicode/japanese_classes.tpz",
+        "destination": "compiler/crates/topaz_resolve/src/std/typeset/unicode/japanese_classes.tpz",
+        "mode": "100644",
+        "bytes": 1806,
+        "sha256": "f2980650db669133f20d55d5ea8ce9b9fe30d222d382b34ea050d33f3400e556",
+        "component": "topaz-standard-library-tools",
+        "origin": "authorized-public-source",
+        "license": "Apache-2.0"
+      },
+      {
+        "source": "compiler/crates/topaz_resolve/src/std/typeset/unicode/line_break.tpz",
+        "destination": "compiler/crates/topaz_resolve/src/std/typeset/unicode/line_break.tpz",
+        "mode": "100644",
+        "bytes": 41142,
+        "sha256": "1cd9968221bbb733712a709deacd942370d0b1acc5aa6428cc1ebc615e0293ce",
+        "component": "topaz-standard-library-tools",
+        "origin": "authorized-public-source",
+        "license": "Apache-2.0"
+      },
+      {
+        "source": "compiler/crates/topaz_resolve/src/std/typeset/unicode/lookup.tpz",
+        "destination": "compiler/crates/topaz_resolve/src/std/typeset/unicode/lookup.tpz",
+        "mode": "100644",
+        "bytes": 878,
+        "sha256": "3c2c827b23aa5566d15c68a63af4c6f7843b26f183c431090ef7009989f60d80",
+        "component": "topaz-standard-library-tools",
+        "origin": "authorized-public-source",
+        "license": "Apache-2.0"
+      },
+      {
+        "source": "compiler/crates/topaz_resolve/src/std/typeset/unicode/pictographic.tpz",
+        "destination": "compiler/crates/topaz_resolve/src/std/typeset/unicode/pictographic.tpz",
+        "mode": "100644",
+        "bytes": 1403,
+        "sha256": "d9df46cc6f13309860ec0acc473130ead900b41a6ea378eee31308828b4ec201",
+        "component": "topaz-standard-library-tools",
+        "origin": "authorized-public-source",
+        "license": "Apache-2.0"
+      },
+      {
+        "source": "compiler/crates/topaz_resolve/src/std/typeset/wide.tpz",
+        "destination": "compiler/crates/topaz_resolve/src/std/typeset/wide.tpz",
+        "mode": "100644",
+        "bytes": 1412,
+        "sha256": "ea0ed931686041ca43c7bd2d1c77ff9d230e7d435bdac1a330f59c56f30c243f",
         "component": "topaz-standard-library-tools",
         "origin": "authorized-public-source",
         "license": "Apache-2.0"
@@ -1769,6 +1989,71 @@
         }
       },
       {
+        "destination": "core-kit/release-remap.sh",
+        "license": "Apache-2.0",
+        "origin": "authorized-public-source"
+      },
+      {
+        "destination": "core-kit/release-remap.ps1",
+        "license": "Apache-2.0",
+        "origin": "authorized-public-source"
+      },
+      {
+        "destination": "core-kit/release-rustc-wrapper.sh",
+        "license": "Apache-2.0",
+        "origin": "authorized-public-source"
+      },
+      {
+        "destination": "core-kit/release-rustc-wrapper.cs",
+        "license": "Apache-2.0",
+        "origin": "authorized-public-source"
+      },
+      {
+        "destination": "core-kit/bootstrap.sh",
+        "license": "Apache-2.0",
+        "origin": "authorized-public-source"
+      },
+      {
+        "destination": "core-kit/bootstrap.ps1",
+        "license": "Apache-2.0",
+        "origin": "authorized-public-source"
+      },
+      {
+        "destination": "core-kit/repro-build.sh",
+        "license": "Apache-2.0",
+        "origin": "authorized-public-source"
+      },
+      {
+        "destination": "core-kit/repro-build.ps1",
+        "license": "Apache-2.0",
+        "origin": "authorized-public-source"
+      },
+      {
+        "destination": "core-kit/distribution/build-x86_64-pc-windows-msvc.json",
+        "license": "Apache-2.0",
+        "origin": "authorized-public-source"
+      },
+      {
+        "destination": "core-kit/distribution/build-x86_64-unknown-linux-gnu.json",
+        "license": "Apache-2.0",
+        "origin": "authorized-public-source"
+      },
+      {
+        "destination": "core-kit/distribution/build-aarch64-apple-darwin.json",
+        "license": "Apache-2.0",
+        "origin": "authorized-public-source"
+      },
+      {
+        "destination": "core-kit/distribution/build-x86_64-apple-darwin.json",
+        "license": "Apache-2.0",
+        "origin": "authorized-public-source"
+      },
+      {
+        "destination": "core-kit/README.md",
+        "license": "Apache-2.0",
+        "origin": "authorized-public-source"
+      },
+      {
         "destination": "compiler/generated/native/compiler.json",
         "license": "Apache-2.0",
         "origin": "authorized-public-source"
@@ -2055,6 +2340,16 @@
       },
       {
         "destination": "compiler/Cargo.lock",
+        "license": "Apache-2.0",
+        "origin": "authorized-public-source"
+      },
+      {
+        "destination": "core-kit/cli/templates/program.lock",
+        "license": "Apache-2.0",
+        "origin": "authorized-public-source"
+      },
+      {
+        "destination": "core-kit/distribution/COMPONENTS.json",
         "license": "Apache-2.0",
         "origin": "authorized-public-source"
       },

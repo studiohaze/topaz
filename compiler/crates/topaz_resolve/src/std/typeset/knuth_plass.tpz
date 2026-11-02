@@ -1,0 +1,52 @@
+function tsKpLine(input:Paragraph, m:TypesetMetrics, start:int, p:Penalty, previous:TypesetState) -> Option<TypesetTransition> {
+  let target = tsTarget(input.geometry,start,previous.bucket)
+  let mut a = start
+  let mut z = p.unitEnd
+  while a < z && m.units[a].glue { a += 1 }
+  // An ordinary glue break discards its trailing glue. A Forced penalty
+  // instead consumes explicit terminal glue, including its natural width
+  // and stretch/shrink (the caller's representation of a ragged last line).
+  if p.rule != BreakRule.Forced {
+    while z > a && m.units[z-1].glue { z -= 1 }
+  }
+  let natural = tsWidth(m,a,z)
+  let slack = tsBig(target) - tsBig(natural) - tsBig(p.width)
+  let stretch = m.stretch[z] - m.stretch[a]
+  let shrink = m.shrink[z] - m.shrink[a]
+  let capacity = if slack >= tsBig(0) { stretch } else { shrink }
+  if capacity == 0 && slack != tsBig(0) { return None }
+  let denominator = tsBig(if capacity == 0 { 1 } else { capacity })
+  if slack < -denominator { return None }
+  if slack > tsBig(0) && slack * tsBig(TYPESET_R) > denominator * tsBig(input.knuthPlass.toleranceR) { return None }
+  let absolute = tsBigAbs(slack)
+  let cubic = tsBig(100) * absolute * absolute * absolute
+  let divisor = denominator * denominator * denominator
+  let badness = if cubic >= tsBig(10000) * divisor { 10000 } else { tsRoundEven(cubic,divisor) }
+  let ratio = tsRoundEven(slack * tsBig(TYPESET_R),denominator)
+  let fitness = if slack * tsBig(2) < -denominator { 0 } else {
+    if slack * tsBig(2) <= denominator { 1 } else { if slack <= denominator { 2 } else { 3 } }
+  }
+  let base = tsBig(input.knuthPlass.linePenalty) + tsBig(badness)
+  let mut cost = base * base
+  match p.rule {
+    case Allowed(value) => {
+      let square = tsBig(value) * tsBig(value)
+      cost = if value >= 0 { cost + square } else { cost - square }
+    };
+    case _ => {}
+  }
+  if previous.line != None && tsAbs(previous.fitness - fitness) > 1 {
+    cost = cost + tsBig(input.knuthPlass.fitnessDemerit)
+  }
+  if previous.flagged && p.flagged { cost = cost + tsBig(input.knuthPlass.flaggedDemerit) }
+  if p.unitEnd == m.units.length && previous.flagged { cost = cost + tsBig(input.knuthPlass.finalFlaggedDemerit) }
+  Some(TypesetTransition {
+    line:tsLine(m,start,p,target,natural,p.width,tsInt(cost),ratio,None),
+    fitness:fitness, flagged:p.flagged
+  })
+}
+function tsTransition(input:Paragraph, m:TypesetMetrics, start:int, p:Penalty, previous:TypesetState, fill:bool) -> Option<TypesetTransition> {
+  if tsForcedBetween(m,start,p.unitEnd) { return None }
+  if input.costModel == CostModel.KnuthPlass { return tsKpLine(input,m,start,p,previous) }
+  tsFixedLine(input,m,start,p,previous.bucket,fill,true)
+}

@@ -146,3 +146,5 @@ Each distributed target carries its platform requirements and recipe identity
 in `assembly.json`. The validation record identifies the source revisions,
 build environments and comparisons behind the published files. Consult those
 records when reproducing a target or investigating a platform-specific result.
+
+On Windows, the path-mapping wrapper uses the .NET Framework C# compiler supplied with Windows PowerShell. Bootstrap checks for it before starting Cargo.

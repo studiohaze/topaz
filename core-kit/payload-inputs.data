@@ -233,6 +233,7 @@ compiler/seed/initial/topaz/types.tpz
 compiler/seed/initial/topaz/unicode.tpz
 compiler/seed/initial/topaz/unicode_tables.tpz
 compiler/seed/runtime.json
+core-kit/README.md
 core-kit/UPSTREAM-PORT.md
 core-kit/bootstrap.ps1
 core-kit/bootstrap.sh
@@ -304,6 +305,10 @@ core-kit/native/src/main.rs
 core-kit/native/src/platform.rs
 core-kit/native/src/process.rs
 core-kit/payload-inputs.data
+core-kit/release-remap.ps1
+core-kit/release-remap.sh
+core-kit/release-rustc-wrapper.cs
+core-kit/release-rustc-wrapper.sh
 core-kit/repro-build.ps1
 core-kit/repro-build.sh
 core-kit/smoke.cmd

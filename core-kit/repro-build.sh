@@ -40,9 +40,9 @@ separator=$(printf '\037')
 case "$root$out" in
   *"$separator"*) printf '%s\n' 'A source/output path contains the Cargo argument separator.' >&2; exit 1 ;;
 esac
-CARGO_ENCODED_RUSTFLAGS="--remap-path-prefix=$root=/topaz-core-kit${separator}--remap-path-prefix=$out/generated_cli.rs=/topaz-core-kit/generated/cli.rs"
+CARGO_ENCODED_RUSTFLAGS="--remap-path-prefix=$root=/topaz/source${separator}--remap-path-prefix=$out/generated_cli.rs=/topaz/source/generated/cli.rs"
 export CARGO_ENCODED_RUSTFLAGS
 
-printf '%s\n' 'Source path recipe: checkout -> /topaz-core-kit; generated CLI -> /topaz-core-kit/generated/cli.rs.'
+printf '%s\n' 'Source path recipe: checkout -> /topaz/source; generated CLI -> /topaz/source/generated/cli.rs.'
 printf '%s\n' 'Changing compiler flags can rebuild the core dependency even when canonical self-regeneration is disabled.'
 exec "$root/bootstrap" --out "$out"

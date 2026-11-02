@@ -1,0 +1,82 @@
+// Apache-2.0. One virtual std.typeset module; these parts have no imports.
+export enum BreakKind {
+  KoreanCluster, LatinSpace, LatinHyphen, LatinSoftHyphen,
+  ClosingPunctuation, HardFallback, ForcedEnd
+}
+export enum TypesetError {
+  InvalidInput(string), InvalidPolicy(string),
+  NoBreakOpportunities, NoGreedyPlan, NoPlan
+}
+export enum DistanceGrid { ScaledPoint, MilliPoint }
+export enum BreakMode { Word, Character }
+export enum KinsokuRules { AtlasDefault, Unicode16Ko, Unicode16Zh, Unicode16Ja }
+export enum JustificationMode { Unjustified, LatinWordSpace, CjkInterCharacter }
+export enum CostModel { FixedPoint, KnuthPlass }
+export enum BreakRule { Allowed(int), Forced, Forbidden }
+export record Box { unitIndex:int, text:string, width:int, trackingAfter:int }
+export record Glue {
+  unitIndex:int, text:string, width:int, trackingAfter:int, stretch:int, shrink:int
+}
+export record Penalty {
+  unitEnd:int, width:int, rule:BreakRule, kind:BreakKind, flagged:bool
+}
+export enum Item { BoxItem(Box), GlueItem(Glue), PenaltyItem(Penalty) }
+export record BreakPolicy {
+  mode:BreakMode, rules:KinsokuRules,
+  forbidBefore:Array<int>, forbidAfter:Array<int>,
+  boundaryAllowed:Array<bool>, generatedHyphenEnds:Array<int>,
+  protectFittingLatin:bool, preserveShortWords:bool,
+  narrowestWordTarget:int, bodyWordTarget:int
+}
+export record BreakCluster { text:string, advance:int, trackingAfter:int }
+export record BreakOpportunity { unitEnd:int, kind:BreakKind }
+export record LatinSpacing {
+  minWordSpaceRatio:float, maxWordSpaceRatio:float,
+  maxLetterSpacingEm:float, fontSizePt:float
+}
+export record JustificationPolicy {
+  mode:JustificationMode, minGapCount:int,
+  minLineWidthRatioM:int, minFinalLineWidthRatioM:Option<int>,
+  maxAdjustment:int, maxGapAdjustment:int, maxGapRatioR:int,
+  latinSpacing:Option<LatinSpacing>, cjkStretchRatio:float
+}
+export record LineGeometry {
+  bodyTarget:int, firstTarget:int, dropCapSpan:int, dropCapInset:int
+}
+export record KnuthPlassPolicy {
+  toleranceR:int, linePenalty:int, fitnessDemerit:int,
+  flaggedDemerit:int, finalFlaggedDemerit:int
+}
+export record Paragraph {
+  grid:DistanceGrid, items:Array<Item>, geometry:LineGeometry,
+  justification:JustificationPolicy, costModel:CostModel,
+  knuthPlass:KnuthPlassPolicy
+}
+export record PlanLine {
+  start:int, endExclusive:int, trimmedEndExclusive:int,
+  displayTextScalarLength:int, kind:BreakKind, target:int,
+  rawTextWidth:int, trimmedTextWidth:int, costTextWidth:int,
+  selectedPenaltyWidth:int, postValidationWidthLimit:Option<int>,
+  cost:int, adjustmentRatioR:int
+}
+export record ParagraphPlan {
+  lines:Array<PlanLine>, totalCost:int,
+  boundedFillFeasible:Option<bool>, grid:DistanceGrid
+}
+export record ParagraphResult {
+  optimized:ParagraphPlan, greedy:ParagraphPlan, breakOpportunityCount:int
+}
+record TypesetUnit { text:string, width:int, tracking:int, stretch:int, shrink:int, glue:bool }
+record TypesetMetrics {
+  units:Array<TypesetUnit>, penalties:Array<Penalty>, prefix:Array<int>,
+  chars:Array<int>, spaces:Array<int>, stretch:Array<int>, shrink:Array<int>
+}
+record TypesetCapacity { shrink:int, stretch:int }
+record TypesetTransition { line:PlanLine, fitness:int, flagged:bool }
+record TypesetState {
+  breakpoint:int, bucket:int, streak:int, fitness:int, flagged:bool,
+  cost:int, previous:int, line:Option<PlanLine>
+}
+const TYPESET_B = 1000000
+const TYPESET_R = 100000000
+const TYPESET_JUSTIFICATION_CAP = 25000

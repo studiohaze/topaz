@@ -1,0 +1,107 @@
+// Fixed locale policies: KLReq 7.1.1-7.1.4, JLReq 3.1.7-3.1.10 strict
+// kinsoku (including small kana), and CLReq 6.1.1 recommended basic kinsoku.
+// All retain UAX14's non-tailorable decisions and explicit shaping boundaries.
+function tsLocaleBefore(cp:int, rules:KinsokuRules) -> bool {
+  let group = tsJaClass(cp)
+  let lb = tsLbResolve(cp)
+  if lb == "CL" || lb == "CP" || lb == "EX" || lb == "NS" { return true }
+  if rules == KinsokuRules.Unicode16Ja { return tsHas([2,3,4,5,6,7,9,10,11,29],group) }
+  if rules == KinsokuRules.Unicode16Ko { return tsHas([2,3,4,5,6,7,9,10],group) }
+  // CLReq basic includes stop/pause punctuation, closing brackets/quotes,
+  // connector marks, interpuncts and solidi. Two-em dashes and ellipses are
+  // distinguished from its optional stricter style; they are not added here.
+  tsHas([2,3,4,5,6,7],group) || tsHas([183,8226,12539,65295,47,65374,126],cp)
+}
+function tsLocaleAfter(cp:int, rules:KinsokuRules) -> bool {
+  tsLbResolve(cp) == "OP" || tsJaClass(cp) == 1 || (rules == KinsokuRules.Unicode16Ja && tsJaClass(cp) == 28)
+}
+// Decimal digits and Han digit/place-value signs, including financial forms.
+// Other ideographs remain ordinary text: the prefix/postfix rules are numeric
+// context rules, not unconditional bans on the abbreviation character classes.
+function tsCjkNumeral(cp:int) -> bool {
+  if tsCategory(cp) == "Nd" { return true }
+  tsHas(tsScalarCodes("〇零一二三四五六七八九十百千万萬億亿兆京垓秭穣穰溝沟澗涧正載载極极壱壹弐貳贰参參叁肆伍陸陆漆柒捌玖拾佰阡仟兩两廿卅卌皕"),cp)
+}
+function tsLocaleNumericBoundary(s:Array<TypesetScalar>, boundary:int, rules:KinsokuRules) -> bool {
+  if rules != KinsokuRules.Unicode16Ja && rules != KinsokuRules.Unicode16Ko { return true }
+  let left = tsPrevious(s,boundary)
+  let a = s[left].effectiveCp
+  let b = s[boundary].effectiveCp
+  // JLReq 3.1.10 / Appendix A cl12/13; KLReq 7.1.4 / cl13 ($, yen)
+  // and cl14 (percent, degrees Celsius). Do not borrow JA's sets for KO.
+  let prefix = if rules == KinsokuRules.Unicode16Ja { tsJaClass(a) == 12 } else { a == 36 || a == 165 }
+  let suffix = if rules == KinsokuRules.Unicode16Ja { tsJaClass(b) == 13 } else { b == 37 || b == 8451 }
+  if (prefix && tsCjkNumeral(b)) || (tsCjkNumeral(a) && suffix) { return false }
+  // JLReq 3.1.10: U+0020 inside a European numeral is a place separator,
+  // not a word boundary. Actual spaces separating an abbreviation and a
+  // number, or separating nonnumeric words, retain their ordinary meaning.
+  if rules == KinsokuRules.Unicode16Ja && s[left].lb == "SP" && s[boundary].category == "Nd" {
+    let mut p = left
+    while p >= 0 && s[p].lb == "SP" { p = tsPrevious(s,p) }
+    if p >= 0 && s[p].category == "Nd" { return false }
+  }
+  true
+}
+function tsLocaleBoundary(codes:Array<int>, s:Array<TypesetScalar>, boundary:int, rules:KinsokuRules) -> bool {
+  if boundary <= 0 || boundary >= codes.length { return true }
+  if !tsLocaleNumericBoundary(s,boundary,rules) { return false }
+  let mut left = boundary - 1
+  let mut right = boundary
+  while left >= 0 && codes[left] == 32 { left -= 1 }
+  while right < codes.length && codes[right] == 32 { right += 1 }
+  if left >= 0 && tsLocaleAfter(codes[left],rules) { return false }
+  if right < codes.length && tsLocaleBefore(codes[right],rules) { return false }
+  if left >= 0 && right < codes.length {
+    let a = codes[left]
+    let b = codes[right]
+    if (a == 8212 && b == 8212) || (a == 8213 && b == 8213) || (a == 8230 && b == 8230) || (a == 8229 && b == 8229) { return false }
+  }
+  true
+}
+function tsHangul(cp:int) -> bool {
+  let lb = tsLbResolve(cp)
+  tsLbSet(["JL","JV","JT","H2","H3"],lb) || (cp >= 12592 && cp <= 12687)
+}
+function tsWordUnit(text:string) -> bool {
+  let codes = tsScalarCodes(text)
+  if codes.length == 0 { return false }
+  for c in codes { if !tsAlphabetic(c) && c != 39 && c != 8217 { return false } }
+  true
+}
+function tsWordRange(m:TypesetMetrics, end:int) -> Array<int> {
+  let mut start = end
+  let mut tail = end
+  while start > 0 && m.units[start-1].text.trim() != "" { start -= 1 }
+  while tail < m.units.length && m.units[tail].text.trim() != "" { tail += 1 }
+  [start,tail]
+}
+function tsWordAllowed(m:TypesetMetrics, opportunity:BreakOpportunity, policy:BreakPolicy) -> bool {
+  let end = opportunity.unitEnd
+  if end == m.units.length { return true }
+  let left = m.units[end-1].text
+  let right = m.units[end].text
+  if opportunity.kind == BreakKind.HardFallback {
+    let mut start = end
+    let mut tail = end
+    while start > 0 && tsWordUnit(m.units[start-1].text) { start -= 1 }
+    while tail < m.units.length && tsWordUnit(m.units[tail].text) { tail += 1 }
+    let inside = start < end && tail > end
+    if inside && policy.protectFittingLatin && tsWidth(m,start,tail) <= policy.narrowestWordTarget { return false }
+    if inside && policy.mode == BreakMode.Word && tsWidth(m,start,tail) <= policy.bodyWordTarget { return false }
+  }
+  if policy.rules == KinsokuRules.Unicode16Ko && policy.mode == BreakMode.Word && tsHangul(tsCode(left)) && tsHangul(tsCode(right)) {
+    let range = tsWordRange(m,end)
+    if tsWidth(m,range[0],range[1]) <= policy.bodyWordTarget { return false }
+  }
+  if policy.preserveShortWords && left.trim() != "" && right.trim() != "" {
+    let range = tsWordRange(m,end)
+    let mut count = 0
+    let mut i = range[0]
+    while i < range[1] {
+      for c in tsScalarCodes(m.units[i].text) { if tsAlphabetic(c) || tsCategory(c).startsWith("N") { count += 1 } }
+      i += 1
+    }
+    if count <= 3 || tsWidth(m,range[0],range[1]) <= policy.bodyWordTarget { return false }
+  }
+  true
+}

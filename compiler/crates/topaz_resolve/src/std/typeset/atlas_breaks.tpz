@@ -1,0 +1,65 @@
+// Historical AtlasDefault sets from immutable 6d9e1be8; not Unicode tables.
+function tsAtlasBefore(c:int) -> bool {
+  tsHas([41,93,125,12301,12303,12299,12297,44,46,59,58,33,63,12289,12290,8221,8217,8230,65289,12305,65341,65373,65292,65294,65307,65306,65281,65311,187,8250],c)
+}
+function tsAtlasAfter(c:int) -> bool {
+  tsHas([40,91,123,12300,12302,12298,12296,8220,8216,65288,12304,65339,65371,171,8249],c)
+}
+function tsNoBreakSpace(s:string) -> bool { s == " " || s == " " }
+function tsNeighborSpace(s:string) -> bool { s == " " || tsNoBreakSpace(s) }
+function tsAtlasHyphen(s:string) -> bool { s == "-" || s == "‐" || s == "‑" || s == "–" }
+function tsAtlasKorean(s:string) -> bool {
+  for c in tsScalarCodes(s) {
+    if !((c >= 4352 && c <= 4607) || (c >= 12592 && c <= 12687) || (c >= 44032 && c <= 55215) ||
+      (c >= 13312 && c <= 19903) || (c >= 19968 && c <= 40959) || (c >= 63744 && c <= 64255) ||
+      tsHas([65292,12289,12290,65307,65306],c)) { return false }
+  }
+  true
+}
+function tsAnyAtlasBefore(s:string) -> bool {
+  for c in tsScalarCodes(s) { if tsAtlasBefore(c) { return true } }
+  false
+}
+function tsAnyAtlasAfter(s:string) -> bool {
+  for c in tsScalarCodes(s) { if tsAtlasAfter(c) { return true } }
+  false
+}
+function tsAsciiDigit(s:string) -> bool { s.scalars().length == 1 && tsCode(s) >= 48 && tsCode(s) <= 57 }
+function tsAtlasKind(clusters:Array<BreakCluster>, end:int) -> Option<BreakKind> {
+  let text = clusters[end-1].text
+  if end == clusters.length { return Some(BreakKind.ForcedEnd) }
+  let next = clusters[end].text
+  if text == " " { return Some(BreakKind.LatinSpace) }
+  if tsAtlasHyphen(text) { return Some(BreakKind.LatinHyphen) }
+  let mut closing = true
+  for c in tsScalarCodes(text) { if !tsAtlasBefore(c) { closing = false } }
+  let numeric = (text == "," || text == "." || text == ":") && end > 1 && tsAsciiDigit(clusters[end-2].text) && tsAsciiDigit(next)
+  if closing && !tsNeighborSpace(next) && !tsAnyAtlasBefore(next) && !numeric { return Some(BreakKind.ClosingPunctuation) }
+  if tsAtlasKorean(text) && !tsNeighborSpace(next) && !tsAnyAtlasBefore(next) && !tsAnyAtlasAfter(text) { return Some(BreakKind.KoreanCluster) }
+  if tsNeighborSpace(next) || tsNoBreakSpace(text) || tsAnyAtlasAfter(text) || tsAnyAtlasBefore(next) { return None }
+  Some(BreakKind.HardFallback)
+}
+function tsAtlasLatin(c:int) -> bool {
+  (c >= 65 && c <= 90) || (c >= 97 && c <= 122) || (c >= 192 && c <= 591) || (c >= 7680 && c <= 7935)
+}
+function tsWhitespace(c:int) -> bool {
+  match c.toCodePoint() { case Some(s) => s.trim() == ""; case None => false }
+}
+function tsOpeningQuote(codes:Array<int>, i:int) -> bool {
+  (codes[i] == 39 || codes[i] == 34) && (i == 0 || tsWhitespace(codes[i-1]) || tsAtlasAfter(codes[i-1]))
+}
+function tsAtlasContext(codes:Array<int>, boundary:int) -> bool {
+  let mut l = boundary - 1
+  let mut r = boundary
+  while l >= 0 && tsWhitespace(codes[l]) { l -= 1 }
+  while r < codes.length && tsWhitespace(codes[r]) { r += 1 }
+  if l >= 0 {
+    if (codes[l] == 8217 || codes[l] == 39) && l > 0 && l + 1 < codes.length && tsAtlasLatin(codes[l-1]) && tsAtlasLatin(codes[l+1]) { return false }
+    if tsAtlasAfter(codes[l]) || tsOpeningQuote(codes,l) { return false }
+  }
+  if r < codes.length {
+    if tsAtlasBefore(codes[r]) || ((codes[r] == 39 || codes[r] == 34) && !tsOpeningQuote(codes,r)) { return false }
+    if codes[r] == 8212 && ((r > 0 && tsAtlasBefore(codes[r-1])) || (r + 1 < codes.length && tsAtlasBefore(codes[r+1]))) { return false }
+  }
+  true
+}

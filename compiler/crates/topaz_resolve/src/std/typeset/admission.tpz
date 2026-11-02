@@ -1,0 +1,37 @@
+function tsValidate(input:Paragraph) -> Result<bool, TypesetError> {
+  let g = input.geometry
+  if g.bodyTarget <= 0 || g.firstTarget <= 0 || g.dropCapSpan < 0 || g.dropCapSpan > 3 {
+    return Err(TypesetError.InvalidPolicy("positive targets and dropCapSpan 0..3 required"))
+  }
+  if g.dropCapSpan > 0 && g.dropCapInset > 0 &&
+    (g.firstTarget <= g.dropCapInset || g.bodyTarget <= g.dropCapInset) {
+    return Err(TypesetError.InvalidPolicy("drop cap inset exceeds target"))
+  }
+  if input.costModel == CostModel.FixedPoint && input.grid != DistanceGrid.MilliPoint {
+    return Err(TypesetError.InvalidPolicy("FixedPoint requires MilliPoint"))
+  }
+  let j = input.justification
+  if j.minGapCount < 0 || j.minLineWidthRatioM < 0 || j.maxAdjustment < 0 || j.maxGapAdjustment < 0 || j.maxGapRatioR < 0 ||
+    !j.cjkStretchRatio.isFinite() || j.cjkStretchRatio < 0.0 {
+    return Err(TypesetError.InvalidPolicy("invalid justification policy"))
+  }
+  match j.minFinalLineWidthRatioM {
+    case Some(ratio) => { if ratio < 0 { return Err(TypesetError.InvalidPolicy("negative final line ratio")) } };
+    case None => {}
+  }
+  match j.latinSpacing {
+    case Some(s) => {
+      if !s.minWordSpaceRatio.isFinite() || !s.maxWordSpaceRatio.isFinite() || !s.maxLetterSpacingEm.isFinite() || !s.fontSizePt.isFinite() ||
+        s.minWordSpaceRatio < 0.8 || s.minWordSpaceRatio > 1.0 || s.maxWordSpaceRatio < 1.0 || s.maxWordSpaceRatio > 1.33 ||
+        s.maxLetterSpacingEm < 0.0 || s.maxLetterSpacingEm > 0.015 || s.fontSizePt <= 0.0 {
+        return Err(TypesetError.InvalidPolicy("invalid Latin spacing"))
+      }
+    };
+    case None => {}
+  }
+  let k = input.knuthPlass
+  if k.toleranceR < 0 || k.linePenalty < 0 || k.fitnessDemerit < 0 || k.flaggedDemerit < 0 || k.finalFlaggedDemerit < 0 {
+    return Err(TypesetError.InvalidPolicy("invalid Knuth-Plass policy"))
+  }
+  Ok(true)
+}
