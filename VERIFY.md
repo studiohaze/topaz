@@ -15,33 +15,40 @@ from this repository. The predicate says so in its `notEstablished` list.
 ## 1. Verify the signature
 
 `--signer-digest` is the commit the workflow ran at, so pin a commit that issued
-an attestation for the version you downloaded. The issued 5.21.1 v2 attestation came from run
+an attestation for the version you downloaded. The issued 5.21.2 v2 attestation came from run
+[41376562394](https://github.com/studiohaze/topaz/actions/runs/41376562394) at
+commit `95d70552ee5fa3c404a59d08911fb82a5e666f6e`. Review the workflow and
+scripts at that commit. A later documentation commit is not the signer digest.
+Compare a later reviewed commit to see which checks changed.
+
+The issued 5.21.1 v2 attestation came from run
 [41215275227](https://github.com/studiohaze/topaz/actions/runs/41215275227) at
-commit `1c5b59925e404e95b4d67a2274586be91ec0f967`. Review the workflow and
-scripts at that commit. Compare a later reviewed commit to see which checks
-changed. The current policy checker retains the 5.21.1 contract.
+commit `1c5b59925e404e95b4d67a2274586be91ec0f967`. The current policy checker
+retains the 5.21.1 contract.
 
 ```sh
-git diff 1c5b59925e404e95b4d67a2274586be91ec0f967 <reviewed commit> -- \
+git diff 95d70552ee5fa3c404a59d08911fb82a5e666f6e <reviewed commit> -- \
   .github/workflows/verify-topaz-release.yml scripts/
 ```
 
 An empty diff means both commits run the same checks. The following example
-verifies a file from 5.21.1 using its issuing commit.
+verifies a file from 5.21.2 using its issuing commit.
 
 ```sh
 gh attestation verify topaz-linux-x86_64 \
   --repo studiohaze/topaz \
   --signer-workflow studiohaze/topaz/.github/workflows/verify-topaz-release.yml \
-  --signer-digest 1c5b59925e404e95b4d67a2274586be91ec0f967 \
+  --signer-digest 95d70552ee5fa3c404a59d08911fb82a5e666f6e \
   --source-ref refs/heads/main \
   --deny-self-hosted-runners \
   --predicate-type https://github.com/studiohaze/topaz/attestations/static-release-bytes/v2 \
   --format json > attestation.json
 ```
 
-You can pass the 5.21.1 seed archive or `compiler/generated/native/compiler.rs`
-in place of the CLI. All three files are subjects of that attestation.
+You can pass the 5.21.2 seed archive, `compiler/generated/native/compiler.rs`,
+`topaz-linux-x86_64.release-core-link.json` or
+`topaz-linux-x86_64.release-core-link.seed.json` in place of the CLI. All five
+files are subjects of that attestation.
 
 ## 2. Check what the statement says
 
@@ -80,6 +87,7 @@ the policy check rejects every v1 result.
 
 | Release | Run | Commit | Type | Subjects |
 | --- | --- | --- | --- | --- |
+| 5.21.2 | [41376562394](https://github.com/studiohaze/topaz/actions/runs/41376562394) | `95d7055` | v2 | CLI, seed archive, `compiler.rs`, product and seed link records |
 | 5.21.1 | [41215275227](https://github.com/studiohaze/topaz/actions/runs/41215275227) | `1c5b599` | v2 | CLI, seed archive, `compiler.rs` |
 | 5.21.1 | [41213079276](https://github.com/studiohaze/topaz/actions/runs/41213079276) | `d552cf6` | v1 | CLI, seed archive, `compiler.rs` |
 | 5.21.1 | [41212135782](https://github.com/studiohaze/topaz/actions/runs/41212135782) | `d9757ac` | v1 | CLI |
