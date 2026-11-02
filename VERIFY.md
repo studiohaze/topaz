@@ -83,3 +83,9 @@ the policy check rejects every v1 result.
 | 5.21.1 | [41215275227](https://github.com/studiohaze/topaz/actions/runs/41215275227) | `1c5b599` | v2 | CLI, seed archive, `compiler.rs` |
 | 5.21.1 | [41213079276](https://github.com/studiohaze/topaz/actions/runs/41213079276) | `d552cf6` | v1 | CLI, seed archive, `compiler.rs` |
 | 5.21.1 | [41212135782](https://github.com/studiohaze/topaz/actions/runs/41212135782) | `d9757ac` | v1 | CLI |
+
+## Rebuild the compiler
+
+[Rebuild the 5.21.2 compiler from the 5.21.1 seed](core-kit/REBUILD-5.21.2.md)
+lists the public inputs, commands and recorded time and memory. Its execution
+record includes the public C0 build and G1 emission.
