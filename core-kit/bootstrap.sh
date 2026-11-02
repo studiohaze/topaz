@@ -58,6 +58,11 @@ target="$root/compiler/target"
 artifacts="$target/$host/release"
 case "$host" in *-windows-*) suffix=.exe ;; *) suffix= ;; esac
 
+TOPAZ_REMAP_SOURCE=$root
+TOPAZ_REMAP_TARGET=$target
+TOPAZ_REMAP_GENERATED=$out
+TOPAZ_REMAP_WRAPPER_DIRECTORY=$root/core-kit
+. "$root/core-kit/release-remap.sh"
 cd "$root/compiler"
 if [ "$verify_core" = true ]; then
   printf '%s\n' 'Bootstrap mode: product build plus optional canonical core regeneration.'

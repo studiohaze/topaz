@@ -64,7 +64,8 @@ try {
     $target = Join-Path $compiler 'target'
     $artifacts = Join-Path (Join-Path $target $hostTarget) 'release'
     $suffix = if ($hostTarget -match '-windows-') { '.exe' } else { '' }
-    Push-Location -LiteralPath $compiler
+    . (Join-Path $root "core-kit/release-remap.ps1") -SourceRoot $root -TargetDirectory $target -GeneratedDirectory $out -WrapperDirectory (Join-Path $root "core-kit")
+Push-Location -LiteralPath $compiler
     $pushed = $true
 
     if ($verifyCore) {

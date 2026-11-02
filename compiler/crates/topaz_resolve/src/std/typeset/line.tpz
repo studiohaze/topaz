@@ -1,0 +1,28 @@
+function tsLine(m:TypesetMetrics, start:int, p:Penalty, target:int, costWidth:int, h:int, cost:int, ratio:int, limit:Option<int>) -> PlanLine {
+  let t = tsTrim(m,start,p.unitEnd)
+  PlanLine {
+    start:start, endExclusive:p.unitEnd, trimmedEndExclusive:t,
+    displayTextScalarLength:tsDisplayLength(m,start,p.unitEnd), kind:p.kind, target:target,
+    rawTextWidth:tsWidth(m,start,p.unitEnd), trimmedTextWidth:tsWidth(m,start,t),
+    costTextWidth:costWidth, selectedPenaltyWidth:h, postValidationWidthLimit:limit,
+    cost:cost, adjustmentRatioR:ratio
+  }
+}
+function tsFixedLine(input:Paragraph, m:TypesetMetrics, start:int, p:Penalty, bucket:int, requireFill:bool, checkWidth:bool) -> Option<TypesetTransition> {
+  let target = tsTarget(input.geometry,start,bucket)
+  let last = p.unitEnd == m.units.length
+  let t = tsTrim(m,start,p.unitEnd)
+  let h = if p.kind == BreakKind.LatinSoftHyphen { p.width } else { 0 }
+  let capacities = tsCapacity(m,start,p.unitEnd,input.justification)
+  let shrink = match capacities { case Some(c) => c.shrink; case None => 0 }
+  let widthLimit = target + if last { 0 } else { shrink } + 1
+  if checkWidth && tsWidth(m,start,t) + h > widthLimit && p.unitEnd > start + 1 { return None }
+  let alignmentTarget = target - if input.justification.latinSpacing != None && p.kind == BreakKind.LatinSoftHyphen { h } else { 0 }
+  let justification = tsJustification(m,start,p.unitEnd,alignmentTarget,last,input.justification)
+  if requireFill && justification >= TYPESET_JUSTIFICATION_CAP * TYPESET_B { return None }
+  let raw = tsWidth(m,start,p.unitEnd)
+  let width = if !last && capacities != None { raw.atMost(target - h) } else { raw }
+  let extra = match p.rule { case Allowed(value) => value; case _ => 0 }
+  let cost = tsBadness(width,target,m.chars[p.unitEnd] - m.chars[start],m.spaces[p.unitEnd] - m.spaces[start],p.kind,last,justification,h) + extra
+  Some(TypesetTransition { line:tsLine(m,start,p,target,width,h,cost,0,Some(widthLimit)), fitness:0, flagged:false })
+}

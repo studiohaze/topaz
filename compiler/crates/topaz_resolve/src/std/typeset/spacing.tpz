@@ -1,0 +1,110 @@
+function tsLatinLetter(text:string) -> bool {
+  let mut alphabetic = false
+  for c in tsScalarCodes(text) {
+    if tsAlphabetic(c) { alphabetic = true }
+    if !((c >= 65 && c <= 591) || (c >= 768 && c <= 879) || (c >= 7680 && c <= 7935)) { return false }
+  }
+  alphabetic
+}
+function tsCapacity(m:TypesetMetrics, start:int, end:int, j:JustificationPolicy) -> Option<TypesetCapacity> {
+  if j.mode == JustificationMode.Unjustified { return None }
+  let spacing = match j.latinSpacing { case Some(value) => value; case None => { return None } }
+  let t = tsTrim(m,start,end)
+  let mut latin = 0
+  let mut cjk = 0
+  let mut other = 0
+  let mut spaces = 0
+  let mut letters = 0
+  let mut cjkWidth = 0
+  let mut i = start
+  while i < t {
+    let text = m.units[i].text
+    let isLatin = tsLatinLetter(text)
+    if isLatin { latin += 1 }
+    if tsSingleCjk(text) { cjk += 1 }
+    if !isLatin {
+      let mut found = false
+      for c in tsScalarCodes(text) { if tsAlphabetic(c) { found = true } }
+      if found { other += 1 }
+    }
+    if text == " " { spaces += m.units[i].width }
+    if i + 1 < t {
+      if isLatin && tsLatinLetter(m.units[i+1].text) { letters += 1 }
+      if tsSingleCjk(text) && tsSingleCjk(m.units[i+1].text) { cjkWidth += m.units[i].width }
+    }
+    i += 1
+  }
+  if !(latin > 0 && other == 0) && cjk == 0 { return None }
+  // Preserve the reference's IEEE evaluation order and each independent floor.
+  let shrink = (spaces.toFloat() * (1.0 - spacing.minWordSpaceRatio)).floor()
+  let cjkRatio = if j.mode == JustificationMode.CjkInterCharacter { j.cjkStretchRatio } else { 0.0 }
+  let stretch = (spaces.toFloat() * (spacing.maxWordSpaceRatio - 1.0)).floor() +
+    letters * (spacing.fontSizePt * spacing.maxLetterSpacingEm * 1000.0).floor() +
+    (cjkWidth.toFloat() * cjkRatio).floor()
+  Some(TypesetCapacity { shrink:shrink, stretch:stretch })
+}
+function tsJustification(m:TypesetMetrics, start:int, end:int, target:int, last:bool, j:JustificationPolicy) -> int {
+  if last || j.mode == JustificationMode.Unjustified { return 0 }
+  let cap = TYPESET_JUSTIFICATION_CAP * TYPESET_B
+  let t = tsTrim(m,start,end)
+  if t <= start || target <= 0 { return cap }
+  let original = tsWidth(m,start,t)
+  match tsCapacity(m,start,t,j) {
+    case Some(c) => {
+      let deficit = (target - original - c.stretch).atLeast(0) + (original - c.shrink - target).atLeast(0)
+      if deficit > 0 { return cap + tsRoundHalfUp(deficit * TYPESET_B,target) * 1000000 }
+      return tsRoundHalfUp(tsAbs(target - original) * TYPESET_B,target) * 10
+    };
+    case None => {}
+  }
+  let wordGaps = m.spaces[t] - m.spaces[start]
+  match j.minFinalLineWidthRatioM {
+    case Some(ratio) => {
+      if wordGaps > 0 || j.mode == JustificationMode.LatinWordSpace {
+        let attainable = original + j.maxAdjustment.atMost(wordGaps * j.maxGapAdjustment)
+        let floor = tsRoundHalfUp(target * ratio,1000)
+        if attainable >= floor { return 0 }
+        return cap + tsRoundHalfUp((floor - attainable) * TYPESET_B,target) * 1000000
+      }
+    };
+    case None => {}
+  }
+  if original * 1000 < target * j.minLineWidthRatioM {
+    let weight = if j.mode == JustificationMode.LatinWordSpace { 1000000 } else { 100000 }
+    return cap + tsRoundHalfUp((target - original) * TYPESET_B,target) * weight
+  }
+  let adjustment = target - original
+  if adjustment <= 1 { return 0 }
+  if adjustment > j.maxAdjustment { return cap + tsRoundHalfUp((adjustment - j.maxAdjustment) * TYPESET_B,1000) }
+  if j.mode == JustificationMode.CjkInterCharacter {
+    if wordGaps > 0 {
+      let excess = adjustment - wordGaps * j.maxGapAdjustment
+      return if excess > wordGaps { cap + tsRoundHalfUp(excess * TYPESET_B,wordGaps) } else { 0 }
+    }
+    let gaps = tsCjkGaps(m,start,t)
+    if gaps == 0 || gaps < j.minGapCount { return cap }
+    let mut sum = 0
+    let mut count = 0
+    let mut i = start
+    while i < t {
+      if tsSingleCjk(m.units[i].text) {
+        if m.units[i].width <= 1 { return cap }
+        sum += m.units[i].width
+        count += 1
+      }
+      i += 1
+    }
+    if count == 0 { return cap }
+    let won = adjustment - gaps * j.maxGapAdjustment
+    let ratio = tsRoundHalfUp(adjustment * count * TYPESET_R,gaps * sum)
+    let excessRatio = ratio - j.maxGapRatioR
+    if won > gaps || excessRatio > 100000 {
+      return cap + if won > 0 { tsRoundHalfUp(won * TYPESET_B,gaps) } else { 0 } +
+        if excessRatio > 0 { excessRatio * 100 } else { 0 }
+    }
+    return 0
+  }
+  if wordGaps == 0 || wordGaps < j.minGapCount { return cap }
+  let won = adjustment - wordGaps * j.maxGapAdjustment
+  if won > wordGaps { cap + tsRoundHalfUp(won * TYPESET_B,wordGaps) } else { 0 }
+}

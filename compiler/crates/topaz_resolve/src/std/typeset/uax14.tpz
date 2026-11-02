@@ -1,0 +1,158 @@
+// UAX #14 revision 53, Unicode 16.0.0. Rule order is significant.
+record TypesetScalar {
+  cp:int, rawLb:string, effectiveCp:int, lb:string,
+  category:string, eastAsian:bool, pictographic:bool,
+  ignored:bool, regionalRun:int
+}
+function tsLbResolve(cp:int) -> string {
+  let value = tsLb(cp)
+  if value == "AI" || value == "SG" || value == "XX" { return "AL" }
+  if value == "CJ" { return "NS" }
+  if value == "SA" {
+    let category = tsCategory(cp)
+    return if category == "Mn" || category == "Mc" { "CM" } else { "AL" }
+  }
+  value
+}
+function tsHard(lb:string) -> bool { lb == "BK" || lb == "CR" || lb == "LF" || lb == "NL" }
+function tsLbSet(values:Array<string>, lb:string) -> bool { values.indexOf(lb) != None }
+function tsUaxStream(codes:Array<int>) -> Array<TypesetScalar> {
+  let mut stream:Array<TypesetScalar> = []
+  let mut base = -1
+  let mut run = 0
+  for cp in codes {
+    let raw = tsLbResolve(cp)
+    let combining = raw == "CM" || raw == "ZWJ"
+    let ignored = combining && base >= 0 && !tsHard(stream[base].lb) && stream[base].lb != "SP" && stream[base].lb != "ZW"
+    let remaining = combining && !ignored
+    let lb = if remaining { "AL" } else { raw }
+    if !ignored { run = if lb == "RI" { run + 1 } else { 0 } }
+    stream.push(TypesetScalar {
+      // Keep physical scalar facts for rules before LB9/LB10. Subsequent
+      // context uses LB10's AL/U+0041 identity and effective properties.
+      cp:cp, rawLb:tsLb(cp), effectiveCp:if remaining { 65 } else { cp }, lb:lb,
+      category:if remaining { "Lu" } else { tsCategory(cp) },
+      eastAsian:if remaining { false } else { tsEastAsian(cp) },
+      pictographic:if remaining { false } else { tsPictographic(cp) },
+      ignored:ignored, regionalRun:run
+    })
+    if !ignored { base = stream.length - 1 }
+  }
+  stream
+}
+function tsPrevious(s:Array<TypesetScalar>, i:int) -> int {
+  let mut p = i - 1
+  while p >= 0 && s[p].ignored { p -= 1 }
+  p
+}
+function tsNext(s:Array<TypesetScalar>, i:int) -> int {
+  let mut p = i + 1
+  while p < s.length && s[p].ignored { p += 1 }
+  p
+}
+// Non-tailorable rules LB2..LB12. None means continue with the ordered
+// tailorable rules; Some(0/1/2) means prohibited/opportunity/mandatory.
+function tsUaxRequired(s:Array<TypesetScalar>, i:int) -> Option<int> {
+  if i == 0 { return Some(0) }
+  if i == s.length { return Some(2) }
+  let left = s[i-1].rawLb
+  let right = s[i].rawLb
+  if left == "BK" { return Some(2) }
+  if left == "CR" && right == "LF" { return Some(0) }
+  if left == "CR" || left == "LF" || left == "NL" { return Some(2) }
+  if tsHard(right) { return Some(0) }
+  if right == "SP" || right == "ZW" { return Some(0) }
+  let mut before = i - 1
+  while before >= 0 && s[before].rawLb == "SP" { before -= 1 }
+  if before >= 0 && s[before].rawLb == "ZW" { return Some(1) }
+  // LB8a uses the immediate physical predecessor, including an initial or
+  // post-hard/SP/ZW ZWJ normalized to AL by LB10. Do not skip ignored CM.
+  if left == "ZWJ" { return Some(0) }
+  if s[i].ignored { return Some(0) }
+  let p = tsPrevious(s,i)
+  if s[p].lb == "WJ" || s[i].lb == "WJ" { return Some(0) }
+  if s[p].lb == "GL" { return Some(0) }
+  None
+}
+function tsUaxDecision(s:Array<TypesetScalar>, i:int) -> int {
+  match tsUaxRequired(s,i) { case Some(value) => { return value }; case None => {} }
+  let l = tsPrevious(s,i)
+  let r = i
+  let left = s[l]
+  let right = s[r]
+  let a = left.lb
+  let b = right.lb
+  let ll = tsPrevious(s,l)
+  let rr = tsNext(s,r)
+  // LB12a, LB13.
+  if b == "GL" && !tsLbSet(["SP","BA","HY"],a) { return 0 }
+  if tsLbSet(["CL","CP","EX","SY"],b) { return 0 }
+  let mut p = l
+  while p >= 0 && s[p].lb == "SP" { p = tsPrevious(s,p) }
+  // LB14, LB15a/b/c/d, LB16, LB17.
+  if p >= 0 && s[p].lb == "OP" { return 0 }
+  if p >= 0 && s[p].lb == "QU" && s[p].category == "Pi" {
+    let q = tsPrevious(s,p)
+    if q < 0 || tsLbSet(["BK","CR","LF","NL","OP","QU","GL","SP","ZW"],s[q].lb) { return 0 }
+  }
+  if b == "QU" && right.category == "Pf" {
+    if rr == s.length || tsLbSet(["SP","GL","WJ","CL","QU","CP","EX","IS","SY","BK","CR","LF","NL","ZW"],s[rr].lb) { return 0 }
+  }
+  if a == "SP" && b == "IS" && rr < s.length && s[rr].lb == "NU" { return 1 }
+  if b == "IS" { return 0 }
+  if p >= 0 && tsLbSet(["CL","CP"],s[p].lb) && b == "NS" { return 0 }
+  if p >= 0 && s[p].lb == "B2" && b == "B2" { return 0 }
+  // LB18, LB19 and LB19a.
+  if a == "SP" { return 1 }
+  if (b == "QU" && right.category != "Pi") || (a == "QU" && left.category != "Pf") { return 0 }
+  if b == "QU" && (!left.eastAsian || rr == s.length || !s[rr].eastAsian) { return 0 }
+  if a == "QU" && (!right.eastAsian || ll < 0 || !s[ll].eastAsian) { return 0 }
+  // LB20 and LB20a.
+  if a == "CB" || b == "CB" { return 1 }
+  if (a == "HY" || left.effectiveCp == 8208) && b == "AL" {
+    if ll < 0 || tsLbSet(["BK","CR","LF","NL","SP","ZW","CB","GL"],s[ll].lb) { return 0 }
+  }
+  // LB21, LB21a/b, LB22.
+  if tsLbSet(["BA","HY","NS"],b) || a == "BB" { return 0 }
+  if ll >= 0 && s[ll].lb == "HL" && (a == "HY" || (a == "BA" && !left.eastAsian)) && b != "HL" { return 0 }
+  if a == "SY" && b == "HL" { return 0 }
+  if b == "IN" { return 0 }
+  // LB23, LB23a, LB24.
+  let alphabeticLeft = a == "AL" || a == "HL"
+  let alphabeticRight = b == "AL" || b == "HL"
+  if (alphabeticLeft && b == "NU") || (a == "NU" && alphabeticRight) { return 0 }
+  if (a == "PR" && tsLbSet(["ID","EB","EM"],b)) || (tsLbSet(["ID","EB","EM"],a) && b == "PO") { return 0 }
+  if (tsLbSet(["PR","PO"],a) && alphabeticRight) || (alphabeticLeft && tsLbSet(["PR","PO"],b)) { return 0 }
+  // LB25: look backwards over (SY|IS)* and optional closing punctuation.
+  if b == "PO" || b == "PR" || b == "NU" {
+    let mut q = l
+    if b != "NU" && tsLbSet(["CL","CP"],s[q].lb) { q = tsPrevious(s,q) }
+    while q >= 0 && tsLbSet(["SY","IS"],s[q].lb) { q = tsPrevious(s,q) }
+    if q >= 0 && s[q].lb == "NU" { return 0 }
+  }
+  if b == "NU" && tsLbSet(["PO","PR","HY","IS"],a) { return 0 }
+  if tsLbSet(["PO","PR"],a) && b == "OP" && rr < s.length {
+    if s[rr].lb == "NU" { return 0 }
+    let q = tsNext(s,rr)
+    if s[rr].lb == "IS" && q < s.length && s[q].lb == "NU" { return 0 }
+  }
+  // LB26, LB27.
+  if a == "JL" && tsLbSet(["JL","JV","H2","H3"],b) { return 0 }
+  if tsLbSet(["JV","H2"],a) && tsLbSet(["JV","JT"],b) { return 0 }
+  if tsLbSet(["JT","H3"],a) && b == "JT" { return 0 }
+  if (tsLbSet(["JL","JV","JT","H2","H3"],a) && b == "PO") || (a == "PR" && tsLbSet(["JL","JV","JT","H2","H3"],b)) { return 0 }
+  // LB28, LB28a (DOTTED CIRCLE is literal U+25CC).
+  if alphabeticLeft && alphabeticRight { return 0 }
+  let aksaraLeft = a == "AK" || a == "AS" || left.effectiveCp == 9676
+  let aksaraRight = b == "AK" || b == "AS" || right.effectiveCp == 9676
+  if a == "AP" && aksaraRight { return 0 }
+  if aksaraLeft && (b == "VF" || b == "VI") { return 0 }
+  if a == "VI" && ll >= 0 && (s[ll].lb == "AK" || s[ll].lb == "AS" || s[ll].effectiveCp == 9676) && (b == "AK" || right.effectiveCp == 9676) { return 0 }
+  if aksaraLeft && aksaraRight && rr < s.length && s[rr].lb == "VF" { return 0 }
+  // LB29, LB30, LB30a/b, LB31.
+  if a == "IS" && alphabeticRight { return 0 }
+  if (tsLbSet(["AL","HL","NU"],a) && b == "OP" && !right.eastAsian) || (a == "CP" && !left.eastAsian && tsLbSet(["AL","HL","NU"],b)) { return 0 }
+  if a == "RI" && b == "RI" && left.regionalRun % 2 == 1 { return 0 }
+  if (a == "EB" || (left.pictographic && left.category == "Cn")) && b == "EM" { return 0 }
+  1
+}

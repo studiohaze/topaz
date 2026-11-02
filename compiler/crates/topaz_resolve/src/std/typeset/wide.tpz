@@ -1,0 +1,34 @@
+function tsAbs(n:int) -> int { if n < 0 { -n } else { n } }
+// Failed internal integer conversion propagates the ordinary checked arithmetic
+// fault. No invalid numeric value is substituted into a plan.
+function tsOverflow(one:int) -> int { 9223372036854775807 + one }
+function tsDivisionByZero(zero:int) -> int { 1 / zero }
+function tsInt(n:BigInt) -> int {
+  match n.toInt() {
+    case Some(value) => value;
+    case None => tsOverflow(1)
+  }
+}
+function tsBig(n:int) -> BigInt { n.toBigInt() }
+function tsBigAbs(n:BigInt) -> BigInt { if n < tsBig(0) { -n } else { n } }
+function tsRoundEven(n:BigInt, d:BigInt) -> int {
+  let numerator = tsBigAbs(n)
+  let denominator = tsBigAbs(d)
+  let mut q = match numerator.div(denominator) {
+    case Ok(value) => value;
+    case Err(_) => tsBig(tsDivisionByZero(0))
+  }
+  let r = match numerator.mod(denominator) {
+    case Ok(value) => value;
+    case Err(_) => tsBig(tsDivisionByZero(0))
+  }
+  let odd = match q.mod(tsBig(2)) { case Ok(value) => value != tsBig(0); case Err(_) => tsDivisionByZero(0) != 0 }
+  if r * tsBig(2) > denominator || (r * tsBig(2) == denominator && odd) { q = q + tsBig(1) }
+  tsInt(if (n < tsBig(0)) != (d < tsBig(0)) { -q } else { q })
+}
+function tsRoundHalfUp(n:int, d:int) -> int {
+  let q = n / d
+  let r = n % d
+  if r >= (d + 1) / 2 { q + 1 } else { q }
+}
+function tsHas(values:Array<int>, n:int) -> bool { values.indexOf(n) != None }

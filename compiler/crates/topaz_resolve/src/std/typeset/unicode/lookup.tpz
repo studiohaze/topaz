@@ -1,0 +1,29 @@
+import std.bytes { Bytes }
+
+// Property rows contain two inclusive 24-bit scalar bounds and a property byte.
+// The generated, immutable byte tables are decoded once during module setup.
+function tsPropertyByte(data:Bytes, offset:int) -> int {
+  match data.get(offset) { case Some(value) => value; case None => 0 }
+}
+
+function tsPropertyU24(data:Bytes, offset:int) -> int {
+  tsPropertyByte(data, offset) + tsPropertyByte(data, offset + 1) * 256 +
+    tsPropertyByte(data, offset + 2) * 65536
+}
+
+function tsPropertyLookup(data:Bytes, c:int) -> int {
+  let mut lo = 0
+  let mut hi = data.length() / 7
+  while lo < hi {
+    let mid = lo + (hi - lo) / 2
+    let offset = mid * 7
+    if c < tsPropertyU24(data, offset) {
+      hi = mid
+    } else if c > tsPropertyU24(data, offset + 3) {
+      lo = mid + 1
+    } else {
+      return tsPropertyByte(data, offset + 6)
+    }
+  }
+  0
+}

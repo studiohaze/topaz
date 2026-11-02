@@ -1,0 +1,112 @@
+function tsCode(s:string) -> int { match s.codePointAt(0) { case Some(c) => c; case None => -1 } }
+function tsScalarCodes(s:string) -> Array<int> {
+  let mut out:Array<int> = []
+  for scalar in s.scalars() { out.push(tsCode(scalar)) }
+  out
+}
+function tsWordSpace(s:string) -> bool { s == " " || s == " " }
+function tsTrim(m:TypesetMetrics, start:int, end:int) -> int {
+  let mut t = end
+  while t > start && tsWordSpace(m.units[t - 1].text) { t -= 1 }
+  t
+}
+function tsDisplayLength(m:TypesetMetrics, start:int, end:int) -> int {
+  let mut scalars:Array<string> = []
+  let mut i = start
+  while i < end {
+    for scalar in m.units[i].text.scalars() { scalars.push(scalar) }
+    i += 1
+  }
+  let mut n = scalars.length
+  while n > 0 && tsWordSpace(scalars[n - 1]) { n -= 1 }
+  n
+}
+function tsWidth(m:TypesetMetrics, start:int, end:int) -> int {
+  m.prefix[end] - m.prefix[start] - if end > start { m.units[end - 1].tracking } else { 0 }
+}
+function tsMeasure(input:Paragraph) -> Result<TypesetMetrics, TypesetError> {
+  let mut units:Array<TypesetUnit> = []
+  let mut penalties:Array<Penalty> = []
+  for item in input.items {
+    match item {
+      case BoxItem(box) => {
+        if box.unitIndex != units.length { return Err(TypesetError.InvalidInput("unitIndex must be contiguous")) }
+        units.push(TypesetUnit { text:box.text, width:box.width, tracking:box.trackingAfter, stretch:0, shrink:0, glue:false })
+      };
+      case GlueItem(glue) => {
+        if glue.unitIndex != units.length || glue.stretch < 0 || glue.shrink < 0 {
+          return Err(TypesetError.InvalidInput("invalid glue index or capacity"))
+        }
+        units.push(TypesetUnit { text:glue.text, width:glue.width, tracking:glue.trackingAfter, stretch:glue.stretch, shrink:glue.shrink, glue:true })
+      };
+      case PenaltyItem(penalty) => { penalties.push(penalty) }
+    }
+  }
+  if units.length == 0 { return Err(TypesetError.InvalidInput("paragraph must contain units")) }
+  for p in penalties {
+    if p.unitEnd <= 0 || p.unitEnd > units.length { return Err(TypesetError.InvalidInput("penalty unitEnd outside paragraph")) }
+  }
+  penalties.sortBy((p:Penalty) => p.unitEnd)
+  Ok(tsMetricsOf(units,penalties))
+}
+function tsMetricsOf(units:Array<TypesetUnit>, penalties:Array<Penalty>) -> TypesetMetrics {
+  let mut prefix = [0]
+  let mut chars = [0]
+  let mut spaces = [0]
+  let mut stretch = [0]
+  let mut shrink = [0]
+  for unit in units {
+    let last = prefix.length - 1
+    prefix.push(prefix[last] + unit.width)
+    chars.push(chars[last] + unit.text.scalars().length)
+    spaces.push(spaces[last] + if unit.text == " " { 1 } else { 0 })
+    stretch.push(stretch[last] + unit.stretch)
+    shrink.push(shrink[last] + unit.shrink)
+  }
+  TypesetMetrics { units:units, penalties:penalties, prefix:prefix, chars:chars, spaces:spaces, stretch:stretch, shrink:shrink }
+}
+function tsForcedBetween(m:TypesetMetrics, start:int, end:int) -> bool {
+  for p in m.penalties {
+    if p.unitEnd > start && p.unitEnd < end && p.rule == BreakRule.Forced { return true }
+  }
+  false
+}
+function tsSelectable(p:Penalty) -> bool {
+  match p.rule { case Forbidden() => false; case _ => true }
+}
+function tsCandidates(m:TypesetMetrics) -> Array<Penalty> {
+  let mut out:Array<Penalty> = []
+  for p in m.penalties { if tsSelectable(p) { out.push(p) } }
+  out
+}
+function tsTarget(g:LineGeometry, start:int, line:int) -> int {
+  let base = if start == 0 { g.firstTarget } else { g.bodyTarget }
+  base - if g.dropCapSpan > 0 && g.dropCapInset > 0 && line < g.dropCapSpan { g.dropCapInset } else { 0 }
+}
+function tsBucketLimit(g:LineGeometry) -> int {
+  if g.dropCapSpan > 0 && g.dropCapInset > 0 { g.dropCapSpan } else { 0 }
+}
+function tsCjk(c:int) -> bool {
+  (c >= 4352 && c <= 4607) || (c >= 12592 && c <= 12687) ||
+  (c >= 13312 && c <= 19903) || (c >= 19968 && c <= 40959) ||
+  (c >= 44032 && c <= 55203) || (c >= 63744 && c <= 64255)
+}
+function tsSingleCjk(s:string) -> bool { s.scalars().length == 1 && tsCjk(tsCode(s)) }
+function tsJustPunctuation(s:string) -> bool {
+  let punctuation = [46,44,59,58,33,63,34,39,40,41,91,93,123,125,12290,12289,65292,65294,12300,12301,12302,12303,12298,12299,12296,12297]
+  for c in tsScalarCodes(s) { if tsHas(punctuation,c) { return true } }
+  false
+}
+function tsCjkPair(a:string, b:string) -> bool {
+  tsSingleCjk(a) && tsSingleCjk(b) && !tsJustPunctuation(a) && !tsJustPunctuation(b)
+}
+function tsCjkGaps(m:TypesetMetrics, start:int, end:int) -> int {
+  let mut gaps = 0
+  let mut i = start
+  while i + 1 < end {
+    if tsCjkPair(m.units[i].text,m.units[i+1].text) { gaps += 1 }
+    if i + 2 < end && tsWordSpace(m.units[i+1].text) && tsCjkPair(m.units[i].text,m.units[i+2].text) { gaps += 2 }
+    i += 1
+  }
+  gaps
+}

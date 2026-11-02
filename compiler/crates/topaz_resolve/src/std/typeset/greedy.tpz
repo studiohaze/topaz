@@ -1,0 +1,37 @@
+function tsGreedy(input:Paragraph, m:TypesetMetrics, candidates:Array<Penalty>) -> Result<ParagraphPlan, TypesetError> {
+  let mut lines:Array<PlanLine> = []
+  let mut start = 0
+  let mut previous = tsOrigin()
+  let mut total = 0
+  while start < m.units.length {
+    let target = tsTarget(input.geometry,start,lines.length)
+    let mut chosen:Option<Penalty> = None
+    let mut chosenTransition:Option<TypesetTransition> = None
+    for p in candidates {
+      if p.unitEnd > start && !tsForcedBetween(m,start,p.unitEnd) {
+        if input.costModel == CostModel.FixedPoint {
+          let width = tsWidth(m,start,p.unitEnd)
+          if width <= target || chosen == None {
+            chosen = Some(p)
+            chosenTransition = tsFixedLine(input,m,start,p,lines.length,false,false)
+          }
+          if width > target || p.rule == BreakRule.Forced { break }
+        } else {
+          match tsKpLine(input,m,start,p,previous) {
+            case Some(value) => { chosen = Some(p); chosenTransition = Some(value) };
+            case None => {}
+          }
+          if p.rule == BreakRule.Forced { break }
+        }
+      }
+    }
+    let selected = match chosen { case Some(value) => value; case None => { return Err(TypesetError.NoGreedyPlan) } }
+    let transition = match chosenTransition { case Some(value) => value; case None => { return Err(TypesetError.NoGreedyPlan) } }
+    total += transition.line.cost
+    lines.push(transition.line)
+    previous = TypesetState { breakpoint:0, bucket:lines.length.atMost(tsBucketLimit(input.geometry)), streak:0,
+      fitness:transition.fitness, flagged:transition.flagged, cost:total, previous:0, line:Some(transition.line) }
+    start = selected.unitEnd
+  }
+  Ok(ParagraphPlan { lines:lines, totalCost:total, boundedFillFeasible:None, grid:input.grid })
+}

@@ -1,0 +1,106 @@
+function tsOrigin() -> TypesetState {
+  TypesetState { breakpoint:0, bucket:0, streak:0, fitness:1, flagged:false, cost:0, previous:0, line:None }
+}
+function tsStateOrder(s:TypesetState) -> int {
+  s.bucket * 24 + s.streak * 8 + s.fitness * 2 + if s.flagged { 1 } else { 0 }
+}
+function tsSameState(a:TypesetState, b:TypesetState) -> bool {
+  a.bucket == b.bucket && a.streak == b.streak && a.fitness == b.fitness && a.flagged == b.flagged
+}
+function tsOptimize(input:Paragraph, m:TypesetMetrics, candidates:Array<Penalty>, fill:bool) -> Option<ParagraphPlan> {
+  let mut points:Array<Penalty> = [Penalty { unitEnd:0, width:0, rule:BreakRule.Forced, kind:BreakKind.ForcedEnd, flagged:false }]
+  for candidate in candidates { points.push(candidate) }
+  let mut arena:Array<TypesetState> = [tsOrigin()]
+  let mut rows:Array<Array<int>> = [[0]]
+  let mut endIndex = 1
+  while endIndex < points.length {
+    let end = points[endIndex]
+    let mut predecessor = 0
+    if input.costModel == CostModel.FixedPoint {
+      predecessor = (endIndex - 80).atLeast(0)
+      while predecessor > 0 {
+        let start = points[predecessor-1].unitEnd
+        let capacity = match tsCapacity(m,start,end.unitEnd,input.justification) { case Some(c) => c.shrink; case None => 0 }
+        if tsWidth(m,start,end.unitEnd) > input.geometry.bodyTarget.atLeast(input.geometry.firstTarget) + capacity + 1 { break }
+        predecessor -= 1
+      }
+    }
+    // KP intentionally begins at zero: every valid predecessor and all of its
+    // semantic fitness/flagged states participate. No window or arena cap.
+    let mut best:Array<TypesetState> = []
+    while predecessor < endIndex {
+      let start = points[predecessor].unitEnd
+      if start < end.unitEnd {
+        for id in rows[predecessor] {
+          let prior = arena[id]
+          let streak = if input.costModel == CostModel.FixedPoint && end.kind == BreakKind.LatinSoftHyphen { prior.streak + 1 } else { 0 }
+          if input.costModel == CostModel.KnuthPlass || streak <= 2 {
+            match tsTransition(input,m,start,end,prior,fill) {
+              case Some(transition) => {
+                let candidate = TypesetState {
+                  breakpoint:endIndex, bucket:(prior.bucket + 1).atMost(tsBucketLimit(input.geometry)),
+                  streak:streak, fitness:transition.fitness, flagged:transition.flagged,
+                  cost:prior.cost + transition.line.cost, previous:id, line:Some(transition.line)
+                }
+                let mut slot = -1
+                let mut i = 0
+                while i < best.length {
+                  if tsSameState(best[i],candidate) { slot = i; break }
+                  i += 1
+                }
+                if slot < 0 { best.push(candidate) } else {
+                  if candidate.cost < best[slot].cost { best[slot] = candidate }
+                }
+              };
+              case None => {}
+            }
+          }
+        }
+      }
+      predecessor += 1
+    }
+    best.sortBy((state:TypesetState) => tsStateOrder(state))
+    let mut row:Array<int> = []
+    for state in best { row.push(arena.length); arena.push(state) }
+    rows.push(row)
+    endIndex += 1
+  }
+  let mut selected = -1
+  let mut point = 1
+  while point < points.length {
+    if points[point].unitEnd == m.units.length {
+      for id in rows[point] {
+        if selected < 0 { selected = id } else { if arena[id].cost < arena[selected].cost { selected = id } }
+      }
+    }
+    point += 1
+  }
+  if selected < 0 { return None }
+  let total = arena[selected].cost
+  let mut lines:Array<PlanLine> = []
+  let mut walk = selected
+  while walk != 0 {
+    let state = arena[walk]
+    match state.line { case Some(line) => { lines.push(line) }; case None => { return None } }
+    walk = state.previous
+  }
+  lines.reverse()
+  Some(ParagraphPlan { lines:lines, totalCost:total, boundedFillFeasible:None, grid:input.grid })
+}
+export function breakParagraph(input:Paragraph) -> Result<ParagraphResult, TypesetError> {
+  tsValidate(input)?
+  let metrics = tsMeasure(input)?
+  let candidates = tsCandidates(metrics)
+  if candidates.length == 0 { return Err(TypesetError.NoBreakOpportunities) }
+  let greedy = tsGreedy(input,metrics,candidates)?
+  let fill = input.costModel == CostModel.FixedPoint && input.justification.mode != JustificationMode.Unjustified && input.justification.latinSpacing != None
+  let first = if fill { tsOptimize(input,metrics,candidates,true) } else { None }
+  let optimized = match first {
+    case Some(plan) => ParagraphPlan { lines:plan.lines, totalCost:plan.totalCost, boundedFillFeasible:Some(true), grid:plan.grid };
+    case None => {
+      let plan = match tsOptimize(input,metrics,candidates,false) { case Some(value) => value; case None => { return Err(TypesetError.NoPlan) } }
+      ParagraphPlan { lines:plan.lines, totalCost:plan.totalCost, boundedFillFeasible:if fill { Some(false) } else { None }, grid:plan.grid }
+    }
+  }
+  Ok(ParagraphResult { optimized:optimized, greedy:greedy, breakOpportunityCount:candidates.length })
+}

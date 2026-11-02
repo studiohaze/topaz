@@ -40,9 +40,9 @@ if ($generated -and ($generated.Attributes -band [IO.FileAttributes]::ReparsePoi
 # bootstrap.cmd is started through the same root string, so the paths Cargo
 # passes to rustc begin with exactly this prefix.
 $separator = [string][char]0x1F
-$env:CARGO_ENCODED_RUSTFLAGS = "--remap-path-prefix=$root=/topaz-core-kit$separator--remap-path-prefix=$out\generated_cli.rs=/topaz-core-kit/generated/cli.rs"
+$env:CARGO_ENCODED_RUSTFLAGS = "--remap-path-prefix=$root=/topaz/source$separator--remap-path-prefix=$out\generated_cli.rs=/topaz/source/generated/cli.rs"
 
-'Source path recipe: checkout -> /topaz-core-kit; generated CLI -> /topaz-core-kit/generated/cli.rs.'
+'Source path recipe: checkout -> /topaz/source; generated CLI -> /topaz/source/generated/cli.rs.'
 'Changing compiler flags can rebuild the core dependency even when canonical self-regeneration is disabled.'
 # Windows PowerShell 5.1 turns redirected native stderr into error records.
 # Cargo progress uses stderr, so only the exit status decides the result.

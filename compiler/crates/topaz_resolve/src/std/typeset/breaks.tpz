@@ -1,0 +1,94 @@
+export function classifyBreaks(clusters:Array<BreakCluster>, policy:BreakPolicy) -> Result<Array<BreakOpportunity>, TypesetError> {
+  let n = clusters.length
+  if n == 0 { return Err(TypesetError.InvalidInput("clusters must not be empty")) }
+  if policy.boundaryAllowed.length != n { return Err(TypesetError.InvalidInput("boundaryAllowed requires one entry per unitEnd")) }
+  if policy.narrowestWordTarget < 0 || policy.bodyWordTarget < 0 { return Err(TypesetError.InvalidPolicy("word targets must be nonnegative")) }
+  for c in policy.forbidBefore {
+    if c < 0 || c > 1114111 || (c >= 55296 && c <= 57343) { return Err(TypesetError.InvalidPolicy("forbidBefore requires Unicode scalars")) }
+  }
+  for c in policy.forbidAfter {
+    if c < 0 || c > 1114111 || (c >= 55296 && c <= 57343) { return Err(TypesetError.InvalidPolicy("forbidAfter requires Unicode scalars")) }
+  }
+  for end in policy.generatedHyphenEnds {
+    if end <= 0 || end >= n || !tsWordUnit(clusters[end-1].text) || !tsWordUnit(clusters[end].text) {
+      return Err(TypesetError.InvalidInput("generated hyphen must identify an interior word cluster boundary"))
+    }
+  }
+  let mut codes:Array<int> = []
+  let mut boundaries = [0]
+  let mut units:Array<TypesetUnit> = []
+  for cluster in clusters {
+    for c in tsScalarCodes(cluster.text) { codes.push(c) }
+    boundaries.push(codes.length)
+    units.push(TypesetUnit { text:cluster.text, width:cluster.advance, tracking:cluster.trackingAfter, stretch:0, shrink:0, glue:false })
+  }
+  let metrics = tsMetricsOf(units,[])
+  let stream = tsUaxStream(codes)
+  let unicode = policy.rules != KinsokuRules.AtlasDefault
+  if unicode {
+    let mut i = 1
+    while i < codes.length {
+      if tsUaxDecision(stream,i) == 2 && boundaries.indexOf(i) == None {
+        return Err(TypesetError.InvalidInput("cluster crosses a mandatory line break"))
+      }
+      i += 1
+    }
+  }
+  let mut out:Array<BreakOpportunity> = []
+  let mut end = 1
+  while end <= n {
+    let boundary = boundaries[end]
+    let decision = if unicode { if end == n { 2 } else { tsUaxDecision(stream,boundary) } } else { 1 }
+    let mut kind:Option<BreakKind> = None
+    if !unicode { kind = tsAtlasKind(clusters,end) } else {
+      if decision == 2 { kind = Some(BreakKind.ForcedEnd) } else {
+        if decision == 1 {
+          let left = clusters[end-1].text
+          kind = Some(if left == " " { BreakKind.LatinSpace } else {
+            if tsAtlasHyphen(left) { BreakKind.LatinHyphen } else {
+              if tsAnyAtlasBefore(left) { BreakKind.ClosingPunctuation } else {
+                if tsSingleCjk(left) || tsEastAsian(tsCode(left)) { BreakKind.KoreanCluster } else { BreakKind.HardFallback }
+              }
+            }
+          })
+        }
+      }
+    }
+    if tsHas(policy.generatedHyphenEnds,end) {
+      let mandatory = if unicode { tsUaxRequired(stream,boundary) } else { None }
+      if mandatory != Some(0) {
+        match kind {
+          case Some(HardFallback()) => { kind = Some(BreakKind.LatinSoftHyphen) };
+          case None => { kind = Some(BreakKind.LatinSoftHyphen) };
+          case _ => {}
+        }
+      }
+    }
+    // An oversized word may use an emergency cluster boundary, but never a
+    // non-tailorable UAX prohibition or a locale kinsoku boundary.
+    if kind == None && policy.mode == BreakMode.Word && end < n && tsWordUnit(clusters[end-1].text) && tsWordUnit(clusters[end].text) {
+      let range = tsWordRange(metrics,end)
+      let ordinaryLetters = boundary > 0 && boundary < codes.length &&
+        tsLbSet(["AL","HL","H2","H3"],tsLbResolve(codes[boundary-1])) &&
+        tsLbSet(["AL","HL","H2","H3"],tsLbResolve(codes[boundary]))
+      if tsWidth(metrics,range[0],range[1]) > policy.bodyWordTarget &&
+        (!unicode || (ordinaryLetters && tsUaxRequired(stream,boundary) == None)) { kind = Some(BreakKind.HardFallback) }
+    }
+    let mandatory = unicode && decision == 2
+    let requiredOpportunity = unicode && tsUaxRequired(stream,boundary) == Some(1)
+    if (mandatory || requiredOpportunity) && !policy.boundaryAllowed[end-1] { return Err(TypesetError.InvalidInput("shaping mask forbids a non-tailorable line break")) }
+    if policy.boundaryAllowed[end-1] {
+      match kind {
+        case Some(value) => {
+          let context = value == BreakKind.ForcedEnd || if unicode { tsLocaleBoundary(codes,stream,boundary,policy.rules) } else { tsAtlasContext(codes,boundary) }
+          let custom = boundary == codes.length || (boundary > 0 && !tsHas(policy.forbidAfter,codes[boundary-1]) && !tsHas(policy.forbidBefore,codes[boundary]))
+          let opportunity = BreakOpportunity { unitEnd:end, kind:value }
+          if mandatory || requiredOpportunity || (context && custom && tsWordAllowed(metrics,opportunity,policy)) { out.push(opportunity) }
+        };
+        case None => {}
+      }
+    }
+    end += 1
+  }
+  if out.length == 0 { Err(TypesetError.NoBreakOpportunities) } else { Ok(out) }
+}

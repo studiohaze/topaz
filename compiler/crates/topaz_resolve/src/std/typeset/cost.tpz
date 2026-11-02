@@ -1,0 +1,29 @@
+export function lineBadnessMpt(
+  widthMpt:int, targetMpt:int, charCount:int, spaces:int,
+  kind:BreakKind, isLast:bool, justificationB:int, hyphenAdvanceMpt:int
+) -> Result<int, TypesetError> {
+  if targetMpt <= 0 || charCount < 0 || spaces < 0 {
+    return Err(TypesetError.InvalidInput("target must be positive; counts must be nonnegative"))
+  }
+  Ok(tsBadness(widthMpt, targetMpt, charCount, spaces, kind, isLast, justificationB, hyphenAdvanceMpt))
+}
+function tsBadness(w:int, t:int, chars:int, spaces:int, kind:BreakKind, last:bool, j:int, h:int) -> int {
+  let effective = w + if kind == BreakKind.LatinSoftHyphen { h } else { 0 }
+  let slack = t - effective
+  let absolute = tsAbs(slack)
+  let raw = if absolute >= 4 * t { 4 * TYPESET_R } else { absolute * TYPESET_R / t }
+  let capacity = 100 + spaces * if slack >= 0 { 45 } else { 25 }
+  let ratio = tsRoundHalfUp(raw * 100, capacity)
+  let square = ratio * ratio
+  let q = tsRoundHalfUp(square, TYPESET_R)
+  let mut cost = tsRoundHalfUp(q * (1000 * TYPESET_B), TYPESET_R)
+  if last {
+    cost = tsRoundHalfUp(cost * 2, 5)
+    if w * 100 < t * 52 && chars > 0 { cost += 500 * TYPESET_B }
+  }
+  if slack < 0 { cost += 20000 * TYPESET_B + tsRoundHalfUp(20000 * TYPESET_B * ratio, TYPESET_R) }
+  if kind == BreakKind.LatinHyphen || kind == BreakKind.LatinSoftHyphen { cost += 65 * TYPESET_B }
+  if kind == BreakKind.HardFallback { cost += 50000 * TYPESET_B }
+  if chars <= 2 { cost += 275 * TYPESET_B }
+  cost + 10 * TYPESET_B + j
+}
