@@ -1,0 +1,23 @@
+{
+  "schema": "topaz.release-core-link/v1",
+  "version": "v5.21.2-test-only",
+  "target": "x86_64-unknown-linux-gnu",
+  "subject": {
+    "name": "topaz-linux-x86_64",
+    "bytes": 8192,
+    "sha256": "3436a5ae0500d62fa7f5f186e0e19cdad204624ac84462656f5f6ac6b3979b5a"
+  },
+  "generatedRustSha256": "297bf27ca381d30de9fc4ea7e3ca2eb23c9bbdee3181b7f650e9aa3ba60945ad",
+  "sourceSetId": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+  "runtimeSourceSetId": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+  "productSourceRevision": "1111111111111111111111111111111111111111",
+  "seedSourceRevision": "1111111111111111111111111111111111111111",
+  "evidence": [],
+  "evidenceReuse": {
+    "currentProductExecution": "direct",
+    "records": []
+  },
+  "seedArchiveSha256": "61cafbeb9bb4608680c8b42183c0ca1b93c2aa1c25014980af5b24332631467d",
+  "publicKitCommit": "2222222222222222222222222222222222222222",
+  "linkedProductRecordSha256": "4c06ce43fc7200e2e5369bedd5a778dac4d060cab22f64062f9f88c4cb9fe40f"
+}

@@ -25,16 +25,17 @@ def load_release():
     return module
 
 
-def v2_policy(release):
+def v2_policy(release, record):
+    record.validate_policy()
     return {
         "predicateType": PREDICATE_TYPE,
-        "cli": (release.NAME, release.PINS[release.NAME]),
-        "seed": (release.SEED, release.PINS[release.SEED]),
-        "compilerRust": (release.PUBLIC_FILE, release.PINS["compiler.rs"]),
-        "version": release.VERSION,
-        "target": release.TARGET,
-        "checks": list(release.CHECKS),
-        "notEstablished": list(release.NOT_ESTABLISHED),
+        "cli": (record.name, record.pins[record.name]),
+        "seed": (record.seed, record.pins[record.seed]),
+        "compilerRust": (release.PUBLIC_FILE, record.pins["compiler.rs"]),
+        "version": record.version,
+        "target": record.target,
+        "checks": list(record.checks),
+        "notEstablished": list(record.not_established),
     }
 
 
@@ -43,21 +44,28 @@ def require(ok, message):
         raise ValueError(message)
 
 
-def check_result(result, policy):
+def check_result(result, release):
     certificate = result["verificationResult"]["signature"]["certificate"]
     require(certificate.get("sourceRepositoryURI") == REPOSITORY, "signed in another repository")
     require(certificate.get("buildSignerURI") == SIGNER, "signed by another workflow or ref")
 
     statement = result["verificationResult"]["statement"]
-    require(statement.get("predicateType") == policy["predicateType"],
+    require(statement.get("predicateType") == PREDICATE_TYPE,
             f"predicate type is {statement.get('predicateType')!r}")
+
+    predicate = statement.get("predicate", {})
+    key = (predicate.get("version"), predicate.get("target"))
+    require(key in release.RELEASES, f"unknown release version or target: {key!r}")
+    record = release.RELEASES[key]
+    policy = v2_policy(release, record)
 
     subjects = [(s.get("name"), s.get("digest", {}).get("sha256")) for s in statement.get("subject", [])]
     expected = [policy["cli"], policy["seed"], policy["compilerRust"]]
+    if record.has_link_check:
+        expected += [(name, record.pins[name]) for name in [record.product_link, record.seed_link]]
     require(sorted(subjects) == sorted(expected),
-            "subjects are not exactly the three verified files")
+            f"subjects are not exactly the {'five' if record.has_link_check else 'three'} verified files")
 
-    predicate = statement.get("predicate", {})
     require(predicate.get("verification") == "static-bytes-only", "verification is not static-bytes-only")
     require(predicate.get("version") == policy["version"] and predicate.get("target") == policy["target"],
             "wrong release version or target")
@@ -71,12 +79,19 @@ def check_result(result, policy):
             and compiler.get("seedArchiveSha256") == policy["seed"][1]
             and compiler.get("sha256") == policy["compilerRust"][1],
             "predicate digests do not match the subjects")
+    if record.has_link_check:
+        require(predicate.get("releaseCoreLink") == record.link_evidence(),
+                "releaseCoreLink does not match the verified release records")
+        require(compiler.get("commit") == record.commit and compiler.get("publicPath") == release.PUBLIC_FILE,
+                "link record public compiler identity mismatch")
 
 
-def check(results, policy):
+def check(results, release=None):
     require(isinstance(results, list) and results, "no verified attestation results")
+    if release is None:
+        release = load_release()
     for result in results:
-        check_result(result, policy)
+        check_result(result, release)
     return len(results)
 
 
@@ -86,7 +101,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     try:
         results = json.loads(args.results.read_text(encoding="utf-8"))
-        count = check(results, v2_policy(load_release()))
+        count = check(results)
     except (ValueError, KeyError, TypeError, AttributeError, OSError) as error:
         sys.exit(f"attestation rejected: {error}")
     print(f"accepted {count} attestation(s) under {PREDICATE_TYPE}")

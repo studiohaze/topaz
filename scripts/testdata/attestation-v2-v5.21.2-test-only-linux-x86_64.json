@@ -1,0 +1,89 @@
+[
+  {
+    "_testFixture": "Hypothetical second release. Not a real attestation or real 5.21.2 release.",
+    "verificationResult": {
+      "signature": {
+        "certificate": {
+          "sourceRepositoryURI": "https://github.com/studiohaze/topaz",
+          "buildSignerURI": "https://github.com/studiohaze/topaz/.github/workflows/verify-topaz-release.yml@refs/heads/main"
+        }
+      },
+      "statement": {
+        "_type": "https://in-toto.io/Statement/v1",
+        "predicateType": "https://github.com/studiohaze/topaz/attestations/static-release-bytes/v2",
+        "subject": [
+          {
+            "name": "topaz-linux-x86_64",
+            "digest": {
+              "sha256": "3436a5ae0500d62fa7f5f186e0e19cdad204624ac84462656f5f6ac6b3979b5a"
+            }
+          },
+          {
+            "name": "topaz-bootstrap-seed-v5.21.2-test-only.tar.gz",
+            "digest": {
+              "sha256": "61cafbeb9bb4608680c8b42183c0ca1b93c2aa1c25014980af5b24332631467d"
+            }
+          },
+          {
+            "name": "compiler/generated/native/compiler.rs",
+            "digest": {
+              "sha256": "297bf27ca381d30de9fc4ea7e3ca2eb23c9bbdee3181b7f650e9aa3ba60945ad"
+            }
+          },
+          {
+            "name": "topaz-linux-x86_64.release-core-link.json",
+            "digest": {
+              "sha256": "4c06ce43fc7200e2e5369bedd5a778dac4d060cab22f64062f9f88c4cb9fe40f"
+            }
+          },
+          {
+            "name": "topaz-linux-x86_64.release-core-link.seed.json",
+            "digest": {
+              "sha256": "99ea9f4484a6ee3c87a993cef8a3f113447542c9e9c4ff961ebcab1fb93a59be"
+            }
+          }
+        ],
+        "predicate": {
+          "version": "v5.21.2-test-only",
+          "target": "linux-x86_64",
+          "verification": "static-bytes-only",
+          "subject": {
+            "name": "topaz-linux-x86_64",
+            "sha256": "3436a5ae0500d62fa7f5f186e0e19cdad204624ac84462656f5f6ac6b3979b5a",
+            "bytes": 8192
+          },
+          "compilerRust": {
+            "seedArchiveSha256": "61cafbeb9bb4608680c8b42183c0ca1b93c2aa1c25014980af5b24332631467d",
+            "sha256": "297bf27ca381d30de9fc4ea7e3ca2eb23c9bbdee3181b7f650e9aa3ba60945ad",
+            "commit": "2222222222222222222222222222222222222222",
+            "bytes": 3072,
+            "publicPath": "compiler/generated/native/compiler.rs"
+          },
+          "checks": [
+            "official-binary-compressed-and-uncompressed-match-signed-list",
+            "public-seed-compiler-rust-equals-pinned-public-repository-file",
+            "signed-release-core-links-match-executable-and-public-compiler"
+          ],
+          "notEstablished": [
+            "official-cli-links-the-public-compiler-rust",
+            "official-cli-behaves-like-the-public-core",
+            "official-cli-rebuilds-from-this-repository"
+          ],
+          "releaseCoreLink": {
+            "productRecord": {
+              "name": "topaz-linux-x86_64.release-core-link.json",
+              "sha256": "4c06ce43fc7200e2e5369bedd5a778dac4d060cab22f64062f9f88c4cb9fe40f"
+            },
+            "seedRecord": {
+              "name": "topaz-linux-x86_64.release-core-link.seed.json",
+              "sha256": "99ea9f4484a6ee3c87a993cef8a3f113447542c9e9c4ff961ebcab1fb93a59be"
+            },
+            "publicCommit": "2222222222222222222222222222222222222222",
+            "compilerRustSha256": "297bf27ca381d30de9fc4ea7e3ca2eb23c9bbdee3181b7f650e9aa3ba60945ad",
+            "executableSha256": "3436a5ae0500d62fa7f5f186e0e19cdad204624ac84462656f5f6ac6b3979b5a"
+          }
+        }
+      }
+    }
+  }
+]
