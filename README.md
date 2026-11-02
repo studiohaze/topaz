@@ -94,7 +94,10 @@ cd topaz
 
 ### Windows
 
-Run these commands from Command Prompt or PowerShell.
+Run these commands from Command Prompt or PowerShell. Clone into a short
+folder such as `C:\src\topaz`. Paths inside the checkout get long, and a
+tested installation failed when the installed executable's path reached 285
+characters.
 
 ```powershell
 .\bootstrap.cmd
@@ -261,13 +264,13 @@ canonical self-regeneration.
 
 ### Checking the website release
 
-A workflow in this repository checks the Topaz 5.21.1 Linux x86_64 release
-from the website. It verifies the signed checksum list, checks that the
-compiler Rust inside the website's seed matches
-`compiler/generated/native/compiler.rs`, then attests the CLI, the seed and
-that file. [VERIFY.md](VERIFY.md) shows how to check the attestation with
-`gh`. The attestation covers those bytes. It doesn't claim that the website
-CLI was built from this checkout.
+A workflow in this repository checks a Linux x86_64 release from the
+website. It verifies the signed checksum lists, checks that the compiler Rust
+inside the website's seed matches `compiler/generated/native/compiler.rs`,
+then attests the release's files. [VERIFY.md](VERIFY.md) lists the files for
+each release and shows how to check the attestation with `gh`. The
+attestation covers those bytes. It doesn't claim that the website CLI was
+built from this checkout.
 
 ## Working on Core Kit
 
