@@ -68,9 +68,10 @@ checks are the expected ones and the `notEstablished` list is present.
 
 For 5.21.3, the expected subjects also include
 `topaz-linux-x86_64.release-core-link.json` and
-`topaz-linux-x86_64.release-core-link.seed.json`. The verifier checks both
-Ed25519-signed release checksum list, the release manifest and seed provenance, the executable's name, size and digest, the
-public source commit, and the generated compiler and seed archive digests.
+`topaz-linux-x86_64.release-core-link.seed.json`. The verifier checks the
+Ed25519-signed release checksum list, the release manifest and seed provenance,
+the executable's name, size and digest, the public source commit, and the
+generated compiler and seed archive digests.
 It preserves `official-cli-links-the-public-compiler-rust` in `notEstablished`.
 
 You can run these checks directly before using an attestation.
