@@ -106,22 +106,22 @@ function Get-TopazDownload {
         }
     }
     if ($null -eq $selected) {
-        throw "No published matching Core Kit for $Target in this checkout. Build from source with .\bootstrap.cmd."
+        throw "Missing platform row: this checkout has no Core Kit archive for $Target. Build from source with .\bootstrap.cmd."
     }
     return $selected
 }
 
 function Assert-TopazFileIdentity {
-    param([string]$Path, [long]$Bytes, [string]$Sha256)
+    param([string]$Path, [long]$Bytes, [string]$Sha256, [string]$Kind = 'Download')
     $item = Get-TopazRegularFile $Path
-    if ($item.Length -ne $Bytes) { throw 'The selected download byte count differs from this checkout catalogue.' }
+    if ($item.Length -ne $Bytes) { throw "$Kind size mismatch: use the archive selected by this catalogue, or install from a later commit containing the matching catalogue rows." }
     $stream = [IO.File]::Open($item.FullName, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::Read)
     $hash = [Security.Cryptography.SHA256]::Create()
     try {
         if ($stream.Length -ne $Bytes) { throw 'The selected file changed before verification.' }
         $actual = [BitConverter]::ToString($hash.ComputeHash($stream)).Replace('-', '').ToLowerInvariant()
         if ($stream.Length -ne $Bytes -or $actual -cne $Sha256) {
-            throw 'The selected download SHA-256 differs from this checkout catalogue.'
+            throw "$Kind hash mismatch: use the archive selected by this catalogue, or install from a later commit containing the matching catalogue rows."
         }
     } finally {
         $hash.Dispose()

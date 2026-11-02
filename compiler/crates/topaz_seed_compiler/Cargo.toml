@@ -6,9 +6,9 @@ rust-version.workspace = true
 license-file.workspace = true
 publish = false
 
+[dependencies]
+topaz_rt.workspace = true
+
 [lib]
 test = false
 doctest = false
-
-[dependencies]
-topaz_rt = { workspace = true }

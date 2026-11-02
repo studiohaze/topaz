@@ -1,14 +1,4 @@
-//! AST definitions for the Topaz grammar (CDR-001 §6; v5.2 module
-//! and base-syntax nodes per CDR-002).
-//!
-//! Statement, expression, pattern, and type nodes carry a [`Span`];
-//! supporting nodes without one (declaration bodies, call arguments,
-//! list elements) recover their extent from their children. No node
-//! owns source text — identifier and literal text is recovered
-//! through the source map.
-//! Identifiers are syntactic atoms: no name resolution, no typing.
-//! The per-file [`Program`] boundary is explicit (the compilation
-//! model is multi-file-ready even though v5.1 is single-file).
+//! Topaz syntax tree definitions.
 
 use std::rc::Rc;
 

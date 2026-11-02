@@ -218,7 +218,7 @@ pub enum Builtin {
     BigIntDiv,
     BigIntMod,
     // §14.2 (v5.4) deterministic decimal value. This core slice covers exact
-    // parse/format/int bridges and + - *; rounding/division land separately.
+    // parse/format/int bridges, arithmetic, rounding and division.
     DecimalFromInt,
     DecimalParse,
     DecimalToString,

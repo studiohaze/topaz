@@ -1,34 +1,9 @@
 //! TPZ diagnostic-code registry.
 //!
-//! Reserved ranges (CDR-001 §5):
-//!
-//! | Range     | Producer                                    |
-//! | --------- | ------------------------------------------- |
-//! | `TPZ0xxx` | raw lexer / template lexer                  |
-//! | `TPZ1xxx` | layout normalizer                           |
-//! | `TPZ2xxx` | parser                                      |
-//! | `TPZ3xxx` | resolver (`topaz_resolve`)                  |
-//! | `TPZ4xxx` | runtime faults (`topaz_value` / interp)     |
-//! | `TPZ5xxx` | static / dynamic semantic guards            |
-//! | `TPZ6xxx` | native emitter / `topaz build`              |
-//!
-//! Per CDR-001 §5, **stable codes are assigned only to diagnostics
-//! covered by `corpus/v5.1/invalid/` fixtures** — the ranges are
-//! reserved here, but no code constant exists until its fixture
-//! lands. Code constants live next to their producers (in
-//! `topaz_lexer` / `topaz_parser`) and are constructed through
-//! [`Code::new`].
-//!
-//! Two producer classes cannot use an ordinary invalid-language corpus row:
-//! `TPZ58xx` reports a selected usage profile narrowing a canonically valid
-//! program, and `TPZ6xxx` reports a native-emitter capability limit on a
-//! WELL-TYPED program. Profile codes are pinned by profile CLI/collector tests;
-//! emitter codes are pinned by the `emit`/`build` CLI tests and the
-//! interpreter/emitter differential harness (CDR-006 §7). Their constants live
-//! beside their producers.
-//!
-//! `TPZ6PY0000` through `TPZ6PY0002` belonged to a target that no longer
-//! exists. They stay unassigned and are never given to another diagnostic.
+//! TPZ0xxx: lexer and loader; TPZ1xxx: layout; TPZ2xxx: parser;
+//! TPZ3xxx: resolver; TPZ4xxx: runtime faults; TPZ5xxx: semantic guards;
+//! TPZ6xxx: native emission and build diagnostics.
+//! Code constants are defined beside their producers.
 
 /// A stable diagnostic code such as `TPZ2001`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

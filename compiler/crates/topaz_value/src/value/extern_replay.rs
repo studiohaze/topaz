@@ -7,14 +7,9 @@ pub(super) struct ExternReplayKey {
     args_json: String,
 }
 
-/// Deterministic v5.4 extern replay sandbox table. Keys are the manifest module
-/// name, exported function name, and canonical ABI encoding of the argument
-/// vector.
-///
-/// This is the final v5.4 extern execution backend: manifest artifacts are
-/// admitted and locked by the package layer, but runtime calls return only from
-/// replay rows after the shared policy/budget checks below. Live artifact
-/// execution is an experimental/post-v5.4 track, not part of this leaf.
+/// Extern replay rows keyed by module, function and canonical ABI arguments.
+/// Calls return recorded values after policy and resource checks. Live
+/// artifact execution is supplied by the host rather than this table.
 #[derive(Debug, Clone, Default)]
 pub struct ExternReplayStore {
     entries: Rc<BTreeMap<ExternReplayKey, Value>>,

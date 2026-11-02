@@ -1,9 +1,7 @@
 use crate::code::Code;
 use crate::span::Span;
 
-/// Diagnostic severity. v0.1 producers emit errors; warnings exist so
-/// the model does not need to change when a non-fatal producer
-/// appears.
+/// Error or warning severity used by diagnostic admission and rendering.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Severity {
     Error,
@@ -36,11 +34,8 @@ impl Label {
     }
 }
 
-/// A single diagnostic (CDR-001 §5).
-///
-/// Data-oriented by design (CDR-001 §5): rendering — plain text
-/// today, JSON/LSP later — consumes this structure and never feeds
-/// back into it.
+/// A diagnostic with a primary source label, contextual labels and notes.
+/// Renderers consume this data without changing it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Diagnostic {
     pub code: Code,
@@ -64,11 +59,8 @@ impl Diagnostic {
         }
     }
 
-    /// A warning diagnostic with its primary label. Non-fatal: a
-    /// consumer renders it but does not fail on it (see [`has_errors`]).
-    /// No producer emits one yet; the future determinism lint is the
-    /// first (CDR-001 §5 — severity exists so the model need not change
-    /// when a non-fatal producer appears).
+    /// A warning with its primary label. Warning-only streams do not fail
+    /// admission; see has_errors.
     pub fn warning(code: Code, message: impl Into<String>, primary: Label) -> Self {
         Self {
             code,

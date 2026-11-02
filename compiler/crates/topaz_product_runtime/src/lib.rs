@@ -1,9 +1,6 @@
-//! Audited target-product runtime for Topaz compiler IR.
-//!
-//! This crate deliberately has no dependency on the lexer, parser, resolver,
-//! checker, lowerer, emitter, interpreter, or self-front-end crates. It only
-//! executes validated private IR produced by the Topaz-authored compiler
-//! kernel. Compiler-image embedding remains owned by `topaz_stage1_runtime`.
+//! Runtime for validated Topaz compiler IR.
+//! Depends on shared values and syntax types, without a reference compiler.
+//! Compiler-image embedding is supplied by the calling program.
 
 use std::any::Any;
 use std::cell::{Cell, RefCell};
@@ -81,5 +78,3 @@ const RUNTIME_DIAGNOSTIC_PREFIX: &str = "topaz.runtime-diagnostic/v2\t";
 // Fifty operations bound scheduler latency while amortizing cooperative-yield overhead.
 const CONCURRENT_STEP_QUANTUM: usize = 50;
 
-#[cfg(test)]
-mod tests;

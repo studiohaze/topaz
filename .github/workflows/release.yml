@@ -1,0 +1,26 @@
+name: Release notes
+
+on:
+  push:
+    tags:
+      - "v5.21.2"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Publish release notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: "v5.21.2"
+          RELEASE_TITLE: "Topaz 5.21.2"
+          RELEASE_BODY: "Topaz 5.21.2\n\nCompiler source and runnable examples.\n\n[Documentation and downloads](https://topaz.ooo/v5.21/en/docs/install)\n"
+        run: |
+          set -eu
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then exit 0; fi
+          printf '%s' "$RELEASE_BODY" > "$RUNNER_TEMP/topaz-release.md"
+          gh release create "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
+            --title "$RELEASE_TITLE" --notes-file "$RUNNER_TEMP/topaz-release.md" --verify-tag

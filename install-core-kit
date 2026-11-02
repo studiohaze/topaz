@@ -69,7 +69,7 @@ else
   IFS= read -r _kit_code < "$_kit_temporary/download.status"
   [ "$_kit_code" = 0 ] || _kit_fail 'The release download failed. Existing local installations were preserved.'
 fi
-_kit_check_file "$_kit_archive" "$_kit_asset_bytes" "$_kit_asset_sha"
+_kit_check_file "$_kit_archive" "$_kit_asset_bytes" "$_kit_asset_sha" Archive
 
 # Only write tar stdout to our private file. Archive paths are never extracted
 # by this adapter. The verified Kit owns complete archive parsing and staging.
@@ -80,7 +80,7 @@ _kit_check_file "$_kit_archive" "$_kit_asset_bytes" "$_kit_asset_sha"
 [ -f "$_kit_temporary/extract.status" ] || _kit_fail 'The first-stage extraction did not finish.'
 IFS= read -r _kit_code < "$_kit_temporary/extract.status"
 [ "$_kit_code" = 0 ] || _kit_fail 'The selected executable could not be read from the archive.'
-_kit_check_file "$_kit_candidate" "$_kit_exe_bytes" "$_kit_exe_sha"
+_kit_check_file "$_kit_candidate" "$_kit_exe_bytes" "$_kit_exe_sha" Executable
 chmod 700 "$_kit_candidate"
 TOPAZ_CORE_KIT_ROOT=$_kit_root
 export TOPAZ_CORE_KIT_ROOT

@@ -33,7 +33,7 @@ function selected(root: string, native: Native) -> Result<Download, string> {
   let download = select(load(root)?, target.target)?
   validateRecordedInputs(root)?
   if inputSetId(root)? != download.inputSetSha256 {
-    return Err("the pinned download does not match this checkout's source inputs; use its matching source revision or bootstrap locally")
+    return Err("input set mismatch: this checkout differs from the Core Kit release; install from the commit that added that release's catalogue rows, or build this checkout with bootstrap")
   }
   Ok(download)
 }
@@ -104,11 +104,11 @@ function verifyVersion(root: string, directory: string, download: Download, nati
 function readArchive(path: string, download: Download, native: Native) -> Result<Array<ArchiveEntry>, string> {
   let file = fileMetadata(path, native)?
   if file.bytes != download.assetBytes || file.bytes > MAX_ARCHIVE_BYTES {
-    return Err("archive size differs from the pinned download")
+    return Err("archive size mismatch: use the archive selected by this catalogue, or install from a later commit containing the matching catalogue rows")
   }
   let bytes = files.readBytes(file.path)?
   if bytes.length() != file.bytes || bytes.sha256().toHex() != download.assetSha256 {
-    return Err("archive SHA-256 differs from the pinned download")
+    return Err("archive hash mismatch: use the archive selected by this catalogue, or install from a later commit containing the matching catalogue rows")
   }
   // Decode validates the complete canonical container before any file is
   // materialized. Only flat regular members and bounded bytes are admitted.

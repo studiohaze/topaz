@@ -1,7 +1,5 @@
-//! The cooperative single-future driver (CDR-006 §4). It runs one program
-//! future to completion on the calling thread; a `Pending` is a cooperative
-//! yield, so the driver simply re-polls. The multi-arm executor owns scheduling,
-//! while this remains the single-arm fast path.
+//! Cooperative single-future execution on the calling thread.
+//! Pending means a cooperative yield; the driver polls again without parking.
 
 use std::future::Future;
 use std::pin::pin;

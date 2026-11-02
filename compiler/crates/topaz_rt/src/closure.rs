@@ -1,10 +1,4 @@
-//! The emitted-code callable ABI (CDR-006 §4). Generated code never
-//! writes a `TpzCall` impl by hand: a lambda becomes an
-//! [`EmittedClosure`] wrapping a Rust closure that returns the body's
-//! future plus the param names (for arity faults), and a call goes
-//! through [`call_value`]. The interpreter drives ITS closures by
-//! downcast + frames instead; both reach the same observable result
-//! because the body lowering and the value model are shared.
+//! Callable interfaces and builtin dispatch for generated programs.
 
 use std::any::Any;
 use std::fmt;

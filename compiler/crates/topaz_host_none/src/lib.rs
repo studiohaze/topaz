@@ -259,6 +259,9 @@ impl Host for NoCapabilityHost {
 mod tests {
     use super::*;
     use topaz_diag::{FileId, Span};
+    use topaz_interp::Machine;
+    use topaz_resolve::{InMemoryProvider, resolve_with_version};
+    use topaz_syntax::LangVersion;
 
     const LIMITS: NoCapabilityLimits = NoCapabilityLimits::new(64, 12, 12, 2);
 
@@ -371,6 +374,24 @@ mod tests {
         let second = host("");
         assert_eq!((first.now_millis(), first.now_millis()), (0, 2));
         assert_eq!(second.now_millis(), 0);
+    }
+
+    #[test]
+    fn interpreter_observes_the_no_capability_boundary() {
+        let source = "import std.fs\nfs.readText(\"secret.txt\")";
+        let mut provider = InMemoryProvider::new();
+        provider.add_file("main.tpz", source);
+        let unit = resolve_with_version(&provider, "main.tpz", None, LangVersion::CURRENT);
+        assert!(unit.diagnostics.is_empty(), "{:?}", unit.diagnostics);
+        let host = host("");
+        let result = Machine::run_unit(&unit, &host).expect("denial is a Topaz Result value");
+        let Value::Err(message) = result else {
+            panic!("expected Err result, found {result:?}");
+        };
+        let Value::Str(message) = message.as_ref() else {
+            panic!("expected string error, found {message:?}");
+        };
+        assert_eq!(&**message, "no-capability host denies `open`");
     }
 
     #[test]

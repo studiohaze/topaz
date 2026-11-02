@@ -110,9 +110,7 @@ pub(crate) struct FunctionLayout {
     pub(crate) body: Option<usize>,
 }
 
-// Bound malformed images while keeping more than twice the largest admitted workload:
-// the compiler image compiling itself on the program-image route, measured at about
-// 2.125e9 steps in one run on 2026-10-27 (2e27d9030 with compact image and JSON schema fixes).
+// Bound malformed images while allowing compiler self-compilation.
 pub(crate) const STAGE1_EXECUTION_STEP_LIMIT: u64 = 5_000_000_000;
 
 impl Machine {

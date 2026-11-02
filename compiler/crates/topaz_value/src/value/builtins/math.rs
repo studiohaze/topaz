@@ -1,29 +1,10 @@
 use super::super::*;
 
-// ----------------------------------------------------------------------------
-// §8 (v5.4) the `Math` builtin namespace — the FIRST pure-compute stdlib slice.
-//
-// ★ FLOAT DETERMINISM. Every float op below routes through ONE shared leaf that
-// the interpreter AND the emitted Rust BOTH call by name, so the result is
-// byte-identical run≡build by construction (and, on a native decline → boxed,
-// across all three columns). The ops use the Rust `std` `f64` primitives
-// (`sqrt`/`abs`/`floor`/`ceil`/`round`/`is_nan`/`is_finite`) and string parse
-// (`f64::from_str`), which are IEEE-754 correctly-rounded and platform-stable —
-// the SAME std code runs in interp, boxed emit, and WASM, so libm is never
-// called from two places. Decisions pinned here (and in the unit tests):
-//   * `round` = round-half-AWAY-from-zero (Rust `f64::round`): `2.5→3.0`,
-//     `-2.5→-3.0`, `0.5→1.0`. Total, deterministic.
-//   * `sqrt` of a NEGATIVE (or NaN) input → value-level `Err` (NOT NaN, NOT a
-//     fault) so a program can recover; `sqrt(-0.0) = -0.0` (IEEE, an `Ok`).
-//   * `min`/`max` = the SHARED `<`/`>` ordering via `float_cmp` (NOT `f64::min`,
-//     whose NaN-skipping is asymmetric): a NaN operand makes the comparison false,
-//     so the result is the SECOND operand — `min(NaN, b) = b`, `min(a, NaN) = NaN`,
-//     `max(NaN, b) = b`, `max(a, NaN) = NaN`. Asymmetric but fully deterministic.
-//   * `parseFloat` = `f64::from_str` over the TRIMMED string → `Ok(f)` /
-//     `Err(message)`; rejects the empty string and any non-numeric text. Rust std
-//     accepts the spellings `inf`/`infinity`/`nan` (any case), but a Topaz text
-//     parse must NOT mint a non-finite float, so a non-finite result is `Err` too —
-//     only a FINITE literal yields `Ok`.
+// Math operations share these Rust f64 helpers across execution paths.
+// round uses half-away-from-zero; sqrt rejects negative and NaN inputs.
+// min/max use Topaz comparisons, so unordered inputs select the second
+// operand. parseFloat accepts only finite values. Transcendental precision
+// follows Rust std and is not guaranteed identical across platforms.
 
 /// Pull the `f64` out of a `Value::Float`, else a GUARD_TYPE fault. The checker
 /// already proves the argument is a `float` (the static-member scheme), so this

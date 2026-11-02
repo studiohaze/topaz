@@ -113,9 +113,9 @@ pub fn builtin_fs_list(host: &dyn Host, path: Value, span: Span) -> Result<Value
     })
 }
 
-// §10/§17 (v5.4) `Cli` + `Path` stdlib leaves. These are pure deterministic
-// helpers: no ambient argv/cwd/fs. The caller passes `args`, and `Path` is a
-// normalized logical project-relative value that future FS leaves can trust.
+// Cli and Path helpers perform no ambient argument, directory or file I/O.
+// The caller supplies arguments. Logical path normalization does not grant
+// filesystem access; host adapters enforce their own capability boundary.
 
 pub(in crate::value) fn cli_args_arg(
     arg: Value,

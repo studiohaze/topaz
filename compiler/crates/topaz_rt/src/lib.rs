@@ -1,12 +1,8 @@
-//! `topaz_rt` — the emitted-program runtime (CDR-006 §3/§4). It
-//! re-exports the shared value core and provides the executor, fault
-//! propagation, builtin runners, template runtime, deferred-error
-//! channel, product runtime, and embedded source bundle used by
-//! generated programs.
+//! Runtime support for generated Topaz programs.
 //!
-//! Zero third-party dependencies; `unsafe_code` is forbidden
-//! workspace-wide; no panics on any program-reachable path — a panic
-//! here is exactly as user-visible as one in `topaz_value`.
+//! Re-exports shared values and the product runtime, and provides cooperative
+//! execution, call dispatch, captured cells and deferred actions.
+//! There are no third-party dependencies; the workspace forbids unsafe code.
 
 pub use topaz_product_runtime::{
     TARGET_ADAPTER_FACTS_SCHEMA, execute_product_export, execute_product_export_in_place,

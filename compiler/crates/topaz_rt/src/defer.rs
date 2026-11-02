@@ -1,16 +1,7 @@
-//! §14 `defer` support for emitted code: a per-function-scope LIFO stack of
-//! deferred actions, drained at the function's non-fault exits. The emit twin of
-//! the interpreter's `drain_defers` (machine.rs): a deferred action's fault — or a
-//! returned `Value::Err` — is routed to [`Host::defer_error`] and CONTAINED (never
-//! propagated, never replaces the in-flight result), and the actions run
-//! last-in-first-out. (Per §14 + the interpreter, an ordinary body fault does NOT
-//! drain defers — only `return`/`?`/case-return/normal completion do — so the
-//! emitted code calls `run_defers` ONLY on those non-fault exits.)
-//!
-//! A deferred action is emitted as a zero-arg closure (`Value::Closure`), exactly
-//! like a `() => action` lambda, so the existing capture machinery
-//! (`lambda_captures` + snapshot) carries the action's free locals — no new capture
-//! path. `run_defers` invokes each through the closure ABI (`TpzCall::call`).
+//! Per-scope deferred actions for generated programs.
+//! Actions run in reverse registration order on normal completion and control
+//! returns. Faults and Err values are reported to Host::defer_error without
+//! replacing the result already being returned. Ordinary faults do not drain defers.
 
 use std::cell::RefCell;
 use std::rc::Rc;

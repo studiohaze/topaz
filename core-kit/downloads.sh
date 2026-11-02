@@ -73,7 +73,7 @@ _kit_load_download() {
     END { if (bad) exit 1; if (NR == 0) exit 1; if (selected != "") print selected }
   ' "$_kit_catalogue") || _kit_fail "$_kit_row"
   [ -n "$_kit_row" ] ||
-    _kit_fail "No published matching Core Kit for $_kit_target in this checkout. Build from source with ./bootstrap."
+    _kit_fail "Missing platform row: this checkout has no Core Kit archive for $_kit_target. Build from source with ./bootstrap."
   IFS='|' read -r _kit_selected_target _kit_repository _kit_tag _kit_source_commit _kit_inputs_sha _kit_asset _kit_asset_bytes _kit_asset_sha _kit_exe_bytes _kit_exe_sha <<EOF
 $_kit_row
 EOF
@@ -91,11 +91,12 @@ _kit_check_file() {
   _kit_check_path=$1
   _kit_check_bytes=$2
   _kit_check_sha=$3
+  _kit_check_kind=${4:-Download}
   [ -f "$_kit_check_path" ] && [ ! -L "$_kit_check_path" ] ||
     _kit_fail 'The selected download must be a regular file without a symlink.'
   _kit_actual_bytes=$(wc -c < "$_kit_check_path")
   [ "$_kit_actual_bytes" -eq "$_kit_check_bytes" ] ||
-    _kit_fail 'The selected download byte count differs from this checkout catalogue.'
+    _kit_fail "$_kit_check_kind size mismatch: use the archive selected by this catalogue, or install from a later commit containing the matching catalogue rows."
   if [ "$_kit_hash_tool" = sha256sum ]; then
     _kit_hash_line=$(sha256sum < "$_kit_check_path")
   else
@@ -103,7 +104,7 @@ _kit_check_file() {
   fi
   _kit_actual_sha=${_kit_hash_line%% *}
   [ "$_kit_actual_sha" = "$_kit_check_sha" ] ||
-    _kit_fail 'The selected download SHA-256 differs from this checkout catalogue.'
+    _kit_fail "$_kit_check_kind hash mismatch: use the archive selected by this catalogue, or install from a later commit containing the matching catalogue rows."
 }
 
 _kit_damaged_installation() {

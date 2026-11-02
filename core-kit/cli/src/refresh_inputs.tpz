@@ -284,23 +284,53 @@ function standardName(filename: string) -> Result<string, string> {
 function standardMappings(root: string) -> Result<Array<StandardMapping>, string> {
   let mut mappings: Array<StandardMapping> = []
   let mut identities: Set<string> = set {}
-  for name in ["bytes", "fs", "io", "json"] {
+  let provenance = parseDocument(readText(root, "compiler/seed/initial/REQUEST-PROVENANCE.json", 1048576)?, "seed provenance")?
+  let canonical = required(provenance, "standardModules", "seed provenance")?
+  let paths = match canonical.keys() {
+    case Some(found) => found
+    case None => return Err("seed standardModules must be an object")
+  }
+  if paths.length > MAX_STANDARD_MODULES { return Err("too many canonical standard modules") }
+  let mut canonicalNames: Array<string> = []
+  let mut hashes: Map<string, string> = map {}
+  for path in paths {
+    let parts = path.split("/")
+    if parts.length != 2 || parts[0] != "std" { return Err("invalid canonical standard module path: {path}") }
+    let name = standardName(parts[1])?
+    let lower = portableName(name)?
+    if name != lower || identities.contains(lower) { return Err("duplicate or case-aliased canonical standard module: {path}") }
+    let hash = stringValue(required(canonical, path, "seed standardModules")?, "standard module digest")?
+    let source = readText(root, "compiler/seed/initial/{path}", 67108864)?
+    if source.encodeUtf8().sha256().toHex() != hash { return Err("canonical standard module differs from seed provenance: {path}") }
+    identities.add(lower)
+    hashes.insert(name, hash)
+    canonicalNames.push(name)
+  }
+  canonicalNames.sort()
+  for name in canonicalNames {
     mappings.push(StandardMapping {
       identity: "std.{name}", path: "std/{name}.tpz",
       sourceFile: "compiler/seed/initial/std/{name}.tpz",
     })
-    identities.add(name)
   }
   requireDirectory(root, "{CLI_ROOT}/std")?
   let children = files.list("{root}/{CLI_ROOT}/std")?
   if children.length + 4 > MAX_STANDARD_MODULES { return Err("too many CLI standard modules") }
   let mut names: Array<string> = []
+  let mut discovered: Set<string> = set {}
   for child in children {
     if child.kind != "file" { return Err("CLI standard modules must be regular files, without subdirectories or symlinks: {child.name}") }
     let name = standardName(child.name)?
     let lower = portableName(name)?
-    if identities.contains(lower) { return Err("duplicate or canonical CLI standard module name: {child.name}") }
-    identities.add(lower)
+    if discovered.contains(lower) { return Err("duplicate or case-aliased CLI standard module name: {child.name}") }
+    discovered.add(lower)
+    if identities.contains(lower) {
+      let source = readText(root, "{CLI_ROOT}/std/{child.name}", 67108864)?
+      if name != lower || source.encodeUtf8().sha256().toHex() != hashes.getOr(name, "") {
+        return Err("CLI standard module differs from canonical seed export: {child.name}")
+      }
+      continue
+    }
     names.push(name)
   }
   names.sort()
@@ -387,8 +417,13 @@ function validatePrevious(descriptor: Descriptor, initial: CompilerRequest) -> R
     let lower = portableName(name)?
     if mapping.identity != "std.{name}" || standardNames.contains(lower) { return Err("invalid or duplicate existing CLI standard module identity") }
     let canonical = name == "bytes" || name == "fs" || name == "io" || name == "json"
-    let sourceFile = if canonical { "compiler/seed/initial/std/{name}.tpz" } else { "{CLI_ROOT}/std/{name}.tpz" }
-    if mapping.sourceFile != sourceFile { return Err("existing CLI standard mapping has an unsupported source location") }
+    let seedFile = "compiler/seed/initial/std/{name}.tpz"
+    let sourceFile = if canonical { seedFile } else { "{CLI_ROOT}/std/{name}.tpz" }
+    // Accept the earlier CLI-owned TOML mapping while migrating it to the
+    // seed owner. All proposed mappings come from the seed provenance above.
+    if mapping.sourceFile != sourceFile && !(name == "toml" && mapping.sourceFile == seedFile) {
+      return Err("existing CLI standard mapping has an unsupported source location")
+    }
     standardNames.add(lower)
     standards.insert(mapping.identity, mapping.path)
     if canonical { fixed.add(name) }

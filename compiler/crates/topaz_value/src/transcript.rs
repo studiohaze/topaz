@@ -1,12 +1,5 @@
-//! The differential comparator (CDR-006 §3): ONE implementation of
-//! expectation matching, called by every harness — the interpreter
-//! corpus, the CLI checks, and both differential harnesses —
-//! so "matches" can never mean two different things in two places.
-//!
-//! Comparison is over UTF-8 text with LF-normalized line endings.
-//! Fault expectations are EXACT: code equality plus full-message
-//! equality (an empty expected message pins only the code — used
-//! while a corpus row migrates, never as a long-term posture).
+//! Transcript comparison with LF-normalized line endings.
+//! An empty expected fault message matches any message; other messages match exactly.
 
 /// Normalizes CRLF/CR line endings to LF.
 pub fn normalize_lf(text: &str) -> String {

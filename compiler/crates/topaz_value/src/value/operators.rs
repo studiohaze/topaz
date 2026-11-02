@@ -1,14 +1,7 @@
 use super::*;
 
-// --- Scalar checked-arithmetic leaf (CDR-006 §2 shared-leaf discipline) ---
-//
-// The SINGLE source of truth for scalar `int`/`float` operation semantics:
-// `binary_value`/`unary_value` call these, and the v5.4 native backend will
-// call the SAME helpers, so monomorphized native arithmetic stays BYTE-IDENTICAL
-// to the interpreter (checked-int overflow TPZ4004, div/rem-by-0 TPZ4002,
-// `i64::MIN / -1`, negative-exponent TPZ4005 — exact codes, messages, and spans).
-// Each is `#[inline]` so the boxed-dispatch caller pays nothing and the native
-// caller inlines the bare scalar fault into its generated code.
+// Shared checked integer arithmetic and IEEE floating-point operations.
+// Faults retain the source span supplied by the caller.
 
 /// `a + b` with the §13a checked-overflow fault (TPZ4004).
 #[inline]

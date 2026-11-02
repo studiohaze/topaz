@@ -1,7 +1,7 @@
-//! Plain-text diagnostic rendering (CDR-001 §5): `file:line:col`
-//! locations and caret underlines. 1-based lines; 1-based Unicode
-//! scalar columns; caret alignment over wide glyphs is best-effort by
-//! design until a future diagnostics CDR.
+//! Plain-text and JSON diagnostic rendering.
+//!
+//! Locations use 1-based lines and Unicode scalar columns. Caret alignment
+//! does not account for the display width of wide glyphs.
 
 use std::fmt::Write as _;
 
