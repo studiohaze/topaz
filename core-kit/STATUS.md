@@ -8,13 +8,13 @@ canonical public compiler, generated compiler Rust, seed inputs, public runtime
 and source build materials. Platform executables belong in named GitHub
 Releases and the checkout's ignored installation cache.
 
-The catalogue lists release archives for `aarch64-apple-darwin`,
-`x86_64-apple-darwin`, `x86_64-pc-windows-msvc` and
-`x86_64-unknown-linux-gnu` on the `core-kit-5.21.1` GitHub Release. Their
-release recipes set `releaseReady`, and each archive was reproduced from two
-separate checkouts. An installation request without a matching target fails
-before a network request and points to the independent source bootstrap.
-[Release build record](VALIDATION.md#release-builds)
+The [catalogue](downloads.data) lists release archives for
+`aarch64-apple-darwin`, `x86_64-apple-darwin`, `x86_64-pc-windows-msvc` and
+`x86_64-unknown-linux-gnu`. Each row names the Core Kit GitHub Release that
+holds its archive. Their release recipes set `releaseReady`, and each archive
+comes from the reproducible build recipe. An installation request without a
+matching target fails before a network request and points to the independent
+source bootstrap. [Release build record](VALIDATION.md#release-builds)
 
 The READMEs describe the completed product and its intended `studiohaze/topaz`
 home. This page and [VALIDATION.md](VALIDATION.md) record actual availability
