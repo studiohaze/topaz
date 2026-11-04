@@ -9,7 +9,8 @@ The language documentation and complete Topaz distribution live at
 [topaz.ooo](https://topaz.ooo).
 
 [Get started](#get-started) · [Use the CLI](#use-the-cli) ·
-[Build from source](#build-the-kit-from-source) · [Verification](#choose-how-much-to-verify)
+[Build from source](#build-the-kit-from-source) · [Verification](#choose-how-much-to-verify) ·
+[Roadmap](#roadmap)
 
 ## A note from Matt
 
@@ -66,6 +67,37 @@ Matt Park
 
 Core Kit includes its own seed inputs. You can follow this README without
 downloading the website's seed archive or installing the website CLI.
+
+## Roadmap
+
+The [roadmap](https://topaz.ooo/en/docs/project/roadmap) covers every
+release in the 5.21 line from 5.21.0, and the plan for the next minor
+version, 5.22.0.
+
+| Version | Status | What it brings |
+| --- | --- | --- |
+| [5.21.0](https://topaz.ooo/en/docs/project/roadmap#v5-21-0) | Released | The `topaz-5.21` language mode, `std.typeset` and Length literals, and embedded Lispex 1.21 |
+| [5.21.1](https://topaz.ooo/en/docs/project/roadmap#v5-21-1) | Released | Repairs to type inference, calls, diagnostics and runtime boundaries |
+| [5.21.2](https://topaz.ooo/en/docs/project/roadmap#v5-21-2) | Released | Faster everyday commands and signed build records |
+| [5.21.3](https://topaz.ooo/en/docs/project/roadmap#v5-21-3) | **Current release** | Signature checks in the npm installer, signed public source and release files without build paths |
+| [5.22.0](https://topaz.ooo/en/docs/project/roadmap#v5-22-0) | Upcoming | A new compiler engine with typed compilation, Rust layouts for known types and direct calls, an [official executable anyone can rebuild](https://topaz.ooo/en/docs/project/roadmap#v5-22-0-rebuildable-cli) from public source, plus [benchmarks](https://topaz.ooo/en/docs/project/roadmap#benchmarks) for every release since 5.21.0 |
+| [Long-term initiative](https://topaz.ooo/en/docs/project/roadmap#zocle) | Not scheduled | Lighter storage for local records and collections |
+
+5.22.0 replaces the inside of the compiler written in Topaz. The compiler
+works on typed data, gives known types their own Rust layouts and calls
+functions directly. Both the compiler and the programs it builds get faster.
+5.22.0 keeps the `topaz-5.21` language mode, so existing programs build
+without changes.
+
+Two independent builds of Core Kit produce the same bytes, so anyone can
+check a download by building it themselves. 5.22.0 brings this idea from the
+public repository back to the official executable. The official `topaz`
+becomes the Core Kit base with add-ons.
+
+5.22.0 will publish benchmark results for every release since 5.21.0, side
+by side with TypeScript, Python and Rust running the same programs under the
+same conditions. The programs, the scripts that run them and the measurement
+method will be in the public repository before 5.22.0.
 
 ## Topaz and Lispex
 
