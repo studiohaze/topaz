@@ -1,3 +1,9 @@
 * -text
 compiler/generated/native/compiler.rs whitespace=-blank-at-eol
 core-kit/distribution/RUST-STDLIB-NOTICES.html whitespace=-blank-at-eol
+
+# Generated Rust and the seed copies stay out of GitHub language statistics,
+# and their diffs collapse by default.
+compiler/generated/** linguist-generated=true
+compiler/seed/** linguist-generated=true
+core-kit/distribution/RUST-STDLIB-NOTICES.html linguist-documentation=true
