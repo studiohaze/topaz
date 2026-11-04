@@ -197,6 +197,10 @@ record for publication. The separate `kit payload-record` and
 | `out/core-kit-installed/` | Downloaded local installations, excluded from Git |
 | [`examples/README.md`](examples/README.md) | Core Kit programs, project inputs and language samples |
 
+The files in `compiler/seed/initial/topaz/` are exact copies of the canonical
+compiler source. The seed keeps its own copy so it can reconstruct the
+compiler without reaching into the rest of the checkout.
+
 The compiler core and the surrounding CLI have separate jobs. Core Kit calls
 the public core's existing compile interface, while the Topaz CLI handles
 commands and project policy. The generated Rust, public native runtime and
