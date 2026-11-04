@@ -67,6 +67,18 @@ Matt Park
 Core Kit includes its own seed inputs. You can follow this README without
 downloading the website's seed archive or installing the website CLI.
 
+## Topaz and Lispex
+
+Lispex is a safe language for business rules. The full Topaz CLI includes
+the Lispex evaluator, so Topaz apps can load rules written in Lispex and run
+them without giving them access to files or the network. Lispex has its own
+releases, published at
+[studiohaze/lispex](https://github.com/studiohaze/lispex).
+
+With Topaz 5.22, the public parts of Lispex move to that repository. That
+covers the language specification, the embedding contract Topaz uses and a
+conformance suite.
+
 ## Get started
 
 To read the CLI, start with [its entry point](core-kit/cli/src/main.tpz).
