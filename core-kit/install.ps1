@@ -134,7 +134,12 @@ try {
         $root = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
         $target = Get-TopazHostTarget
         $download = Get-TopazDownload $root $target
-        $tar = (Get-Command tar.exe -CommandType Application -ErrorAction Stop).Source
+        # Prefer Windows bsdtar; GNU tar can treat drive letters as remote hosts.
+        $tar = Join-Path $env:SystemRoot 'System32\tar.exe'
+        if (-not [IO.File]::Exists($tar)) {
+            # Windows PowerShell 5.1 can return multiple application matches.
+            $tar = @(Get-Command tar.exe -CommandType Application -ErrorAction Stop)[0].Source
+        }
         $temporary = Join-Path ([IO.Path]::GetTempPath()) ('topaz-core-kit-' + [Guid]::NewGuid().ToString('N'))
         $null = New-Item -ItemType Directory -Path $temporary -ErrorAction Stop
         $archive = Join-Path $temporary 'asset.tar.gz'
