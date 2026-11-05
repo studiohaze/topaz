@@ -47,8 +47,8 @@ try {
     $env:RUSTUP_AUTO_INSTALL = '0'
     $env:CARGO_NET_OFFLINE = 'true'
     $env:TOPAZ_CORE_KIT_ROOT = $root
-    $cargo = (Get-Command cargo -CommandType Application -ErrorAction Stop).Source
-    $rustc = (Get-Command rustc -CommandType Application -ErrorAction Stop).Source
+    $cargo = @(Get-Command cargo -CommandType Application -ErrorAction Stop)[0].Source
+    $rustc = @(Get-Command rustc -CommandType Application -ErrorAction Stop)[0].Source
     $rustInfo = @(& $rustc -vV)
     if ($LASTEXITCODE -ne 0) { throw 'Rust 1.96.0 must already be installed; automatic installation is disabled.' }
     $release = @($rustInfo | Where-Object { $_ -match '^release: ' } | ForEach-Object { $_.Substring(9) })
