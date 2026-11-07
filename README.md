@@ -14,48 +14,67 @@ The language documentation and complete Topaz distribution live at
 
 ## A note from Matt
 
-Hi, I'm Matt Park. Topaz has a website and a full toolchain, so I'd like to
-explain why I also put Core Kit here.
+Hi, I'm Matt Park, the creator of Topaz. It's a general-purpose language with
+typesetting built in.
+
+Until now, we've put self-hosting and stability first. The compiler is written
+in Topaz and can be rebuilt from a public seed. Two independent builds of Core
+Kit produce the same bytes. Performance had to wait. Values share a runtime
+representation, and even calls to known functions allocate on the heap. The
+compiler doesn't work on typed data yet. These problems require structural
+changes.
+
+For [5.22](https://topaz.ooo/en/docs/project/roadmap#v5-22-0), we're replacing
+the compiler's internals so it can work on typed data. Known types will get
+their own Rust layouts, and calls to known functions will become plain Rust
+calls. 5.22 is the final release series for the `topaz-5.21` language mode, so
+existing programs will build without changes. We'll publish
+[benchmarks](https://topaz.ooo/en/docs/project/roadmap#benchmarks) against
+TypeScript, Python and Rust with the scripts used to run them.
+
+[6.0.0](https://topaz.ooo/en/docs/project/roadmap#v6-0-0) will build on that
+engine and rework the language. For the first time, we're writing each rule
+into the specification before implementing it. Every rule gets a rationale and
+examples that run against the compiler. We're rebuilding the web documentation
+around the same specification and giving it a new form.
+
+The principle is "one way to say it." Where Topaz has two ways to express the
+same thing, we'll keep one. The aim is a clearer, more consistent
+specification. These changes will break existing code, and we'll release a
+migration tool with 6.0.0.
+
+Where that principle leaves a choice open, typesetting comes first. I still
+want a broad general-purpose language, so features can belong even when
+typesetting has no use for them. Typesetting demands determinism. The same
+manuscript has to produce the same pages on every machine, down to the last
+line break. Any field that needs results it can reproduce and check asks for
+the same discipline, so I believe typesetting and general-purpose use belong
+in one language.
+
+STUDIO HAZE develops Topaz and is where it gets used. Outside adoption is
+close to zero. If even one person anywhere in the world needs a language like
+this, I'll keep working to make Topaz ready for them.
+
+Matt Park
+
+## Why Core Kit
 
 The website brings together the language documentation, the full CLI and the
 public bootstrap seed. The full CLI includes the Rust reference compiler and
 Lispex evaluation, which have their own source and licensing policies. The
-seed gives you the materials to reconstruct the public compiler and compare
-the result.
+seed is enough to reconstruct the public compiler, but it offers little for
+everyday work.
 
-I also wanted a convenient way to work with that public compiler. A seed is
-useful for reconstruction, but it doesn't give you much of an everyday
-interface for checking a project or building an application. Asking everyone
-to assemble their own tool before using it would make that option needlessly
-hard to choose.
+Core Kit puts a usable CLI around the same canonical compiler core. It leaves
+out the Rust reference compiler and the private Lispex evaluator. Commands,
+project configuration, builds and payload preparation are written in Topaz, so
+the CLI is also code you can read and learn from. The public native runtime and
+a thin Rust adapter connect it to the operating system.
 
-Core Kit puts a usable CLI around the same canonical compiler core used by
-the public seed. It leaves out the Rust reference compiler and the private
-Lispex evaluator. Command handling, project configuration, compiler requests,
-diagnostics, builds, source maintenance and payload preparation are written in
-Topaz. The public native runtime and a thin Rust adapter provide the
-operating-system and ABI connections those tools need.
-
-The CLI is also Topaz code that people can learn from. I care about its
-structure, names and error handling because someone should be able to open
-the source, understand a command and change it without first untangling a
-collection of build scripts.
-
-I keep the source, seed inputs, public runtime and build instructions in Git.
-They are the materials you need to understand the compiler and reconstruct it.
-The generated Rust form of the canonical core is included too, so starting
-from Rust/Cargo doesn't require an existing Topaz executable or a second seed
-archive from the website.
-
-I keep the big executables out of Git. You can build the Kit here and run
-it from the output directory. When we publish a platform build on GitHub
-Releases, the installer can fetch the exact archive listed for that checkout.
-
-The website remains the place to learn the language and use the full
-toolchain. Here, the public compiler, a practical CLI and their reconstruction
-materials live together so you can work with them directly.
-
-Matt Park
+The source, seed inputs, runtime and build instructions live in Git, along with
+the generated Rust of the canonical core, so starting from Rust and Cargo needs
+no existing Topaz executable. Executables stay out of Git, and platform builds
+go on GitHub Releases.
 
 ### Choosing a starting point
 
@@ -71,8 +90,7 @@ downloading the website's seed archive or installing the website CLI.
 ## Roadmap
 
 The [roadmap](https://topaz.ooo/en/docs/project/roadmap) covers every
-release in the 5.21 line from 5.21.0, and the plan for the next minor
-version, 5.22.0.
+release in the 5.21 line from 5.21.0, and the plans for 5.22.0 and 6.0.0.
 
 | Version | Status | What it brings |
 | --- | --- | --- |
@@ -81,6 +99,7 @@ version, 5.22.0.
 | [5.21.2](https://topaz.ooo/en/docs/project/roadmap#v5-21-2) | Released | Faster everyday commands and signed build records |
 | [5.21.3](https://topaz.ooo/en/docs/project/roadmap#v5-21-3) | **Current release** | Signature checks in the npm installer, signed public source and release files without build paths |
 | [5.22.0](https://topaz.ooo/en/docs/project/roadmap#v5-22-0) | Upcoming | A new compiler engine with typed compilation, Rust layouts for known types and direct calls, an [official executable anyone can rebuild](https://topaz.ooo/en/docs/project/roadmap#v5-22-0-rebuildable-cli) from public source, plus [benchmarks](https://topaz.ooo/en/docs/project/roadmap#benchmarks) for every release since 5.21.0 |
+| [6.0.0](https://topaz.ooo/en/docs/project/roadmap#v6-0-0) | Planned | One way to say it throughout the language, a specification written before the compiler, a new reference and a migration tool |
 | [Long-term initiative](https://topaz.ooo/en/docs/project/roadmap#zocle) | Not scheduled | Lighter storage for local records and collections |
 
 5.22.0 replaces the inside of the compiler written in Topaz. The compiler
@@ -98,6 +117,10 @@ becomes the Core Kit base with add-ons.
 by side with TypeScript, Python and Rust running the same programs under the
 same conditions. The programs, the scripts that run them and the measurement
 method will be in the public repository before 5.22.0.
+
+Patch releases 5.22.x may follow 5.22.0. The line after 5.22 is 6.0.0, not
+5.23. It starts the `topaz-6.0` language mode, built on the 5.22 engine, and
+comes with a migration guide and a migration tool.
 
 ## Topaz and Lispex
 
