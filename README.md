@@ -109,10 +109,10 @@ functions directly. Both the compiler and the programs it builds get faster.
 5.22.0 keeps the `topaz-5.21` language mode, so existing programs build
 without changes.
 
-Two independent builds of Core Kit produce the same bytes, so anyone can
-check a download by building it themselves. 5.22.0 brings this idea from the
-public repository back to the official executable. The official `topaz`
-becomes the Core Kit base with add-ons.
+Building Core Kit twice from the same source, in separate checkouts, produces
+the same bytes, so anyone can check a download by building it themselves.
+5.22.0 brings this idea from the public repository back to the official
+executable. The official `topaz` becomes the Core Kit base with add-ons.
 
 5.22.0 will publish benchmark results for every release since 5.21.0, side
 by side with TypeScript, Python and Rust running the same programs under the
