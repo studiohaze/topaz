@@ -18,11 +18,12 @@ Hi, I'm Matt Park, the creator of Topaz. It's a general-purpose language with
 typesetting built in.
 
 Until now, we've put self-hosting and stability first. The compiler is written
-in Topaz and can be rebuilt from a public seed. Two independent builds of Core
-Kit produce the same bytes. Performance had to wait. Values share a runtime
-representation, and even calls to known functions allocate on the heap. The
-compiler doesn't work on typed data yet. These problems require structural
-changes.
+in Topaz and reaches a fixed point. A compiler built from its own generated
+Rust generates that same Rust again, byte for byte, and you can rebuild it
+from the public seed and compare the result yourself. Performance had to wait.
+Values share a runtime representation, and even calls to known functions
+allocate on the heap. The compiler doesn't work on typed data yet. These
+problems require structural changes.
 
 For [5.22](https://topaz.ooo/en/docs/project/roadmap#v5-22-0), we're replacing
 the compiler's internals so it can work on typed data. Known types will get
