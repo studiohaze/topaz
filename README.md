@@ -139,7 +139,10 @@ suite will live in that repository.
 
 To read the CLI, start with [its entry point](core-kit/cli/src/main.tpz).
 It parses a command and passes it to the [command handlers](core-kit/cli/src/commands.tpz).
-To run the code, build the Kit below.
+To run the code, [build the Kit](#build-the-kit-from-source). Linux and
+macOS also have a [release installer](#what-installation-selects). On Windows,
+build with `bootstrap.cmd`, then use the native Kit to install the matching
+release archive as shown below.
 
 ## Build the Kit from source
 
@@ -185,13 +188,32 @@ compiler self-regeneration check.
 ### What installation selects
 
 The [download catalogue](core-kit/downloads.data) lists the release archives
-for this checkout. When it lists an archive for your platform, `install-core-kit` or
-`install-core-kit.cmd` verifies and installs those bytes. The root `topaz`
-and `topaz.cmd` launchers select that version. For the source build above,
-run the executable under `out/core-kit-bootstrap` directly.
+for this checkout. On Linux and macOS, when the catalogue lists an archive for
+your platform, install it from the checkout root.
 
-The [download guide](dist/README.md) covers offline installation from a
-matching archive and switching between versions.
+```sh
+./install-core-kit
+./topaz --version
+```
+
+On Windows x86-64, build the Kit with `bootstrap.cmd` as shown above. Download
+the [matching Windows archive](https://github.com/studiohaze/topaz/releases/download/core-kit-5.21.3/topaz-core-kit-x86_64-pc-windows-msvc.tar.gz),
+then run the native installer from the checkout root. Replace the archive
+path with the file you downloaded.
+
+```powershell
+.\out\core-kit-bootstrap\topaz-core-kit.exe kit install --archive "C:\Downloads\topaz-core-kit-x86_64-pc-windows-msvc.tar.gz"
+.\topaz.cmd --version
+.\topaz.cmd kit install --check
+```
+
+The native Kit reads the archive and verifies it against the catalogue and
+the checkout's source inputs before installing it. The root `topaz` and
+`topaz.cmd` launchers select the installed version. To use the source build
+directly, run the executable under `out/core-kit-bootstrap`.
+
+Keep the archive and catalogue from the same release together. After changing
+the checkout, use its catalogue to select the matching archive.
 
 ## Use the CLI
 
