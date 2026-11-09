@@ -18,11 +18,13 @@ Hi, I'm Matt Park, the creator of Topaz.
 
 Topaz is a general-purpose programming language with typesetting built in. Code that does the same job looks the same no matter who writes it.
 
-The compiler is written in Topaz and reaches a fixed point. A compiler built
-from its own generated Rust generates that same Rust again, byte for byte.
-You can rebuild the current compiler from the public seed and compare the
-result yourself. Values currently share a runtime representation, and calls
-to known functions allocate on the heap.
+Until now, we've put self-hosting and stability first. The compiler is written
+in Topaz and reaches a fixed point. A compiler built from its own generated
+Rust generates that same Rust again, byte for byte, and you can rebuild it
+from the public seed and compare the result yourself. Performance had to wait.
+Values share a runtime representation, and even calls to known functions
+allocate on the heap. The compiler doesn't work on typed data yet. These
+problems require structural changes.
 
 The next public release is
 [6.0.0](https://topaz.ooo/en/docs/project/roadmap#v6-0-0). It brings a new
@@ -55,10 +57,10 @@ line break. Any field that needs results it can reproduce and check asks for
 the same discipline, so I believe typesetting and general-purpose use belong
 in one language.
 
-STUDIO HAZE develops Topaz and uses it in its products. Every product we build
-with Topaz will move to Topaz 6 with this release. If even one person anywhere
-in the world needs a language like this, I'll keep working to make Topaz ready
-for them.
+STUDIO HAZE develops Topaz and is where it gets used. Outside adoption is
+close to zero. Every product we build with Topaz will move to Topaz 6 with
+6.0.0. If even one person anywhere in the world needs a language like this,
+I'll keep working to make Topaz ready for them.
 
 Matt Park
 
