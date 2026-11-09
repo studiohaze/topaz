@@ -14,30 +14,33 @@ The language documentation and complete Topaz distribution live at
 
 ## A note from Matt
 
-Hi, I'm Matt Park, the creator of Topaz. It's a general-purpose language with
-typesetting built in.
+Hi, I'm Matt Park, the creator of Topaz.
 
-Until now, we've put self-hosting and stability first. The compiler is written
-in Topaz and reaches a fixed point. A compiler built from its own generated
-Rust generates that same Rust again, byte for byte, and you can rebuild it
-from the public seed and compare the result yourself. Performance had to wait.
-Values share a runtime representation, and even calls to known functions
-allocate on the heap. The compiler doesn't work on typed data yet. These
-problems require structural changes.
+Topaz is a general-purpose programming language with typesetting built in. Code that does the same job looks the same no matter who writes it.
 
-For [5.22](https://topaz.ooo/en/docs/project/roadmap#v5-22-0), we're replacing
-the compiler's internals so it can work on typed data. Known types will get
-their own Rust layouts, and calls to known functions will become plain Rust
-calls. 5.22 is the final release series for the `topaz-5.21` language mode, so
-existing programs will build without changes. We'll publish
-[benchmarks](https://topaz.ooo/en/docs/project/roadmap#benchmarks) against
-TypeScript, Python and Rust with the scripts used to run them.
+The compiler is written in Topaz and reaches a fixed point. A compiler built
+from its own generated Rust generates that same Rust again, byte for byte.
+You can rebuild the current compiler from the public seed and compare the
+result yourself. Values currently share a runtime representation, and calls
+to known functions allocate on the heap.
 
-[6.0.0](https://topaz.ooo/en/docs/project/roadmap#v6-0-0) will build on that
-engine and rework the language. For the first time, we're writing each rule
-into the specification before implementing it. Every rule gets a rationale and
-examples that run against the compiler. We're rebuilding the web documentation
-around the same specification and giving it a new form.
+The next public release is
+[6.0.0](https://topaz.ooo/en/docs/project/roadmap#v6-0-0). It brings a new
+compiler engine and changes to the language. The engine works on typed data,
+gives known types their own Rust layouts and calls known functions directly.
+
+We'll publish an official executable that anyone can rebuild from public
+source. It will use Core Kit with add-ons, with Lispex in a separate
+WebAssembly module and the reference compiler as an add-on. The compiler
+reconstruction guide will start a new chain at 6.0.0.
+[Benchmarks](https://topaz.ooo/en/docs/project/roadmap#benchmarks) will compare
+Topaz with TypeScript, Python and Rust running the same programs under the
+same conditions. The benchmark programs, scripts and measurement method will
+be public.
+
+The 6.0.0 specification will define each language rule with a rationale and
+examples that run against the compiler. The web documentation will follow the
+same specification.
 
 The principle is "one way to say it." Where Topaz has two ways to express the
 same thing, we'll keep one. The aim is a clearer, more consistent
@@ -52,9 +55,10 @@ line break. Any field that needs results it can reproduce and check asks for
 the same discipline, so I believe typesetting and general-purpose use belong
 in one language.
 
-STUDIO HAZE develops Topaz and is where it gets used. Outside adoption is
-close to zero. If even one person anywhere in the world needs a language like
-this, I'll keep working to make Topaz ready for them.
+STUDIO HAZE develops Topaz and uses it in its products. Every product we build
+with Topaz will move to Topaz 6 with this release. If even one person anywhere
+in the world needs a language like this, I'll keep working to make Topaz ready
+for them.
 
 Matt Park
 
@@ -90,8 +94,8 @@ downloading the website's seed archive or installing the website CLI.
 
 ## Roadmap
 
-The [roadmap](https://topaz.ooo/en/docs/project/roadmap) covers every
-release in the 5.21 line from 5.21.0, and the plans for 5.22.0 and 6.0.0.
+The [roadmap](https://topaz.ooo/en/docs/project/roadmap) covers the releases
+in the 5.21 line from 5.21.0 and the plan for 6.0.0.
 
 | Version | Status | What it brings |
 | --- | --- | --- |
@@ -99,29 +103,25 @@ release in the 5.21 line from 5.21.0, and the plans for 5.22.0 and 6.0.0.
 | [5.21.1](https://topaz.ooo/en/docs/project/roadmap#v5-21-1) | Released | Repairs to type inference, calls, diagnostics and runtime boundaries |
 | [5.21.2](https://topaz.ooo/en/docs/project/roadmap#v5-21-2) | Released | Faster everyday commands and signed build records |
 | [5.21.3](https://topaz.ooo/en/docs/project/roadmap#v5-21-3) | **Current release** | Signature checks in the npm installer, signed public source and release files without build paths |
-| [5.22.0](https://topaz.ooo/en/docs/project/roadmap#v5-22-0) | Upcoming | A new compiler engine with typed compilation, Rust layouts for known types and direct calls, an [official executable anyone can rebuild](https://topaz.ooo/en/docs/project/roadmap#v5-22-0-rebuildable-cli) from public source, plus [benchmarks](https://topaz.ooo/en/docs/project/roadmap#benchmarks) for every release since 5.21.0 |
-| [6.0.0](https://topaz.ooo/en/docs/project/roadmap#v6-0-0) | Planned | One way to say it throughout the language, a specification written before the compiler, a new reference and a migration tool |
+| [6.0.0](https://topaz.ooo/en/docs/project/roadmap#v6-0-0) | Upcoming | A new typed compiler engine, specification-led language changes, an official executable anyone can rebuild from public source, comparable [benchmarks](https://topaz.ooo/en/docs/project/roadmap#benchmarks), a compiler reconstruction guide and a migration tool |
 | [Long-term initiative](https://topaz.ooo/en/docs/project/roadmap#zocle) | Not scheduled | Lighter storage for local records and collections |
 
-5.22.0 replaces the inside of the compiler written in Topaz. The compiler
-works on typed data, gives known types their own Rust layouts and calls
-functions directly. Both the compiler and the programs it builds get faster.
-5.22.0 keeps the `topaz-5.21` language mode, so existing programs build
-without changes.
+6.0.0 is the next public release. It brings the new compiler engine and
+specification-led language changes in the `topaz-6.0` language mode. The
+compiler works on typed data, gives known types their own Rust layouts and
+calls known functions directly. A migration guide and migration tool will
+help existing programs move to 6.0.0.
 
-Building Core Kit twice from the same source, in separate checkouts, produces
-the same bytes, so anyone can check a download by building it themselves.
-5.22.0 brings this idea from the public repository back to the official
-executable. The official `topaz` becomes the Core Kit base with add-ons.
+The official `topaz` executable will use Core Kit as its base with add-ons.
+Lispex will run as a separate WebAssembly module, and the Rust reference
+compiler will be an add-on. Anyone will be able to rebuild the official
+executable from public source using the published inputs and build
+instructions. The compiler reconstruction guide will start a new chain at
+6.0.0 with its seed and published inputs.
 
-5.22.0 will publish benchmark results for every release since 5.21.0, side
-by side with TypeScript, Python and Rust running the same programs under the
-same conditions. The programs, the scripts that run them and the measurement
-method will be in the public repository before 5.22.0.
-
-Patch releases 5.22.x may follow 5.22.0. The line after 5.22 is 6.0.0, not
-5.23. It starts the `topaz-6.0` language mode, built on the 5.22 engine, and
-comes with a migration guide and a migration tool.
+6.0.0 will publish benchmark results alongside TypeScript, Python and Rust
+running the same programs under the same conditions. The benchmark programs,
+scripts and measurement method will be public.
 
 ## Topaz and Lispex
 
@@ -131,9 +131,9 @@ them without giving them access to files or the network. Lispex has its own
 releases, published at
 [studiohaze/lispex](https://github.com/studiohaze/lispex).
 
-With Topaz 5.22, the public parts of Lispex move to that repository. That
-covers the language specification, the embedding contract Topaz uses and a
-conformance suite.
+With Topaz 6.0.0, Lispex will run as a separate WebAssembly module. Its
+public specification, the embedding contract Topaz uses and the conformance
+suite will live in that repository.
 
 ## Get started
 
