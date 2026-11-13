@@ -15,13 +15,13 @@ Topaz is a general-purpose programming language with typesetting built in. Code 
 
 Topaz 6.0 starts from the specification. Every rule in the new language reference says why it exists and links to examples that run on the release before it ships. Behavior the compiler does not follow yet is marked as a known limitation until it does.
 
-The new engine works on typed data, gives known types their own Rust layouts and calls known functions directly. Anyone will be able to rebuild the official executable from public source and compare it byte for byte with the release. Where Topaz has two ways to say the same thing, 6.0 keeps one, and a migration tool moves existing programs across in one pass.
+The new engine works on typed data, gives known types their own Rust layouts and calls known functions directly. Anyone will be able to rebuild the official base executable from public source and compare it byte for byte with the release. Where Topaz has two ways to say the same thing, 6.0 keeps one, and a migration tool moves existing programs across in one pass.
 
 ## Built for ATLAS first
 
 ATLAS is the flagship program of STUDIO HAZE. Its line-breaking rules are already written in Topaz, and its typesetting engine is planned to run on Topaz 6.0. So 6.0 is applied and validated in ATLAS before it reaches anyone else.
 
-The public release follows once 6.0 runs in ATLAS, produces the same pages as the current Rust engine on the same manuscripts and passes the published benchmarks against TypeScript, Python and Rust. The [roadmap](https://topaz.ooo/en/roadmap) shows the progress toward each of these goals, generated from the checks that run on every change.
+6.0 is released to the public once three things are true. ATLAS runs on 6.0. It produces the same pages as the current Rust engine from the same manuscripts. Its benchmark results, measured alongside TypeScript, Python and Rust under the same conditions, are published. The [roadmap](https://topaz.ooo/en/roadmap) shows the progress toward each of these goals, generated from the checks that run on every change.
 
 ## A note from Matt
 
@@ -37,7 +37,7 @@ Matt Park
 
 ## Use Topaz 5.21.3 today
 
-Install the stable release from the [download page](https://topaz.ooo/en/download) and start with the [Topaz 5 manual](https://topaz.ooo/v5.21/en/docs/introduction).
+Install the stable release from the [download page](https://topaz.ooo/en/download) and start with the [Topaz 5 manual](https://topaz.ooo/v5.21/en/docs/introduction). To check a release you downloaded, follow [VERIFY.md](VERIFY.md).
 
 This repository holds Topaz Core Kit 5.21.3, including the public compiler and a CLI written in Topaz. To build it from source, install Rust and Cargo 1.96.0 and run the bootstrap. On Windows, clone into a short folder such as `C:\src\topaz`, because long paths inside the checkout can make installation fail.
 
