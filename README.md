@@ -21,7 +21,7 @@ The new engine works on typed data, gives known types their own Rust layouts and
 
 ATLAS is the flagship program of STUDIO HAZE. Its line-breaking rules are already written in Topaz, and its typesetting engine is planned to run on Topaz 6.0. So 6.0 is applied and validated in ATLAS before it reaches anyone else.
 
-Besides the release conditions on the [roadmap](https://topaz.ooo/en/roadmap), 6.0 needs three more things before its public release. ATLAS runs on 6.0. It produces the same pages as the current Rust engine from the same manuscripts. Its benchmark results, measured alongside TypeScript, Python and Rust under the same conditions, are published. The [roadmap](https://topaz.ooo/en/roadmap) shows the progress toward each of these goals, generated from the checks that run on every change.
+The release conditions on the [roadmap](https://topaz.ooo/en/roadmap) include these three. ATLAS runs on 6.0. It produces the same pages as the current Rust engine from the same manuscripts. Its benchmark results, measured alongside TypeScript, Python and Rust under the same conditions, are published. The [roadmap](https://topaz.ooo/en/roadmap) shows the progress toward each of these goals, generated from the checks that run on every change.
 
 ## A note from Matt
 
