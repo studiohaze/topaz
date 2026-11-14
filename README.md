@@ -15,19 +15,19 @@ Topaz is a general-purpose programming language with typesetting built in. Code 
 
 Topaz 6.0 starts from the specification. Every rule in the new language reference says why it exists and links to examples that run on the release before it ships. Behavior the compiler does not follow yet is marked as a known limitation until it does.
 
-The new engine works on typed data, gives known types their own Rust layouts and calls known functions directly. With it, the self-compiler written in Topaz is designed to match the speed of the reference compiler written in Rust. Anyone will be able to rebuild the official base executable from public source and compare it byte for byte with the release. Where Topaz has two ways to say the same thing, 6.0 keeps one, and a migration tool moves existing programs across in one pass.
+The new engine works on typed data, gives known types their own Rust layouts and calls known functions directly. With it, the self-compiler written in Topaz is designed to compile as fast as the reference compiler written in Rust while making generated programs even faster. Anyone will be able to rebuild the official base executable from public source and compare it byte for byte with the release. Where Topaz has two ways to say the same thing, 6.0 keeps one, and a migration tool moves existing programs across in one pass.
 
 ## Built for ATLAS first
 
-ATLAS is the flagship program of STUDIO HAZE. ATLAS is written in Topaz 6.0. Commercial builds of ATLAS use the reference compiler written in Rust, which already delivers production performance. The self-compiler written in Topaz does not reach that speed yet. Topaz 6.0 is validated in ATLAS before its public release.
+ATLAS is the flagship program of STUDIO HAZE. ATLAS is written in Topaz 6.0. Today, commercial builds of ATLAS use the reference compiler written in Rust, which compiles large codebases quickly while the Topaz 6.0 self-compiler is being completed. Topaz 6.0 is validated in ATLAS before its public release.
 
-The release conditions on the [roadmap](https://topaz.ooo/en/roadmap) include these three. The Topaz code for ATLAS must build with the Topaz 6.0 self-compiler. From the same manuscripts, that build must produce the same pages as the commercial build made with the Rust reference compiler and deliver production performance. Benchmark results for Topaz 6.0, measured alongside TypeScript, Python and Rust under the same conditions, must be published. The roadmap shows the progress toward each of these goals, generated from the checks that run on every change.
+The release conditions on the [roadmap](https://topaz.ooo/en/roadmap) include these three. The Topaz code for ATLAS must build with the Topaz 6.0 self-compiler. From the same manuscripts, that build must produce the same pages as the commercial build made with the Rust reference compiler, and the self-compiler must compile ATLAS fast enough for everyday development. Benchmark results for Topaz 6.0, measured alongside TypeScript, Python and Rust under the same conditions, must be published. The roadmap shows the progress toward each of these goals, generated from the checks that run on every change.
 
 ## A note from Matt
 
 Hi, I'm Matt Park, the creator of Topaz.
 
-Until now, we've put self-hosting and stability first. The compiler is written in Topaz and reaches a fixed point. A compiler built from its own generated Rust generates that same Rust again, byte for byte, and you can rebuild it from the public seed and compare the result yourself. Reaching that point came before making the self-compiler fast, so it still trails the reference compiler written in Rust. Closing the gap takes structural changes. That is what 6.0 is for.
+Until now, we've put self-hosting and stability first. The compiler is written in Topaz and reaches a fixed point. A compiler built from its own generated Rust generates that same Rust again, byte for byte, and you can rebuild it from the public seed and compare the result yourself. It already produces fast executables, yet compiling large projects with the self-compiler itself takes longer than with the reference compiler written in Rust. Closing that compilation speed gap and pushing runtime performance even further takes structural changes. That is what 6.0 is for.
 
 Typesetting demands determinism. The same manuscript has to produce the same pages on every machine, down to the last line break. Any field that needs results it can reproduce and check asks for the same discipline, so I believe typesetting and general-purpose use belong in one language. Where a choice is open, typesetting comes first, but features can belong even when typesetting has no use for them.
 
