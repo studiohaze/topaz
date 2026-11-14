@@ -19,9 +19,9 @@ The new engine works on typed data, gives known types their own Rust layouts and
 
 ## Built for ATLAS first
 
-ATLAS is the flagship program of STUDIO HAZE. ATLAS is already written in Topaz. Through Topaz 5.21, commercial builds of ATLAS use the reference compiler written in Rust, which already delivers production performance. The self-compiler written in Topaz does not reach that speed yet. Topaz 6.0 will first be validated by building this existing ATLAS code with its self-compiler.
+ATLAS is the flagship program of STUDIO HAZE. ATLAS is written in Topaz 6.0. Commercial builds of ATLAS use the reference compiler written in Rust, which already delivers production performance. The self-compiler written in Topaz does not reach that speed yet. Topaz 6.0 is validated in ATLAS before its public release.
 
-The release conditions on the [roadmap](https://topaz.ooo/en/roadmap) include these three. The existing Topaz code for ATLAS must build with the Topaz 6.0 self-compiler. From the same manuscripts, that build must produce the same pages as the commercial build made with the Rust reference compiler and deliver production performance. Benchmark results for Topaz 6.0, measured alongside TypeScript, Python and Rust under the same conditions, must be published. The roadmap shows the progress toward each of these goals, generated from the checks that run on every change.
+The release conditions on the [roadmap](https://topaz.ooo/en/roadmap) include these three. The Topaz code for ATLAS must build with the Topaz 6.0 self-compiler. From the same manuscripts, that build must produce the same pages as the commercial build made with the Rust reference compiler and deliver production performance. Benchmark results for Topaz 6.0, measured alongside TypeScript, Python and Rust under the same conditions, must be published. The roadmap shows the progress toward each of these goals, generated from the checks that run on every change.
 
 ## A note from Matt
 
