@@ -1,0 +1,10 @@
+import std.io
+
+function fibonacci(n: int) -> int {
+    if n < 2 {
+        return n
+    }
+    fibonacci(n - 1) + fibonacci(n - 2)
+}
+
+io.writeLine("bench-v1:{fibonacci(26)}")

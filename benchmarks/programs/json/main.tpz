@@ -1,0 +1,41 @@
+import std.fs
+import std.io
+import std.json
+
+function parse(text: string) -> Result<JSONValue, string> {
+    match json.parse(text) {
+        case Ok(value) => Ok(value)
+        case Err(error) => Err("{error.line}:{error.column}: {error.message}")
+    }
+}
+
+function summarize() -> Result<string, string> {
+    let mut totals: Array<int> = [0, 0, 0, 0]
+    for repeat in 0..<20 {
+        let text = fs.readText("input.json")?
+        let document = parse(text)?
+        let rows = document.asArray().okOr("expected array")?
+        for row in rows {
+            let nameValue = row.get("name").okOr("missing name")?
+            let amountValue = row.get("amount").okOr("missing amount")?
+            let activeValue = row.get("active").okOr("missing active")?
+            let tagsValue = row.get("tags").okOr("missing tags")?
+            let name = nameValue.asString().okOr("expected string")?
+            let amount = amountValue.asInt().okOr("expected integer")?
+            let active = activeValue.asBool().okOr("expected boolean")?
+            let tags = tagsValue.asArray().okOr("expected tags")?
+            if active {
+                totals[0] += 1
+                totals[1] += amount
+                totals[2] += name.trim().scalars().length
+                totals[3] += tags.length
+            }
+        }
+    }
+    json.stringify(totals)
+}
+
+match summarize() {
+    case Ok(text) => io.writeLine("bench-v1:{text}")
+    case Err(error) => io.writeLine("error: {error}")
+}

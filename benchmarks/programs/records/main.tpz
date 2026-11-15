@@ -1,0 +1,32 @@
+import std.io
+
+record Entry {
+    name: string,
+    amount: int,
+    active: bool,
+}
+
+let lines = [" cedar |12|open", "maple|7|closed", " birch |5|open", "cedar|3|open", "oak|11|open", "birch|2|closed"]
+let mut entries: Array<Entry> = []
+for repeat in 0..<2000 {
+    for line in lines {
+        let fields = line.split("|")
+        entries.push(Entry {
+            name: fields[0].trim(),
+            amount: fields[1].toInt() ?? 0,
+            active: fields[2] == "open",
+        })
+    }
+}
+let selected = entries.filter(entry => entry.active)
+let adjusted = selected.map(entry => Entry {
+    name: entry.name,
+    amount: entry.amount * 2 + 1,
+    active: entry.active,
+})
+let mut totals: Map<string, int> = map {}
+for entry in adjusted {
+    totals.insert(entry.name, totals.getOr(entry.name, 0) + entry.amount)
+}
+let pieces = totals.keys.sorted().map(name => "{name}={totals.getOr(name, 0)}")
+io.writeLine("bench-v1:{entries.length}:{selected.length}:{pieces.join(",")}")
