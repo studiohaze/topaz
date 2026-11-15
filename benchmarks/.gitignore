@@ -1,0 +1,6 @@
+.work/
+.cache/
+results/
+toolchains.local.json
+__pycache__/
+*.pyc

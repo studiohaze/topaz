@@ -1,0 +1,28 @@
+import std.io
+
+let size = 40
+let mut left: Array<int> = []
+let mut right: Array<int> = []
+for row in 0..<size {
+    for column in 0..<size {
+        left.push((row * 3 + column * 5) % 17 - 8)
+        right.push((row * 7 + column * 2) % 19 - 9)
+    }
+}
+let mut checksum = 0
+for round in 0..<8 {
+    let mut product: Array<int> = []
+    for row in 0..<size {
+        for column in 0..<size {
+            let mut value = 0
+            for inner in 0..<size {
+                value += left[row * size + inner] * right[inner * size + column]
+            }
+            product.push(value)
+        }
+    }
+    for index in 0..<product.length {
+        checksum += product[index] * (index + 1) * (round + 1)
+    }
+}
+io.writeLine("bench-v1:{checksum}")

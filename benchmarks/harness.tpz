@@ -1,0 +1,404 @@
+// Scheduling and statistics stay in Topaz; bench.py supplies OS observations.
+import std.fs
+import std.json
+
+type BenchCase = { id: string, program: string, build: bool }
+type Job = { case_id: string, metric: string, iteration: int, warmup: bool }
+type Statistics = { n: int, median: JSONValue, q1: JSONValue, q3: JSONValue, iqr: JSONValue }
+type Summary = {
+    case_id: string,
+    metric: string,
+    status: string,
+    reason: string,
+    time_ns: Option<Statistics>,
+    peak_rss_bytes: Option<Statistics>,
+    memory_status: string,
+}
+type ReportRow = { summary: Summary, markdown: string }
+type LineCount = { case_id: string, physical_nonblank_lines: int }
+
+function parseJson(text: string) -> Result<JSONValue, string> {
+    match json.parse(text) {
+        case Ok(value) => Ok(value)
+        case Err(error) => Err("{error.line}:{error.column}: {error.message}")
+    }
+}
+
+function field(object: JSONValue, key: string) -> Result<JSONValue, string> {
+    match object.get(key) {
+        case Some(value) => Ok(value)
+        case None => Err("missing field: {key}")
+    }
+}
+
+function stringField(object: JSONValue, key: string) -> Result<string, string> {
+    let value = field(object, key)?
+    match value.asString() {
+        case Some(text) => Ok(text)
+        case None => Err("expected string: {key}")
+    }
+}
+
+function intField(object: JSONValue, key: string) -> Result<int, string> {
+    let value = field(object, key)?
+    match value.asInt() {
+        case Some(number) => Ok(number)
+        case None => Err("expected integer: {key}")
+    }
+}
+
+function boolField(object: JSONValue, key: string) -> Result<bool, string> {
+    let value = field(object, key)?
+    match value.asBool() {
+        case Some(flag) => Ok(flag)
+        case None => Err("expected boolean: {key}")
+    }
+}
+
+function arrayField(object: JSONValue, key: string) -> Result<Array<JSONValue>, string> {
+    let value = field(object, key)?
+    match value.asArray() {
+        case Some(items) => Ok(items)
+        case None => Err("expected array: {key}")
+    }
+}
+
+function optionalString(object: JSONValue, key: string, fallback: string) -> string {
+    match object.get(key) {
+        case Some(value) => value.asString() ?? fallback
+        case None => fallback
+    }
+}
+
+function readCases(document: JSONValue) -> Result<Array<BenchCase>, string> {
+    let rawCases = arrayField(document, "cases")?
+    let mut cases: Array<BenchCase> = []
+    let mut ids: Array<string> = []
+    for item in rawCases {
+        let id = stringField(item, "id")?
+        if id.byteLength() == 0 || id in ids {
+            return Err("case ids must be nonempty and unique")
+        }
+        ids.push(id)
+        cases.push({
+            id: id,
+            program: stringField(item, "program")?,
+            build: boolField(item, "build")?,
+        })
+    }
+    Ok(cases)
+}
+
+// Each round rotates the starting lane and alternates its traversal direction.
+// This orders individual samples, not whole language/version batches.
+function roundOrder(cases: Array<BenchCase>, round: int) -> Array<BenchCase> {
+    let mut ordered: Array<BenchCase> = []
+    if cases.length == 0 {
+        return ordered
+    }
+    let start = round % cases.length
+    for offset in 0..<cases.length {
+        let index = if round % 2 == 0 {
+            (start + offset) % cases.length
+        } else {
+            (start + cases.length - offset) % cases.length
+        }
+        ordered.push(cases[index])
+    }
+    ordered
+}
+
+// smoke: one correctness pass. baseline: execution and startup time only.
+// benchmark: the full release comparison. Only benchmark has build trials,
+// memory and source lines.
+function methodField(document: JSONValue) -> Result<string, string> {
+    let method = stringField(document, "method")?
+    if method != "smoke" && method != "baseline" && method != "benchmark" {
+        return Err("method must be smoke, baseline or benchmark")
+    }
+    Ok(method)
+}
+
+function plan(input: string, output: string) -> Result<int, string> {
+    let document = parseJson(fs.readText(input)?)?
+    let method = methodField(document)?
+    let quick = method == "smoke"
+    let full = method == "benchmark"
+    let repetitions = if quick { 1 } else { intField(document, "repetitions")? }
+    let warmups = if quick { 0 } else { intField(document, "warmups")? }
+    if repetitions < 1 || warmups < 0 {
+        return Err("repetitions must be positive and warmups nonnegative")
+    }
+    let cases = readCases(document)?
+    let mut lineCounts: Array<LineCount> = []
+    if full {
+        for source in arrayField(document, "line_sources")? {
+            let id = stringField(source, "case_id")?
+            let path = stringField(source, "path")?
+            let text = fs.readText(path)?
+            let mut count = 0
+            for line in text.split("\n") {
+                if line.trim().byteLength() > 0 {
+                    count += 1
+                }
+            }
+            lineCounts.push({ case_id: id, physical_nonblank_lines: count })
+        }
+    }
+    let mut jobs: Array<Job> = []
+    for round in 0..<(warmups + repetitions) {
+        for item in roundOrder(cases, round) {
+            let metric = if item.program == "empty" { "startup" } else { "runtime" }
+            jobs.push({
+                case_id: item.id,
+                metric: metric,
+                iteration: round - warmups,
+                warmup: round < warmups,
+            })
+        }
+    }
+    let buildCases = cases.filter(item => item.build && full)
+    for round in 0..<(warmups + repetitions) {
+        // Every edit follows that case's fresh build and retains its products.
+        // Separating these passes interleaves languages for both build metrics.
+        for metric in ["build_clean", "build_edit"] {
+            for item in roundOrder(buildCases, round) {
+                jobs.push({
+                    case_id: item.id,
+                    metric: metric,
+                    iteration: round - warmups,
+                    warmup: round < warmups,
+                })
+            }
+        }
+    }
+    let result = { schema: "topaz-benchmarks-plan/v1", method: method, jobs: jobs, line_counts: lineCounts }
+    fs.writeText(output, json.stringify(result)? + "\n")?
+    Ok(0)
+}
+
+// Quartiles use linear interpolation at p * (n - 1), including n == 1.
+// Integer observations make every result an exact multiple of one quarter.
+function quantileQuarters(sorted: Array<int>, quarter: int) -> int {
+    let position = (sorted.length - 1) * quarter
+    let lower = position / 4
+    let fraction = position % 4
+    let left = sorted[lower]
+    let right = if fraction == 0 { left } else { sorted[lower + 1] }
+    left * 4 + (right - left) * fraction
+}
+
+// 5.21 json.stringify rejects float values. Parsed JSON numeric nodes retain
+// exact decimal fractions and remain JSON numbers, not strings or rounded ints.
+function quarterNumber(value: int) -> Result<JSONValue, string> {
+    let whole = value / 4
+    let fraction = value % 4
+    let suffix = if fraction == 0 { "" } else if fraction == 1 {
+        ".25"
+    } else if fraction == 2 {
+        ".5"
+    } else {
+        ".75"
+    }
+    parseJson("{whole}{suffix}")
+}
+
+function statistics(values: Array<int>) -> Result<Statistics, string> {
+    let sorted = values.sorted()
+    let q1 = quantileQuarters(sorted, 1)
+    let q3 = quantileQuarters(sorted, 3)
+    Ok({
+        n: values.length,
+        median: quarterNumber(quantileQuarters(sorted, 2))?,
+        q1: quarterNumber(q1)?,
+        q3: quarterNumber(q3)?,
+        iqr: quarterNumber(q3 - q1)?,
+    })
+}
+
+function tableText(value: string) -> string {
+    value.split("|").join("\\|").split("\r").join(" ").split("\n").join(" ")
+}
+
+function summarize(
+    item: BenchCase,
+    original: JSONValue,
+    metric: string,
+    samples: Array<JSONValue>,
+    repetitions: int,
+    method: string,
+) -> Result<ReportRow, string> {
+    let quick = method == "smoke"
+    let full = method == "benchmark"
+    let executionMetric = metric != "build_clean" && metric != "build_edit"
+    let applicable = executionMetric || (item.build && full)
+    let mut times: Array<int> = []
+    let mut memory: Array<int> = []
+    let mut iterations: Array<int> = []
+    let mut invalid = false
+    let mut reason = ""
+    for sample in samples {
+        if stringField(sample, "case_id")? == item.id && stringField(sample, "metric")? == metric {
+            if stringField(sample, "status")? != "ok" {
+                invalid = true
+                reason = optionalString(sample, "reason", "sample did not complete correctly")
+            }
+            if !boolField(sample, "warmup")? {
+                let iteration = intField(sample, "iteration")?
+                if iteration < 0 || iteration >= repetitions || iteration in iterations {
+                    invalid = true
+                    reason = "invalid or duplicate measured iteration"
+                }
+                iterations.push(iteration)
+                if !quick {
+                    let elapsed = field(sample, "elapsed_ns")?
+                    match elapsed.asInt() {
+                        case Some(value) if value >= 0 && value <= 9007199254740991 => times.push(value)
+                        case _ => {
+                            invalid = true
+                            reason = "missing, negative, or inexact elapsed time"
+                        }
+                    }
+                    let rss = field(sample, "peak_rss_bytes")?
+                    match rss.asInt() {
+                        case Some(value) if value >= 0 && value <= 9007199254740991 => memory.push(value)
+                        case _ => {
+                            if full && (metric == "runtime" || metric == "startup") {
+                                reason = optionalString(sample, "memory_reason", "peak memory is unavailable")
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    let mut status = if quick { "passed" } else { "ok" }
+    if !applicable {
+        status = "not_applicable"
+        reason = if quick {
+            "build trials are outside the correctness smoke"
+        } else if !full {
+            "build trials are outside the execution-time baseline"
+        } else if item.program == "empty" {
+            "startup preparation is outside the build trials"
+        } else {
+            "this execution route has no separate build"
+        }
+    } else if invalid {
+        status = "failed"
+    } else if iterations.length == 0 {
+        status = optionalString(original, "status", "unavailable")
+        if status == "ok" || status == "ready" {
+            status = "unavailable"
+        }
+        reason = optionalString(original, "reason", "no measured samples")
+    } else if iterations.length != repetitions {
+        status = "incomplete"
+        reason = "measured iteration coverage is incomplete"
+    }
+    let mut timeStats: Option<Statistics> = None
+    let mut memoryStats: Option<Statistics> = None
+    let mut memoryStatus = if !full || metric == "build_clean" || metric == "build_edit" {
+        "not_measured"
+    } else {
+        "unavailable"
+    }
+    let mut timeCells = "n/a | n/a"
+    let mut memoryCells = "n/a | n/a"
+    if status == "ok" {
+        let calculated = statistics(times)?
+        timeStats = Some(calculated)
+        timeCells = json.stringify(calculated.median)? + " | " + json.stringify(calculated.iqr)?
+        if memory.length == repetitions {
+            let calculatedMemory = statistics(memory)?
+            memoryStats = Some(calculatedMemory)
+            memoryStatus = "ok"
+            memoryCells = json.stringify(calculatedMemory.median)? + " | " + json.stringify(calculatedMemory.iqr)?
+        }
+    } else if status == "not_applicable" {
+        memoryStatus = "not_applicable"
+    }
+    let summary: Summary = {
+        case_id: item.id,
+        metric: metric,
+        status: status,
+        reason: reason,
+        time_ns: timeStats,
+        peak_rss_bytes: memoryStats,
+        memory_status: memoryStatus,
+    }
+    let row = "| {tableText(item.id)} | {metric} | {status} | {timeCells} | {memoryCells} | {memoryStatus} | {tableText(reason)} |\n"
+    Ok({ summary: summary, markdown: row })
+}
+
+function report(input: string, output: string, table: string) -> Result<int, string> {
+    let document = parseJson(fs.readText(input)?)?
+    let method = methodField(document)?
+    let quick = method == "smoke"
+    let full = method == "benchmark"
+    let repetitions = if quick { 1 } else { intField(document, "repetitions")? }
+    if repetitions < 1 {
+        return Err("repetitions must be positive")
+    }
+    let cases = readCases(document)?
+    let originalCases = arrayField(document, "cases")?
+    let samples = arrayField(document, "samples")?
+    let lineCounts = arrayField(document, "line_counts")?
+    let kind = method
+    let mut summaries: Array<Summary> = []
+    let mut markdown = "# Local {kind} report\n\n"
+    if quick {
+        markdown += "A one-repetition smoke check establishes operation and output equality. No timing, memory, or source-line measurements are collected. It does not establish public-source reproducibility or support performance comparisons.\n\n"
+    } else if !full {
+        markdown += "An execution-time baseline of downloaded official executables, identified by their published hashes. It does not establish public-source reproducibility and is not the release comparison. No build, memory, or source-line measurements are collected. Statistics exclude warmups. Time is nanoseconds. Quartiles and all observations are retained in the JSON. No outliers are removed.\n\n"
+    } else {
+        markdown += "Statistics exclude warmups. Time is nanoseconds; memory is peak resident bytes. Quartiles and all observations are retained in the JSON. No outliers are removed.\n\n"
+    }
+    markdown += "| Case | Metric | Status | Time median (ns) | Time IQR (ns) | Memory median (bytes) | Memory IQR (bytes) | Memory status | Reason |\n"
+    markdown += "| --- | --- | --- | --- | --- | --- | --- | --- | --- |\n"
+    for index in 0..<cases.length {
+        let item = cases[index]
+        let executionMetric = if item.program == "empty" { "startup" } else { "runtime" }
+        for metric in [executionMetric, "build_clean", "build_edit"] {
+            let row = summarize(item, originalCases[index], metric, samples, repetitions, method)?
+            summaries.push(row.summary)
+            markdown += row.markdown
+        }
+    }
+    if !full {
+        if lineCounts.length != 0 {
+            return Err("{kind} reports must not contain source-line measurements")
+        }
+        markdown += "\nSource-line measurement was not collected for this {kind} run.\n"
+    } else {
+        markdown += "\n## Source lines\n\nPhysical nonblank source lines, including comments and declarations; generated files and input fixtures are excluded.\n\n"
+        markdown += "| Case | Physical nonblank lines |\n| --- | --- |\n"
+    }
+    for item in lineCounts {
+        let id = stringField(item, "case_id")?
+        let count = intField(item, "physical_nonblank_lines")?
+        if count < 0 {
+            return Err("line counts must be nonnegative")
+        }
+        markdown += "| {tableText(id)} | {count} |\n"
+    }
+    let result = {
+        schema: "topaz-benchmarks/v1",
+        kind: kind,
+        raw: document,
+        summaries: summaries,
+    }
+    fs.writeText(output, json.stringify(result)? + "\n")?
+    fs.writeText(table, markdown)?
+    Ok(0)
+}
+
+export function main(args: Array<string>, stdin: string) -> Result<int, string> {
+    if args.length == 3 && args[0] == "plan" {
+        return plan(args[1], args[2])
+    }
+    if args.length == 4 && args[0] == "report" {
+        return report(args[1], args[2], args[3])
+    }
+    Err("usage: harness.tpz -- plan REQUEST PLAN | report RAW RESULT TABLE")
+}

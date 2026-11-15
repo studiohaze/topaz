@@ -1,0 +1,19 @@
+{
+  "schema": "topaz-benchmarks-toolchains/v1",
+  "driver": {"path": null, "version": null},
+  "tools": {
+    "node": {"path": null, "version": null},
+    "typescript": {"path": null, "version": null},
+    "python": {"path": null, "version": null},
+    "rustc": {"path": null, "version": null},
+    "cargo": {"path": null, "version": null},
+    "rustup": {"path": null, "version": null}
+  },
+  "releases": [
+    {"version": "5.21.0", "channel": "npm", "artifact": null, "source": null},
+    {"version": "5.21.1", "channel": "npm", "artifact": null, "source": null},
+    {"version": "5.21.2", "channel": "npm", "artifact": null, "source": null},
+    {"version": "5.21.3", "channel": "npm", "artifact": null, "source": null}
+  ],
+  "host_notes": "Record power mode, CPU governor, affinity, virtualization, background load and thermal conditions."
+}

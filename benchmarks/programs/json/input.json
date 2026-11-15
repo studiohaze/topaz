@@ -1,0 +1,1474 @@
+[
+  {
+    "name": " cedar ",
+    "amount": -50,
+    "active": false,
+    "tags": [
+      "bench",
+      "group0"
+    ],
+    "meta": {
+      "valid": true,
+      "scale": 1.5
+    }
+  },
+  {
+    "name": "quote\"mark",
+    "amount": -43,
+    "active": true,
+    "tags": [
+      "bench",
+      "group1"
+    ],
+    "meta": null
+  },
+  {
+    "name": "slash\\path",
+    "amount": -36,
+    "active": true,
+    "tags": [
+      "bench",
+      "group2"
+    ],
+    "meta": {
+      "valid": true,
+      "scale": 1.5
+    }
+  },
+  {
+    "name": "\ud1a0\ud30c\uc988",
+    "amount": -29,
+    "active": false,
+    "tags": [
+      "bench",
+      "group3"
+    ],
+    "meta": null
+  },
+  {
+    "name": "astral\ud83d\udc8e",
+    "amount": -22,
+    "active": true,
+    "tags": [
+      "bench",
+      "group0"
+    ],
+    "meta": {
+      "valid": true,
+      "scale": 1.5
+    }
+  },
+  {
+    "name": "line\nbreak",
+    "amount": -15,
+    "active": true,
+    "tags": [
+      "bench",
+      "group1"
+    ],
+    "meta": null
+  },
+  {
+    "name": " cedar ",
+    "amount": -8,
+    "active": false,
+    "tags": [
+      "bench",
+      "group2"
+    ],
+    "meta": {
+      "valid": true,
+      "scale": 1.5
+    }
+  },
+  {
+    "name": "quote\"mark",
+    "amount": -1,
+    "active": true,
+    "tags": [
+      "bench",
+      "group3"
+    ],
+    "meta": null
+  },
+  {
+    "name": "slash\\path",
+    "amount": 6,
+    "active": true,
+    "tags": [
+      "bench",
+      "group0"
+    ],
+    "meta": {
+      "valid": true,
+      "scale": 1.5
+    }
+  },
+  {
+    "name": "\ud1a0\ud30c\uc988",
+    "amount": 13,
+    "active": false,
+    "tags": [
+      "bench",
+      "group1"
+    ],
+    "meta": null
+  },
+  {
+    "name": "astral\ud83d\udc8e",
+    "amount": 20,
+    "active": true,
+    "tags": [
+      "bench",
+      "group2"
+    ],
+    "meta": {
+      "valid": true,
+      "scale": 1.5
+    }
+  },
+  {
+    "name": "line\nbreak",
+    "amount": 27,
+    "active": true,
+    "tags": [
+      "bench",
+      "group3"
+    ],
+    "meta": null
+  },
+  {
+    "name": " cedar ",
+    "amount": 34,
+    "active": false,
+    "tags": [
+      "bench",
+      "group0"
+    ],
+    "meta": {
+      "valid": true,
+      "scale": 1.5
+    }
+  },
+  {
+    "name": "quote\"mark",
+    "amount": 41,
+    "active": true,
+    "tags": [
+      "bench",
+      "group1"
+    ],
+    "meta": null
+  },
+  {
+    "name": "slash\\path",
+    "amount": 48,
+    "active": true,
+    "tags": [
+      "bench",
+      "group2"
+    ],
+    "meta": {
+      "valid": true,
+      "scale": 1.5
+    }
+  },
+  {
+    "name": "\ud1a0\ud30c\uc988",
+    "amount": -46,
+    "active": false,
+    "tags": [
+      "bench",
+      "group3"
+    ],
+    "meta": null
+  },
+  {
+    "name": "astral\ud83d\udc8e",
+    "amount": -39,
+    "active": true,
+    "tags": [
+      "bench",
+      "group0"
+    ],
+    "meta": {
+      "valid": true,
+      "scale": 1.5
+    }
+  },
+  {
+    "name": "line\nbreak",
+    "amount": -32,
+    "active": true,
+    "tags": [
+      "bench",
+      "group1"
+    ],
+    "meta": null
+  },
+  {
+    "name": " cedar ",
+    "amount": -25,
+    "active": false,
+    "tags": [
+      "bench",
+      "group2"
+    ],
+    "meta": {
+      "valid": true,
+      "scale": 1.5
+    }
+  },
+  {
+    "name": "quote\"mark",
+    "amount": -18,
+    "active": true,
+    "tags": [
+      "bench",
+      "group3"
+    ],
+    "meta": null
+  },
+  {
+    "name": "slash\\path",
+    "amount": -11,
+    "active": true,
+    "tags": [
+      "bench",
+      "group0"
+    ],
+    "meta": {
+      "valid": true,
+      "scale": 1.5
+    }
+  },
+  {
+    "name": "\ud1a0\ud30c\uc988",
+    "amount": -4,
+    "active": false,
+    "tags": [
+      "bench",
+      "group1"
+    ],
+    "meta": null
+  },
+  {
+    "name": "astral\ud83d\udc8e",
+    "amount": 3,
+    "active": true,
+    "tags": [
+      "bench",
+      "group2"
+    ],
+    "meta": {
+      "valid": true,
+      "scale": 1.5
+    }
+  },
+  {
+    "name": "line\nbreak",
+    "amount": 10,
+    "active": true,
+    "tags": [
+      "bench",
+      "group3"
+    ],
+    "meta": null
+  },
+  {
+    "name": " cedar ",
+    "amount": 17,
+    "active": false,
+    "tags": [
+      "bench",
+      "group0"
+    ],
+    "meta": {
+      "valid": true,
+      "scale": 1.5
+    }
+  },
+  {
+    "name": "quote\"mark",
+    "amount": 24,
+    "active": true,
+    "tags": [
+      "bench",
+      "group1"
+    ],
+    "meta": null
+  },
+  {
+    "name": "slash\\path",
+    "amount": 31,
+    "active": true,
+    "tags": [
+      "bench",
+      "group2"
+    ],
+    "meta": {
+      "valid": true,
+      "scale": 1.5
+    }
+  },
+  {
+    "name": "\ud1a0\ud30c\uc988",
+    "amount": 38,
+    "active": false,
+    "tags": [
+      "bench",
+      "group3"
+    ],
+    "meta": null
+  },
+  {
+    "name": "astral\ud83d\udc8e",
+    "amount": 45,
+    "active": true,
+    "tags": [
+      "bench",
+      "group0"
+    ],
+    "meta": {
+      "valid": true,
+      "scale": 1.5
+    }
+  },
+  {
+    "name": "line\nbreak",
+    "amount": -49,
+    "active": true,
+    "tags": [
+      "bench",
+      "group1"
+    ],
+    "meta": null
+  },
+  {
+    "name": " cedar ",
+    "amount": -42,
+    "active": false,
+    "tags": [
+      "bench",
+      "group2"
+    ],
+    "meta": {
+      "valid": true,
+      "scale": 1.5
+    }
+  },
+  {
+    "name": "quote\"mark",
+    "amount": -35,
+    "active": true,
+    "tags": [
+      "bench",
+      "group3"
+    ],
+    "meta": null
+  },
+  {
+    "name": "slash\\path",
+    "amount": -28,
+    "active": true,
+    "tags": [
+      "bench",
+      "group0"
+    ],
+    "meta": {
+      "valid": true,
+      "scale": 1.5
+    }
+  },
+  {
+    "name": "\ud1a0\ud30c\uc988",
+    "amount": -21,
+    "active": false,
+    "tags": [
+      "bench",
+      "group1"
+    ],
+    "meta": null
+  },
+  {
+    "name": "astral\ud83d\udc8e",
+    "amount": -14,
+    "active": true,
+    "tags": [
+      "bench",
+      "group2"
+    ],
+    "meta": {
+      "valid": true,
+      "scale": 1.5
+    }
+  },
+  {
+    "name": "line\nbreak",
+    "amount": -7,
+    "active": true,
+    "tags": [
+      "bench",
+      "group3"
+    ],
+    "meta": null
+  },
+  {
+    "name": " cedar ",
+    "amount": 0,
+    "active": false,
+    "tags": [
+      "bench",
+      "group0"
+    ],
+    "meta": {
+      "valid": true,
+      "scale": 1.5
+    }
+  },
+  {
+    "name": "quote\"mark",
+    "amount": 7,
+    "active": true,
+    "tags": [
+      "bench",
+      "group1"
+    ],
+    "meta": null
+  },
+  {
+    "name": "slash\\path",
+    "amount": 14,
+    "active": true,
+    "tags": [
+      "bench",
+      "group2"
+    ],
+    "meta": {
+      "valid": true,
+      "scale": 1.5
+    }
+  },
+  {
+    "name": "\ud1a0\ud30c\uc988",
+    "amount": 21,
+    "active": false,
+    "tags": [
+      "bench",
+      "group3"
+    ],
+    "meta": null
+  },
+  {
+    "name": "astral\ud83d\udc8e",
+    "amount": 28,
+    "active": true,
+    "tags": [
+      "bench",
+      "group0"
+    ],
+    "meta": {
+      "valid": true,
+      "scale": 1.5
+    }
+  },
+  {
+    "name": "line\nbreak",
+    "amount": 35,
+    "active": true,
+    "tags": [
+      "bench",
+      "group1"
+    ],
+    "meta": null
+  },
+  {
+    "name": " cedar ",
+    "amount": 42,
+    "active": false,
+    "tags": [
+      "bench",
+      "group2"
+    ],
+    "meta": {
+      "valid": true,
+      "scale": 1.5
+    }
+  },
+  {
+    "name": "quote\"mark",
+    "amount": 49,
+    "active": true,
+    "tags": [
+      "bench",
+      "group3"
+    ],
+    "meta": null
+  },
+  {
+    "name": "slash\\path",
+    "amount": -45,
+    "active": true,
+    "tags": [
+      "bench",
+      "group0"
+    ],
+    "meta": {
+      "valid": true,
+      "scale": 1.5
+    }
+  },
+  {
+    "name": "\ud1a0\ud30c\uc988",
+    "amount": -38,
+    "active": false,
+    "tags": [
+      "bench",
+      "group1"
+    ],
+    "meta": null
+  },
+  {
+    "name": "astral\ud83d\udc8e",
+    "amount": -31,
+    "active": true,
+    "tags": [
+      "bench",
+      "group2"
+    ],
+    "meta": {
+      "valid": true,
+      "scale": 1.5
+    }
+  },
+  {
+    "name": "line\nbreak",
+    "amount": -24,
+    "active": true,
+    "tags": [
+      "bench",
+      "group3"
+    ],
+    "meta": null
+  },
+  {
+    "name": " cedar ",
+    "amount": -17,
+    "active": false,
+    "tags": [
+      "bench",
+      "group0"
+    ],
+    "meta": {
+      "valid": true,
+      "scale": 1.5
+    }
+  },
+  {
+    "name": "quote\"mark",
+    "amount": -10,
+    "active": true,
+    "tags": [
+      "bench",
+      "group1"
+    ],
+    "meta": null
+  },
+  {
+    "name": "slash\\path",
+    "amount": -3,
+    "active": true,
+    "tags": [
+      "bench",
+      "group2"
+    ],
+    "meta": {
+      "valid": true,
+      "scale": 1.5
+    }
+  },
+  {
+    "name": "\ud1a0\ud30c\uc988",
+    "amount": 4,
+    "active": false,
+    "tags": [
+      "bench",
+      "group3"
+    ],
+    "meta": null
+  },
+  {
+    "name": "astral\ud83d\udc8e",
+    "amount": 11,
+    "active": true,
+    "tags": [
+      "bench",
+      "group0"
+    ],
+    "meta": {
+      "valid": true,
+      "scale": 1.5
+    }
+  },
+  {
+    "name": "line\nbreak",
+    "amount": 18,
+    "active": true,
+    "tags": [
+      "bench",
+      "group1"
+    ],
+    "meta": null
+  },
+  {
+    "name": " cedar ",
+    "amount": 25,
+    "active": false,
+    "tags": [
+      "bench",
+      "group2"
+    ],
+    "meta": {
+      "valid": true,
+      "scale": 1.5
+    }
+  },
+  {
+    "name": "quote\"mark",
+    "amount": 32,
+    "active": true,
+    "tags": [
+      "bench",
+      "group3"
+    ],
+    "meta": null
+  },
+  {
+    "name": "slash\\path",
+    "amount": 39,
+    "active": true,
+    "tags": [
+      "bench",
+      "group0"
+    ],
+    "meta": {
+      "valid": true,
+      "scale": 1.5
+    }
+  },
+  {
+    "name": "\ud1a0\ud30c\uc988",
+    "amount": 46,
+    "active": false,
+    "tags": [
+      "bench",
+      "group1"
+    ],
+    "meta": null
+  },
+  {
+    "name": "astral\ud83d\udc8e",
+    "amount": -48,
+    "active": true,
+    "tags": [
+      "bench",
+      "group2"
+    ],
+    "meta": {
+      "valid": true,
+      "scale": 1.5
+    }
+  },
+  {
+    "name": "line\nbreak",
+    "amount": -41,
+    "active": true,
+    "tags": [
+      "bench",
+      "group3"
+    ],
+    "meta": null
+  },
+  {
+    "name": " cedar ",
+    "amount": -34,
+    "active": false,
+    "tags": [
+      "bench",
+      "group0"
+    ],
+    "meta": {
+      "valid": true,
+      "scale": 1.5
+    }
+  },
+  {
+    "name": "quote\"mark",
+    "amount": -27,
+    "active": true,
+    "tags": [
+      "bench",
+      "group1"
+    ],
+    "meta": null
+  },
+  {
+    "name": "slash\\path",
+    "amount": -20,
+    "active": true,
+    "tags": [
+      "bench",
+      "group2"
+    ],
+    "meta": {
+      "valid": true,
+      "scale": 1.5
+    }
+  },
+  {
+    "name": "\ud1a0\ud30c\uc988",
+    "amount": -13,
+    "active": false,
+    "tags": [
+      "bench",
+      "group3"
+    ],
+    "meta": null
+  },
+  {
+    "name": "astral\ud83d\udc8e",
+    "amount": -6,
+    "active": true,
+    "tags": [
+      "bench",
+      "group0"
+    ],
+    "meta": {
+      "valid": true,
+      "scale": 1.5
+    }
+  },
+  {
+    "name": "line\nbreak",
+    "amount": 1,
+    "active": true,
+    "tags": [
+      "bench",
+      "group1"
+    ],
+    "meta": null
+  },
+  {
+    "name": " cedar ",
+    "amount": 8,
+    "active": false,
+    "tags": [
+      "bench",
+      "group2"
+    ],
+    "meta": {
+      "valid": true,
+      "scale": 1.5
+    }
+  },
+  {
+    "name": "quote\"mark",
+    "amount": 15,
+    "active": true,
+    "tags": [
+      "bench",
+      "group3"
+    ],
+    "meta": null
+  },
+  {
+    "name": "slash\\path",
+    "amount": 22,
+    "active": true,
+    "tags": [
+      "bench",
+      "group0"
+    ],
+    "meta": {
+      "valid": true,
+      "scale": 1.5
+    }
+  },
+  {
+    "name": "\ud1a0\ud30c\uc988",
+    "amount": 29,
+    "active": false,
+    "tags": [
+      "bench",
+      "group1"
+    ],
+    "meta": null
+  },
+  {
+    "name": "astral\ud83d\udc8e",
+    "amount": 36,
+    "active": true,
+    "tags": [
+      "bench",
+      "group2"
+    ],
+    "meta": {
+      "valid": true,
+      "scale": 1.5
+    }
+  },
+  {
+    "name": "line\nbreak",
+    "amount": 43,
+    "active": true,
+    "tags": [
+      "bench",
+      "group3"
+    ],
+    "meta": null
+  },
+  {
+    "name": " cedar ",
+    "amount": 50,
+    "active": false,
+    "tags": [
+      "bench",
+      "group0"
+    ],
+    "meta": {
+      "valid": true,
+      "scale": 1.5
+    }
+  },
+  {
+    "name": "quote\"mark",
+    "amount": -44,
+    "active": true,
+    "tags": [
+      "bench",
+      "group1"
+    ],
+    "meta": null
+  },
+  {
+    "name": "slash\\path",
+    "amount": -37,
+    "active": true,
+    "tags": [
+      "bench",
+      "group2"
+    ],
+    "meta": {
+      "valid": true,
+      "scale": 1.5
+    }
+  },
+  {
+    "name": "\ud1a0\ud30c\uc988",
+    "amount": -30,
+    "active": false,
+    "tags": [
+      "bench",
+      "group3"
+    ],
+    "meta": null
+  },
+  {
+    "name": "astral\ud83d\udc8e",
+    "amount": -23,
+    "active": true,
+    "tags": [
+      "bench",
+      "group0"
+    ],
+    "meta": {
+      "valid": true,
+      "scale": 1.5
+    }
+  },
+  {
+    "name": "line\nbreak",
+    "amount": -16,
+    "active": true,
+    "tags": [
+      "bench",
+      "group1"
+    ],
+    "meta": null
+  },
+  {
+    "name": " cedar ",
+    "amount": -9,
+    "active": false,
+    "tags": [
+      "bench",
+      "group2"
+    ],
+    "meta": {
+      "valid": true,
+      "scale": 1.5
+    }
+  },
+  {
+    "name": "quote\"mark",
+    "amount": -2,
+    "active": true,
+    "tags": [
+      "bench",
+      "group3"
+    ],
+    "meta": null
+  },
+  {
+    "name": "slash\\path",
+    "amount": 5,
+    "active": true,
+    "tags": [
+      "bench",
+      "group0"
+    ],
+    "meta": {
+      "valid": true,
+      "scale": 1.5
+    }
+  },
+  {
+    "name": "\ud1a0\ud30c\uc988",
+    "amount": 12,
+    "active": false,
+    "tags": [
+      "bench",
+      "group1"
+    ],
+    "meta": null
+  },
+  {
+    "name": "astral\ud83d\udc8e",
+    "amount": 19,
+    "active": true,
+    "tags": [
+      "bench",
+      "group2"
+    ],
+    "meta": {
+      "valid": true,
+      "scale": 1.5
+    }
+  },
+  {
+    "name": "line\nbreak",
+    "amount": 26,
+    "active": true,
+    "tags": [
+      "bench",
+      "group3"
+    ],
+    "meta": null
+  },
+  {
+    "name": " cedar ",
+    "amount": 33,
+    "active": false,
+    "tags": [
+      "bench",
+      "group0"
+    ],
+    "meta": {
+      "valid": true,
+      "scale": 1.5
+    }
+  },
+  {
+    "name": "quote\"mark",
+    "amount": 40,
+    "active": true,
+    "tags": [
+      "bench",
+      "group1"
+    ],
+    "meta": null
+  },
+  {
+    "name": "slash\\path",
+    "amount": 47,
+    "active": true,
+    "tags": [
+      "bench",
+      "group2"
+    ],
+    "meta": {
+      "valid": true,
+      "scale": 1.5
+    }
+  },
+  {
+    "name": "\ud1a0\ud30c\uc988",
+    "amount": -47,
+    "active": false,
+    "tags": [
+      "bench",
+      "group3"
+    ],
+    "meta": null
+  },
+  {
+    "name": "astral\ud83d\udc8e",
+    "amount": -40,
+    "active": true,
+    "tags": [
+      "bench",
+      "group0"
+    ],
+    "meta": {
+      "valid": true,
+      "scale": 1.5
+    }
+  },
+  {
+    "name": "line\nbreak",
+    "amount": -33,
+    "active": true,
+    "tags": [
+      "bench",
+      "group1"
+    ],
+    "meta": null
+  },
+  {
+    "name": " cedar ",
+    "amount": -26,
+    "active": false,
+    "tags": [
+      "bench",
+      "group2"
+    ],
+    "meta": {
+      "valid": true,
+      "scale": 1.5
+    }
+  },
+  {
+    "name": "quote\"mark",
+    "amount": -19,
+    "active": true,
+    "tags": [
+      "bench",
+      "group3"
+    ],
+    "meta": null
+  },
+  {
+    "name": "slash\\path",
+    "amount": -12,
+    "active": true,
+    "tags": [
+      "bench",
+      "group0"
+    ],
+    "meta": {
+      "valid": true,
+      "scale": 1.5
+    }
+  },
+  {
+    "name": "\ud1a0\ud30c\uc988",
+    "amount": -5,
+    "active": false,
+    "tags": [
+      "bench",
+      "group1"
+    ],
+    "meta": null
+  },
+  {
+    "name": "astral\ud83d\udc8e",
+    "amount": 2,
+    "active": true,
+    "tags": [
+      "bench",
+      "group2"
+    ],
+    "meta": {
+      "valid": true,
+      "scale": 1.5
+    }
+  },
+  {
+    "name": "line\nbreak",
+    "amount": 9,
+    "active": true,
+    "tags": [
+      "bench",
+      "group3"
+    ],
+    "meta": null
+  },
+  {
+    "name": " cedar ",
+    "amount": 16,
+    "active": false,
+    "tags": [
+      "bench",
+      "group0"
+    ],
+    "meta": {
+      "valid": true,
+      "scale": 1.5
+    }
+  },
+  {
+    "name": "quote\"mark",
+    "amount": 23,
+    "active": true,
+    "tags": [
+      "bench",
+      "group1"
+    ],
+    "meta": null
+  },
+  {
+    "name": "slash\\path",
+    "amount": 30,
+    "active": true,
+    "tags": [
+      "bench",
+      "group2"
+    ],
+    "meta": {
+      "valid": true,
+      "scale": 1.5
+    }
+  },
+  {
+    "name": "\ud1a0\ud30c\uc988",
+    "amount": 37,
+    "active": false,
+    "tags": [
+      "bench",
+      "group3"
+    ],
+    "meta": null
+  },
+  {
+    "name": "astral\ud83d\udc8e",
+    "amount": 44,
+    "active": true,
+    "tags": [
+      "bench",
+      "group0"
+    ],
+    "meta": {
+      "valid": true,
+      "scale": 1.5
+    }
+  },
+  {
+    "name": "line\nbreak",
+    "amount": -50,
+    "active": true,
+    "tags": [
+      "bench",
+      "group1"
+    ],
+    "meta": null
+  },
+  {
+    "name": " cedar ",
+    "amount": -43,
+    "active": false,
+    "tags": [
+      "bench",
+      "group2"
+    ],
+    "meta": {
+      "valid": true,
+      "scale": 1.5
+    }
+  },
+  {
+    "name": "quote\"mark",
+    "amount": -36,
+    "active": true,
+    "tags": [
+      "bench",
+      "group3"
+    ],
+    "meta": null
+  },
+  {
+    "name": "slash\\path",
+    "amount": -29,
+    "active": true,
+    "tags": [
+      "bench",
+      "group0"
+    ],
+    "meta": {
+      "valid": true,
+      "scale": 1.5
+    }
+  },
+  {
+    "name": "\ud1a0\ud30c\uc988",
+    "amount": -22,
+    "active": false,
+    "tags": [
+      "bench",
+      "group1"
+    ],
+    "meta": null
+  },
+  {
+    "name": "astral\ud83d\udc8e",
+    "amount": -15,
+    "active": true,
+    "tags": [
+      "bench",
+      "group2"
+    ],
+    "meta": {
+      "valid": true,
+      "scale": 1.5
+    }
+  },
+  {
+    "name": "line\nbreak",
+    "amount": -8,
+    "active": true,
+    "tags": [
+      "bench",
+      "group3"
+    ],
+    "meta": null
+  },
+  {
+    "name": " cedar ",
+    "amount": -1,
+    "active": false,
+    "tags": [
+      "bench",
+      "group0"
+    ],
+    "meta": {
+      "valid": true,
+      "scale": 1.5
+    }
+  },
+  {
+    "name": "quote\"mark",
+    "amount": 6,
+    "active": true,
+    "tags": [
+      "bench",
+      "group1"
+    ],
+    "meta": null
+  },
+  {
+    "name": "slash\\path",
+    "amount": 13,
+    "active": true,
+    "tags": [
+      "bench",
+      "group2"
+    ],
+    "meta": {
+      "valid": true,
+      "scale": 1.5
+    }
+  },
+  {
+    "name": "\ud1a0\ud30c\uc988",
+    "amount": 20,
+    "active": false,
+    "tags": [
+      "bench",
+      "group3"
+    ],
+    "meta": null
+  },
+  {
+    "name": "astral\ud83d\udc8e",
+    "amount": 27,
+    "active": true,
+    "tags": [
+      "bench",
+      "group0"
+    ],
+    "meta": {
+      "valid": true,
+      "scale": 1.5
+    }
+  },
+  {
+    "name": "line\nbreak",
+    "amount": 34,
+    "active": true,
+    "tags": [
+      "bench",
+      "group1"
+    ],
+    "meta": null
+  },
+  {
+    "name": " cedar ",
+    "amount": 41,
+    "active": false,
+    "tags": [
+      "bench",
+      "group2"
+    ],
+    "meta": {
+      "valid": true,
+      "scale": 1.5
+    }
+  },
+  {
+    "name": "quote\"mark",
+    "amount": 48,
+    "active": true,
+    "tags": [
+      "bench",
+      "group3"
+    ],
+    "meta": null
+  },
+  {
+    "name": "slash\\path",
+    "amount": -46,
+    "active": true,
+    "tags": [
+      "bench",
+      "group0"
+    ],
+    "meta": {
+      "valid": true,
+      "scale": 1.5
+    }
+  },
+  {
+    "name": "\ud1a0\ud30c\uc988",
+    "amount": -39,
+    "active": false,
+    "tags": [
+      "bench",
+      "group1"
+    ],
+    "meta": null
+  },
+  {
+    "name": "astral\ud83d\udc8e",
+    "amount": -32,
+    "active": true,
+    "tags": [
+      "bench",
+      "group2"
+    ],
+    "meta": {
+      "valid": true,
+      "scale": 1.5
+    }
+  },
+  {
+    "name": "line\nbreak",
+    "amount": -25,
+    "active": true,
+    "tags": [
+      "bench",
+      "group3"
+    ],
+    "meta": null
+  },
+  {
+    "name": " cedar ",
+    "amount": -18,
+    "active": false,
+    "tags": [
+      "bench",
+      "group0"
+    ],
+    "meta": {
+      "valid": true,
+      "scale": 1.5
+    }
+  },
+  {
+    "name": "quote\"mark",
+    "amount": -11,
+    "active": true,
+    "tags": [
+      "bench",
+      "group1"
+    ],
+    "meta": null
+  },
+  {
+    "name": "slash\\path",
+    "amount": -4,
+    "active": true,
+    "tags": [
+      "bench",
+      "group2"
+    ],
+    "meta": {
+      "valid": true,
+      "scale": 1.5
+    }
+  },
+  {
+    "name": "\ud1a0\ud30c\uc988",
+    "amount": 3,
+    "active": false,
+    "tags": [
+      "bench",
+      "group3"
+    ],
+    "meta": null
+  },
+  {
+    "name": "astral\ud83d\udc8e",
+    "amount": 10,
+    "active": true,
+    "tags": [
+      "bench",
+      "group0"
+    ],
+    "meta": {
+      "valid": true,
+      "scale": 1.5
+    }
+  },
+  {
+    "name": "line\nbreak",
+    "amount": 17,
+    "active": true,
+    "tags": [
+      "bench",
+      "group1"
+    ],
+    "meta": null
+  },
+  {
+    "name": " cedar ",
+    "amount": 24,
+    "active": false,
+    "tags": [
+      "bench",
+      "group2"
+    ],
+    "meta": {
+      "valid": true,
+      "scale": 1.5
+    }
+  },
+  {
+    "name": "quote\"mark",
+    "amount": 31,
+    "active": true,
+    "tags": [
+      "bench",
+      "group3"
+    ],
+    "meta": null
+  }
+]
