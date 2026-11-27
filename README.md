@@ -4,20 +4,18 @@ Topaz is a general-purpose programming language with typesetting built in. Code 
 
 [Website](https://topaz.ooo) · [Vision](https://topaz.ooo/en/vision) · [Roadmap](https://topaz.ooo/en/roadmap) · [Download 5.21.3](https://topaz.ooo/en/download) · [Built with Topaz](https://topaz.ooo/en/built-with-topaz)
 
-## Two lines of Topaz
+## Two release lines
 
 | Version | Status | What it is |
 | --- | --- | --- |
 | 5.21.3 | **Stable** | The release you can install and use today. This repository holds its Core Kit source. |
-| 6.0 | **Spec-first redesign** | A new compiler engine and a language that its specification defines first. It is validated in ATLAS before its public release. |
+| 6.0 | **Spec-first redesign** | A new compiler engine and a language that its specification defines first. |
 
 ## Where 6.0 is going
 
 Topaz 6.0 starts from the specification. Every rule in the new language reference says why it exists and links to examples that run on the release before it ships. Behavior the compiler does not follow yet is marked as a known limitation until it does.
 
 The new engine works on typed data, gives known types their own Rust layouts and calls known functions directly. With it, the self-compiler written in Topaz is designed to compile as fast as the reference compiler written in Rust while making generated programs even faster. Anyone will be able to rebuild the official base executable from public source and compare it byte for byte with the release. Where Topaz has two ways to say the same thing, 6.0 keeps one, and a migration tool moves existing programs across in one pass.
-
-The [vision](https://topaz.ooo/en/vision) explains how these choices fit together and where they lead.
 
 ## Built for ATLAS first
 
@@ -32,6 +30,8 @@ Hi, I'm Matt Park, the creator of Topaz.
 Until now, we've put self-hosting and stability first. The compiler is written in Topaz and reaches a fixed point. A compiler built from its own generated Rust generates that same Rust again, byte for byte, and you can rebuild it from the public seed and compare the result yourself. It already produces fast executables, yet compiling large projects with the self-compiler itself takes longer than with the reference compiler written in Rust. Closing that compilation speed gap and pushing runtime performance even further takes structural changes. That is what 6.0 is for.
 
 Typesetting demands determinism. The same manuscript has to produce the same pages on every machine, down to the last line break. Any field that needs results it can reproduce and check asks for the same discipline, so I believe typesetting and general-purpose use belong in one language. Where a choice is open, typesetting comes first, but features can belong even when typesetting has no use for them.
+
+We wrote down where Topaz is heading in our [vision](https://topaz.ooo/en/vision). People and AI express intent, the specification settles what it means, and the compiler takes responsibility for running it efficiently.
 
 Every product we build with Topaz will move to Topaz 6. If even one person anywhere in the world needs a language like this, I'll keep working to make Topaz ready for them.
 
@@ -53,7 +53,7 @@ The [build guide](core-kit/BUILD.md) covers installation, the CLI commands, veri
 
 ## Topaz and Lispex
 
-[Lispex](https://github.com/studiohaze/lispex) is a safe language for business rules. Topaz apps can load rules written in Lispex and run them without giving them access to files or the network. In Topaz 6, Lispex runs as a separate WebAssembly module inside a public host.
+[Lispex](https://github.com/studiohaze/lispex) is a safe language for business rules. Topaz apps can load rules written in Lispex and run them without giving them access to files or the network. In Topaz 6, Lispex runs as a separate WASM module inside a public host.
 
 ## License
 
