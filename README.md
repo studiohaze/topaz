@@ -2,7 +2,7 @@
 
 Topaz is a general-purpose programming language with typesetting built in. Code that does the same job looks the same no matter who writes it.
 
-[Website](https://topaz.ooo) · [Roadmap](https://topaz.ooo/en/roadmap) · [Download 5.21.3](https://topaz.ooo/en/download) · [Built with Topaz](https://topaz.ooo/en/built-with-topaz)
+[Website](https://topaz.ooo) · [Vision](https://topaz.ooo/en/vision) · [Roadmap](https://topaz.ooo/en/roadmap) · [Download 5.21.3](https://topaz.ooo/en/download) · [Built with Topaz](https://topaz.ooo/en/built-with-topaz)
 
 ## Two lines of Topaz
 
@@ -16,6 +16,8 @@ Topaz is a general-purpose programming language with typesetting built in. Code 
 Topaz 6.0 starts from the specification. Every rule in the new language reference says why it exists and links to examples that run on the release before it ships. Behavior the compiler does not follow yet is marked as a known limitation until it does.
 
 The new engine works on typed data, gives known types their own Rust layouts and calls known functions directly. With it, the self-compiler written in Topaz is designed to compile as fast as the reference compiler written in Rust while making generated programs even faster. Anyone will be able to rebuild the official base executable from public source and compare it byte for byte with the release. Where Topaz has two ways to say the same thing, 6.0 keeps one, and a migration tool moves existing programs across in one pass.
+
+The [vision](https://topaz.ooo/en/vision) explains how these choices fit together and where they lead.
 
 ## Built for ATLAS first
 
